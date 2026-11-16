@@ -75,6 +75,10 @@ pub(crate) struct ChunkFrame {
     pub settled: bool,
 }
 
+/// Streams a Game world's Chunks within its Load radius, or, given the View
+/// distance as that radius, their Far proxies, one a Chunk: what it then
+/// calls a Chunk's load is a Far proxy's, and its Late Chunks are the Late
+/// Far proxies.
 pub(crate) struct ChunkStreamer {
     chunks: HashSet<[i32; 2]>,
     /// The lowest and highest coordinates of `chunks`, x then z.
@@ -643,6 +647,63 @@ mod tests {
             })
             .collect();
         assert_eq!(late, [0, 0, 1, 0, 0]);
+    }
+
+    /// A streamer whose radius is the world's View distance streams its Far
+    /// proxies: on the bench path and the traversal, Fast travels included,
+    /// those Resident and those in flight never pass the Material table's
+    /// count for them, and none is late at 50 m/s.
+    #[test]
+    fn the_worlds_paths_keep_its_far_proxies_within_their_materials_count_and_none_late() {
+        use crate::scenes::world::{
+            BENCH_SEGMENT_FRAMES, TRAVERSAL_FRAMES, camera_at, traversal_camera_at,
+        };
+
+        let scene = crate::scenes::ReferenceScene::World;
+        let most_materials = crate::assets::PoolCapacities::checked_in().far_proxy_materials;
+        let paths: [(fn(u32) -> crate::camera::Camera, u32); 2] = [
+            (camera_at, BENCH_SEGMENT_FRAMES),
+            (traversal_camera_at, TRAVERSAL_FRAMES),
+        ];
+        for (camera_at, frames) in paths {
+            let mut far_proxies =
+                ChunkStreamer::new(scene.chunk_coordinates(), scene.view_distance_metres());
+            let mut io = ScriptedIo::new(8);
+            let (mut most_held, mut late) = (0, 0);
+            for frame in 0..frames {
+                let camera = camera_at(frame);
+                late += step(
+                    &mut far_proxies,
+                    &mut io,
+                    camera.position,
+                    camera.teleported,
+                )
+                .late_chunks;
+                most_held = most_held.max(far_proxies.loaded.len() + far_proxies.in_flight.len());
+            }
+            assert!(most_held > 200, "{most_held} Far proxies at most");
+            assert!(
+                most_held <= most_materials as usize,
+                "{most_held} Far proxies held, past the {most_materials} Materials of theirs"
+            );
+            assert_eq!(late, 0);
+        }
+    }
+
+    /// A streamer whose radius is the world's View distance: a Far proxy
+    /// still unread when its Chunk comes within it, into the Far field, is
+    /// one Late Far proxy, once. Column 12 starts at x = 3,072 m.
+    #[test]
+    fn a_far_proxy_unread_when_its_chunk_enters_the_far_field_is_late_once() {
+        let chunks = (-4..=40).flat_map(|x| (-4..=4).map(move |z| [x, z]));
+        let mut far_proxies = ChunkStreamer::new(chunks, 2000.0);
+        let mut io = ScriptedIo::new(6);
+        io.delays.insert([12, 0], 600);
+        let late: Vec<u32> = (0..3600)
+            .map(|frame| step(&mut far_proxies, &mut io, flying_east(frame), false).late_chunks)
+            .filter(|&late| late > 0)
+            .collect();
+        assert_eq!(late, [1]);
     }
 
     #[test]

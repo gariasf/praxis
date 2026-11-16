@@ -91,16 +91,7 @@ pub struct PoolLoader<'a> {
 
 impl AssetLoader for PoolLoader<'_> {
     fn material(&mut self, id: AssetId) -> anyhow::Result<MaterialHandle> {
-        let loaded = self.material_pool.load_making_room(
-            self.device,
-            self.staging,
-            self.reader,
-            id,
-            MaterialUse::Ordinary,
-            &mut free_unused_mesh(self.mesh_pool),
-        );
-        self.forget_freed_meshes();
-        loaded
+        self.material_for(id, MaterialUse::Ordinary)
     }
 
     fn texture(&mut self, channel: MaterialChannel, id: AssetId) -> anyhow::Result<u32> {
@@ -110,7 +101,7 @@ impl AssetLoader for PoolLoader<'_> {
             self.reader,
             channel,
             id,
-            &mut free_unused_mesh(self.mesh_pool),
+            &mut free_unused_mesh(self.mesh_pool, None),
         );
         self.forget_freed_meshes();
         loaded
@@ -147,6 +138,36 @@ impl AssetLoader for PoolLoader<'_> {
 }
 
 impl PoolLoader<'_> {
+    /// Loads the Mesh `id` as a Far proxy's: drawn, traced by no ray, with
+    /// its first Primitive's Material, the one baked for it, in the Material
+    /// table's count for Far proxies; or counts one more user of it if it is
+    /// loaded.
+    pub(crate) fn far_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+        self.mesh_for(id, MeshUse::FarProxy)
+    }
+
+    /// Loads the Material `id` as `AssetLoader::material` does, into an entry
+    /// of `material_use`'s count. A Far proxy's Material without room frees
+    /// unused Far proxies' Meshes alone, as only they hold its count's
+    /// entries.
+    fn material_for(
+        &mut self,
+        id: AssetId,
+        material_use: MaterialUse,
+    ) -> anyhow::Result<MaterialHandle> {
+        let freed_for_room = (material_use == MaterialUse::FarProxy).then_some(MeshUse::FarProxy);
+        let loaded = self.material_pool.load_making_room(
+            self.device,
+            self.staging,
+            self.reader,
+            id,
+            material_use,
+            &mut free_unused_mesh(self.mesh_pool, freed_for_room),
+        );
+        self.forget_freed_meshes();
+        loaded
+    }
+
     /// Loads the Mesh `id` for `mesh_use`, once per Asset ID unless it is
     /// bent, with the Materials its Primitives name unless no pass draws it.
     fn mesh_for(&mut self, id: AssetId, mesh_use: MeshUse) -> anyhow::Result<MeshHandle> {
@@ -155,7 +176,7 @@ impl PoolLoader<'_> {
         }
         let mesh = self.reader.mesh(id)?;
         let materials = if mesh_use.drawn() {
-            self.materials(id, &mesh)?
+            self.materials(id, &mesh, mesh_use)?
         } else {
             vec![None; mesh.primitives.len()]
         };
@@ -184,20 +205,28 @@ impl PoolLoader<'_> {
         }
     }
 
-    /// The Materials `mesh`'s Primitives name, Mesh `id`'s; one that fails
-    /// gives back the users of those loaded before it.
+    /// The Materials `mesh`'s Primitives name, Mesh `id`'s, loaded for
+    /// `mesh_use`: the first Primitive's in the Material table's count for
+    /// Far proxies when it is a Far proxy's. One that fails gives back the
+    /// users of those loaded before it.
     fn materials(
         &mut self,
         id: AssetId,
         mesh: &CookedMesh,
+        mesh_use: MeshUse,
     ) -> anyhow::Result<Vec<Option<MaterialHandle>>> {
         let mut handles = Vec::with_capacity(mesh.primitives.len());
-        for primitive in &mesh.primitives {
+        for (index, primitive) in mesh.primitives.iter().enumerate() {
             let Some(material) = primitive.material else {
                 handles.push(None);
                 continue;
             };
-            match self.material(material) {
+            let material_use = if mesh_use == MeshUse::FarProxy && index == 0 {
+                MaterialUse::FarProxy
+            } else {
+                MaterialUse::Ordinary
+            };
+            match self.material_for(material, material_use) {
                 Ok(handle) => handles.push(Some(handle)),
                 Err(error) => {
                     let loaded = mesh.primitives.iter().zip(&handles);
@@ -215,12 +244,16 @@ impl PoolLoader<'_> {
 }
 
 /// What a Material pool load calls once it has no unused Material left to
-/// free: frees `mesh_pool`'s least recently used unused Mesh, counting a user
-/// fewer of each Material it named, and says whether it freed one.
-fn free_unused_mesh(mesh_pool: &mut MeshPool) -> impl FnMut(&mut MaterialPool) -> bool + '_ {
+/// free: frees `mesh_pool`'s least recently used unused Mesh, loaded for
+/// `mesh_use` when one is given, counting a user fewer of each Material it
+/// named, and says whether it freed one.
+fn free_unused_mesh(
+    mesh_pool: &mut MeshPool,
+    mesh_use: Option<MeshUse>,
+) -> impl FnMut(&mut MaterialPool) -> bool + '_ {
     let mut released_materials = Vec::new();
     move |material_pool| {
-        let freed = mesh_pool.free_least_recently_used(&mut released_materials);
+        let freed = mesh_pool.free_least_recently_used(mesh_use, &mut released_materials);
         for material in released_materials.drain(..) {
             material_pool.remove_user(material);
         }
@@ -237,6 +270,114 @@ mod tests {
         CookedMaterial, CookedMesh, CookedMeshlet, CookedPrimitive, CookedTexture, CookedVertex,
     };
     use crate::stats::gpu_memory::tests::gpu_memory;
+
+    /// A Far proxy's Mesh loads without a BLAS, open land's with an empty
+    /// first Primitive; the Material baked for it takes an entry of the Far
+    /// proxies' count and its ground's one of the others'. With that count
+    /// full, a further Far proxy is refused while the first is in use, and
+    /// frees it once it is not, leaving a Chunk's unused Mesh loaded.
+    #[test]
+    fn a_far_proxy_loads_untraced_and_its_baked_material_makes_room_among_far_proxies_alone() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let directory =
+            std::env::temp_dir().join(format!("praxis-far-proxy-loader-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        let material = CookedMaterial {
+            base_color: [1.0; 4],
+            metallic: 0.0,
+            roughness: 1.0,
+            emissive: [0.0; 3],
+            normal_scale: 1.0,
+            textures: [None; 5],
+        };
+        let (ground, baked, other_baked) = (AssetId(1), AssetId(2), AssetId(3));
+        for id in [ground, baked, other_baked] {
+            cache.write(id, "key", &material.to_blob()).unwrap();
+        }
+        let primitive = |material| CookedPrimitive {
+            first_index: 0,
+            index_count: 3,
+            material: Some(material),
+            texel_density: 0.0,
+            thin_radius_metres: None,
+            meshlets: vec![CookedMeshlet {
+                vertices: vec![0, 1, 2],
+                triangles: vec![[0, 1, 2]],
+            }],
+        };
+        let empty = CookedPrimitive {
+            index_count: 0,
+            material: None,
+            meshlets: Vec::new(),
+            ..primitive(ground)
+        };
+        let (far_proxy, other_far_proxy, open_land, chunk_mesh) =
+            (AssetId(11), AssetId(12), AssetId(13), AssetId(14));
+        for (id, primitives) in [
+            (far_proxy, vec![primitive(baked), primitive(ground)]),
+            (
+                other_far_proxy,
+                vec![primitive(other_baked), primitive(ground)],
+            ),
+            (open_land, vec![empty, primitive(ground)]),
+            (chunk_mesh, vec![primitive(ground)]),
+        ] {
+            let mesh = CookedMesh {
+                vertices: vec![CookedVertex::default(); 3],
+                indices: vec![0, 1, 2],
+                primitives,
+                coarser_lods: Vec::new(),
+                bounds: [[0.0; 3]; 2],
+            };
+            cache.write(id, "key", &mesh.to_blob().unwrap()).unwrap();
+        }
+        let mut staging = LoadStaging::new(context.device.clone());
+        let memory = gpu_memory(&context);
+        let capacities = PoolCapacities {
+            far_proxy_materials: 1,
+            ..PoolCapacities::checked_in()
+        };
+        let mut mesh_pool = MeshPool::new(&context.device, &memory, &capacities);
+        let mut material_pool =
+            MaterialPool::new(&context.device, &memory, &mut staging, &capacities, false);
+        let mut loader = PoolLoader {
+            device: &context.device,
+            staging: &mut staging,
+            reader: &cache,
+            mesh_pool: &mut mesh_pool,
+            material_pool: &mut material_pool,
+        };
+
+        let loaded = loader.far_proxy(far_proxy).unwrap();
+        assert!(loader.mesh_pool.blas(loaded).is_none());
+        assert_eq!(loader.far_proxy(far_proxy).unwrap(), loaded);
+        loader.far_proxy(open_land).unwrap();
+        let unused = loader.mesh(chunk_mesh).unwrap();
+        loader
+            .mesh_pool
+            .remove_user(chunk_mesh, MeshUse::DrawnAndTraced);
+        assert_eq!(loader.material_pool.users(ground), 3);
+        assert_eq!(loader.material_pool.users(baked), 1);
+
+        let (refused, log) = logged(|| loader.far_proxy(other_far_proxy));
+        assert!(
+            refused.is_err(),
+            "a second Material took the count's one entry"
+        );
+        assert!(log.contains("Material refused"), "not logged: {log:?}");
+        assert!(loader.mesh_pool.get(unused).is_some());
+
+        for _ in 0..2 {
+            loader.mesh_pool.remove_user(far_proxy, MeshUse::FarProxy);
+        }
+        loader.far_proxy(other_far_proxy).unwrap();
+        assert!(loader.mesh_pool.get(loaded).is_none());
+        assert!(!loader.material_pool.is_loaded(baked));
+        assert!(loader.mesh_pool.get(unused).is_some());
+        std::fs::remove_dir_all(&directory).ok();
+    }
 
     #[test]
     fn an_asset_loaded_twice_keeps_one_entry_and_a_bent_mesh_its_own() {

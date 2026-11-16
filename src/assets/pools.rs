@@ -111,6 +111,8 @@ pub enum MeshUse {
     /// Drawn and traced, a Mesh the GPU bends whose BLAS is updated each
     /// frame from its bent shape: built to allow updates, never compacted.
     Refitted,
+    /// Drawn alone, as it was cooked: a Far proxy, which holds no TLAS entry.
+    FarProxy,
 }
 
 impl MeshUse {
@@ -122,13 +124,16 @@ impl MeshUse {
     /// Whether rays trace it, so it needs a BLAS and the index stream the
     /// BLAS is built from.
     fn traced(self) -> bool {
-        self != MeshUse::Drawn
+        !matches!(self, MeshUse::Drawn | MeshUse::FarProxy)
     }
 
     /// Whether Renderables share one entry per Asset ID: a bent Mesh is its
     /// Renderable's own, as the GPU writes its vertices.
     fn shared(self) -> bool {
-        matches!(self, MeshUse::DrawnAndTraced | MeshUse::Traced)
+        matches!(
+            self,
+            MeshUse::DrawnAndTraced | MeshUse::Traced | MeshUse::FarProxy
+        )
     }
 }
 
@@ -368,7 +373,7 @@ impl MeshPool {
             match self.load_for(staging, mesh, materials, mesh_use) {
                 Ok(handle) => break handle,
                 Err(refusal) => {
-                    if !self.free_least_recently_used(released_materials) {
+                    if !self.free_least_recently_used(None, released_materials) {
                         refusal.log();
                         self.refusals += 1;
                         released_materials.extend(material_ids);
@@ -390,14 +395,22 @@ impl MeshPool {
         Some(handle)
     }
 
-    /// Frees the least recently used unused Mesh, pushing its Material Asset
-    /// IDs onto `released_materials`; false when none is unused or the frame
-    /// freed `ENTRIES_FREED_PER_FRAME` already.
-    pub fn free_least_recently_used(&mut self, released_materials: &mut Vec<AssetId>) -> bool {
+    /// Frees the least recently used unused Mesh, loaded for `mesh_use` when
+    /// one is given, pushing its Material Asset IDs onto `released_materials`;
+    /// false when none is unused or the frame freed `ENTRIES_FREED_PER_FRAME`
+    /// already.
+    pub fn free_least_recently_used(
+        &mut self,
+        mesh_use: Option<MeshUse>,
+        released_materials: &mut Vec<AssetId>,
+    ) -> bool {
         if self.frame_frees >= ENTRIES_FREED_PER_FRAME {
             return false;
         }
-        let Some(key) = self.unused.pop_least_recent() else {
+        let wanted = |&(_, loaded_for): &(AssetId, MeshUse)| {
+            mesh_use.is_none_or(|mesh_use| mesh_use == loaded_for)
+        };
+        let Some(key) = self.unused.pop_least_recent_where(wanted) else {
             return false;
         };
         let shared = self
@@ -1133,10 +1146,6 @@ impl<Key> Unused<Key> {
     /// Takes out the key `push` returned `tick` for.
     pub(crate) fn remove(&mut self, tick: u64) {
         self.order.remove(&tick);
-    }
-
-    pub(crate) fn pop_least_recent(&mut self) -> Option<Key> {
-        self.order.pop_first().map(|(_, key)| key)
     }
 
     /// Takes out the least recently used key that `wanted` holds for.

@@ -17,7 +17,7 @@ use crate::camera::Camera;
 use crate::cooked::{AssetId, CookedCache, CookedChunk, CookedMaterial, CookedMesh, CookedTexture};
 use crate::render::{Renderer, mips_written_bytes, texture_written_bytes};
 use crate::scenes::ReferenceScene;
-use crate::streaming::chunks::load_cooked_chunk;
+use crate::streaming::chunks::{load_cooked_chunk, load_far_proxy};
 use crate::streaming::mips::{MipPriority, MipRequest};
 use crate::streaming::{
     ChunkFrame, ChunkIo, ChunkStreamer, FinishedLoad, LoadedChunk, LoadedChunks, distance_metres,
@@ -86,12 +86,33 @@ impl DecodedAssets {
     }
 }
 
+/// What the IO pool reads at a Chunk's coordinates: the Chunk, or its Far
+/// proxy. Chunks sort first, so a frame loads them first.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+enum Load {
+    Chunk,
+    FarProxy,
+}
+
+impl Load {
+    /// What its Meshes are loaded for.
+    fn mesh_use(self) -> MeshUse {
+        match self {
+            Load::Chunk => MeshUse::DrawnAndTraced,
+            Load::FarProxy => MeshUse::FarProxy,
+        }
+    }
+}
+
 /// A Chunk the IO pool read and decoded, with the Assets it names, through
-/// its Meshes' Materials to their Textures, that no earlier load claimed.
+/// its Meshes' Materials to their Textures, that no earlier load claimed; or
+/// a Far proxy, read as a Chunk that names its Mesh alone.
 struct DecodedChunk {
+    /// The Chunk's Asset ID, or the Far proxy's Mesh's.
     id: AssetId,
     coordinates: [i32; 2],
-    chunk: CookedChunk,
+    /// None of a Far proxy.
+    chunk: Option<CookedChunk>,
     /// The Meshes its Placements name, each once.
     meshes: Vec<AssetId>,
     /// The Materials its Placements name, each once.
@@ -109,16 +130,16 @@ struct DecodedMips {
     bytes_read: u64,
 }
 
-/// What the IO pool reads: the Chunk with an Asset ID at its coordinates,
-/// with the Assets it names, or a Texture's mips.
+/// What the IO pool reads: the Chunk or the Far proxy with an Asset ID at
+/// its coordinates, with the Assets it names, or a Texture's mips.
 #[derive(Debug)]
 enum IoRequest {
-    Chunk([i32; 2], AssetId),
+    Chunk(Load, [i32; 2], AssetId),
     Mips(MipRequest),
 }
 
 enum Finished {
-    Chunk([i32; 2], Box<anyhow::Result<DecodedChunk>>),
+    Chunk(Load, [i32; 2], Box<anyhow::Result<DecodedChunk>>),
     Mips(MipRequest, anyhow::Result<DecodedMips>),
 }
 
@@ -130,13 +151,13 @@ struct IoPool {
     finished: mpsc::Receiver<Finished>,
     threads: Vec<JoinHandle<()>>,
     in_flight: usize,
-    /// The Chunk reads in flight, by coordinates, each with the number of
-    /// Chunk reads requested before it.
-    chunk_reads: HashMap<[i32; 2], u64>,
+    /// The Chunk and Far proxy reads in flight, by coordinates, each with
+    /// the number of such reads requested before it.
+    chunk_reads: HashMap<(Load, [i32; 2]), u64>,
     chunk_reads_requested: u64,
-    /// Loads the threads finished and the main thread has not taken, by
-    /// coordinates.
-    ready: BTreeMap<[i32; 2], anyhow::Result<DecodedChunk>>,
+    /// Loads the threads finished and the main thread has not taken, Chunks
+    /// first, by coordinates.
+    ready: BTreeMap<(Load, [i32; 2]), anyhow::Result<DecodedChunk>>,
     /// Mips the threads read and the main thread has not applied, by the
     /// finest requested, then Texture, with the mips requested.
     ready_mips: BTreeMap<(u32, AssetId), (Range<u32>, anyhow::Result<DecodedMips>)>,
@@ -164,10 +185,11 @@ impl IoPool {
                                 .unwrap_or_else(PoisonError::into_inner)
                                 .recv();
                             let finished_load = match request {
-                                Ok(IoRequest::Chunk(coordinates, id)) => Finished::Chunk(
-                                    coordinates,
-                                    Box::new(decode_chunk(&cache, &claimed, id, coordinates)),
-                                ),
+                                Ok(IoRequest::Chunk(load, coordinates, id)) => {
+                                    let decoded =
+                                        decode_chunk(&cache, &claimed, load, id, coordinates);
+                                    Finished::Chunk(load, coordinates, Box::new(decoded))
+                                }
                                 Ok(IoRequest::Mips(request)) => {
                                     let decoded = decode_mips(&cache, &request);
                                     Finished::Mips(request, decoded)
@@ -195,8 +217,8 @@ impl IoPool {
     }
 
     fn request(&mut self, request: IoRequest) {
-        let chunk_coordinates = match &request {
-            IoRequest::Chunk(coordinates, _) => Some(*coordinates),
+        let chunk_read = match &request {
+            IoRequest::Chunk(load, coordinates, _) => Some((*load, *coordinates)),
             IoRequest::Mips(_) => None,
         };
         let refused = match &self.requests {
@@ -206,9 +228,9 @@ impl IoPool {
         match refused {
             None => {
                 self.in_flight += 1;
-                if let Some(coordinates) = chunk_coordinates {
+                if let Some(chunk_read) = chunk_read {
                     self.chunk_reads
-                        .insert(coordinates, self.chunk_reads_requested);
+                        .insert(chunk_read, self.chunk_reads_requested);
                     self.chunk_reads_requested += 1;
                 }
             }
@@ -247,13 +269,13 @@ impl IoPool {
 
     fn take(&mut self, finished: Finished) {
         match finished {
-            Finished::Chunk(coordinates, decoded) => {
-                self.chunk_reads.remove(&coordinates);
+            Finished::Chunk(load, coordinates, decoded) => {
+                self.chunk_reads.remove(&(load, coordinates));
                 let mut decoded = *decoded;
                 if let Ok(decoded) = &mut decoded {
                     decoded.reads_requested_before_it_came_back = self.chunk_reads_requested;
                 }
-                self.ready.insert(coordinates, decoded);
+                self.ready.insert((load, coordinates), decoded);
             }
             Finished::Mips(request, decoded) => {
                 let key = (request.levels.start, request.texture);
@@ -275,10 +297,11 @@ impl Drop for IoPool {
 
 /// Reads and decodes the Chunk `id` at `coordinates` from `cache`, and each
 /// Mesh, Material and Texture it names that `claimed` lacks, which it
-/// claims.
+/// claims; of a Far proxy, the Mesh `id` and what it names.
 fn decode_chunk(
     cache: &CookedCache,
     claimed: &Mutex<HashSet<AssetId>>,
+    load: Load,
     id: AssetId,
     coordinates: [i32; 2],
 ) -> anyhow::Result<DecodedChunk> {
@@ -296,13 +319,24 @@ fn decode_chunk(
                 .unwrap_or_else(PoisonError::into_inner)
                 .insert(asset)
     };
-    let chunk =
-        CookedChunk::from_blob(&read(id)?).with_context(|| format!("reading Chunk {id}"))?;
+    let chunk = match load {
+        Load::Chunk => Some(
+            CookedChunk::from_blob(&read(id)?).with_context(|| format!("reading Chunk {id}"))?,
+        ),
+        Load::FarProxy => None,
+    };
     let mut assets = DecodedAssets::default();
     let (mut meshes, mut placement_materials) = (BTreeSet::new(), BTreeSet::new());
-    for placement in &chunk.placements {
-        meshes.insert(placement.mesh);
-        placement_materials.extend(placement.material);
+    match &chunk {
+        Some(chunk) => {
+            for placement in &chunk.placements {
+                meshes.insert(placement.mesh);
+                placement_materials.extend(placement.material);
+            }
+        }
+        None => {
+            meshes.insert(id);
+        }
     }
     let mut materials: Vec<AssetId> = placement_materials.iter().copied().collect();
     for &mesh_id in &meshes {
@@ -430,6 +464,7 @@ impl AssetReader for DecodedReader<'_> {
 #[derive(Default)]
 pub(crate) struct StreamedFrame {
     pub late_chunks: u32,
+    pub late_far_proxies: u32,
     pub chunks_loaded: u32,
     pub chunks_unloaded: u32,
     pub bytes_read: u64,
@@ -447,10 +482,25 @@ pub(crate) struct StreamedFrame {
     pub fast_travel_hold: Option<Duration>,
 }
 
+/// A scene's Far proxies streamed around the camera: a Chunk streamer whose
+/// radius is the View distance, so a proxy is requested as its Chunk comes
+/// within it and released a Chunk's edge past it, and its late loads are
+/// the Late Far proxies.
+struct FarProxies {
+    streamer: ChunkStreamer,
+    /// Far proxies loaded into the pools that the streamer has not taken.
+    awaiting_placement: Vec<LoadedChunk>,
+    /// The Resident Far proxies, in load order, each a Chunk of one
+    /// Placement; one held is past the View distance.
+    resident: Vec<LoadedChunk>,
+}
+
 /// A Reference scene's Chunks streamed around the camera: the Chunk
-/// streamer, served by the IO pool, keeping the World's `LoadedChunks`.
+/// streamer, served by the IO pool, keeping the World's `LoadedChunks`; and
+/// the Far proxies of a scene with a Far field, served after its Chunks.
 pub(crate) struct ChunkStreaming {
     streamer: ChunkStreamer,
+    far_proxies: Option<FarProxies>,
     io: IoPool,
     scene: ReferenceScene,
     shift: DVec3,
@@ -504,8 +554,15 @@ impl ChunkStreaming {
         cache: Arc<CookedCache>,
     ) -> anyhow::Result<Self> {
         let claimed = Claimed::default();
+        let view_distance_metres = scene.view_distance_metres();
+        let far_proxies = (view_distance_metres > load_radius_metres).then(|| FarProxies {
+            streamer: ChunkStreamer::new(scene.chunk_coordinates(), view_distance_metres),
+            awaiting_placement: Vec::new(),
+            resident: Vec::new(),
+        });
         Ok(Self {
             streamer: ChunkStreamer::new(scene.chunk_coordinates(), load_radius_metres),
+            far_proxies,
             io: IoPool::new(cache.clone(), claimed.clone())?,
             scene,
             shift,
@@ -531,9 +588,9 @@ impl ChunkStreaming {
     }
 
     /// Runs the dev launch's cook, where there is one, on each Chunk within
-    /// the hold radius of any of `cameras`, World positions, now rather than
-    /// on the main thread as each is requested, so frames that stream time no
-    /// cook.
+    /// the hold radius of any of `cameras`, World positions, and on each Far
+    /// proxy within its own, now rather than on the main thread as each is
+    /// requested, so frames that stream time no cook.
     pub(crate) fn cook_ahead(
         &mut self,
         cameras: impl IntoIterator<Item = DVec3>,
@@ -541,12 +598,20 @@ impl ChunkStreaming {
         let Some(cook_chunk) = &mut self.cook_chunk else {
             return Ok(());
         };
-        let mut chunks = BTreeSet::new();
+        let (mut chunks, mut far_proxies) = (BTreeSet::new(), BTreeSet::new());
         for camera in cameras {
-            chunks.extend(self.streamer.within_hold_radius(camera - self.shift));
+            let camera = camera - self.shift;
+            chunks.extend(self.streamer.within_hold_radius(camera));
+            if let Some(streamed) = &self.far_proxies {
+                far_proxies.extend(streamed.streamer.within_hold_radius(camera));
+            }
         }
-        for coordinates in chunks {
-            cook_chunk(self.scene.chunk_id(coordinates))?;
+        let chunks = chunks.into_iter().map(|chunk| self.scene.chunk_id(chunk));
+        let far_proxies = far_proxies
+            .into_iter()
+            .map(|chunk| self.scene.far_proxy_id(chunk));
+        for id in chunks.chain(far_proxies) {
+            cook_chunk(id)?;
         }
         Ok(())
     }
@@ -594,7 +659,8 @@ impl ChunkStreaming {
         self.cache.content_hash()
     }
 
-    /// Runs the Chunk streamer for the World's camera: loads the Chunks whose
+    /// Runs the Chunk streamer for the World's camera, then the Far proxies'
+    /// as it runs the Chunks', within the same caps: loads the Chunks whose
     /// reads finished into `renderer`'s pools, nearest the camera first, up
     /// to the frame's caps on loads and load bytes; places those loaded, in
     /// the order loaded, whose Meshes' BLASes the GPU has built and
@@ -649,6 +715,7 @@ impl ChunkStreaming {
         loop {
             let Self {
                 streamer,
+                far_proxies,
                 io,
                 scene,
                 shift,
@@ -667,6 +734,7 @@ impl ChunkStreaming {
             let mut frame_io = FrameIo {
                 cook_chunk,
                 io,
+                load: Load::Chunk,
                 scene: *scene,
                 shift: *shift,
                 camera,
@@ -694,7 +762,22 @@ impl ChunkStreaming {
             streamed.chunks_loaded += frame.loaded.len() as u32;
             streamed.chunks_not_loaded += frame.not_loaded.len() as u32;
             streamed.chunks_unloaded += frame.unloaded.len() as u32;
-            keep_loaded_chunks(world, frame, finished, renderer);
+            let mut settled = frame.settled;
+            let mut loaded_chunks = world.resource_mut::<LoadedChunks>();
+            let chunks = &mut loaded_chunks.bypass_change_detection().0;
+            let (finished, pools) = (&mut *frame_io.finished, &mut *frame_io.pools);
+            if keep_loaded_chunks(chunks, frame, finished, pools, MeshUse::DrawnAndTraced) {
+                loaded_chunks.set_changed();
+            }
+            if let Some(far_proxies) = far_proxies {
+                frame_io.serve_far_proxies(&mut far_proxies.awaiting_placement);
+                let frame = (far_proxies.streamer).update(camera, teleported, &mut frame_io);
+                streamed.late_far_proxies += frame.late_chunks;
+                settled &= frame.settled;
+                let (finished, pools) = (&mut *frame_io.finished, &mut *frame_io.pools);
+                let resident = &mut far_proxies.resident;
+                keep_loaded_chunks(resident, frame, finished, pools, MeshUse::FarProxy);
+            }
             let mip_streaming = MipStreaming {
                 io,
                 priority: mips,
@@ -703,7 +786,7 @@ impl ChunkStreaming {
                 load_bytes_per_frame: *load_bytes_per_frame,
             };
             let mips_settled = mip_streaming.stream(world, &mut streamed);
-            if !settle || (frame.settled && mips_settled) {
+            if !settle || (settled && mips_settled) {
                 return Ok(streamed);
             }
             if let Some(error) = error.take() {
@@ -809,17 +892,17 @@ impl MipStreaming<'_> {
     }
 }
 
-/// Moves the Chunks the streamer took this frame from `finished` into the
-/// World's `LoadedChunks`, removes those it unloaded, marks those it holds,
-/// and gives back the pool users of the Chunks it unloaded or dropped.
+/// Moves the loads the streamer took this frame from `finished` into
+/// `chunks`, removes those it unloaded, marks those it holds, and gives back
+/// the pool users, of Meshes loaded for `mesh_use`, of those it unloaded or
+/// dropped. Returns whether `chunks` changed.
 fn keep_loaded_chunks(
-    world: &mut World,
+    chunks: &mut Vec<LoadedChunk>,
     frame: &ChunkFrame,
     finished: &mut BTreeMap<[i32; 2], LoadedChunk>,
     renderer: &mut Renderer,
-) {
-    let mut loaded_chunks = world.resource_mut::<LoadedChunks>();
-    let chunks = &mut loaded_chunks.bypass_change_detection().0;
+    mesh_use: MeshUse,
+) -> bool {
     let mut changed = false;
     for coordinates in &frame.loaded {
         if let Some(chunk) = finished.remove(coordinates) {
@@ -828,13 +911,13 @@ fn keep_loaded_chunks(
         }
     }
     for chunk in std::mem::take(finished).into_values() {
-        remove_users(renderer, &chunk);
+        remove_users(renderer, &chunk, mesh_use);
     }
     if !frame.unloaded.is_empty() {
         chunks.retain(|chunk| {
             let unloaded = frame.unloaded.contains(&chunk.coordinates);
             if unloaded {
-                remove_users(renderer, chunk);
+                remove_users(renderer, chunk, mesh_use);
             }
             !unloaded
         });
@@ -845,27 +928,26 @@ fn keep_loaded_chunks(
         changed |= chunk.held != held;
         chunk.held = held;
     }
-    if changed {
-        loaded_chunks.set_changed();
-    }
+    changed
 }
 
-fn remove_users(renderer: &mut Renderer, chunk: &LoadedChunk) {
+fn remove_users(renderer: &mut Renderer, chunk: &LoadedChunk, mesh_use: MeshUse) {
     for &mesh in &chunk.meshes {
-        renderer
-            .mesh_pool
-            .remove_user(mesh, MeshUse::DrawnAndTraced);
+        renderer.mesh_pool.remove_user(mesh, mesh_use);
     }
     for &material in &chunk.materials {
         renderer.material_pool.remove_user(material);
     }
 }
 
-/// The IO the Chunk streamer reaches in one frame: requests go to the IO
-/// pool, and its finished reads are loaded into `Pools`, the Renderer's.
+/// The IO a streamer reaches in one frame, the Chunks' or the Far proxies':
+/// requests go to the IO pool, and its finished reads are loaded into
+/// `Pools`, the Renderer's.
 struct FrameIo<'a, Pools> {
     cook_chunk: &'a mut Option<CookChunk>,
     io: &'a mut IoPool,
+    /// Which of the two the streamer it serves loads.
+    load: Load,
     scene: ReferenceScene,
     shift: DVec3,
     /// The camera's position in the scene's own placement.
@@ -880,7 +962,8 @@ struct FrameIo<'a, Pools> {
     load_bytes_per_frame: u64,
     instances_placed_per_frame: usize,
     loads_per_frame: usize,
-    /// The loads the frame made so far, those that failed among them.
+    /// The loads the frame made so far, Chunks and Far proxies, those that
+    /// failed among them.
     loads: usize,
     /// The bytes the frame's loads wrote into the load staging so far.
     written_bytes: &'a mut u64,
@@ -897,13 +980,25 @@ struct FrameIo<'a, Pools> {
 /// What a frame's Chunk loads ask of the pools they load into.
 trait LoadsIntoPools {
     fn waits_on_a_read(&self, decoded: &DecodedChunk) -> bool;
-    fn most_written_bytes(&mut self, chunk: &CookedChunk) -> anyhow::Result<u64>;
+    fn most_written_bytes(&mut self, decoded: &DecodedChunk) -> anyhow::Result<u64>;
     /// The bytes written into the load staging so far.
     fn load_staging_written_bytes(&self) -> u64;
     fn load_into_pools(&mut self, decoded: &DecodedChunk) -> anyhow::Result<LoadedChunk>;
     /// Whether the GPU has built and compacted the BLAS of every Mesh
     /// `chunk` names.
     fn blases_ready(&self, chunk: &LoadedChunk) -> bool;
+}
+
+impl<'a, Pools> FrameIo<'a, Pools> {
+    /// Serves the Far proxies' streamer for the rest of the frame, once the
+    /// Chunks' has run: its loads wait in `awaiting_placement`, and count
+    /// towards the frame's caps after the Chunks'.
+    fn serve_far_proxies(&mut self, awaiting_placement: &'a mut Vec<LoadedChunk>) {
+        self.load = Load::FarProxy;
+        self.awaiting_placement = awaiting_placement;
+        self.waiting.clear();
+        self.loads_ended = false;
+    }
 }
 
 impl<Pools> FrameIo<'_, Pools>
@@ -913,12 +1008,9 @@ where
     /// The ready load to take next: the Chunk nearest the camera, lowest
     /// coordinates first, or the lowest coordinates while settling.
     fn next_ready(&self) -> Option<[i32; 2]> {
-        let mut ready = self
-            .io
-            .ready
-            .keys()
-            .copied()
-            .filter(|coordinates| !self.waiting.contains(coordinates));
+        let mut ready = (self.io.ready.keys())
+            .filter(|(load, coordinates)| *load == self.load && !self.waiting.contains(coordinates))
+            .map(|&(_, coordinates)| coordinates);
         if self.settle {
             return ready.next();
         }
@@ -927,10 +1019,10 @@ where
         })
     }
 
-    /// Whether loading `chunk` keeps the frame's loads and load bytes within
+    /// Whether loading `decoded` keeps the frame's loads and load bytes within
     /// their caps: always while settling; past the bytes' cap only while the
     /// frame's loads have written none.
-    fn fits(&mut self, chunk: &CookedChunk) -> anyhow::Result<bool> {
+    fn fits(&mut self, decoded: &DecodedChunk) -> anyhow::Result<bool> {
         if self.settle {
             return Ok(true);
         }
@@ -940,7 +1032,7 @@ where
         if *self.written_bytes == 0 {
             return Ok(true);
         }
-        let bytes = self.most_written_bytes(chunk)?;
+        let bytes = self.most_written_bytes(decoded)?;
         Ok(*self.written_bytes + bytes <= self.load_bytes_per_frame)
     }
 
@@ -949,7 +1041,7 @@ where
         self.loads += 1;
         *self.bytes_read += decoded.bytes_read;
         #[cfg(debug_assertions)]
-        let most_written_bytes = self.most_written_bytes(&decoded.chunk)?;
+        let most_written_bytes = self.most_written_bytes(&decoded)?;
         let written_before = self.load_staging_written_bytes();
         let loaded = self.load_into_pools(&decoded);
         let written_bytes = self.load_staging_written_bytes() - written_before;
@@ -968,20 +1060,20 @@ where
     fn load_next_ready(&mut self) -> Option<([i32; 2], anyhow::Result<LoadedChunk>)> {
         let (coordinates, decoded) = loop {
             let coordinates = self.next_ready()?;
-            let decoded = self.io.ready.remove(&coordinates)?;
+            let decoded = self.io.ready.remove(&(self.load, coordinates))?;
             match &decoded {
                 Ok(chunk) if !self.settle && self.waits_on_a_read(chunk) => {
-                    self.io.ready.insert(coordinates, decoded);
+                    self.io.ready.insert((self.load, coordinates), decoded);
                     self.waiting.insert(coordinates);
                 }
                 _ => break (coordinates, decoded),
             }
         };
         let loaded = match decoded {
-            Ok(decoded) => match self.fits(&decoded.chunk) {
+            Ok(decoded) => match self.fits(&decoded) {
                 Ok(true) => self.load(decoded),
                 Ok(false) => {
-                    self.io.ready.insert(coordinates, Ok(decoded));
+                    self.io.ready.insert((self.load, coordinates), Ok(decoded));
                     return None;
                 }
                 Err(error) => Err(error),
@@ -1027,7 +1119,7 @@ impl LoadsIntoPools for FrameIo<'_, Renderer> {
         let claimed = self.claimed.lock().unwrap_or_else(PoisonError::into_inner);
         let available = |id| {
             !claimed.contains(&id)
-                || mesh_pool.is_loaded(id, MeshUse::DrawnAndTraced)
+                || mesh_pool.is_loaded(id, self.load.mesh_use())
                 || material_pool.is_loaded(id)
                 || material_pool.is_texture_loaded(id)
         };
@@ -1035,10 +1127,11 @@ impl LoadsIntoPools for FrameIo<'_, Renderer> {
             .lacks(&decoded.meshes, &decoded.materials, available)
     }
 
-    /// The most bytes loading `chunk` writes into the load staging: those of
+    /// The most bytes loading `decoded` writes into the load staging: those of
     /// each Mesh, Material and Texture it names that the pools lack, each
     /// read into what the IO pool decoded, if it is not there, for the load.
-    fn most_written_bytes(&mut self, chunk: &CookedChunk) -> anyhow::Result<u64> {
+    fn most_written_bytes(&mut self, decoded: &DecodedChunk) -> anyhow::Result<u64> {
+        let mesh_use = self.load.mesh_use();
         let Renderer {
             mesh_pool,
             material_pool,
@@ -1052,18 +1145,13 @@ impl LoadsIntoPools for FrameIo<'_, Renderer> {
         };
         let mut seen = HashSet::new();
         let mut bytes = 0;
-        let mut materials: Vec<AssetId> = chunk
-            .placements
-            .iter()
-            .filter_map(|placement| placement.material)
-            .collect();
-        for placement in &chunk.placements {
-            let id = placement.mesh;
-            if !seen.insert(id) || mesh_pool.is_loaded(id, MeshUse::DrawnAndTraced) {
+        let mut materials = decoded.materials.clone();
+        for &id in &decoded.meshes {
+            if mesh_pool.is_loaded(id, mesh_use) {
                 continue;
             }
             let mesh = reader.mesh(id)?;
-            bytes += MeshPool::written_bytes(&mesh, MeshUse::DrawnAndTraced);
+            bytes += MeshPool::written_bytes(&mesh, mesh_use);
             let primitive_materials = mesh
                 .primitives
                 .iter()
@@ -1118,7 +1206,11 @@ impl LoadsIntoPools for FrameIo<'_, Renderer> {
             material_pool,
         };
         loader.mesh_pool.defer_blases(!self.settle);
-        let chunk = load_cooked_chunk(&mut loader, decoded.id, decoded.coordinates, &decoded.chunk);
+        let (id, coordinates) = (decoded.id, decoded.coordinates);
+        let chunk = match &decoded.chunk {
+            Some(chunk) => load_cooked_chunk(&mut loader, id, coordinates, chunk),
+            None => load_far_proxy(&mut loader, id, coordinates),
+        };
         loader.mesh_pool.defer_blases(false);
         let mut chunk = chunk?;
         chunk.shift(self.shift);
@@ -1127,7 +1219,7 @@ impl LoadsIntoPools for FrameIo<'_, Renderer> {
 
     fn blases_ready(&self, chunk: &LoadedChunk) -> bool {
         (chunk.meshes.iter())
-            .all(|&mesh| (self.pools.mesh_pool).asset_blas_ready(mesh, MeshUse::DrawnAndTraced))
+            .all(|&mesh| (self.pools.mesh_pool).asset_blas_ready(mesh, self.load.mesh_use()))
     }
 }
 
@@ -1136,14 +1228,18 @@ where
     Self: LoadsIntoPools,
 {
     fn request(&mut self, coordinates: [i32; 2]) {
-        let id = self.scene.chunk_id(coordinates);
+        let load = self.load;
+        let id = match load {
+            Load::Chunk => self.scene.chunk_id(coordinates),
+            Load::FarProxy => self.scene.far_proxy_id(coordinates),
+        };
         if let Some(cook_chunk) = self.cook_chunk
             && let Err(error) = cook_chunk(id)
         {
             let error = format!("{error:#}");
-            tracing::error!(?coordinates, error, "Chunk not cooked");
+            tracing::error!(?load, ?coordinates, error, "not cooked");
         }
-        self.io.request(IoRequest::Chunk(coordinates, id));
+        self.io.request(IoRequest::Chunk(load, coordinates, id));
     }
 
     fn take_finished(&mut self) -> Option<FinishedLoad> {
@@ -1162,8 +1258,9 @@ where
             match loaded {
                 Ok(chunk) => self.awaiting_placement.push(chunk),
                 Err(error) => {
-                    let error = error.context(format!("loading the Chunk at {coordinates:?}"));
-                    tracing::error!(error = format!("{error:#}"), "Chunk not loaded");
+                    let load = self.load;
+                    let error = error.context(format!("loading the {load:?} at {coordinates:?}"));
+                    tracing::error!(error = format!("{error:#}"), "not loaded");
                     if self.settle {
                         self.error.get_or_insert(error);
                     }
@@ -1216,21 +1313,26 @@ mod tests {
     /// The read of a Chunk without Placements at `coordinates`, as it comes
     /// back from the IO pool.
     fn read_chunk(coordinates: [i32; 2]) -> Finished {
+        read(Load::Chunk, coordinates)
+    }
+
+    /// `read_chunk`, or the read of the Chunk's Far proxy.
+    fn read(load: Load, coordinates: [i32; 2]) -> Finished {
         let decoded = DecodedChunk {
             id: AssetId(1),
             coordinates,
-            chunk: CookedChunk {
+            chunk: Some(CookedChunk {
                 placements: Vec::new(),
                 lights: Vec::new(),
                 bounds: [DVec3::ZERO; 2],
-            },
+            }),
             meshes: Vec::new(),
             materials: Vec::new(),
             assets: DecodedAssets::default(),
             bytes_read: 0,
             reads_requested_before_it_came_back: 0,
         };
-        Finished::Chunk(coordinates, Box::new(Ok(decoded)))
+        Finished::Chunk(load, coordinates, Box::new(Ok(decoded)))
     }
 
     /// Pools that load any Chunk but the one at `refused`, without its
@@ -1246,7 +1348,7 @@ mod tests {
             false
         }
 
-        fn most_written_bytes(&mut self, _chunk: &CookedChunk) -> anyhow::Result<u64> {
+        fn most_written_bytes(&mut self, _decoded: &DecodedChunk) -> anyhow::Result<u64> {
             Ok(0)
         }
 
@@ -1316,6 +1418,7 @@ mod tests {
             let mut frame_io = FrameIo {
                 cook_chunk: &mut None,
                 io: &mut io,
+                load: Load::Chunk,
                 scene: ReferenceScene::TextureWall,
                 shift: DVec3::ZERO,
                 camera,
@@ -1432,24 +1535,117 @@ mod tests {
         );
     }
 
+    /// A row of seven Chunks streamed with a Load radius of 256 m and a View
+    /// distance of 512 m, at most four loads a frame. The first frame
+    /// requests the three Chunks within the Load radius, then the five Far
+    /// proxies within the View distance, nearest first. The hold ends with
+    /// the Chunks' loads, no Far proxy read. The Far proxies then load
+    /// nearest first within the frame's loads, and a jump three Chunks east
+    /// releases the two more than a Chunk's edge past the View distance.
+    #[test]
+    fn far_proxies_are_requested_after_the_chunks_and_released_an_edge_past_the_view_distance() {
+        let (mut io, requests, finished_sender) = io_pool();
+        let cache = CookedCache::new(std::env::temp_dir());
+        let claimed = Mutex::new(HashSet::new());
+        let row = || (-3..=3).map(|x| [x, 0]);
+        let mut streamer = ChunkStreamer::new(row(), 256.0);
+        let mut far_proxies = ChunkStreamer::new(row(), 512.0);
+        let mut decoded = DecodedAssets::default();
+        let (mut awaiting_placement, mut far_proxies_awaiting) = (Vec::new(), Vec::new());
+        let mut frame = |camera: DVec3, teleported: bool, reads: &[(Load, [i32; 2])]| {
+            for &(load, coordinates) in reads {
+                finished_sender.send(read(load, coordinates)).unwrap();
+            }
+            let mut frame_io = FrameIo {
+                cook_chunk: &mut None,
+                io: &mut io,
+                load: Load::Chunk,
+                scene: ReferenceScene::World,
+                shift: DVec3::ZERO,
+                camera,
+                cache: &cache,
+                claimed: &claimed,
+                decoded: &mut decoded,
+                awaiting_placement: &mut awaiting_placement,
+                finished: &mut BTreeMap::new(),
+                pools: &mut NoPools {
+                    refused: None,
+                    unready: &[],
+                },
+                settle: false,
+                load_bytes_per_frame: u64::MAX,
+                instances_placed_per_frame: usize::MAX,
+                loads_per_frame: 4,
+                loads: 0,
+                written_bytes: &mut 0,
+                placed_instances: &mut 0,
+                bytes_read: &mut 0,
+                error: &mut None,
+                waiting: HashSet::new(),
+                loads_ended: false,
+            };
+            let chunks = streamer.update(camera, teleported, &mut frame_io).clone();
+            frame_io.serve_far_proxies(&mut far_proxies_awaiting);
+            let far = far_proxies
+                .update(camera, teleported, &mut frame_io)
+                .clone();
+            (chunks, far)
+        };
+        let near = [[0, 0], [-1, 0], [1, 0]];
+        let far_field = [[-2, 0], [2, 0]];
+        let of = |load, chunks: &[[i32; 2]]| -> Vec<(Load, [i32; 2])> {
+            chunks.iter().map(|&chunk| (load, chunk)).collect()
+        };
+
+        let (chunks, _) = frame(MIDDLE, false, &[]);
+        let requested: Vec<(Load, [i32; 2])> = requests
+            .try_iter()
+            .map(|request| match request {
+                IoRequest::Chunk(load, coordinates, _) => (load, coordinates),
+                IoRequest::Mips(_) => unreachable!(),
+            })
+            .collect();
+        let mut expected = of(Load::Chunk, &near);
+        expected.extend(of(Load::FarProxy, &near));
+        expected.extend(of(Load::FarProxy, &far_field));
+        assert_eq!(requested, expected);
+        assert!(chunks.holding);
+
+        let (chunks, far) = frame(MIDDLE, false, &of(Load::Chunk, &near));
+        assert_eq!(chunks.loaded, near);
+        assert!(!chunks.holding && chunks.settled);
+        assert!(far.loaded.is_empty() && !far.settled);
+
+        let (_, far) = frame(MIDDLE, false, &expected[3..]);
+        assert_eq!(far.loaded, [[0, 0], [-1, 0], [1, 0], [-2, 0]]);
+        let (_, far) = frame(MIDDLE, false, &[]);
+        assert_eq!(far.loaded, [[2, 0]]);
+        assert!(far.settled);
+
+        let three_east = MIDDLE + DVec3::X * 768.0;
+        let (_, far) = frame(three_east, true, &[]);
+        assert_eq!(far.unloaded, [[-2, 0], [-1, 0]]);
+        assert_eq!(far.held, [[0, 0]]);
+    }
+
     /// A Chunk waits only on the Chunk reads in flight when its own came back:
     /// any later read found what it names claimed and skipped it.
     #[test]
     fn a_chunk_waits_only_on_the_reads_in_flight_when_its_own_came_back() {
         let (mut io, _requests, finished_sender) = io_pool();
         let finish = |coordinates| finished_sender.send(read_chunk(coordinates)).unwrap();
-        let reads_before = |io: &IoPool, coordinates| match &io.ready[&coordinates] {
+        let reads_before = |io: &IoPool, coordinates| match &io.ready[&(Load::Chunk, coordinates)] {
             Ok(decoded) => io.reads_in_flight_before(decoded.reads_requested_before_it_came_back),
             Err(_) => unreachable!(),
         };
 
-        io.request(IoRequest::Chunk([0, 0], AssetId(1)));
-        io.request(IoRequest::Chunk([1, 0], AssetId(1)));
+        io.request(IoRequest::Chunk(Load::Chunk, [0, 0], AssetId(1)));
+        io.request(IoRequest::Chunk(Load::Chunk, [1, 0], AssetId(1)));
         finish([1, 0]);
         io.receive();
         assert!(reads_before(&io, [1, 0]));
 
-        io.request(IoRequest::Chunk([2, 0], AssetId(1)));
+        io.request(IoRequest::Chunk(Load::Chunk, [2, 0], AssetId(1)));
         assert!(reads_before(&io, [1, 0]));
         finish([0, 0]);
         io.receive();

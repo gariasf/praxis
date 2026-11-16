@@ -18,7 +18,7 @@ use super::{
 /// requires the backend, each pass with the Baseline's pass of its name; both
 /// culling phases' per-slot stages show their guard in the Budget column; counters compare
 /// as `compare` reads them. A run whose measured frames streamed also shows
-/// what they streamed: Late Chunks, late mips, Chunks loaded, the Fast
+/// what they streamed: Late Chunks, Late Far proxies, late mips, Chunks loaded, the Fast
 /// travel's hold, the frames until traced and the longest wait on BLAS
 /// compaction, or none. A Baseline of another scene, profile, size or
 /// counter frames is refused.
@@ -237,6 +237,11 @@ pub fn report(
         let hold = current.fast_travel_hold;
         let rows = [
             ("Late Chunks", Some(streamed.late_chunks as f64), 0),
+            (
+                "Late Far proxies",
+                Some(streamed.late_far_proxies as f64),
+                0,
+            ),
             ("Late mips", Some(streamed.late_mips as f64), 0),
             ("Chunks loaded", Some(streamed.chunks_loaded as f64), 0),
             (
@@ -323,6 +328,7 @@ impl std::fmt::Display for Traversal {
             ("GPU frame p99, µs", gpu.p99, 1),
             ("GPU frame maximum, µs", gpu.maximum, 1),
             ("Late Chunks", Some(self.late_chunks as f64), 0),
+            ("Late Far proxies", Some(self.late_far_proxies as f64), 0),
             ("Late mips", Some(self.late_mips as f64), 0),
             (
                 "Peak GPU memory, bytes",
@@ -404,6 +410,7 @@ mod tests {
         froxel_lights_overflowed: 0,
         shadow_mask_lights_overflowed: 3,
         late_chunks: 0,
+        late_far_proxies: 0,
         chunks_loaded: 0,
         chunks_unloaded: 0,
         bytes_read: 0,
@@ -579,6 +586,7 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
 | `froxel_lights_overflowed` | 0 | 0 | +0 | — | — |
 | `shadow_mask_lights_overflowed` | 3 | 3 | +0 | 1.000 | — |
 | `late_chunks` | 0 | 0 | +0 | — | — |
+| `late_far_proxies` | 0 | 0 | +0 | — | — |
 | `chunks_loaded` | 0 | 0 | +0 | — | — |
 | `chunks_unloaded` | 0 | 0 | +0 | — | — |
 | `bytes_read` | 0 | 0 | +0 | — | — |
@@ -626,6 +634,7 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
         let mut streamed = current();
         streamed.counters.chunks_loaded = 120;
         streamed.counters.late_mips = 1234;
+        streamed.counters.late_far_proxies = 2;
         streamed.counter_frames.counters.heap_allocations = 310;
         streamed.fast_travel_hold = Some(FastTravelHold {
             milliseconds: 412.34,
@@ -640,6 +649,7 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
             "BLAS compaction",
             "`heap_allocations`",
             "Late Chunks",
+            "Late Far proxies",
             "Late mips",
             "Chunks loaded",
             "Fast-travel hold, ms",
@@ -655,6 +665,7 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
                 "| BLAS compaction | 850.0 | 1,900.0 | 2,400.0 | 3,100.0 | — | — | — | — | — |",
                 "| `heap_allocations` | 310 | 300 | +10 | 1.033 | — |",
                 "| Late Chunks | 0 |",
+                "| Late Far proxies | 2 |",
                 "| Late mips | 1,234 |",
                 "| Chunks loaded | 120 |",
                 "| Fast-travel hold, ms | 412.3 |",
