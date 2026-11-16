@@ -5,7 +5,9 @@
 //! `forced_lod` Render switch the LOD it names; and a packed
 //! index per triangle corner, in slot order within each phase, which the
 //! main pass draws with one indirect call per phase and depth pipeline, and
-//! one of both phases for the lit pipeline (ADR 0019). It runs in two
+//! one of both phases for the lit pipeline (ADR 0019); the packed indices
+//! of Thin Primitives' Meshlets go apart, at the buffer's end, each phase's
+//! in slot order, for the pipelines that draw them (ADR 0027). It runs in two
 //! phases: phase one draws the Instances visible the frame before, phase
 //! two, after the depth pyramid, the others in view that the pyramid does
 //! not hide, and it records each Instance's visibility for the next frame. With the `culling` Render switch on, it
@@ -101,8 +103,9 @@ impl DrawCapacity {
 /// readback reads: the indirect arguments of the indexed draw of both
 /// phases, its index count first, then the Instances it holds and those it
 /// has no room for, then phase two's own draw's arguments, where phase
-/// two's Meshlet records and packed indices start, and the phase's dispatch
-/// of `append_triangles`.
+/// two's Meshlet records, packed indices and Thin Primitives' packed indices
+/// start, the phase's dispatch of `append_triangles`, and each phase's draw
+/// of its Thin Primitives.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct FrameDraw {
@@ -110,11 +113,17 @@ pub(crate) struct FrameDraw {
     pub(crate) instances_drawn: u32,
     pub(crate) instances_overflowed: u32,
     pub(crate) phase_two_draw: wgpu::util::DrawIndexedIndirectArgs,
-    phase_two_offsets: [u32; 2],
+    phase_two_offsets: [u32; 3],
     append_dispatch: wgpu::util::DispatchIndirectArgs,
-    /// To WGSL's size: `phase_two_offsets` aligns the struct to 8 bytes.
-    _padding: u32,
+    pub(crate) phase_one_thin_draw: wgpu::util::DrawIndexedIndirectArgs,
+    pub(crate) phase_two_thin_draw: wgpu::util::DrawIndexedIndirectArgs,
 }
+
+// WGSL aligns `phase_two_offsets` and the struct to 16 bytes.
+const _: () = assert!(
+    std::mem::offset_of!(FrameDraw, phase_two_offsets).is_multiple_of(16)
+        && size_of::<FrameDraw>().is_multiple_of(16)
+);
 
 /// Where the frame's draw holds the indirect arguments of phase two's draw.
 pub(crate) const PHASE_TWO_DRAW_OFFSET: u64 =
@@ -123,16 +132,27 @@ pub(crate) const PHASE_TWO_DRAW_OFFSET: u64 =
 /// Where the frame's draw holds the phase's dispatch of `append_triangles`.
 const APPEND_DISPATCH_OFFSET: u64 = std::mem::offset_of!(FrameDraw, append_dispatch) as u64;
 
+/// Where the frame's draw holds the indirect arguments of each phase's draw
+/// of its Thin Primitives.
+pub(crate) const PHASE_ONE_THIN_DRAW_OFFSET: u64 =
+    std::mem::offset_of!(FrameDraw, phase_one_thin_draw) as u64;
+pub(crate) const PHASE_TWO_THIN_DRAW_OFFSET: u64 =
+    std::mem::offset_of!(FrameDraw, phase_two_thin_draw) as u64;
+
 impl FrameDraw {
-    /// Its index count over 3: the drawn Instances' indices fill the draw
-    /// from index 0 with no gap, in slot order within each phase.
+    /// Its draws' index counts over 3: the drawn Instances' indices fill the
+    /// draw from index 0 with no gap, in slot order within each phase, and
+    /// their Thin Primitives' each phase's draw of them.
     pub(crate) fn triangles_drawn(&self) -> u32 {
-        self.draw.index_count / 3
+        (self.draw.index_count
+            + self.phase_one_thin_draw.index_count
+            + self.phase_two_thin_draw.index_count)
+            / 3
     }
 
-    /// Phase two's draw's index count over 3.
+    /// Phase two's draws' index counts over 3.
     pub(crate) fn phase_two_triangles_drawn(&self) -> u32 {
-        self.phase_two_draw.index_count / 3
+        (self.phase_two_draw.index_count + self.phase_two_thin_draw.index_count) / 3
     }
 }
 
@@ -161,8 +181,9 @@ pub struct CullingPass {
 struct FrameDrawBuffers {
     /// The Instance slots in use, which the CPU writes when they change.
     instance_slot_count: Counted<wgpu::Buffer>,
-    /// Each slot's first Meshlet record and packed index within its block of
-    /// `SCAN_BLOCK_SIZE` slots, then each block's.
+    /// Each slot's first Meshlet record, packed index and Thin Primitives'
+    /// packed index within its block of `SCAN_BLOCK_SIZE` slots, then each
+    /// block's, then the phase's two entries (`culling.wgsl`).
     instance_offsets: Counted<wgpu::Buffer>,
     meshlet_records: Counted<wgpu::Buffer>,
     packed_indices: Counted<wgpu::Buffer>,
@@ -219,8 +240,9 @@ impl CullingPass {
         );
         let instance_offsets = buffer(
             "Instance Offset Buffer",
-            u64::from(capacities.instances + capacities.instances / SCAN_BLOCK_SIZE + 1)
-                * size_of::<[u32; 2]>() as u64,
+            // A vec3 of u32s takes four in an array.
+            u64::from(capacities.instances + capacities.instances / SCAN_BLOCK_SIZE + 2)
+                * size_of::<[u32; 4]>() as u64,
             wgpu::BufferUsages::STORAGE,
         );
         // A record is three u32s: Instance slot, Meshlet and Material ID.

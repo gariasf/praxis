@@ -7,10 +7,15 @@
 //! colour, which it resolves into the HDR target. With shadow rays on, phase
 //! two's depth is a pass of its own, so the shadow mask pass reads every
 //! Instance's depth before the lit pass reads the mask; with them off, the
-//! lit pass draws it first.
+//! lit pass draws it first. While a loaded Mesh has a Thin Primitive, each
+//! draw is followed by its phase's Thin Primitives' through a pipeline of
+//! their own, whose depth passes write which samples a fragment keeps (ADR
+//! 0027), so no other geometry pays for a written sample mask.
 
 use crate::render::bind_groups::{BindGroupDefinition, MAIN_PASS_INPUTS, pipeline_layout};
-use crate::render::culling_pass::{CullingPhase, PHASE_TWO_DRAW_OFFSET};
+use crate::render::culling_pass::{
+    CullingPhase, PHASE_ONE_THIN_DRAW_OFFSET, PHASE_TWO_DRAW_OFFSET, PHASE_TWO_THIN_DRAW_OFFSET,
+};
 use crate::render::renderer::{RenderCapacities, RenderSwitches};
 use crate::render::shaders;
 use crate::render::targets::{self, RenderTargets};
@@ -31,6 +36,10 @@ pub struct MainPass {
     /// pass, before it shades.
     lit_pass_depth_pipeline: wgpu::RenderPipeline,
     lit_pipeline: wgpu::RenderPipeline,
+    /// Each pipeline's twin for Thin Primitives.
+    thin_depth_prepass_pipeline: wgpu::RenderPipeline,
+    thin_lit_pass_depth_pipeline: wgpu::RenderPipeline,
+    thin_lit_pipeline: wgpu::RenderPipeline,
     inputs_layout: wgpu::BindGroupLayout,
     meshlet_records_buffer: wgpu::Buffer,
     /// The frame's draw's packed indices, its index buffer.
@@ -121,43 +130,62 @@ impl MainPass {
                 cache: None,
             })
         };
+        let depth_fragment = |entry_point, targets| {
+            Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some(entry_point),
+                targets,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            })
+        };
+        let surface_normals_target = [Some(wgpu::ColorTargetState {
+            format: targets::SURFACE_NORMALS_FORMAT,
+            blend: None,
+            write_mask: wgpu::ColorWrites::ALL,
+        })];
         // With shadow rays on, the depth passes write each sample's surface
         // normals beside its depth, for the shadow mask pass.
         let depth_prepass_pipeline = if switches.shadow_rays {
             depth_pipeline(
                 "Depth Pre-pass Pipeline",
                 "vs_depth_normals",
-                Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some("fs_surface_normals"),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: targets::SURFACE_NORMALS_FORMAT,
-                        blend: None,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                }),
+                depth_fragment("fs_surface_normals", &surface_normals_target),
             )
         } else {
             depth_pipeline("Depth Pre-pass Pipeline", "vs_depth_prepass", None)
         };
+        let thin_depth_prepass_pipeline = if switches.shadow_rays {
+            depth_pipeline(
+                "Thin Depth Pre-pass Pipeline",
+                "vs_thin",
+                depth_fragment("fs_thin_surface_normals", &surface_normals_target),
+            )
+        } else {
+            depth_pipeline(
+                "Thin Depth Pre-pass Pipeline",
+                "vs_thin",
+                depth_fragment("fs_thin_depth", &[]),
+            )
+        };
         // Every pipeline the lit pass sets names its colour target, so its
-        // depth draw names it too, and writes nothing to it.
+        // depth draws name it too, and write nothing to it.
+        let unwritten_colour_target = [Some(wgpu::ColorTargetState {
+            format: targets::HDR_FORMAT,
+            blend: None,
+            write_mask: wgpu::ColorWrites::empty(),
+        })];
         let lit_pass_depth_pipeline = depth_pipeline(
             "Lit Pass Depth Pipeline",
             "vs_depth_prepass",
-            Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_depth"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: targets::HDR_FORMAT,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::empty(),
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
+            depth_fragment("fs_depth", &unwritten_colour_target),
         );
-        let lit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let thin_lit_pass_depth_pipeline = depth_pipeline(
+            "Thin Lit Pass Depth Pipeline",
+            "vs_thin",
+            depth_fragment("fs_thin_depth", &unwritten_colour_target),
+        );
+        let constants = switches.constants();
+        let mut lit_descriptor = wgpu::RenderPipelineDescriptor {
             label: Some("Lit Pass Pipeline"),
             layout: Some(&lit_layout),
             vertex: wgpu::VertexState {
@@ -175,7 +203,7 @@ impl MainPass {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions {
-                    constants: &switches.constants(),
+                    constants: &constants,
                     ..wgpu::PipelineCompilationOptions::default()
                 },
             }),
@@ -184,11 +212,21 @@ impl MainPass {
             multisample,
             multiview_mask: None,
             cache: None,
-        });
+        };
+        let lit_pipeline = device.create_render_pipeline(&lit_descriptor);
+        lit_descriptor.label = Some("Thin Lit Pass Pipeline");
+        lit_descriptor.vertex.entry_point = Some("vs_thin");
+        if let Some(fragment) = &mut lit_descriptor.fragment {
+            fragment.entry_point = Some("fs_thin_main");
+        }
+        let thin_lit_pipeline = device.create_render_pipeline(&lit_descriptor);
         MainPass {
             depth_prepass_pipeline,
             lit_pass_depth_pipeline,
             lit_pipeline,
+            thin_depth_prepass_pipeline,
+            thin_lit_pass_depth_pipeline,
+            thin_lit_pipeline,
             inputs_layout,
             meshlet_records_buffer,
             packed_indices_buffer: packed_indices.clone(),
@@ -240,13 +278,15 @@ impl MainPass {
     /// `timestamp_writes`: it draws the phase's draw into the depth target,
     /// and with shadow rays on into the surface normals. Phase one's, the
     /// depth pre-pass, clears them; phase two's, recorded only with shadow
-    /// rays on, loads them and stores them for the shadow mask pass.
+    /// rays on, loads them and stores them for the shadow mask pass. With
+    /// `thin_primitives`, it draws the phase's Thin Primitives after.
     pub fn record_depth_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         render_targets: &RenderTargets,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         phase: CullingPhase,
+        thin_primitives: bool,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) {
         let (label, depth_attachment, clears_surface_normals, draw_offset) = match phase {
@@ -282,19 +322,29 @@ impl MainPass {
                 .filter(|&(definition, _)| definition.visible_to(wgpu::ShaderStages::VERTEX)),
         );
         depth_pass.draw_indexed_indirect(&self.frame_draw_buffer, draw_offset);
+        if thin_primitives {
+            let thin_draw_offset = match phase {
+                CullingPhase::One => PHASE_ONE_THIN_DRAW_OFFSET,
+                CullingPhase::Two => PHASE_TWO_THIN_DRAW_OFFSET,
+            };
+            depth_pass.set_pipeline(&self.thin_depth_prepass_pipeline);
+            depth_pass.draw_indexed_indirect(&self.frame_draw_buffer, thin_draw_offset);
+        }
     }
 
     /// Records the lit pass into `encoder`: clears the multisampled colour
     /// to `background`, exposed, draws phase two's draw into the depth
     /// target unless its own pass did, then the frame's draw of both phases
     /// at depth equal, with `bind_groups` set, and resolves the colour into
-    /// the HDR target, timed into `timestamp_writes`.
+    /// the HDR target, timed into `timestamp_writes`. With `thin_primitives`,
+    /// each draw is followed by the Thin Primitives' of its phases.
     pub fn record_lit_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         render_targets: &RenderTargets,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         background: wgpu::Color,
+        thin_primitives: bool,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) {
         let mut lit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -312,9 +362,18 @@ impl MainPass {
         if !self.shadow_rays {
             lit_pass.set_pipeline(&self.lit_pass_depth_pipeline);
             lit_pass.draw_indexed_indirect(&self.frame_draw_buffer, PHASE_TWO_DRAW_OFFSET);
+            if thin_primitives {
+                lit_pass.set_pipeline(&self.thin_lit_pass_depth_pipeline);
+                lit_pass.draw_indexed_indirect(&self.frame_draw_buffer, PHASE_TWO_THIN_DRAW_OFFSET);
+            }
         }
         lit_pass.set_pipeline(&self.lit_pipeline);
         lit_pass.draw_indexed_indirect(&self.frame_draw_buffer, 0);
+        if thin_primitives {
+            lit_pass.set_pipeline(&self.thin_lit_pipeline);
+            lit_pass.draw_indexed_indirect(&self.frame_draw_buffer, PHASE_ONE_THIN_DRAW_OFFSET);
+            lit_pass.draw_indexed_indirect(&self.frame_draw_buffer, PHASE_TWO_THIN_DRAW_OFFSET);
+        }
     }
 
     /// Sets `bind_groups`, this pass's own group and the frame's draw's

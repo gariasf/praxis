@@ -1,0 +1,27 @@
+# Coverage in the main pass is a written `sample_mask`, and alpha-to-coverage stays off
+
+A fragment of the main pass that stands for part of a pixel says so by writing `sample_mask`, the samples it keeps of the pixel's four, and alpha-to-coverage stays off in every pipeline of the main pass. Geometry that writes the mask draws through pipelines of its own, so no other geometry pays for it. Accepted 2026-11-14 ([decision](https://github.com/gariasf/praxis/issues/797#issuecomment-6874904284), items 2 and 12; kept by both prototypes, [the LOD switch's](https://github.com/gariasf/praxis/issues/800#issuecomment-6875787005) for its cost and [the widening's](https://github.com/gariasf/praxis/issues/801#issuecomment-6876086730) for its look). Implemented for Thin Primitives ([#360](https://github.com/gariasf/praxis/issues/360)). Not yet: a small Instance's coverage, and M7's masked Materials.
+
+## Decision
+
+- **The carrier.** Partial coverage is a `sample_mask` output of the fragment stage. No pipeline of the main pass enables alpha-to-coverage.
+- **Who writes it.** The depth passes write the mask, so only the kept samples take the fragment's depth. The lit pass draws the same geometry at depth equal and writes none: it meets the depths the depth passes kept.
+- **Five levels, rounded.** 4x MSAA holds five coverage levels. A fragment keeps a count of the four samples equal to its coverage times four, rounded to the nearest, and none below an eighth. The samples kept follow from the count alone, sample 0, then 3, 1 and 2, so every fragment of a pixel keeps the same ones and a tube's faces share them. No dither, no pattern across pixels, no state across frames.
+- **Pipelines of their own.** Each pipeline of the main pass has a twin whose fragment stage writes the mask, or for the lit pass meets it, and the culling pass lists the geometry drawn through the twins apart, in slot order within each phase. The twins are set only while a loaded Mesh needs them.
+- **A Thin Primitive's coverage.** Its vertices move out from its tube's centre line until the tube draws a pixel wide, and its coverage is the tube's true width over the width it draws. It reads the camera and the Instance alone. A Far proxy holds no Thin Primitive, so the rule ends at the Load radius.
+
+## Considered options
+
+- **Alpha-to-coverage.** Which samples a given alpha keeps is the platform's choice, so two machines would draw two images, and a pipeline that enables it may not also write `sample_mask` [ref:webgpu-alpha-to-coverage-sample-mask], which the same passes need.
+- **A dither between the levels.** The right mean coverage at any width, as a stipple that crawls under a moving camera. The owner flew `town` on both and chose rounding ([decision](https://github.com/gariasf/praxis/issues/801#issuecomment-6876086730), item 1).
+- **Alpha blending**, as phone-wire antialiasing fades the line it widens. Continuous at any distance, but it needs M7's sorted transparent pass.
+- **Accumulating coverage over frames.** Excluded by ADR 0008.
+- **The mask in the pipelines every Instance draws through.** On the M4 Pro at 2560×1440, a `sample_mask` output in both depth passes and the lit pass cost `town`'s GPU frame 0.73 ms with shadow rays on and its gate 0.56 ms, as much as a `discard` there; the cost followed the share of indices drawn through the stages that write it, and a second pipeline and draw a pass cost nothing ([#800](https://github.com/gariasf/praxis/issues/800)). Measured on the M4 Pro alone.
+
+## Consequences
+
+- ADR 0019's "alpha-to-coverage for masked materials" no longer holds: a masked Material derives its mask from alpha in the shader and writes it as `sample_mask`, through the twins.
+- Five levels are all 4x MSAA holds: the contrast along a Thin Primitive steps by a quarter as it narrows, and it ends at an eighth of coverage. A tube of few faces draws wider than a pixel so that its narrowest view spans one, a third wider for three faces, so `town`'s wire ends where it is a sixth of a pixel wide.
+- The culling pass's compute stage already binds the nine storage buffers the Capability floor allows (ADR 0021), so the twins' packed indices share the frame's draw's buffer: each phase's fill its end, back from the phases' before, in slot order.
+- A fragment stage that writes the mask reads a flat input, so the M4 Pro merges none of its fragments (ADR 0019).
+- A pixel whose samples a mask splits between two surfaces is listed for the shadow mask pass's second surface, as any edge pixel is.
