@@ -75,7 +75,15 @@ pub(crate) struct ChunkFrame {
     pub settled: bool,
 }
 
+/// Streams a Game world's Chunks within its Load radius, or, given the View
+/// distance as that radius, their Far proxies, one a Chunk: what it then
+/// calls a Chunk's load is a Far proxy's, and its Late Chunks are the Late
+/// Far proxies.
 pub(crate) struct ChunkStreamer {
+    far_proxies: bool,
+    /// Whether an arrival's Far proxies still load, none failing, as the
+    /// camera travels: one reached meanwhile loads behind them, not late.
+    filling: bool,
     chunks: HashSet<[i32; 2]>,
     /// The lowest and highest coordinates of `chunks`, x then z.
     bounds: [RangeInclusive<i32>; 2],
@@ -116,6 +124,8 @@ impl ChunkStreamer {
             lowest..=highest
         };
         Self {
+            far_proxies: false,
+            filling: false,
             bounds: [along(0), along(1)],
             chunks,
             load_radius_metres,
@@ -131,6 +141,18 @@ impl ChunkStreamer {
             lead_frames: LEAST_LEAD_FRAMES,
             requests: Vec::new(),
             frame: ChunkFrame::default(),
+        }
+    }
+
+    /// A streamer of the Far proxies of the Chunks at `chunks`, Resident
+    /// within `view_distance_metres` of the camera.
+    pub(crate) fn of_far_proxies(
+        chunks: impl IntoIterator<Item = [i32; 2]>,
+        view_distance_metres: f64,
+    ) -> Self {
+        Self {
+            far_proxies: true,
+            ..Self::new(chunks, view_distance_metres)
         }
     }
 
@@ -158,6 +180,8 @@ impl ChunkStreamer {
             _ => 0.0,
         };
         let arrived = teleported || self.camera_before.is_none();
+        let arriving = arrived || self.filling;
+        let mut arrival_failing = false;
 
         while let Some(load) = io.take_finished() {
             let Some(requested_on) = self.in_flight.remove(&load.coordinates) else {
@@ -231,8 +255,9 @@ impl ChunkStreamer {
             if metres <= load_radius_metres {
                 self.within_load_radius.insert(coordinates);
                 every_chunk_within_load_radius_loaded &= loaded;
+                arrival_failing |= !loaded && self.failed.contains_key(&coordinates);
                 let entered = !self.within_load_radius_before.contains(&coordinates);
-                if !arrived && !loaded && entered && self.counted_late.insert(coordinates) {
+                if !arriving && !loaded && entered && self.counted_late.insert(coordinates) {
                     frame.late_chunks += 1;
                 }
             }
@@ -245,6 +270,7 @@ impl ChunkStreamer {
             }
         }
         frame.holding = (frame.holding || arrived) && !every_chunk_within_load_radius_loaded;
+        self.filling = self.far_proxies && frame.holding && !arrival_failing;
         self.requests
             .sort_unstable_by(|(left_metres, left), (right_metres, right)| {
                 left_metres.total_cmp(right_metres).then(left.cmp(right))
@@ -578,6 +604,32 @@ mod tests {
         assert!(frames.iter().all(|frame| frame.late_chunks == 0));
     }
 
+    /// Loads take 200 frames. Flying east from an arrival, [22, 0] comes
+    /// within the radius on frame 154 and [22, -1] and [22, 1] on frame 195,
+    /// each unread for 184 frames more: three Late Chunks, each once. For a
+    /// Far proxies' streamer they are the far field's fill, none late,
+    /// unless a load of the arrival, here [21, 1]'s, is failing.
+    #[test]
+    fn a_far_proxy_unread_as_its_chunk_arrives_is_late_once_unless_the_far_field_fills() {
+        let far_proxies = || {
+            let chunks = (-4..=40).flat_map(|x| (-4..=4).map(move |z| [x, z]));
+            ChunkStreamer::of_far_proxies(chunks, LOAD_RADIUS_METRES)
+        };
+        let late = |mut streamer: ChunkStreamer, failures: u32| -> u32 {
+            let mut io = ScriptedIo::new(200);
+            io.delays.insert([21, 1], 1);
+            io.failures.insert([21, 1], failures);
+            let frames = (0..600).map(|frame| {
+                let camera = middle_of([20, 0]) + DVec3::X * f64::from(frame) * 50.0 / 60.0;
+                step(&mut streamer, &mut io, camera, false).late_chunks
+            });
+            frames.sum()
+        };
+        assert_eq!(late(streamer(), 0), 3);
+        assert_eq!(late(far_proxies(), 0), 0);
+        assert_eq!(late(far_proxies(), 10), 3);
+    }
+
     #[test]
     fn a_frame_is_settled_when_every_chunk_it_requested_has_loaded() {
         let (mut streamer, mut io) = (streamer(), ScriptedIo::new(6));
@@ -643,6 +695,45 @@ mod tests {
             })
             .collect();
         assert_eq!(late, [0, 0, 1, 0, 0]);
+    }
+
+    /// The world's Far proxies on the bench path and the traversal, Fast
+    /// travels included: those Resident and those in flight never pass the
+    /// Material table's count for them, whether loads take 8 frames or 300,
+    /// whose lead requests a Far proxy as far out as it is released, and
+    /// none is late at 50 m/s.
+    #[test]
+    fn the_worlds_paths_keep_its_far_proxies_within_their_materials_count_and_none_late() {
+        use crate::scenes::world::{
+            BENCH_SEGMENT_FRAMES, TRAVERSAL_FRAMES, camera_at, traversal_camera_at,
+        };
+
+        let scene = crate::scenes::ReferenceScene::World;
+        let most_materials = crate::assets::PoolCapacities::checked_in().far_proxy_materials;
+        type CameraPath = fn(u32) -> crate::camera::Camera;
+        let paths: [(CameraPath, u32); 2] = [
+            (camera_at, BENCH_SEGMENT_FRAMES),
+            (traversal_camera_at, TRAVERSAL_FRAMES),
+        ];
+        let runs = paths.into_iter().flat_map(|path| [(path, 8), (path, 300)]);
+        for ((camera_at, frames), load_frames) in runs {
+            let chunks = scene.chunk_coordinates();
+            let mut streamer = ChunkStreamer::of_far_proxies(chunks, scene.view_distance_metres());
+            let mut io = ScriptedIo::new(load_frames);
+            let (mut most_held, mut late) = (0, 0);
+            for frame in 0..frames {
+                let camera = camera_at(frame);
+                let stepped = step(&mut streamer, &mut io, camera.position, camera.teleported);
+                late += stepped.late_chunks;
+                most_held = most_held.max(streamer.loaded.len() + streamer.in_flight.len());
+            }
+            assert!(most_held > 200, "{most_held} Far proxies at most");
+            assert!(
+                most_held <= most_materials as usize,
+                "{most_held} Far proxies held, past the {most_materials} Materials of theirs"
+            );
+            assert_eq!(late, 0);
+        }
     }
 
     #[test]

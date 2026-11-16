@@ -3,9 +3,9 @@ use std::collections::hash_map::Entry;
 
 use bevy_ecs::prelude::*;
 
-use crate::assets::{AssetLoader, MaterialHandle, MeshHandle};
+use crate::assets::{AssetLoader, MaterialHandle, MeshHandle, PoolLoader};
 use crate::components::{PointLight, Transform};
-use crate::cooked::{AssetId, CookedChunk, chunk_origin};
+use crate::cooked::{AssetId, CHUNK_EDGE_METRES, CookedChunk, chunk_origin};
 
 /// The loaded Chunks, in load order. Prepare gives each its own range of
 /// Instance slots and writes its Placements there; no entity holds them.
@@ -99,6 +99,36 @@ pub(crate) fn load_cooked_chunk(
         lights,
         meshes: mesh_ids,
         materials: material_ids,
+        held: false,
+    })
+}
+
+/// Loads the Far proxy of the Chunk at `coordinates`, the Mesh `id`, through
+/// `loader`, as a Chunk of one Placement: its Mesh, unrotated, at the
+/// Chunk's centre on the ground (ADR 0026).
+pub(crate) fn load_far_proxy(
+    loader: &mut PoolLoader,
+    id: AssetId,
+    coordinates: [i32; 2],
+) -> anyhow::Result<LoadedChunk> {
+    let half_edge_metres = CHUNK_EDGE_METRES / 2.0;
+    let pivot = glam::dvec3(half_edge_metres, 0.0, half_edge_metres);
+    let placement = ChunkPlacement {
+        transform: Transform {
+            translation: chunk_origin(coordinates) + pivot,
+            rotation: glam::Quat::IDENTITY,
+            scale: glam::Vec3::ONE,
+        },
+        mesh: loader.far_proxy(id)?,
+        material: None,
+    };
+    Ok(LoadedChunk {
+        id,
+        coordinates,
+        placements: vec![placement],
+        lights: Vec::new(),
+        meshes: vec![id],
+        materials: Vec::new(),
         held: false,
     })
 }

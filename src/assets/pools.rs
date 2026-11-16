@@ -15,8 +15,8 @@ use crate::{
 /// Thousandths of the geometry Arenas' Budget each Arena takes, in the
 /// order of `PoolCapacities`' Arenas: the shares of the bytes `helmet`'s,
 /// `town`'s and `world`'s Meshes put in each, every LOD's Meshlets and LOD
-/// 0's indices.
-const ARENA_PER_MILLE: [u64; 5] = [408, 265, 10, 145, 172];
+/// 0's indices, `world`'s with its densest far field's Far proxies.
+const ARENA_PER_MILLE: [u64; 5] = [658, 130, 11, 133, 68];
 
 /// A Mesh's bytes in the geometry Arenas: the mean of `town`'s Meshes when
 /// it had 19.
@@ -111,6 +111,8 @@ pub enum MeshUse {
     /// Drawn and traced, a Mesh the GPU bends whose BLAS is updated each
     /// frame from its bent shape: built to allow updates, never compacted.
     Refitted,
+    /// Drawn alone, as it was cooked: a Far proxy's load, which builds no BLAS.
+    FarProxy,
 }
 
 impl MeshUse {
@@ -122,13 +124,16 @@ impl MeshUse {
     /// Whether rays trace it, so it needs a BLAS and the index stream the
     /// BLAS is built from.
     fn traced(self) -> bool {
-        self != MeshUse::Drawn
+        !matches!(self, MeshUse::Drawn | MeshUse::FarProxy)
     }
 
     /// Whether Renderables share one entry per Asset ID: a bent Mesh is its
     /// Renderable's own, as the GPU writes its vertices.
     fn shared(self) -> bool {
-        matches!(self, MeshUse::DrawnAndTraced | MeshUse::Traced)
+        matches!(
+            self,
+            MeshUse::DrawnAndTraced | MeshUse::Traced | MeshUse::FarProxy
+        )
     }
 }
 
@@ -368,7 +373,7 @@ impl MeshPool {
             match self.load_for(staging, mesh, materials, mesh_use) {
                 Ok(handle) => break handle,
                 Err(refusal) => {
-                    if !self.free_least_recently_used(released_materials) {
+                    if !self.free_least_recently_used(None, released_materials) {
                         refusal.log();
                         self.refusals += 1;
                         released_materials.extend(material_ids);
@@ -390,14 +395,22 @@ impl MeshPool {
         Some(handle)
     }
 
-    /// Frees the least recently used unused Mesh, pushing its Material Asset
-    /// IDs onto `released_materials`; false when none is unused or the frame
-    /// freed `ENTRIES_FREED_PER_FRAME` already.
-    pub fn free_least_recently_used(&mut self, released_materials: &mut Vec<AssetId>) -> bool {
+    /// Frees the least recently used unused Mesh, loaded for `mesh_use` when
+    /// one is given, pushing its Material Asset IDs onto `released_materials`;
+    /// false when none is unused or the frame freed `ENTRIES_FREED_PER_FRAME`
+    /// already.
+    pub fn free_least_recently_used(
+        &mut self,
+        mesh_use: Option<MeshUse>,
+        released_materials: &mut Vec<AssetId>,
+    ) -> bool {
         if self.frame_frees >= ENTRIES_FREED_PER_FRAME {
             return false;
         }
-        let Some(key) = self.unused.pop_least_recent() else {
+        let wanted = |&(_, loaded_for): &(AssetId, MeshUse)| {
+            mesh_use.is_none_or(|mesh_use| mesh_use == loaded_for)
+        };
+        let Some(key) = self.unused.pop_least_recent_where(wanted) else {
             return false;
         };
         let shared = self
@@ -1150,10 +1163,6 @@ impl<Key> Unused<Key> {
         self.order.remove(&tick);
     }
 
-    pub(crate) fn pop_least_recent(&mut self) -> Option<Key> {
-        self.order.pop_first().map(|(_, key)| key)
-    }
-
     /// Takes out the least recently used key that `wanted` holds for.
     pub(crate) fn pop_least_recent_where(&mut self, wanted: impl Fn(&Key) -> bool) -> Option<Key> {
         let tick = *self.order.iter().find(|(_, key)| wanted(key))?.0;
@@ -1370,11 +1379,11 @@ pub(crate) mod tests {
         assert_eq!(
             PoolCapacities::checked_in(),
             PoolCapacities {
-                vertex_arena_bytes: 34_225_520,
-                index_arena_bytes: 22_229_808,
-                meshlet_arena_bytes: 838_860,
-                meshlet_vertex_arena_bytes: 12_163_480,
-                meshlet_triangle_arena_bytes: 14_428_404,
+                vertex_arena_bytes: 55_197_040,
+                index_arena_bytes: 10_905_188,
+                meshlet_arena_bytes: 922_744,
+                meshlet_vertex_arena_bytes: 11_156_848,
+                meshlet_triangle_arena_bytes: 5_704_252,
                 meshes: 16_371,
                 materials: 222,
                 far_proxy_materials: 285,
@@ -1399,7 +1408,7 @@ pub(crate) mod tests {
         let memory = gpu_memory(&context);
         let mut pool = MeshPool::new(&context.device, &memory, &capacities);
         let bytes_by_kind = memory.bytes_by_kind();
-        assert_eq!(bytes_by_kind[GpuMemoryKind::GeometryArenas as usize], 10236);
+        assert_eq!(bytes_by_kind[GpuMemoryKind::GeometryArenas as usize], 10240);
         assert_eq!(
             bytes_by_kind[GpuMemoryKind::SceneAndPassBuffers as usize],
             2 * size_of::<MeshData>() as u64
