@@ -366,7 +366,15 @@ fn offset_slots(
     if slot < instance_slot_count && instances[slot].mesh != NO_MESH {
         let instance = instances[slot];
         let mesh = meshes[instance.mesh];
-        let bounds = clip_space_bounds(instance, mesh);
+        var bounds = clip_space_bounds(instance, mesh);
+        var coverage = 1.0;
+        // A Mesh with a Thin Primitive keeps that rule alone.
+        if mesh.thin_triangle_counts[0] == 0u {
+            coverage = instance_coverage(instance, mesh, bounds.centre.w);
+            // The tests below take the bounds as the Instance draws them.
+            bounds.half_axes = bounds.half_axes * small_instance_scale(coverage);
+        }
+        small = coverage < 1.0;
         visible = !CULLING || in_view_frustum(bounds);
         if PHASE_TWO {
             // Behind what phase one drew, it is not visible.
@@ -379,12 +387,7 @@ fn offset_slots(
         // A shadow proxy's Mesh has no Meshlets: rays trace it, no pass
         // draws it.
         drawn = drawn && mesh.meshlet_counts[0] != 0u;
-        // A Mesh with a Thin Primitive keeps that rule alone.
-        if drawn && mesh.thin_triangle_counts[0] == 0u {
-            let coverage = instance_coverage(instance, mesh, bounds.centre.w);
-            small = coverage < 1.0;
-            drawn = !CULLING || thin_kept_samples(coverage) != 0u;
-        }
+        drawn = drawn && (!CULLING || thin_kept_samples(coverage) != 0u);
         if drawn {
             lod = instance_lod(instance, mesh);
             counts = lod_counts(instance.mesh, lod, small);
