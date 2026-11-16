@@ -111,7 +111,7 @@ pub enum MeshUse {
     /// Drawn and traced, a Mesh the GPU bends whose BLAS is updated each
     /// frame from its bent shape: built to allow updates, never compacted.
     Refitted,
-    /// Drawn alone, as it was cooked: a Far proxy, which holds no TLAS entry.
+    /// Drawn alone, as it was cooked: a Far proxy's load, which builds no BLAS.
     FarProxy,
 }
 

@@ -87,7 +87,7 @@ impl DecodedAssets {
 }
 
 /// What the IO pool reads at a Chunk's coordinates: the Chunk, or its Far
-/// proxy. Chunks sort first, so a frame loads them first.
+/// proxy.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 enum Load {
     Chunk,
@@ -327,16 +327,12 @@ fn decode_chunk(
     };
     let mut assets = DecodedAssets::default();
     let (mut meshes, mut placement_materials) = (BTreeSet::new(), BTreeSet::new());
-    match &chunk {
-        Some(chunk) => {
-            for placement in &chunk.placements {
-                meshes.insert(placement.mesh);
-                placement_materials.extend(placement.material);
-            }
-        }
-        None => {
-            meshes.insert(id);
-        }
+    for placement in chunk.iter().flat_map(|chunk| &chunk.placements) {
+        meshes.insert(placement.mesh);
+        placement_materials.extend(placement.material);
+    }
+    if chunk.is_none() {
+        meshes.insert(id);
     }
     let mut materials: Vec<AssetId> = placement_materials.iter().copied().collect();
     for &mesh_id in &meshes {
@@ -533,7 +529,7 @@ pub(crate) struct ChunkStreaming {
 /// sized in `docs/performance.md`, "Measurements behind the code".
 const INSTANCES_PLACED_PER_FRAME: usize = 131_072;
 
-/// The Chunks a frame loads, as each load's sizing and pool writes take the
+/// The Chunks and Far proxies a frame loads, as each load's sizing and pool writes take the
 /// main thread whatever it places or writes; sized in
 /// `docs/performance.md`, "Measurements behind the code".
 const LOADS_PER_FRAME: usize = 3;
@@ -555,8 +551,12 @@ impl ChunkStreaming {
     ) -> anyhow::Result<Self> {
         let claimed = Claimed::default();
         let view_distance_metres = scene.view_distance_metres();
-        let far_proxies = (view_distance_metres > load_radius_metres).then(|| FarProxies {
-            streamer: ChunkStreamer::new(scene.chunk_coordinates(), view_distance_metres),
+        let has_far_field = view_distance_metres > scene.load_radius_metres();
+        let far_proxies = has_far_field.then(|| FarProxies {
+            streamer: ChunkStreamer::of_far_proxies(
+                scene.chunk_coordinates(),
+                view_distance_metres,
+            ),
             awaiting_placement: Vec::new(),
             resident: Vec::new(),
         });
@@ -602,14 +602,13 @@ impl ChunkStreaming {
         for camera in cameras {
             let camera = camera - self.shift;
             chunks.extend(self.streamer.within_hold_radius(camera));
-            if let Some(streamed) = &self.far_proxies {
-                far_proxies.extend(streamed.streamer.within_hold_radius(camera));
+            if let Some(resident) = &self.far_proxies {
+                far_proxies.extend(resident.streamer.within_hold_radius(camera));
             }
         }
-        let chunks = chunks.into_iter().map(|chunk| self.scene.chunk_id(chunk));
-        let far_proxies = far_proxies
-            .into_iter()
-            .map(|chunk| self.scene.far_proxy_id(chunk));
+        let (chunks, far_proxies) = (chunks.into_iter(), far_proxies.into_iter());
+        let chunks = chunks.map(|coordinates| self.scene.chunk_id(coordinates));
+        let far_proxies = far_proxies.map(|coordinates| self.scene.far_proxy_id(coordinates));
         for id in chunks.chain(far_proxies) {
             cook_chunk(id)?;
         }
@@ -1237,7 +1236,7 @@ where
             && let Err(error) = cook_chunk(id)
         {
             let error = format!("{error:#}");
-            tracing::error!(?load, ?coordinates, error, "not cooked");
+            tracing::error!(?load, ?coordinates, error, "Chunk or Far proxy not cooked");
         }
         self.io.request(IoRequest::Chunk(load, coordinates, id));
     }
@@ -1260,7 +1259,10 @@ where
                 Err(error) => {
                     let load = self.load;
                     let error = error.context(format!("loading the {load:?} at {coordinates:?}"));
-                    tracing::error!(error = format!("{error:#}"), "not loaded");
+                    tracing::error!(
+                        error = format!("{error:#}"),
+                        "Chunk or Far proxy not loaded"
+                    );
                     if self.settle {
                         self.error.get_or_insert(error);
                     }
