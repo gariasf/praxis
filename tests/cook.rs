@@ -69,7 +69,8 @@ fn write_sources(assets: &Path, path: &str, gltf: &str) {
 }
 
 /// A directory for one test in one process, holding only `cooked/`: a copy
-/// of `scene_cache`, so a test cooks only its own sources.
+/// of `scene_cache` without the temporaries a killed cook left there, so a
+/// test cooks only its own sources and finds only its own temporaries.
 fn scratch(test: &str) -> PathBuf {
     let directory =
         Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("cook-{test}-{}", std::process::id()));
@@ -84,6 +85,9 @@ fn scratch(test: &str) -> PathBuf {
         fs::create_dir_all(&to).unwrap();
         for file in fs::read_dir(from).unwrap() {
             let file = file.unwrap();
+            if file.file_name().to_string_lossy().ends_with(".tmp") {
+                continue;
+            }
             fs::copy(file.path(), to.join(file.file_name())).unwrap();
         }
     }
