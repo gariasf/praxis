@@ -37,7 +37,7 @@ pub(crate) const MAX_TEXTURE_SIDE: u32 = 8192;
 /// Starts every Mesh Blob, followed by `MESH_FORMAT_VERSION`.
 pub(crate) const MESH_MAGIC: [u8; 4] = *b"PXME";
 /// As `MATERIAL_FORMAT_VERSION`, for Mesh Blobs.
-pub(crate) const MESH_FORMAT_VERSION: u32 = 6;
+pub(crate) const MESH_FORMAT_VERSION: u32 = 7;
 /// The most LODs a Mesh's LOD chain holds, LOD 0 among them.
 pub(crate) const MESH_MAX_LODS: usize = 8;
 /// The most vertices a Meshlet holds: a packed index carries the vertex
@@ -495,8 +495,8 @@ pub struct CookedPrimitive {
     /// as a length. Times a Texture's side and over the Instance's scale it
     /// is texels per metre, which mip priority reads (ADR 0017).
     pub texel_density: f32,
-    /// Its radius, if it is a Thin Primitive: a side vertex's position less
-    /// its normal times this is on its centre line; a cap's is not.
+    /// Its radius, if it is a Thin Primitive: a vertex's position less its
+    /// normal times this is on its centre line, a cap's normal its ring's.
     pub thin_radius_metres: Option<f32>,
     /// Its triangles in index order, each in exactly one Meshlet.
     pub meshlets: Vec<CookedMeshlet>,

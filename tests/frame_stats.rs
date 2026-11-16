@@ -10,7 +10,7 @@ use praxis::{GpuMemoryKind, ReferenceScene};
 /// town's Instances and their triangles, as its generator places them
 /// (`src/scenes/town.rs`).
 const TOWN_INSTANCES: u32 = 254_319;
-const TOWN_TRIANGLES: u32 = 9_994_316;
+const TOWN_TRIANGLES: u32 = 10_024_932;
 /// The Instances within `world`'s Load radius of its first camera, as its
 /// generator places them (`src/scenes/world.rs`), and its 10,000 birds of
 /// 24 triangles, and their triangles.

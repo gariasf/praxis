@@ -29,7 +29,7 @@ use crate::transform::PreviousWorldTransform;
 enum TownMesh {
     Ground,
     /// A unit cube on its base, scaled per Instance and drawn with its
-    /// Instance's Material: slabs, buildings, windows and rails.
+    /// Instance's Material: slabs, buildings and windows.
     Box,
     AirConditioner,
     Vent,
@@ -38,6 +38,7 @@ enum TownMesh {
     Aerial,
     SolarPanel,
     RailingPost,
+    TopRail,
     Lamp,
     UtilityPole,
     Wire,
@@ -54,7 +55,7 @@ enum TownMesh {
 impl TownMesh {
     /// Every Mesh, in the order of its discriminant, which indexes its
     /// Handle when loaded.
-    const ALL: [TownMesh; 19] = [
+    const ALL: [TownMesh; 20] = [
         TownMesh::Ground,
         TownMesh::Box,
         TownMesh::AirConditioner,
@@ -64,6 +65,7 @@ impl TownMesh {
         TownMesh::Aerial,
         TownMesh::SolarPanel,
         TownMesh::RailingPost,
+        TownMesh::TopRail,
         TownMesh::Lamp,
         TownMesh::UtilityPole,
         TownMesh::Wire,
@@ -88,6 +90,7 @@ impl TownMesh {
             TownMesh::Aerial => "aerial",
             TownMesh::SolarPanel => "solar-panel",
             TownMesh::RailingPost => "railing-post",
+            TownMesh::TopRail => "top-rail",
             TownMesh::Lamp => "lamp",
             TownMesh::UtilityPole => "utility-pole",
             TownMesh::Wire => "wire",
@@ -206,6 +209,7 @@ const WINDOW_SIZE: glam::Vec3 = glam::Vec3::new(1.4, 1.8, 0.12);
 const RAILING_POSTS_PER_SIDE: u32 = 20;
 const RAILING_INSET: f64 = 0.3;
 const RAILING_HEIGHT: f64 = 1.0;
+const RAILING_RADIUS: f64 = 0.025;
 /// A roof's plant stands on a grid of cells `ROOF_CELL` metres square.
 const ROOF_CELLS_PER_SIDE: u32 = 6;
 const ROOF_CELL: f64 = 2.2;
@@ -550,11 +554,10 @@ impl Block {
                     glam::Quat::IDENTITY,
                 ));
             }
-            placed.push(TownRenderable::cube(
-                BoxMaterial::Steel,
-                roof + outward * half_side + glam::DVec3::Y * RAILING_HEIGHT,
+            placed.push(TownRenderable::new(
+                TownMesh::TopRail,
+                roof + outward * half_side + glam::DVec3::Y * (RAILING_HEIGHT + RAILING_RADIUS),
                 facing(along),
-                glam::vec3(0.05, 0.05, 2.0 * half_side as f32),
             ));
         }
         let first_cell = -ROOF_CELL * f64::from(ROOF_CELLS_PER_SIDE - 1) / 2.0;
@@ -989,12 +992,17 @@ mod generators {
         };
         let tank_legs = [(-0.6, -0.6), (0.6, -0.6), (-0.6, 0.6), (0.6, 0.6)]
             .map(|(x, z)| cuboid(vec3(x - 0.06, 0.0, z - 0.06), vec3(x + 0.06, 1.2, z + 0.06)));
+        let along_x = Quat::from_rotation_z(-TAU / 4.0);
+        let along_z = Quat::from_rotation_x(TAU / 4.0);
         let aerial_bars = [(2.0, 0.6), (2.6, 0.45), (3.2, 0.3)].map(|(height, half_length)| {
-            cuboid(
-                vec3(-half_length, height, -0.015),
-                vec3(half_length, height + 0.03, 0.015),
+            moved(
+                cylinder(0.015, 0.015, 2.0 * half_length, 3),
+                along_x,
+                vec3(-half_length, height + 0.015, 0.0),
             )
         });
+        let railing_radius = super::RAILING_RADIUS as f32;
+        let rail_length = 2.0 * (super::BUILDING_HALF_SIDE - super::RAILING_INSET) as f32;
         let crown = [(1.8, 1.8, 2.2), (3.0, 1.4, 2.0), (4.1, 1.0, 1.8)]
             .map(|(base, radius, height)| raised(cylinder(radius, 0.0, height, 10), base));
         let meshes = [
@@ -1059,13 +1067,10 @@ mod generators {
             ),
             (
                 TownMesh::Aerial,
-                vec![of(
-                    "steel",
-                    [cylinder(0.03, 0.02, 3.5, 6)]
-                        .into_iter()
-                        .chain(aerial_bars)
-                        .collect(),
-                )],
+                vec![
+                    thin(of("steel", vec![cylinder(0.03, 0.02, 3.5, 6)]), 0.025),
+                    thin(of("steel", aerial_bars.into()), 0.015),
+                ],
             ),
             (
                 TownMesh::SolarPanel,
@@ -1090,30 +1095,64 @@ mod generators {
             (
                 TownMesh::RailingPost,
                 vec![thin(
-                    of("steel", vec![cylinder(0.025, 0.025, 1.0, 6)]),
-                    0.025,
+                    of(
+                        "steel",
+                        vec![cylinder(railing_radius, railing_radius, 1.0, 6)],
+                    ),
+                    railing_radius,
+                )],
+            ),
+            (
+                TownMesh::TopRail,
+                vec![thin(
+                    of(
+                        "steel",
+                        vec![moved(
+                            cylinder(railing_radius, railing_radius, rail_length, 6),
+                            along_z,
+                            vec3(0.0, 0.0, -0.5 * rail_length),
+                        )],
+                    ),
+                    railing_radius,
                 )],
             ),
             (
                 TownMesh::Lamp,
-                vec![of(
-                    "steel",
-                    vec![
-                        cylinder(0.09, 0.06, 5.2, 8),
-                        cuboid(vec3(-0.03, 4.95, 0.0), vec3(0.03, 5.05, 1.3)),
-                        cuboid(vec3(-0.18, 4.85, 0.95), vec3(0.18, 5.05, 1.45)),
-                    ],
-                )],
+                vec![
+                    thin(of("steel", vec![cylinder(0.09, 0.06, 5.2, 8)]), 0.075),
+                    thin(
+                        of(
+                            "steel",
+                            vec![moved(
+                                cylinder(0.04, 0.04, 1.3, 6),
+                                along_z,
+                                vec3(0.0, 5.0, 0.0),
+                            )],
+                        ),
+                        0.04,
+                    ),
+                    of(
+                        "steel",
+                        vec![cuboid(vec3(-0.18, 4.85, 0.95), vec3(0.18, 5.05, 1.45))],
+                    ),
+                ],
             ),
             (
                 TownMesh::UtilityPole,
-                vec![of(
-                    "wood",
-                    vec![
-                        cylinder(0.13, 0.1, 8.0, 8),
-                        cuboid(vec3(-0.06, 7.75, -0.9), vec3(0.06, 7.9, 0.9)),
-                    ],
-                )],
+                vec![
+                    thin(of("wood", vec![cylinder(0.13, 0.1, 8.0, 8)]), 0.115),
+                    thin(
+                        of(
+                            "wood",
+                            vec![moved(
+                                cylinder(0.07, 0.07, 1.8, 6),
+                                along_z,
+                                vec3(0.0, 7.825, -0.9),
+                            )],
+                        ),
+                        0.07,
+                    ),
+                ],
             ),
             (
                 TownMesh::Wire,
@@ -1371,6 +1410,23 @@ mod generators {
             assert!(!cooks_as_thin(post_and_bar, 0.025));
             assert!(!cooks_as_thin(cylinder(0.025, 0.025, 1.0, 6), 0.0));
             assert!(!cooks_as_thin(cylinder(0.025, 0.025, 1.0, 6), f32::NAN));
+        }
+
+        #[test]
+        fn a_thin_primitives_cap_vertices_cook_with_their_rings_normals() {
+            const RADIUS_METRES: f32 = 0.025;
+            let post = cylinder(RADIUS_METRES, RADIUS_METRES, 1.0, 6).thin(RADIUS_METRES);
+            let mesh = crate::cook::mesh::cook(&[(post, None)]).expect("a tube cooks");
+            for vertex in &mesh.vertices {
+                let normal = Vec3::from(crate::cook::mesh::qtangent_normal(vertex.qtangent));
+                let centre = Vec3::from(vertex.position) - normal * RADIUS_METRES;
+                let from_axis_metres = vec3(centre.x, 0.0, centre.z).length();
+                assert!(
+                    from_axis_metres < 0.01 * RADIUS_METRES,
+                    "the vertex at {:?} widens from {from_axis_metres} m off the axis",
+                    vertex.position
+                );
+            }
         }
     }
 }

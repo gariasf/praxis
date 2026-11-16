@@ -141,16 +141,40 @@ fn bounds_centre(instance: InstanceData, bounds_min: vec3<f32>, bounds_max: vec3
     );
 }
 
+// A Thin Primitive's widening moves a vertex out of its Mesh bounds by less
+// than the radius it draws at the box's farthest corner.
 fn clip_space_bounds(instance: InstanceData, mesh: MeshData) -> ClipBox {
     let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
     let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);
     let half_extent = 0.5 * (bounds_max - bounds_min);
+    let centre = camera.view_proj * vec4<f32>(bounds_centre(instance, bounds_min, bounds_max), 1.0);
+    let half_axes = mat3x3<f32>(
+        instance.rotation_scale[0] * half_extent.x,
+        instance.rotation_scale[1] * half_extent.y,
+        instance.rotation_scale[2] * half_extent.z,
+    );
+    let clip_half_axes = camera.view_proj * mat3x4<f32>(
+        vec4<f32>(half_axes[0], 0.0),
+        vec4<f32>(half_axes[1], 0.0),
+        vec4<f32>(half_axes[2], 0.0),
+    );
+    let farthest_w = centre.w
+        + abs(clip_half_axes[0].w)
+        + abs(clip_half_axes[1].w)
+        + abs(clip_half_axes[2].w);
+    let widening_metres = select(
+        0.0,
+        thin_drawn_radius(0.0, camera.pixel_size_per_metre * max(farthest_w, 0.0)),
+        mesh.thin_triangle_counts[0] != 0u
+    );
+    let half_lengths = vec3<f32>(length(half_axes[0]), length(half_axes[1]), length(half_axes[2]));
+    let growth = 1.0 + widening_metres / max(half_lengths, vec3<f32>(1e-30));
     return ClipBox(
-        camera.view_proj * vec4<f32>(bounds_centre(instance, bounds_min, bounds_max), 1.0),
-        camera.view_proj * mat3x4<f32>(
-            vec4<f32>(instance.rotation_scale[0] * half_extent.x, 0.0),
-            vec4<f32>(instance.rotation_scale[1] * half_extent.y, 0.0),
-            vec4<f32>(instance.rotation_scale[2] * half_extent.z, 0.0),
+        centre,
+        mat3x4<f32>(
+            clip_half_axes[0] * growth.x,
+            clip_half_axes[1] * growth.y,
+            clip_half_axes[2] * growth.z,
         ),
     );
 }
