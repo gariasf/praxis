@@ -188,15 +188,17 @@ fn hal_built_bytes<A: wgpu::hal::Api>(
 }
 
 /// Anchor cells, along any axis, between the camera's Anchor and the bound
-/// static TLAS's past which a build re-anchors it though no static Instance
-/// changed: a Chunk's edge. Within it, the camera adds less than 320 m to
+/// static TLAS's past which a build re-anchors it, and runs though no static
+/// Instance changed: a Chunk's edge. Within it, the camera adds less than 320 m to
 /// what a shadow ray composes in the TLAS's frame, and less than 4.9 mm to
 /// its offset.
 const REANCHOR_CELLS: i32 = (CHUNK_EDGE_METRES / ANCHOR_CELL_SIZE) as i32;
 
 /// The static TLAS (ADR 0020): each static Instance in an entry of its own,
 /// tagged with its slot, in a frame whose origin is the corner of an Anchor:
-/// the camera's when the build started (ADR 0014). Two TLASes hold it: rays
+/// the camera's when the first static Instance took an entry, or when a
+/// build last re-anchored it (ADR 0014), so the frames in between do not
+/// move it. Two TLASes hold it: rays
 /// trace the bound one while a worker thread brings the spare up to date
 /// and records its build, which the main thread submits (ADR 0016), and the
 /// spare is bound from the frame after that submit. A frame that changes a
@@ -269,7 +271,8 @@ enum Spare {
     /// On the main thread.
     Idle(AnchoredTlas),
     /// On the worker, which takes the entry changes it lacks and, when it
-    /// builds, re-anchors it at the camera's Anchor and records its build.
+    /// builds, takes it to the bound TLAS's Anchor, or to the camera's once
+    /// that is more than `REANCHOR_CELLS` away, and records its build.
     /// `built_from` is the frame of the earliest change the bound TLAS lacks.
     Working {
         worker: std::thread::JoinHandle<Work>,
@@ -509,8 +512,9 @@ impl StaticTlas {
     /// Hands the idle spare to a worker on `device` when its entries lack a
     /// change, the bound TLAS's build does, or the bound TLAS's Anchor is
     /// more than `REANCHOR_CELLS` from `camera_anchor` along an axis; in the
-    /// latter two cases the worker re-anchors it at `camera_anchor` and
-    /// records its build. Returns whether it did.
+    /// latter two cases the worker records its build, in the bound TLAS's
+    /// frame, or, in the last, re-anchored at `camera_anchor`. Returns
+    /// whether it did.
     fn start(&mut self, device: &wgpu::Device, camera_anchor: [i32; 3]) -> bool {
         let spare_index = 1 - self.bound_index;
         let built_from = self.behind[self.bound_index]
@@ -521,6 +525,11 @@ impl StaticTlas {
                 > i64::from(REANCHOR_CELLS)
         });
         let records_build = built_from.is_some() || camera_strayed;
+        let anchor = if camera_strayed {
+            camera_anchor
+        } else {
+            self.bound.anchor
+        };
         if !matches!(self.spare, Some(Spare::Idle(_)))
             || (self.behind[spare_index].is_empty() && !records_build)
         {
@@ -535,8 +544,8 @@ impl StaticTlas {
             .name("Static TLAS Worker".to_string())
             .spawn(move || {
                 let started = Instant::now();
-                let moved = device.is_some()
-                    && std::mem::replace(&mut tlas.anchor, camera_anchor) != camera_anchor;
+                let moved =
+                    device.is_some() && std::mem::replace(&mut tlas.anchor, anchor) != anchor;
                 for change in batches.iter().flat_map(|batch| batch.changes.iter()) {
                     tlas.apply(change);
                 }
@@ -1276,12 +1285,14 @@ mod tests {
         assert!(!triangle.update(&mut tlas, LOAD_ANCHOR, vec![(1, freed(), false)]));
     }
 
-    /// Each build composes every entry from the camera's Anchor in the frame
-    /// it starts, entries an earlier frame changed included, and a camera
-    /// more than `REANCHOR_CELLS` from the bound TLAS's Anchor along an axis
-    /// starts one with no change, which brings none to trace.
+    /// A build keeps the bound TLAS's Anchor under a camera within
+    /// `REANCHOR_CELLS` of it, whatever it changes. A camera farther along an
+    /// axis starts one with no change, which brings none to trace and
+    /// composes every entry from the camera's Anchor, entries an earlier
+    /// frame changed included.
     #[test]
-    fn a_build_re_anchors_it_at_the_cameras_anchor_and_a_far_camera_starts_one() {
+    fn a_build_keeps_its_anchor_until_the_camera_is_a_chunks_edge_away_and_a_far_camera_starts_one()
+    {
         let Some(triangle) = Triangle::new() else {
             return;
         };
@@ -1304,7 +1315,9 @@ mod tests {
             LOAD_ANCHOR[2] + REANCHOR_CELLS,
         ];
         assert!(!triangle.update(&mut tlas, edge, Vec::new()));
+        assert!(triangle.update(&mut tlas, edge, vec![(0, at(5.0), false)]));
         assert_eq!(tlas.anchor(), LOAD_ANCHOR);
+        assert_eq!(translations(&tlas), [(0, [5.0, 0.0, 0.0])]);
         let past = [edge[0] + 1, edge[1], edge[2]];
         assert!(triangle.update(&mut tlas, past, Vec::new()));
         assert_eq!(tlas.anchor(), past);
