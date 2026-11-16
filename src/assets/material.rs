@@ -290,7 +290,6 @@ pub(crate) enum StreamedMips {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MaterialUse {
     Ordinary = 0,
-    #[cfg_attr(not(all(test, feature = "cook")), allow(dead_code))]
     FarProxy = 1,
 }
 

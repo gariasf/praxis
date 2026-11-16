@@ -349,7 +349,7 @@ impl ReferenceScene {
         AssetId::new(source, AssetKind::Chunk, AssetName::Name(&name))
     }
 
-    #[cfg(feature = "cook")]
+    /// The Asset ID of the Far proxy of the scene's Chunk at `coordinates`.
     pub(crate) fn far_proxy_id(self, [x, z]: [i32; 2]) -> AssetId {
         let source = AssetSource::Scene(self.name());
         let name = format!("far proxy {x} {z}");
@@ -551,6 +551,15 @@ impl ReferenceScene {
             | Self::Shadows
             | Self::Crowd
             | Self::World => 256.0,
+        }
+    }
+
+    /// The scene's View distance, in metres: the world's 2 km, or the Load
+    /// radius of the others, which have no Far field.
+    pub(crate) fn view_distance_metres(self) -> f64 {
+        match self {
+            Self::World => 2000.0,
+            _ => self.load_radius_metres(),
         }
     }
 

@@ -273,6 +273,7 @@ impl State {
             self.streaming
                 .update(&mut self.simulation.world, &mut self.renderer, settle)?;
         self.recorder.counters.late_chunks = streamed.late_chunks;
+        self.recorder.counters.late_far_proxies = streamed.late_far_proxies;
         self.recorder.counters.chunks_loaded = streamed.chunks_loaded;
         self.recorder.counters.chunks_unloaded = streamed.chunks_unloaded;
         self.recorder.counters.bytes_read = streamed.bytes_read;

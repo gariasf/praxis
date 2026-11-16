@@ -277,7 +277,7 @@ impl Measurements {
     }
 }
 
-const COUNTER_COUNT: usize = 23;
+const COUNTER_COUNT: usize = 24;
 
 /// Medians of counters, which repeat exactly on every run, but for the
 /// Instances overflowed and the refusals, from the Renderables refused to
@@ -313,6 +313,8 @@ pub struct Counters {
     pub shadow_mask_lights_overflowed: u64,
     #[serde(default)]
     pub late_chunks: u64,
+    #[serde(default)]
+    pub late_far_proxies: u64,
     #[serde(default)]
     pub chunks_loaded: u64,
     #[serde(default)]
@@ -368,6 +370,7 @@ impl Counters {
                     .map_or(0, |gpu| gpu.shadow_mask_lights_overflowed.into())
             }),
             late_chunks: total(|stats| stats.late_chunks.into()),
+            late_far_proxies: total(|stats| stats.late_far_proxies.into()),
             chunks_loaded: total(|stats| stats.chunks_loaded.into()),
             chunks_unloaded: total(|stats| stats.chunks_unloaded.into()),
             bytes_read: total(|stats| stats.bytes_read),
@@ -415,6 +418,7 @@ impl Counters {
         "froxel_lights_overflowed",
         "shadow_mask_lights_overflowed",
         "late_chunks",
+        "late_far_proxies",
         "chunks_loaded",
         "chunks_unloaded",
         "bytes_read",
@@ -442,6 +446,7 @@ impl Counters {
             self.froxel_lights_overflowed,
             self.shadow_mask_lights_overflowed,
             self.late_chunks,
+            self.late_far_proxies,
             self.chunks_loaded,
             self.chunks_unloaded,
             self.bytes_read,
@@ -584,7 +589,7 @@ impl FastTravelHold {
 
 /// What `traverse` measured of the world's traversal: the CPU and GPU
 /// frames after the reference warm-up, and over every frame its Late
-/// Chunks, late mips, peak GPU memory in all and of each kind, refusals,
+/// Chunks, Late Far proxies, late mips, peak GPU memory in all and of each kind, refusals,
 /// Chunks not loaded and Fast travel's hold.
 #[derive(Debug)]
 pub struct Traversal {
@@ -592,6 +597,7 @@ pub struct Traversal {
     pub cpu_frame_microseconds: Spread,
     pub gpu_frame_microseconds: Spread,
     pub late_chunks: u64,
+    pub late_far_proxies: u64,
     pub late_mips: u64,
     pub peak_gpu_memory_bytes: u64,
     /// Each kind's peak, in `GpuMemoryKind::ALL`'s order, whatever frame
@@ -631,6 +637,7 @@ impl Traversal {
                     .collect(),
             ),
             late_chunks: total(|stats| stats.late_chunks),
+            late_far_proxies: total(|stats| stats.late_far_proxies),
             late_mips: total(|stats| stats.late_mips),
             peak_gpu_memory_bytes: frames
                 .iter()
@@ -1596,6 +1603,7 @@ mod tests {
         froxel_lights_overflowed: 0,
         shadow_mask_lights_overflowed: 0,
         late_chunks: 0,
+        late_far_proxies: 0,
         chunks_loaded: 0,
         chunks_unloaded: 0,
         bytes_read: 0,
@@ -1624,6 +1632,7 @@ mod tests {
             froxel_lights_overflowed: 14,
             shadow_mask_lights_overflowed: 15,
             late_chunks: 16,
+            late_far_proxies: 24,
             chunks_loaded: 17,
             chunks_unloaded: 18,
             bytes_read: 19,
@@ -2455,6 +2464,7 @@ mod tests {
                     moving_instances_left_out: refused(4),
                     bends_left_out: refused(5),
                     late_chunks: u32::from(frame == 300 || frame == 301),
+                    late_far_proxies: u32::from(frame == 302) * 3,
                     chunks_loaded: if matches!(frame, 10 | 300) { 2 } else { 0 },
                     chunks_unloaded: if frame == 300 { 3 } else { 0 },
                     bytes_read: if matches!(frame, 0 | 10 | 300) {
@@ -2835,6 +2845,8 @@ mod tests {
         assert_eq!(traversal.cpu_frame_microseconds.p99, Some(100.0));
         assert_eq!(traversal.gpu_frame_microseconds.maximum, Some(300.0));
         assert_eq!((traversal.late_chunks, traversal.late_mips), (2, 5));
+        assert_eq!(traversal.late_far_proxies, 3);
+        assert!(traversal.to_string().contains("| Late Far proxies | 3 |"));
         assert_eq!(traversal.peak_gpu_memory_bytes, 7_000_000_000);
         assert_eq!(
             traversal.peak_gpu_memory_bytes_by_kind,

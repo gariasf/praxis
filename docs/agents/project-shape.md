@@ -36,7 +36,10 @@ src/
                                  ChunkStreaming, which the State runs each
                                  frame, Settled for captures and the
                                  bench's frames through its counter
-                                 frames, timing a Fast travel's hold;
+                                 frames, timing a Fast travel's hold,
+                                 and which streams a Far field's Far
+                                 proxies through a second Chunk streamer
+                                 whose radius is the View distance;
                                  mips.rs, mip priority: the
                                  finest mip each streamed Texture needs
                                  and the requests for it, finest-needed

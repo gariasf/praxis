@@ -87,6 +87,9 @@ pub struct FrameStats {
     pub dropped_time: Duration,
     /// Chunks the camera came within the Load radius of before they loaded.
     pub late_chunks: u32,
+    /// Late Far proxies: Far proxies still not Resident as their Chunks came
+    /// within the View distance.
+    pub late_far_proxies: u32,
     /// Chunks whose loads the frame took.
     pub chunks_loaded: u32,
     /// Chunks the frame unloaded.
