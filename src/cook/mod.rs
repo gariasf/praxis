@@ -12,6 +12,7 @@ mod texture;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::Context;
 use serde::Deserialize;
@@ -26,8 +27,8 @@ pub use texture::{ImageGenerator, LoadedImage, TextureSource};
 use crate::ReferenceScene;
 use crate::cooked::{
     AssetId, AssetKind, AssetName, AssetSource, CookedCache, CookedChunk, CookedMaterial,
-    MATERIAL_FORMAT_VERSION, MATERIAL_MAGIC, MESH_FORMAT_VERSION, MESH_MAGIC, MaterialChannel,
-    TEXTURE_FORMAT_VERSION, chunk_origin, hex,
+    CookedMesh, MATERIAL_FORMAT_VERSION, MATERIAL_MAGIC, MESH_FORMAT_VERSION, MESH_MAGIC,
+    MaterialChannel, TEXTURE_FORMAT_VERSION, chunk_origin, hex,
 };
 use crate::render::CrowdForm;
 use crate::state::Simulation;
@@ -155,19 +156,40 @@ struct Sources {
     /// Each Texture a read source's Materials sample whose image this cook
     /// did not read, so its Blob, if any, stays as it is.
     kept_textures: Vec<AssetId>,
+    texture_cook_keys: HashMap<AssetId, String>,
+    /// Each Texture a Far proxy's bake has read, from the finest mip one
+    /// read.
+    mips: HashMap<AssetId, Arc<texture::Mips>>,
 }
 
 struct ChunkSummary {
     cook_key: String,
     kept: bool,
     meshes: Vec<AssetId>,
+    materials: Vec<AssetId>,
 }
 
 struct GeneratedFarProxy {
     id: AssetId,
+    /// Its baked Material and that Material's albedo and metallic-roughness
+    /// Textures, which a proxy with a first Primitive has.
+    baked: [AssetId; 3],
     cook_key: String,
     kept: bool,
     references: Vec<(Referrer, AssetId)>,
+}
+
+impl GeneratedFarProxy {
+    /// Whether the cache holds each of its Blobs under its Cook key: its
+    /// Mesh's, and its baked ones unless that Mesh names no Material.
+    fn is_fresh(&self, cache: &CookedCache) -> bool {
+        let fresh = |id: &AssetId| is_fresh(cache, *id, &self.cook_key);
+        let unbaked = || {
+            let mesh = cache.mesh(self.id);
+            mesh.is_ok_and(|mesh| mesh.primitives[0].material.is_none())
+        };
+        fresh(&self.id) && (self.baked.iter().all(fresh) || unbaked())
+    }
 }
 
 fn neighbours([x, z]: [i32; 2]) -> impl Iterator<Item = [i32; 2]> {
@@ -241,10 +263,14 @@ impl Sources {
             .collect();
         meshes.sort_unstable();
         meshes.dedup();
+        let overrides = chunk.placements.iter();
         let summary = ChunkSummary {
             cook_key: cook_key.clone(),
             kept,
             meshes,
+            materials: overrides
+                .filter_map(|placement| placement.material)
+                .collect(),
         };
         self.chunk_summaries.insert(id, summary);
         Ok(GeneratedChunk {
@@ -256,12 +282,15 @@ impl Sources {
         })
     }
 
-    /// The Cook key covers the Chunk's and its neighbours' Cook keys and
-    /// their Meshes', which hold everything `far_proxy_blob` reads.
+    /// The Cook key covers the Chunk's and its neighbours' Cook keys, their
+    /// Meshes', their Materials' and those Materials' albedo and
+    /// metallic-roughness Textures', which hold everything `cook_far_proxy`
+    /// reads, and the formats and settings of each Blob it writes.
     fn far_proxy(
         &mut self,
         scene: ReferenceScene,
         coordinates: [i32; 2],
+        settings: &CookSettings,
     ) -> anyhow::Result<GeneratedFarProxy> {
         let id = scene.far_proxy_id(coordinates);
         let pixel_metres = far_proxy::pixel_metres(scene.load_radius_metres());
@@ -270,9 +299,12 @@ impl Sources {
         hasher.update(MESH_FORMAT_VERSION.to_le_bytes());
         hasher.update(mesh::encoder_settings());
         hasher.update(far_proxy::settings(pixel_metres));
+        hasher.update(MATERIAL_MAGIC);
+        hasher.update(MATERIAL_FORMAT_VERSION.to_le_bytes());
+        texture::hash_cook_settings(&mut hasher, settings, TEXTURE_FORMAT_VERSION);
         let ground = scene.far_field_ground();
         hasher.update(ground.map_or(0, |ground| ground.0).to_be_bytes());
-        let (mut kept, mut meshes) = (false, Vec::new());
+        let (mut kept, mut meshes, mut materials) = (false, Vec::new(), Vec::new());
         for near in [coordinates].into_iter().chain(neighbours(coordinates)) {
             if !self.chunks.contains(&(scene, near)) {
                 hasher.update([0]);
@@ -287,6 +319,7 @@ impl Sources {
             hasher.update(&summary.cook_key);
             kept |= summary.kept;
             meshes.extend(&summary.meshes);
+            materials.extend(&summary.materials);
         }
         meshes.sort_unstable();
         meshes.dedup();
@@ -297,24 +330,149 @@ impl Sources {
             }
             hasher.update(mesh.0.to_be_bytes());
             hasher.update(cook_key);
+            let named = primitives.iter().filter_map(|(_, material)| *material);
+            materials.extend(named.clone());
             if Some(*mesh) == ground {
-                let materials = primitives.iter().filter_map(|(_, material)| *material);
-                references.extend(materials.map(|material| (Referrer::Mesh(id), material)));
+                references.extend(named.map(|material| (Referrer::Mesh(id), material)));
             }
+        }
+        materials.sort_unstable();
+        materials.dedup();
+        let mut textures = Vec::new();
+        for material in materials {
+            let read = self.materials.iter().find(|(id, ..)| *id == material);
+            let Some((_, cook_key, source)) = read else {
+                kept = true;
+                continue;
+            };
+            hasher.update(material.0.to_be_bytes());
+            hasher.update(cook_key);
+            let sampled =
+                far_proxy::BAKED_CHANNELS.map(|channel| source.textures[channel as usize]);
+            textures.extend(sampled.into_iter().flatten());
+        }
+        for texture in textures {
+            let Some(cook_key) = self.texture_cook_key(texture, settings) else {
+                kept = true;
+                continue;
+            };
+            hasher.update(texture.0.to_be_bytes());
+            hasher.update(cook_key);
         }
         Ok(GeneratedFarProxy {
             id,
+            baked: scene.far_proxy_baked_ids(coordinates),
             cook_key: hex(&hasher.finalize()),
             kept,
             references,
         })
     }
 
-    fn far_proxy_blob(
+    /// The Cook key of Texture `id`, found once; none for one this cook did
+    /// not read.
+    fn texture_cook_key(&mut self, id: AssetId, settings: &CookSettings) -> Option<String> {
+        if !self.texture_cook_keys.contains_key(&id) {
+            let texture = self.textures.iter().find(|texture| texture.id == id)?;
+            let cook_key = texture.cook_key(settings, TEXTURE_FORMAT_VERSION);
+            self.texture_cook_keys.insert(id, cook_key);
+        }
+        self.texture_cook_keys.get(&id).cloned()
+    }
+
+    /// Material `id` as a Far proxy's bake reads it, a sample of which spans
+    /// `uv_per_sample` UV units at least.
+    fn source_material(
+        &mut self,
+        id: AssetId,
+        uv_per_sample: f32,
+    ) -> anyhow::Result<far_proxy::SourceMaterial> {
+        let material = self.materials.iter().find(|(named, ..)| *named == id);
+        let (_, _, material) =
+            material.with_context(|| format!("Material {id} is not among the cook's sources"))?;
+        let [red, green, blue, _] = material.base_color;
+        let (roughness, metallic) = (material.roughness, material.metallic);
+        let mut baked_from = [None, None];
+        for (channel_mips, channel) in baked_from.iter_mut().zip(far_proxy::BAKED_CHANNELS) {
+            let Some(id) = material.textures[channel as usize] else {
+                continue;
+            };
+            let held = self.mips.get(&id).filter(|held| held.holds(uv_per_sample));
+            *channel_mips = Some(match held {
+                Some(held) => held.clone(),
+                None => {
+                    let texture = self.textures.iter().find(|texture| texture.id == id);
+                    let texture = texture
+                        .with_context(|| format!("Texture {id} is not among the cook's sources"))?;
+                    let read = Arc::new(texture.mips(uv_per_sample)?);
+                    self.mips.insert(id, read.clone());
+                    read
+                }
+            });
+        }
+        let [albedo, metallic_roughness] = baked_from;
+        Ok(far_proxy::SourceMaterial {
+            base_color: [red, green, blue],
+            roughness,
+            metallic,
+            albedo,
+            metallic_roughness,
+        })
+    }
+
+    /// Writes the Far proxy's Blobs under `proxy`'s Cook key, its Mesh's
+    /// last, so a fresh Mesh has its baked Material and Textures, and gives
+    /// each Asset written.
+    fn cook_far_proxy(
+        &mut self,
+        cache: &CookedCache,
+        settings: &CookSettings,
+        scene: ReferenceScene,
+        coordinates: [i32; 2],
+        proxy: &GeneratedFarProxy,
+    ) -> anyhow::Result<Vec<AssetId>> {
+        let (mesh, transfer) = self.far_proxy_mesh(scene, coordinates)?;
+        let mut written = Vec::new();
+        if let Some(transfer) = transfer {
+            let mut materials = Vec::new();
+            for (material, uv_per_sample) in &transfer.materials {
+                materials.push(self.source_material(*material, *uv_per_sample)?);
+            }
+            let [material, albedo, metallic_roughness] = proxy.baked;
+            let threads = std::thread::available_parallelism().map_or(1, |threads| threads.get());
+            let images = transfer.bake(&materials).into_iter();
+            let mut textures = [None; 5];
+            for ((image, channel), id) in images
+                .zip(far_proxy::BAKED_CHANNELS)
+                .zip([albedo, metallic_roughness])
+            {
+                let name = format!("{}'s Far proxy", Referrer::Chunk(scene, coordinates));
+                let image: ImageGenerator = Arc::new(move || image.clone());
+                let source = TextureSource::generated(id, channel, name, image).with_fastest_bc7();
+                cache.write(id, &proxy.cook_key, &source.cook(settings, threads)?)?;
+                textures[channel as usize] = Some(id);
+            }
+            let baked = CookedMaterial {
+                base_color: [1.0; 4],
+                metallic: 1.0,
+                roughness: 1.0,
+                emissive: [0.0; 3],
+                normal_scale: 1.0,
+                textures,
+            };
+            cache.write(material, &proxy.cook_key, &baked.to_blob())?;
+            written.extend(proxy.baked);
+        }
+        cache.write(proxy.id, &proxy.cook_key, &mesh.to_blob()?)?;
+        written.push(proxy.id);
+        Ok(written)
+    }
+
+    /// The Far proxy's Mesh, and what bakes its Material where it has one.
+    fn far_proxy_mesh(
         &mut self,
         scene: ReferenceScene,
         coordinates: [i32; 2],
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> anyhow::Result<(CookedMesh, Option<far_proxy::Transfer>)> {
         let referrer = Referrer::Chunk(scene, coordinates);
         let ground = scene
             .far_field_ground()
@@ -335,9 +493,16 @@ impl Sources {
             source.map(|(.., primitives)| &primitives[..])
         };
         let pixel_metres = far_proxy::pixel_metres(scene.load_radius_metres());
-        far_proxy::cook(&chunk, &neighbouring, &primitives_of, ground, pixel_metres)
-            .and_then(|(mesh, _)| mesh.to_blob())
-            .with_context(|| format!("cooking the Far proxy of {referrer}"))
+        let [material, ..] = scene.far_proxy_baked_ids(coordinates);
+        far_proxy::cook(
+            &chunk,
+            &neighbouring,
+            &primitives_of,
+            ground,
+            material,
+            pixel_metres,
+        )
+        .with_context(|| format!("cooking the Far proxy of {referrer}"))
     }
 
     /// Whether the Blob `reference` names may be one a cook kept as it is:
@@ -460,27 +625,36 @@ fn cook_sources(
         if scene.far_field_ground().is_none() {
             continue;
         }
-        let proxy = sources.far_proxy(scene, coordinates)?;
+        let proxy = sources.far_proxy(scene, coordinates, settings)?;
         if proxy.kept {
             continue;
         }
-        if is_fresh(cache, proxy.id, &proxy.cook_key) {
+        if proxy.is_fresh(cache) {
+            let fresh = |id: &AssetId| is_fresh(cache, *id, &proxy.cook_key);
             report.unchanged.push(proxy.id);
+            report
+                .unchanged
+                .extend(proxy.baked.into_iter().filter(fresh));
         } else {
-            let blob = sources.far_proxy_blob(scene, coordinates)?;
-            cache.write(proxy.id, &proxy.cook_key, &blob)?;
-            report.cooked.push(proxy.id);
+            let written = sources.cook_far_proxy(cache, settings, scene, coordinates, &proxy)?;
+            report.cooked.extend(written);
         }
     }
     let mut stale = Vec::new();
-    for texture in &sources.textures {
-        let cook_key = texture.cook_key(settings, TEXTURE_FORMAT_VERSION);
-        if is_fresh(cache, texture.id, &cook_key) {
-            report.unchanged.push(texture.id);
+    for index in 0..sources.textures.len() {
+        let id = sources.textures[index].id;
+        let cook_key = sources
+            .texture_cook_key(id, settings)
+            .expect("a read Texture");
+        if is_fresh(cache, id, &cook_key) {
+            report.unchanged.push(id);
         } else {
-            stale.push((texture, cook_key));
+            stale.push((index, cook_key));
         }
     }
+    let stale: Vec<_> = (stale.into_iter())
+        .map(|(index, cook_key)| (&sources.textures[index], cook_key))
+        .collect();
     // One Texture per core at a time: its filtering runs on its own thread,
     // and memory holds at most that many Textures' working sets. The cores
     // split among a batch's encoders.
@@ -957,6 +1131,39 @@ mod tests {
             "Chunk (0, 0) of Reference scene pbr-sweep"
         );
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn a_far_proxys_cook_key_follows_the_materials_its_sources_draw_with_and_no_other() {
+        let scene = ReferenceScene::World;
+        let farm = [-20, -11];
+        let mut sources = read_sources(Path::new(ASSETS_DIRECTORY), &[scene], Some(&[])).unwrap();
+        let settings = CookSettings::default();
+        let cook_key = |sources: &mut Sources| {
+            let proxy = sources.far_proxy(scene, farm, &settings).unwrap();
+            assert!(!proxy.kept);
+            proxy.cook_key
+        };
+        let unchanged = cook_key(&mut sources);
+        let placements = sources.chunk(scene, farm).unwrap().chunk.placements;
+        let facade = placements.iter().find_map(|placement| placement.material);
+        let drawn_with = |sources: &Sources, drawn: bool| {
+            let mut materials = sources.materials.iter();
+            let found = materials.rposition(|(id, ..)| (Some(*id) == facade) == drawn);
+            found.unwrap()
+        };
+
+        let other = drawn_with(&sources, false);
+        sources.materials[other].1.push('x');
+        assert_eq!(cook_key(&mut sources), unchanged);
+        let facade_index = drawn_with(&sources, true);
+        sources.materials[facade_index].1.push('x');
+        assert_ne!(cook_key(&mut sources), unchanged);
+
+        let albedo = sources.materials[facade_index].2.textures[0].unwrap();
+        sources.textures.retain(|texture| texture.id != albedo);
+        sources.texture_cook_keys.clear();
+        assert!(sources.far_proxy(scene, farm, &settings).unwrap().kept);
     }
 
     /// texture-wall loads its Textures by Asset ID, with no Material naming

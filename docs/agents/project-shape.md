@@ -72,7 +72,8 @@ src/
                                  each load finds its Blob missing or stale;
                                  far_proxy.rs cooks each Chunk of a scene
                                  with a Far field its Far proxy's Mesh,
-                                 far_proxy/bake.rs that Mesh's atlas
+                                 far_proxy/bake.rs its atlas and the
+                                 Material baked into it
                                  (ADR 0026);
                                  `praxis fetch` downloads the manifest's
                                  fetched sources, as a dev launch that

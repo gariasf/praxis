@@ -356,6 +356,18 @@ impl ReferenceScene {
         AssetId::new(source, AssetKind::Mesh, AssetName::Name(&name))
     }
 
+    /// The Asset IDs of the Material baked for the Far proxy of the Chunk at
+    /// `coordinates`, and of its albedo and metallic-roughness Textures.
+    #[cfg(feature = "cook")]
+    pub(crate) fn far_proxy_baked_ids(self, [x, z]: [i32; 2]) -> [AssetId; 3] {
+        let name = format!("far proxy {x} {z}");
+        [
+            self.material_id(&name),
+            self.texture_id(MaterialChannel::Albedo, &name),
+            self.texture_id(MaterialChannel::MetallicRoughness, &name),
+        ]
+    }
+
     /// The Mesh of the ground tiles of a scene with a Far field, each of
     /// whose Chunks cooks a Far proxy.
     #[cfg(feature = "cook")]

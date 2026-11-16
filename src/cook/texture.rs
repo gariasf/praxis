@@ -20,6 +20,10 @@ unsafe extern "C" {}
 /// The encoder and its profile, part of every Texture's Cook key.
 const ENCODER: &str = "intel_tex_2 0.5.0 basic";
 
+/// The profile a Texture `with_fastest_bc7` encodes at instead, part of its
+/// Cook key and of whichever key its Blob is written under.
+pub(super) const FASTEST_BC7_PROFILE: &str = "ultra_fast";
+
 /// RGBA8 pixels, row-major, top row first.
 #[derive(Clone)]
 pub struct LoadedImage {
@@ -42,6 +46,7 @@ pub struct TextureSource {
     /// A metallic-roughness Texture's normal Texture, whose variance widens its
     /// roughness (Toksvig).
     normal_texture: Option<Box<TextureSource>>,
+    fastest_bc7: bool,
 }
 
 #[derive(Clone)]
@@ -67,6 +72,7 @@ impl TextureSource {
             name,
             image,
             normal_texture: None,
+            fastest_bc7: false,
         }
     }
 
@@ -83,6 +89,7 @@ impl TextureSource {
             name,
             image,
             normal_texture: None,
+            fastest_bc7: false,
         }
     }
 
@@ -92,6 +99,15 @@ impl TextureSource {
         debug_assert_eq!(self.channel, MaterialChannel::MetallicRoughness);
         Self {
             normal_texture: Some(Box::new(normal_texture)),
+            ..self
+        }
+    }
+
+    /// This Texture encoded at the encoder's fastest BC7 profile, which its
+    /// Cook key then covers.
+    pub(super) fn with_fastest_bc7(self) -> Self {
+        Self {
+            fastest_bc7: true,
             ..self
         }
     }
@@ -113,16 +129,16 @@ impl TextureSource {
         }
     }
 
-    /// SHA-256 over the format, the encoder, the settings, the Channel, a
-    /// normal Texture's Cook key and the source bytes; a generated image's bytes
-    /// are its pixels and size.
+    /// SHA-256 over the format, the encoder, the settings, the Channel, the
+    /// fastest BC7 profile where it encodes at it, a normal Texture's Cook key
+    /// and the source bytes; a generated image's bytes are its pixels and size.
     pub(super) fn cook_key(&self, settings: &CookSettings, format_version: u32) -> String {
         let mut hasher = Sha256::new();
-        hasher.update(TEXTURE_VERSION_KEY);
-        hasher.update(format_version.to_le_bytes());
-        hasher.update(ENCODER);
-        hasher.update(settings.texture_zstd_level.to_le_bytes());
+        hash_cook_settings(&mut hasher, settings, format_version);
         hasher.update([self.channel as u8]);
+        if self.fastest_bc7 {
+            hasher.update(FASTEST_BC7_PROFILE);
+        }
         // Tagged, and ahead of the source bytes, whose length varies, so that
         // no source's bytes can stand in for it.
         if let Some(normal_texture) = &self.normal_texture {
@@ -181,7 +197,13 @@ impl TextureSource {
                 },
                 _ => level.to_texels(self.channel),
             };
-            let blocks = encode(self.channel, format, &texels, encode_threads);
+            let blocks = encode(
+                self.channel,
+                format,
+                &texels,
+                encode_threads,
+                self.fastest_bc7,
+            );
             debug_assert_eq!(blocks.len(), level_bytes(format, width, height, mip));
             levels.push(blocks);
         })?;
@@ -232,7 +254,6 @@ impl TextureSource {
 
     /// Its mips in linear light, from the one a sample that spans
     /// `uv_per_sample` UV units reads to the coarsest.
-    #[cfg_attr(not(test), expect(dead_code))]
     pub(super) fn mips(&self, uv_per_sample: f32) -> anyhow::Result<Mips> {
         let image = self.decode()?;
         let side = image.width.max(image.height);
@@ -251,6 +272,19 @@ impl TextureSource {
     }
 }
 
+/// What every Texture's Cook key starts with: the format, the encoder and
+/// the settings.
+pub(super) fn hash_cook_settings(
+    hasher: &mut Sha256,
+    settings: &CookSettings,
+    format_version: u32,
+) {
+    hasher.update(TEXTURE_VERSION_KEY);
+    hasher.update(format_version.to_le_bytes());
+    hasher.update(ENCODER);
+    hasher.update(settings.texture_zstd_level.to_le_bytes());
+}
+
 /// A Texture's mips in linear light as its cook filters them, from
 /// `first_level` to the coarsest.
 pub(super) struct Mips {
@@ -263,6 +297,12 @@ pub(super) struct Mips {
 impl Mips {
     fn level_of(side_texels: u32, uv_per_sample: f32) -> usize {
         (uv_per_sample * side_texels as f32).log2().ceil().max(0.0) as usize
+    }
+
+    /// Whether it holds the mip a sample that spans `uv_per_sample` UV units
+    /// reads.
+    pub(super) fn holds(&self, uv_per_sample: f32) -> bool {
+        Self::level_of(self.side_texels, uv_per_sample) >= self.first_level
     }
 
     /// The mip such a sample reads: the finest whose texels are no smaller
@@ -563,6 +603,7 @@ fn encode(
     format: wgpu::TextureFormat,
     texels: &Texels,
     threads: usize,
+    fastest_bc7: bool,
 ) -> Vec<u8> {
     let row_bytes = texels.bytes.len() / texels.height as usize;
     let components = row_bytes as u32 / texels.width;
@@ -571,17 +612,18 @@ fn encode(
     let block_rows = (texels.height / 4) as usize;
     let strip_block_rows = block_rows.div_ceil(threads);
     // Alpha below 255 needs the profile that keeps alpha.
-    let bc7_settings = if components == 4
+    let has_alpha = components == 4
         && texels
             .bytes
             .as_chunks::<4>()
             .0
             .iter()
-            .any(|texel| texel[3] < 255)
-    {
-        intel_tex_2::bc7::alpha_basic_settings()
-    } else {
-        intel_tex_2::bc7::opaque_basic_settings()
+            .any(|texel| texel[3] < 255);
+    let bc7_settings = match (has_alpha, fastest_bc7) {
+        (true, false) => intel_tex_2::bc7::alpha_basic_settings(),
+        (true, true) => intel_tex_2::bc7::alpha_ultra_fast_settings(),
+        (false, false) => intel_tex_2::bc7::opaque_basic_settings(),
+        (false, true) => intel_tex_2::bc7::opaque_ultra_fast_settings(),
     };
     let mut blocks = vec![0; blocks_wide * block_rows * block_bytes];
     std::thread::scope(|scope| {
@@ -632,6 +674,36 @@ fn encode(
 mod tests {
     use super::*;
     use crate::cooked::TEXTURE_FORMAT_VERSION;
+
+    #[test]
+    fn a_texture_at_the_fastest_bc7_profile_has_blocks_and_a_cook_key_of_its_own() {
+        let mottled = || LoadedImage {
+            pixels: (0..16 * 16 * 4_u32)
+                .map(|index| match index % 4 {
+                    3 => 255,
+                    _ => (index * 37 % 251) as u8,
+                })
+                .collect(),
+            width: 16,
+            height: 16,
+        };
+        let source = TextureSource::generated(
+            AssetId(1),
+            MaterialChannel::Albedo,
+            "mottled".into(),
+            std::sync::Arc::new(mottled),
+        );
+        let fastest = source.clone().with_fastest_bc7();
+        let settings = CookSettings::default();
+        assert_ne!(
+            source.cook_key(&settings, TEXTURE_FORMAT_VERSION),
+            fastest.cook_key(&settings, TEXTURE_FORMAT_VERSION)
+        );
+        assert_ne!(
+            source.cook(&settings, 1).unwrap(),
+            fastest.cook(&settings, 1).unwrap()
+        );
+    }
 
     #[test]
     fn the_cook_key_covers_the_format_version() {

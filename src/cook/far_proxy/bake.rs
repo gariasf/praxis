@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use glam::{UVec2, Vec2, Vec3};
 
 use super::Placed;
-use crate::cook::texture::{LoadedImage, Mips, linear_to_srgb};
+use crate::cook::texture::{FASTEST_BC7_PROFILE, LoadedImage, Mips, linear_to_srgb};
 use crate::cooked::{AssetId, MAX_TEXTURE_SIDE};
 use crate::scenes::Geometry;
 
@@ -20,7 +20,7 @@ const LIKE_NORMAL_COSINE: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
 pub(super) fn settings() -> String {
     format!(
-        "charted a texel a pixel, a rectangle a planar face with {GUTTER_TEXELS} texels of gutter on a grid of {GRID_TEXELS}, a coarser LOD's faces in the nearest chart whose normal is within a cosine of {LIKE_NORMAL_COSINE} of theirs"
+        "charted a texel a pixel, a rectangle a planar face with {GUTTER_TEXELS} texels of gutter on a grid of {GRID_TEXELS}, a coarser LOD's faces in the nearest chart whose normal is within a cosine of {LIKE_NORMAL_COSINE} of theirs, baked at {SAMPLES_PER_SIDE}x{SAMPLES_PER_SIDE} samples a texel from the outermost source within {REACH_PIXELS} pixels of a face at the finest mip no finer than a sample, dilated, the charts' mean elsewhere, under a Material of unit factors, its albedo encoded at {FASTEST_BC7_PROFILE}"
     )
 }
 
@@ -314,7 +314,6 @@ pub(in crate::cook) struct Transfer {
 impl Transfer {
     /// The atlas's albedo and metallic-roughness images; `materials` are
     /// `self.materials`' in order.
-    #[cfg_attr(not(test), expect(dead_code))]
     pub(in crate::cook) fn bake(&self, materials: &[SourceMaterial]) -> [LoadedImage; 2] {
         assert_eq!(materials.len(), self.materials.len());
         let charts = &self.atlas.charts;

@@ -9,7 +9,7 @@ use super::{
 };
 use crate::ReferenceScene;
 use crate::assets::{AssetLoader, MaterialChannel, MaterialHandle, MeshHandle};
-use crate::cooked::{AssetId, CookedCache, CookedChunk, TEXTURE_FORMAT_VERSION};
+use crate::cooked::{AssetId, CookedCache, CookedChunk};
 
 /// Loads through another loader, first cooking each Asset a load asks for,
 /// and each Asset it names, whose Blob is missing or stale.
@@ -37,7 +37,7 @@ enum SourceEntry {
     Material(usize),
     Mesh(usize),
     Chunk(usize),
-    /// The Far proxy of the Chunk at this index.
+    /// The Far proxy of the Chunk at this index, or a Blob baked with it.
     FarProxy(usize),
     Texture(usize),
 }
@@ -77,11 +77,10 @@ impl<'a> CookingLoader<'a> {
         });
         let far_proxies = (sources.chunks.iter().enumerate())
             .filter(|(_, (scene, _))| scene.far_field_ground().is_some())
-            .map(|(index, (scene, coordinates))| {
-                (
-                    scene.far_proxy_id(*coordinates),
-                    SourceEntry::FarProxy(index),
-                )
+            .flat_map(|(index, (scene, coordinates))| {
+                let baked = scene.far_proxy_baked_ids(*coordinates);
+                let ids = [scene.far_proxy_id(*coordinates)].into_iter().chain(baked);
+                ids.map(move |id| (id, SourceEntry::FarProxy(index)))
             });
         let textures = sources.textures.iter().enumerate();
         let textures = textures.map(|(index, texture)| (texture.id, SourceEntry::Texture(index)));
@@ -184,18 +183,26 @@ impl LaunchCook {
             }
             SourceEntry::FarProxy(index) => {
                 let (scene, coordinates) = sources.chunks[index];
-                let proxy = self.sources.far_proxy(scene, coordinates)?;
+                let settings = self.settings;
+                let proxy = self.sources.far_proxy(scene, coordinates, &settings)?;
                 if proxy.kept {
                     return Ok(());
                 }
-                self.cook_after_named(cache, id, &proxy.cook_key, proxy.references, |sources| {
-                    sources.far_proxy_blob(scene, coordinates)
-                })
+                self.checked.extend(proxy.baked);
+                self.checked.insert(proxy.id);
+                for (referrer, named) in proxy.references.clone() {
+                    self.cook_on_miss(cache, referrer, named)?;
+                }
+                if !proxy.is_fresh(cache) {
+                    (self.sources).cook_far_proxy(cache, &settings, scene, coordinates, &proxy)?;
+                    tracing::debug!(asset = %proxy.id, "cooked on a miss");
+                }
+                Ok(())
             }
             SourceEntry::Texture(index) => {
-                let cook_key =
-                    sources.textures[index].cook_key(&self.settings, TEXTURE_FORMAT_VERSION);
                 let settings = self.settings;
+                let cook_key = (self.sources.texture_cook_key(id, &settings))
+                    .expect("a Texture among the sources");
                 self.cook_after_named(cache, id, &cook_key, Vec::new(), |sources| {
                     let threads =
                         std::thread::available_parallelism().map_or(1, |threads| threads.get());
@@ -289,6 +296,8 @@ mod tests {
     use crate::scenes::ground_plane;
     use crate::stats::gpu_memory::tests::gpu_memory;
     use crate::streaming::load_chunk;
+
+    const FARM_CHUNK: [i32; 2] = [-20, -11];
 
     /// A scratch directory for one test in one process.
     fn scratch(test: &str) -> PathBuf {
@@ -394,28 +403,65 @@ mod tests {
         assert!(textures_cooked > 0, "no loaded Chunk named a Texture");
     }
 
+    /// Open land's Far proxy, then a farm's, whose first Primitive has
+    /// triangles.
     #[test]
-    fn loading_a_far_proxy_cooks_it_and_its_grounds_material_and_no_other_blob() {
+    fn loading_a_far_proxy_cooks_it_its_grounds_material_what_is_baked_for_it_and_no_other_blob() {
         let scene = ReferenceScene::World;
-        let directory = scratch("far-proxy");
-        let cache_path = directory.join("cooked");
-        let cache = CookedCache::new(&cache_path);
-        let mut recorder = AssetRecorder::default();
-        let assets = directory.join("assets");
-        let settings = CookSettings::default();
-        let mut loader =
-            CookingLoader::new(scene, &assets, &cache, settings, &mut recorder).unwrap();
-        let id = scene.far_proxy_id([0, 0]);
-        loader.mesh(id).unwrap();
+        for (coordinates, baked) in [([0, 0], false), (FARM_CHUNK, true)] {
+            let directory = scratch(&format!("far-proxy-{baked}"));
+            let cache_path = directory.join("cooked");
+            let cache = CookedCache::new(&cache_path);
+            let mut recorder = AssetRecorder::default();
+            let assets = directory.join("assets");
+            let settings = CookSettings::default();
+            let mut loader =
+                CookingLoader::new(scene, &assets, &cache, settings, &mut recorder).unwrap();
+            let id = scene.far_proxy_id(coordinates);
+            loader.mesh(id).unwrap();
 
-        let ground_material = cache.mesh(id).unwrap().primitives[1].material.unwrap();
-        cache.material(ground_material).unwrap();
-        let expected: BTreeSet<_> = [id, ground_material]
-            .iter()
-            .map(AssetId::to_string)
-            .collect();
-        assert_eq!(file_names(&cache_path.join("index")), expected);
-        std::fs::remove_dir_all(&directory).unwrap();
+            let [shell, ground] = &cache.mesh(id).unwrap().primitives[..] else {
+                panic!("a Far proxy has two Primitives");
+            };
+            let ground_material = ground.material.unwrap();
+            cache.material(ground_material).unwrap();
+            let mut expected = vec![id, ground_material];
+            if baked {
+                let [material, albedo, metallic_roughness] = scene.far_proxy_baked_ids(coordinates);
+                assert_eq!(shell.material, Some(material));
+                let textures = cache.material(material).unwrap().textures;
+                assert_eq!(textures[MaterialChannel::Albedo as usize], Some(albedo));
+                let named = textures[MaterialChannel::MetallicRoughness as usize];
+                assert_eq!(named, Some(metallic_roughness));
+                let albedo_atlas = cache.texture(albedo).unwrap();
+                let metallic_roughness_atlas = cache.texture(metallic_roughness).unwrap();
+                assert_eq!(albedo_atlas.format, wgpu::TextureFormat::Bc7RgbaUnormSrgb);
+                assert_eq!(
+                    metallic_roughness_atlas.format,
+                    wgpu::TextureFormat::Bc5RgUnorm
+                );
+                for atlas in [&albedo_atlas, &metallic_roughness_atlas] {
+                    assert_eq!((atlas.width, atlas.first_level), (atlas.height, 0));
+                    assert_eq!(atlas.levels.len(), atlas.width.ilog2() as usize + 1);
+                }
+                let texels_per_metre = shell.texel_density * albedo_atlas.width as f32;
+                assert!((texels_per_metre * 0.1473 - 1.0).abs() < 1e-3);
+                expected.extend([material, albedo, metallic_roughness]);
+
+                let material_entry = cache_path.join("index").join(material.to_string());
+                std::fs::remove_file(material_entry).unwrap();
+                let mut recorder = AssetRecorder::default();
+                let mut next_launch =
+                    CookingLoader::new(scene, &assets, &cache, settings, &mut recorder).unwrap();
+                next_launch.material(material).unwrap();
+                assert_eq!(cache.material(material).unwrap().textures, textures);
+            } else {
+                assert_eq!((shell.index_count, shell.material), (0, None));
+            }
+            let expected: BTreeSet<_> = expected.iter().map(AssetId::to_string).collect();
+            assert_eq!(file_names(&cache_path.join("index")), expected);
+            std::fs::remove_dir_all(&directory).unwrap();
+        }
     }
 
     /// The sources of uv-grid's Mesh `plane`, `half_size` metres to each
