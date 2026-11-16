@@ -189,9 +189,9 @@ fn hal_built_bytes<A: wgpu::hal::Api>(
 
 /// Anchor cells, along any axis, between the camera's Anchor and the bound
 /// static TLAS's past which a build re-anchors it, and runs though no static
-/// Instance changed: a Chunk's edge. Within it, the camera adds less than 320 m to
-/// what a shadow ray composes in the TLAS's frame, and less than 4.9 mm to
-/// its offset.
+/// Instance changed: a Chunk's edge. Within it, the camera adds less than
+/// 320 m to what a shadow ray composes in the TLAS's frame, and less than
+/// 4.9 mm to its offset.
 const REANCHOR_CELLS: i32 = (CHUNK_EDGE_METRES / ANCHOR_CELL_SIZE) as i32;
 
 /// The static TLAS (ADR 0020): each static Instance in an entry of its own,
