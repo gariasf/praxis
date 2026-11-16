@@ -80,12 +80,9 @@ pub(crate) struct ChunkFrame {
 /// calls a Chunk's load is a Far proxy's, and its Late Chunks are the Late
 /// Far proxies.
 pub(crate) struct ChunkStreamer {
-    /// Whether it streams Far proxies, whose loads after an arrival go on
-    /// while the camera travels: the far field's fill.
     far_proxies: bool,
-    /// Whether the far field still fills, no load of the arrival's failing:
-    /// a Far proxy whose Chunk comes within the radius meanwhile loads
-    /// behind the fill, and is not late.
+    /// Whether an arrival's Far proxies still load, none failing, as the
+    /// camera travels: one reached meanwhile loads behind them, not late.
     filling: bool,
     chunks: HashSet<[i32; 2]>,
     /// The lowest and highest coordinates of `chunks`, x then z.
@@ -609,11 +606,11 @@ mod tests {
 
     /// Loads take 200 frames. Flying east from an arrival, [22, 0] comes
     /// within the radius on frame 154 and [22, -1] and [22, 1] on frame 195,
-    /// before any of the arrival's loads end: three Late Chunks, and for a
-    /// Far proxies' streamer the far field's fill, none late, unless a load
-    /// of the arrival, here [21, 1]'s, is failing.
+    /// each unread for 184 frames more: three Late Chunks, each once. For a
+    /// Far proxies' streamer they are the far field's fill, none late,
+    /// unless a load of the arrival, here [21, 1]'s, is failing.
     #[test]
-    fn a_far_proxy_reached_while_the_far_field_fills_is_not_late_unless_a_load_fails() {
+    fn a_far_proxy_unread_as_its_chunk_arrives_is_late_once_unless_the_far_field_fills() {
         let far_proxies = || {
             let chunks = (-4..=40).flat_map(|x| (-4..=4).map(move |z| [x, z]));
             ChunkStreamer::of_far_proxies(chunks, LOAD_RADIUS_METRES)
@@ -713,7 +710,8 @@ mod tests {
 
         let scene = crate::scenes::ReferenceScene::World;
         let most_materials = crate::assets::PoolCapacities::checked_in().far_proxy_materials;
-        let paths: [(fn(u32) -> crate::camera::Camera, u32); 2] = [
+        type CameraPath = fn(u32) -> crate::camera::Camera;
+        let paths: [(CameraPath, u32); 2] = [
             (camera_at, BENCH_SEGMENT_FRAMES),
             (traversal_camera_at, TRAVERSAL_FRAMES),
         ];
@@ -742,22 +740,6 @@ mod tests {
             );
             assert_eq!(late, 0);
         }
-    }
-
-    /// A Far proxy still unread when its Chunk comes within the world's View
-    /// distance, into the Far field, is one Late Far proxy, once. Column 12
-    /// starts at x = 3,072 m.
-    #[test]
-    fn a_far_proxy_unread_when_its_chunk_enters_the_far_field_is_late_once() {
-        let chunks = (-4..=40).flat_map(|x| (-4..=4).map(move |z| [x, z]));
-        let mut far_proxies = ChunkStreamer::of_far_proxies(chunks, 2000.0);
-        let mut io = ScriptedIo::new(6);
-        io.delays.insert([12, 0], 600);
-        let late: Vec<u32> = (0..3600)
-            .map(|frame| step(&mut far_proxies, &mut io, flying_east(frame), false).late_chunks)
-            .filter(|&late| late > 0)
-            .collect();
-        assert_eq!(late, [1]);
     }
 
     #[test]

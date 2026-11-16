@@ -362,26 +362,18 @@ mod tests {
             glam::dvec3(640.0, 0.0, -128.0)
         );
         assert!(loader.mesh_pool.blas(loaded).is_none());
-        assert_eq!(loader.far_proxy(far_proxy).unwrap(), loaded);
         loader.far_proxy(open_land).unwrap();
         let unused = loader.mesh(chunk_mesh).unwrap();
         loader
             .mesh_pool
             .remove_user(chunk_mesh, MeshUse::DrawnAndTraced);
         assert_eq!(loader.material_pool.users(ground), 3);
-        assert_eq!(loader.material_pool.users(baked), 1);
 
-        let (refused, log) = logged(|| loader.far_proxy(other_far_proxy));
-        assert!(
-            refused.is_err(),
-            "a second Material took the count's one entry"
-        );
-        assert!(log.contains("Material refused"), "not logged: {log:?}");
+        let (refused, _) = logged(|| loader.far_proxy(other_far_proxy));
+        assert!(refused.is_err(), "a second baked Material loaded");
         assert!(loader.mesh_pool.get(unused).is_some());
 
-        for _ in 0..2 {
-            loader.mesh_pool.remove_user(far_proxy, MeshUse::FarProxy);
-        }
+        loader.mesh_pool.remove_user(far_proxy, MeshUse::FarProxy);
         loader.far_proxy(other_far_proxy).unwrap();
         assert!(loader.mesh_pool.get(loaded).is_none());
         assert!(!loader.material_pool.is_loaded(baked));

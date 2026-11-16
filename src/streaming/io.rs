@@ -478,10 +478,8 @@ pub(crate) struct StreamedFrame {
     pub fast_travel_hold: Option<Duration>,
 }
 
-/// A scene's Far proxies streamed around the camera: a Chunk streamer whose
-/// radius is the View distance, so a proxy is requested as its Chunk comes
-/// within it and released a Chunk's edge past it, and its late loads are
-/// the Late Far proxies.
+/// A scene's Far proxies streamed around the camera, by a Chunk streamer
+/// whose radius is the View distance.
 struct FarProxies {
     streamer: ChunkStreamer,
     /// Far proxies loaded into the pools that the streamer has not taken.
@@ -1537,13 +1535,11 @@ mod tests {
         );
     }
 
-    /// A row of seven Chunks streamed with a Load radius of 256 m and a View
-    /// distance of 512 m, at most four loads a frame. The first frame
-    /// requests the three Chunks within the Load radius, then the five Far
-    /// proxies within the View distance, nearest first. The hold ends with
-    /// the Chunks' loads, no Far proxy read. The Far proxies then load
-    /// nearest first within the frame's loads, and a jump three Chunks east
-    /// releases the two more than a Chunk's edge past the View distance.
+    /// A row of seven Chunks, a Load radius of 256 m, a View distance of
+    /// 512 m, four loads a frame. The first frame requests the three Chunks
+    /// within the Load radius, then the five Far proxies within the View
+    /// distance, nearest first; the hold ends with no Far proxy read; a jump
+    /// three Chunks east releases the two past the View distance's edge.
     #[test]
     fn far_proxies_are_requested_after_the_chunks_and_released_an_edge_past_the_view_distance() {
         let (mut io, requests, finished_sender) = io_pool();
