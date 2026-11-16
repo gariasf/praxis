@@ -3,7 +3,7 @@
   "frame": 59,
   "width": 2560,
   "height": 1440,
-  "commit": "431f9e1a99ab861ab3faa87a9cdd07535f05d79f",
+  "commit": "d92aa7355819126f27a3d689777f328a24efe86e",
   "blender": "5.2.3 LTS",
   "mean_difference_steps": 4.937,
   "linear_rmse": 0.00771
