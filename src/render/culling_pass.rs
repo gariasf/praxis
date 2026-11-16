@@ -6,7 +6,8 @@
 //! index per triangle corner, in slot order within each phase, which the
 //! main pass draws with one indirect call per phase and depth pipeline, and
 //! one of both phases for the lit pipeline (ADR 0019); the packed indices
-//! of Thin Primitives' Meshlets go apart, at the buffer's end, each phase's
+//! of Thin Primitives' Meshlets, among which every Meshlet of a small
+//! Instance counts throughout, go apart, at the buffer's end, each phase's
 //! in slot order, for the pipelines that draw them (ADR 0027). It runs in two
 //! phases: phase one draws the Instances visible the frame before, phase
 //! two, after the depth pyramid, the others in view that the pyramid does
@@ -65,8 +66,9 @@ impl CullingPhase {
 /// slots take one workgroup of blocks, a run of them to an invocation.
 pub(crate) const SCAN_BLOCK_SIZE: u32 = 256;
 
-/// The bits of a drawn slot's first Meshlet record within its scan block,
-/// which its offsets hold under its Instance's LOD.
+/// The bit from which a drawn slot's offsets hold its Instance's LOD, over
+/// whether the Instance is small, over its first Meshlet record within its
+/// scan block.
 pub(crate) const SLOT_LOD_SHIFT: u32 = 28;
 
 // A LOD short of all the bits above, which a slot not drawn holds set.
@@ -217,7 +219,7 @@ impl CullingPass {
         // index.
         assert!(draw_capacity.meshlet_records < 1 << (u32::BITS - MESHLET_MAX_VERTICES.ilog2()));
         // The most a slot's offsets hold of its first record is past them.
-        assert!(draw_capacity.meshlet_records < (1 << SLOT_LOD_SHIFT) - 1);
+        assert!(draw_capacity.meshlet_records < (1 << (SLOT_LOD_SHIFT - 1)) - 1);
         assert!(
             device.limits().max_compute_workgroups_per_dimension >= MAX_WORKGROUPS_PER_DIMENSION
         );

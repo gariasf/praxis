@@ -179,8 +179,6 @@ pub struct MeshPool {
     /// Bytes of the BLASes compacted, as built, and of the others.
     compacted_blas_bytes: u64,
     uncompacted_blas_bytes: u64,
-    /// The loaded Meshes a pass draws a Thin Primitive of.
-    thin_meshes: u32,
     /// The BLASes' bytes, the compacted ones' at `compacted_blas_fraction`
     /// of theirs.
     blas_charge: Charge,
@@ -216,7 +214,6 @@ impl MeshPool {
             refitted_blases: Vec::new(),
             compacted_blas_bytes: 0,
             uncompacted_blas_bytes: 0,
-            thin_meshes: 0,
             blas_charge: memory.charge(GpuMemoryKind::AccelerationStructures, 0),
             compacted_blas_fraction: memory.compacted_blas_fraction(),
             // The vertex shader pulls from it (ADR 0019), BLAS builds read it.
@@ -622,9 +619,7 @@ impl MeshPool {
             ],
             blas_bytes: built_bytes,
             blas_compacted: false,
-            thin: mesh_data.thin_triangle_counts[0] > 0,
         };
-        self.thin_meshes += u32::from(allocation.thin);
         let index = handle.index as usize;
         if index == self.allocations.len() {
             self.allocations.push(Some(allocation));
@@ -894,7 +889,6 @@ impl MeshPool {
         let allocation = self.allocations[index]
             .take()
             .expect("a live index holds a Mesh's allocation");
-        self.thin_meshes -= u32::from(allocation.thin);
         for (arena, range) in self.arenas_mut().into_iter().zip(allocation.ranges) {
             arena.free(range);
         }
@@ -910,11 +904,6 @@ impl MeshPool {
         }
         tracing::debug!(?handle, "Mesh freed");
         true
-    }
-
-    /// Whether a loaded Mesh has a Thin Primitive a pass draws.
-    pub fn draws_thin_primitives(&self) -> bool {
-        self.thin_meshes > 0
     }
 
     /// The loaded Meshes, as prepare reads them.
@@ -1163,8 +1152,6 @@ struct MeshAllocation {
     ranges: [offset_allocator::Allocation; 5],
     blas_bytes: u64,
     blas_compacted: bool,
-    /// Whether a pass draws a Thin Primitive of it.
-    thin: bool,
 }
 
 /// The indices of a pool's table, each with the generation its Handles
@@ -1525,7 +1512,6 @@ pub(crate) mod tests {
             .expect("the Mesh fits");
         staging.submit(&context.queue);
         assert_eq!(pool.get(handle).unwrap().texel_densities, [0.0, 3.0]);
-        assert!(pool.draws_thin_primitives());
 
         let mesh_table: Vec<MeshData> = read_storage(&context, &pool.mesh_table, 2);
         let mesh_data = mesh_table[handle.index as usize];

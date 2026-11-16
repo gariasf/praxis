@@ -86,9 +86,10 @@ fn vs_main(@builtin(vertex_index) packed_index: u32) -> VertexOutput {
     return vertex_output(packed_index);
 }
 
-// A Thin Primitive's vertex in each of its pipelines: the lit pass's, with
-// its tube's radius as its Instance scales it and what a pixel spans at the
-// tube's centre line there.
+// A vertex of a Thin Primitive or of a small Instance in each of their
+// pipelines: the lit pass's, with the tube's radius as its Instance scales
+// it, 0 for any other vertex, what a pixel spans at the tube's centre line
+// there, and its Instance's coverage.
 struct ThinVertexOutput {
     @builtin(position) @invariant clip_position: vec4<f32>,
     @location(0) camera_relative_position: vec3<f32>,
@@ -98,11 +99,14 @@ struct ThinVertexOutput {
     @location(4) tangent_world: vec4<f32>,
     @location(5) @interpolate(flat) radius_metres: f32,
     @location(6) pixel_metres: f32,
+    @location(7) @interpolate(flat) instance_coverage: f32,
 }
 
 // A Thin Primitive's vertex, moved out from its tube's centre line, which
 // lies the radius behind it along its normal, until the tube draws a pixel
-// wide where it would draw narrower. Every pipeline that draws one runs this
+// wide where it would draw narrower; or any other vertex, of a small
+// Instance, moved out from the centre of its Mesh bounds across the view
+// until they cover a pixel's area. Every pipeline that draws one runs this
 // stage, so the lit pass meets the depths the depth passes kept.
 @vertex
 fn vs_thin(@builtin(vertex_index) packed_index: u32) -> ThinVertexOutput {
@@ -110,15 +114,48 @@ fn vs_thin(@builtin(vertex_index) packed_index: u32) -> ThinVertexOutput {
     let index = unpack_index(packed_index);
     let record = meshlet_records[index.record];
     let meshlet = meshlets[record.meshlet];
-    let normal = decode_vertex(vertices[meshlet_vertices[meshlet.first_vertex + index.vertex]]).tangent_frame.normal;
-    let radial = instances[record.instance_slot].rotation_scale * (normal * meshlet.thin_radius_metres);
-    let radius_metres = length(radial);
-    let centre = out.camera_relative_position - radial;
-    let pixel_metres = camera.pixel_size_per_metre * (camera.view_proj * vec4<f32>(centre, 1.0)).w;
-    // At or behind the camera's plane a pixel spans nothing: the vertex stays.
-    if pixel_metres > 0.0 && radius_metres > 0.0 {
-        let drawn_radius_metres = thin_drawn_radius(radius_metres, pixel_metres);
-        out.camera_relative_position = centre + radial * (drawn_radius_metres / radius_metres);
+    let instance = instances[record.instance_slot];
+    var radius_metres = 0.0;
+    var pixel_metres = 0.0;
+    var instance_coverage = 1.0;
+    if meshlet.thin_radius_metres > 0.0 {
+        let normal =
+            decode_vertex(vertices[meshlet_vertices[meshlet.first_vertex + index.vertex]]).tangent_frame.normal;
+        let radial = instance.rotation_scale * (normal * meshlet.thin_radius_metres);
+        radius_metres = length(radial);
+        let centre = out.camera_relative_position - radial;
+        pixel_metres = camera.pixel_size_per_metre * (camera.view_proj * vec4<f32>(centre, 1.0)).w;
+        // At or behind the camera's plane a pixel spans nothing: the vertex stays.
+        if pixel_metres > 0.0 && radius_metres > 0.0 {
+            let drawn_radius_metres = thin_drawn_radius(radius_metres, pixel_metres);
+            out.camera_relative_position = centre + radial * (drawn_radius_metres / radius_metres);
+            out.clip_position = camera.view_proj * vec4<f32>(out.camera_relative_position, 1.0);
+        }
+    } else {
+        let stored_min = meshes[instance.mesh].bounds_min;
+        let stored_max = meshes[instance.mesh].bounds_max;
+        let bounds_min = vec3<f32>(stored_min[0], stored_min[1], stored_min[2]);
+        let bounds_max = vec3<f32>(stored_max[0], stored_max[1], stored_max[2]);
+        let bounds_centre = camera_relative_position(
+            instance.anchor,
+            instance.offset,
+            camera.anchor,
+            camera.offset,
+            instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
+        );
+        instance_coverage = small_instance_coverage(
+            bounds_centre,
+            instance.rotation_scale,
+            0.5 * (bounds_max - bounds_min),
+            (camera.view_proj * vec4<f32>(bounds_centre, 1.0)).w,
+            camera.pixel_size_per_metre
+        );
+        // Across the view only: each vertex keeps its depth, as the culling pass's box does.
+        let view_axis = vec3<f32>(camera.view_proj[0].w, camera.view_proj[1].w, camera.view_proj[2].w);
+        let from_centre = out.camera_relative_position - bounds_centre;
+        let along_view = view_axis * (dot(from_centre, view_axis) / max(dot(view_axis, view_axis), 1e-30));
+        out.camera_relative_position = bounds_centre + along_view
+            + (from_centre - along_view) * small_instance_scale(instance_coverage);
         out.clip_position = camera.view_proj * vec4<f32>(out.camera_relative_position, 1.0);
     }
     return ThinVertexOutput(
@@ -129,17 +166,20 @@ fn vs_thin(@builtin(vertex_index) packed_index: u32) -> ThinVertexOutput {
         out.material_id,
         out.tangent_world,
         radius_metres,
-        pixel_metres
+        pixel_metres,
+        instance_coverage
     );
 }
 
 // The samples of a pixel's four that a fragment of a Thin Primitive keeps:
-// the tube's true width over the width it draws, of them, to the nearest.
-// The depth passes write them, and the lit pass shades what covers them. The
-// radius is a flat input, which keeps the M4 Pro from merging the fragments
-// of triangles that share indices (ADR 0019).
+// the tube's true width over the width it draws, of them, to the nearest;
+// any other fragment keeps its Instance's coverage of them. The depth passes
+// write them, and the lit pass shades what covers them. The radius is a flat
+// input, which keeps the M4 Pro from merging the fragments of triangles that
+// share indices (ADR 0019).
 fn thin_fragment_samples(in: ThinVertexOutput) -> u32 {
-    return thin_kept_samples(in.radius_metres / thin_drawn_radius(in.radius_metres, max(in.pixel_metres, 1e-9)));
+    let width_share = in.radius_metres / thin_drawn_radius(in.radius_metres, max(in.pixel_metres, 1e-9));
+    return thin_kept_samples(select(in.instance_coverage, width_share, in.radius_metres > 0.0));
 }
 
 @fragment
