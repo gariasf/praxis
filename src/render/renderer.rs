@@ -566,6 +566,7 @@ impl Renderer {
                 ("light", &light_uniform_buffer),
                 ("lights", &light_buffer),
                 ("froxel_lists", froxel_pass.froxel_lists()),
+                ("instance_offsets", culling_pass.instance_offsets()),
             ],
             &render_targets,
             switches,
@@ -1995,83 +1996,120 @@ pub(crate) mod tests {
         assert_eq!(word(0, 0), [0, second_half]);
     }
 
-    /// A floor over the whole target under the sun, drawn at its LOD 1 while
-    /// the TLAS holds its LOD 0: the same square nearer the sun, so every
-    /// shadow ray meets it. A pixel at the floor spans 2 tan(π/8) / 16 of its
-    /// 2.25 m, and the LOD error allowed there is that at the target's
-    /// middle and 1.16 times it at a corner, which lies 1.16 times as far
-    /// from the camera.
-    /// Facing the sun, LOD 0 shows a ray its back: 0.9 of a pixel off, every
-    /// ray passes it, and 1.3 off, it hides the sun from every pixel. Turned
-    /// to the floor, it hides the sun at either distance.
     #[test]
-    fn a_shadow_ray_passes_a_back_face_within_the_lod_error_allowed_and_no_other() {
+    fn a_shadow_ray_passes_a_back_face_within_its_instances_lod_error_and_no_other() {
+        #[derive(Clone, Copy, PartialEq)]
+        enum TracedFace {
+            OwnBack,
+            OwnFront,
+            AnotherMeshBack,
+        }
         let Some(context) = gpu_context() else {
             return;
         };
-        let pixel_width = 2.0 * std::f32::consts::FRAC_PI_8.tan() * FLOOR_DISTANCE / SIZE as f32;
-        let pixels_hidden = |lift_pixels: f32, faces_sun: bool| {
+        let lod_error = 2.0 * std::f32::consts::FRAC_PI_8.tan() * FLOOR_DISTANCE / SIZE as f32;
+        const INSTANCE_SCALE: f32 = 4.0;
+        let towards_camera = [[0, 1, 2], [0, 2, 3]];
+        let away_from_camera = [[0, 2, 1], [0, 3, 2]];
+        let square = |first_vertex: u32, triangles: [[u8; 3]; 2]| {
+            let indices: Vec<u32> = triangles
+                .iter()
+                .flatten()
+                .map(|&corner| first_vertex + u32::from(corner))
+                .collect();
+            let primitive = CookedPrimitive {
+                first_index: 0,
+                index_count: 6,
+                material: None,
+                texel_density: 0.0,
+                thin_radius_metres: None,
+                meshlets: vec![CookedMeshlet {
+                    vertices: (first_vertex..first_vertex + 4).collect(),
+                    triangles: triangles.to_vec(),
+                }],
+            };
+            (indices, vec![primitive])
+        };
+        let two_squares =
+            |drawn_height: f32, traced_height: f32, traced: [[u8; 3]; 2], error_metres: f32| {
+                let corners = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
+                let (indices, primitives) = square(4, traced);
+                let (drawn_indices, drawn_primitives) = square(0, towards_camera);
+                CookedMesh {
+                    vertices: [drawn_height, traced_height]
+                        .into_iter()
+                        .flat_map(|height| {
+                            corners.map(|[x, y]| CookedVertex {
+                                position: [x, y, height],
+                                uv: [0.0, 0.0],
+                                qtangent: [0, 0, 0, i16::MAX],
+                            })
+                        })
+                        .collect(),
+                    indices,
+                    primitives,
+                    coarser_lods: vec![
+                        CookedLod {
+                            error_metres,
+                            indices: drawn_indices.clone(),
+                            primitives: drawn_primitives.clone(),
+                        },
+                        CookedLod {
+                            error_metres: 1000.0,
+                            indices: drawn_indices,
+                            primitives: drawn_primitives,
+                        },
+                    ],
+                    bounds: [
+                        [-0.5, -0.5, drawn_height.min(traced_height)],
+                        [0.5, 0.5, drawn_height.max(traced_height)],
+                    ],
+                }
+            };
+        let pixels_hidden = |light_turn: f32, lift_in_lod_errors: f32, traced_face: TracedFace| {
             let switches = RenderSwitches {
                 forced_lod: Some(1),
                 ..RenderSwitches::default()
             };
             let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
-            let lift = lift_pixels * pixel_width;
-            let corners = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
-            let square = |first_vertex: u32, triangles: [[u8; 3]; 2]| {
-                let indices: Vec<u32> = triangles
-                    .iter()
-                    .flatten()
-                    .map(|&corner| first_vertex + u32::from(corner))
-                    .collect();
-                let primitive = CookedPrimitive {
-                    first_index: 0,
-                    index_count: 6,
-                    material: None,
-                    texel_density: 0.0,
-                    thin_radius_metres: None,
-                    meshlets: vec![CookedMeshlet {
-                        vertices: (first_vertex..first_vertex + 4).collect(),
-                        triangles: triangles.to_vec(),
-                    }],
-                };
-                (indices, vec![primitive])
+            let lift = lift_in_lod_errors * lod_error;
+            let floor_lift = if traced_face == TracedFace::AnotherMeshBack {
+                0.0
+            } else {
+                lift
             };
-            let towards_camera = [[0, 1, 2], [0, 2, 3]];
-            let away_from_camera = [[0, 2, 1], [0, 3, 2]];
-            let (indices, primitives) = square(
-                4,
-                if faces_sun {
-                    towards_camera
-                } else {
-                    away_from_camera
-                },
-            );
-            let (drawn_indices, drawn_primitives) = square(0, towards_camera);
-            let mesh = CookedMesh {
-                vertices: [0.0, lift]
-                    .into_iter()
-                    .flat_map(|z| {
-                        corners.map(|[x, y]| CookedVertex {
-                            position: [x, y, z],
-                            uv: [0.0, 0.0],
-                            qtangent: [0, 0, 0, i16::MAX],
-                        })
-                    })
-                    .collect(),
-                indices,
-                primitives,
-                coarser_lods: vec![CookedLod {
-                    error_metres: lift,
-                    indices: drawn_indices,
-                    primitives: drawn_primitives,
-                }],
-                bounds: [[-0.5, -0.5, 0.0], [0.5, 0.5, lift]],
+            let floor_facing = if traced_face == TracedFace::OwnFront {
+                away_from_camera
+            } else {
+                towards_camera
             };
-            let floor = renderer
-                .mesh_pool
-                .load(&mut renderer.load_staging, &mesh, &[None])
-                .expect("the floor fits");
+            let mut meshes = vec![two_squares(
+                0.0,
+                floor_lift,
+                floor_facing,
+                lod_error / INSTANCE_SCALE,
+            )];
+            if traced_face == TracedFace::AnotherMeshBack {
+                meshes.push(two_squares(-0.5, lift, towards_camera, 0.0));
+            }
+            let instances = meshes
+                .iter()
+                .map(|mesh| {
+                    let handle = renderer
+                        .mesh_pool
+                        .load(&mut renderer.load_staging, mesh, &[None])
+                        .expect("the Mesh fits");
+                    InstanceData {
+                        rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                            INSTANCE_SCALE,
+                            INSTANCE_SCALE,
+                            1.0,
+                        ))),
+                        offset: [0.0, 0.0, -FLOOR_DISTANCE],
+                        ..instance(handle, NO_MATERIAL, [0.0, 0.0])
+                    }
+                })
+                .collect();
             let mut frame = FrameData {
                 camera: CameraUniform {
                     view_proj: (projection_matrix(1.0) * Camera::new().view_matrix())
@@ -2083,14 +2121,11 @@ pub(crate) mod tests {
                     directional_light_count: 1,
                     ..LightUniform::default()
                 },
-                lights: vec![SUN],
-                ..frame_of(vec![InstanceData {
-                    rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
-                        4.0, 4.0, 1.0,
-                    ))),
-                    offset: [0.0, 0.0, -FLOOR_DISTANCE],
-                    ..instance(floor, NO_MATERIAL, [0.0, 0.0])
-                }])
+                lights: vec![LightData {
+                    offset: [-light_turn.sin(), 0.0, -light_turn.cos()],
+                    ..SUN
+                }],
+                ..frame_of(instances)
             };
             render_traced_frame(&context, &mut renderer, &mut frame, SIZE, SIZE);
             read_back(&context, renderer.shadow_mask())
@@ -2101,10 +2136,20 @@ pub(crate) mod tests {
                 .filter(|word| word[0] & 1 == 1)
                 .count() as u32
         };
-        assert_eq!(pixels_hidden(0.9, true), 0);
-        assert_eq!(pixels_hidden(1.3, true), SIZE * SIZE);
-        assert_eq!(pixels_hidden(0.9, false), SIZE * SIZE);
-        assert_eq!(pixels_hidden(1.3, false), SIZE * SIZE);
+        let oblique_turn = std::f32::consts::FRAC_PI_3;
+        assert_eq!(pixels_hidden(0.0, 0.9, TracedFace::OwnBack), 0);
+        assert_eq!(pixels_hidden(0.0, 2.6, TracedFace::OwnBack), 0);
+        assert_eq!(pixels_hidden(0.0, 4.0, TracedFace::OwnBack), SIZE * SIZE);
+        assert_eq!(pixels_hidden(oblique_turn, 2.0, TracedFace::OwnBack), 0);
+        assert_eq!(
+            pixels_hidden(oblique_turn, 4.0, TracedFace::OwnBack),
+            SIZE * SIZE
+        );
+        assert_eq!(pixels_hidden(0.0, 0.9, TracedFace::OwnFront), SIZE * SIZE);
+        assert_eq!(
+            pixels_hidden(0.0, 0.9, TracedFace::AnotherMeshBack),
+            SIZE * SIZE
+        );
     }
 
     /// A panel 1.5 m ahead whose right edge crosses a pixel's middle, over

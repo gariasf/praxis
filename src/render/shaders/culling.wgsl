@@ -266,6 +266,14 @@ fn occluded(bounds: ClipBox) -> bool {
     return nearest_depth < farthest;
 }
 
+// An Instance's largest scale along an axis.
+fn instance_scale(instance: InstanceData) -> f32 {
+    return max(
+        max(length(instance.rotation_scale[0]), length(instance.rotation_scale[1])),
+        length(instance.rotation_scale[2])
+    );
+}
+
 // The LOD an Instance draws of its Mesh: the one forced, or the one selected
 // at the distance to the sphere about its Mesh bounds, under the Instance's
 // largest scale along an axis, so no nearer point of it and no axis strays
@@ -279,10 +287,7 @@ fn instance_lod(instance: InstanceData, mesh: MeshData) -> u32 {
     }
     let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
     let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);
-    let scale = max(
-        max(length(instance.rotation_scale[0]), length(instance.rotation_scale[1])),
-        length(instance.rotation_scale[2])
-    );
+    let scale = instance_scale(instance);
     let radius = 0.5 * length(bounds_max - bounds_min) * scale;
     let distance_metres = max(length(bounds_centre(instance, bounds_min, bounds_max)) - radius, 0.0);
     return selected_lod(
@@ -348,6 +353,10 @@ fn visible_before(slot: u32) -> bool {
 // LOD its Instance draws where the phase draws it or none, summed over the
 // block's earlier slots into its offsets, under that LOD, NOT_DRAWN in
 // their place where it is not drawn, and the block's sum after every slot's.
+// A slot's fourth word is the LOD error, in metres at the Instance's scale,
+// of the LOD its Instance draws where a phase draws it, which the shadow
+// mask pass reads: phase one writes it whether or not it draws the
+// Instance, so the mask does not depend on what is culled.
 // Phase one draws an Instance in view that was visible the frame before.
 // Phase two finds each Instance in view visible unless it lies behind what
 // phase one drew, records which are, and draws those phase one did not.
@@ -364,6 +373,7 @@ fn offset_slots(
     var counts = vec3<u32>(0u);
     var lod = 0u;
     var small = false;
+    var lod_error_metres = 0.0;
     if slot < instance_slot_count && instances[slot].mesh != NO_MESH {
         let instance = instances[slot];
         let mesh = meshes[instance.mesh];
@@ -386,7 +396,7 @@ fn offset_slots(
             // Behind what phase one drew, it is not visible.
             visible = visible && !(CULLING && occluded(bounds));
             // Phase one's offsets for the slot, before this phase's replace them.
-            drawn = CULLING && visible && all(instance_offsets[slot] == NOT_DRAWN);
+            drawn = CULLING && visible && all(instance_offsets[slot].xyz == NOT_DRAWN);
         } else {
             drawn = visible && (!CULLING || visible_before(slot));
         }
@@ -394,8 +404,11 @@ fn offset_slots(
         // draws it.
         drawn = drawn && mesh.meshlet_counts[0] != 0u;
         drawn = drawn && (!CULLING || thin_kept_samples(coverage) != 0u);
-        if drawn {
+        if drawn || !PHASE_TWO {
             lod = instance_lod(instance, mesh);
+            lod_error_metres = mesh.lod_errors_metres[lod] * instance_scale(instance);
+        }
+        if drawn {
             counts = lod_counts(instance.mesh, lod, small);
         }
     }
@@ -413,10 +426,16 @@ fn offset_slots(
         let record_small_and_lod = min(offset.x, SLOT_RECORD_MASK)
             | (u32(small) << SLOT_SMALL_SHIFT)
             | (lod << SLOT_LOD_SHIFT);
-        instance_offsets[slot] = select(NOT_DRAWN, vec3<u32>(record_small_and_lod, offset.yz), drawn);
+        if PHASE_TWO {
+            lod_error_metres = bitcast<f32>(instance_offsets[slot].w);
+        }
+        instance_offsets[slot] = vec4<u32>(
+            select(NOT_DRAWN, vec3<u32>(record_small_and_lod, offset.yz), drawn),
+            bitcast<u32>(lod_error_metres)
+        );
     }
     if invocation == SCAN_BLOCK_SIZE - 1u {
-        instance_offsets[INSTANCE_CAPACITY + block.x] = saturating_add(offset, counts);
+        instance_offsets[INSTANCE_CAPACITY + block.x] = vec4<u32>(saturating_add(offset, counts), 0u);
     }
 }
 
@@ -437,7 +456,7 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
     var sum = vec3<u32>(0u);
     for (var step = 0u; step < blocks_per_invocation; step++) {
         if first_block + step < block_count {
-            sum = saturating_add(sum, instance_offsets[INSTANCE_CAPACITY + first_block + step]);
+            sum = saturating_add(sum, instance_offsets[INSTANCE_CAPACITY + first_block + step].xyz);
         }
     }
     // Phase one's last invocation writes these below: phase one reads none.
@@ -449,8 +468,8 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
     for (var step = 0u; step < blocks_per_invocation; step++) {
         let block = INSTANCE_CAPACITY + first_block + step;
         if first_block + step < block_count {
-            let block_sum = instance_offsets[block];
-            instance_offsets[block] = offset;
+            let block_sum = instance_offsets[block].xyz;
+            instance_offsets[block] = vec4<u32>(offset, 0u);
             offset = saturating_add(offset, block_sum);
         }
     }
@@ -460,12 +479,12 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
         }
         let record_capacity = arrayLength(&meshlet_records);
         let appended = min(vec2<u32>(first.x, offset.x), vec2<u32>(record_capacity));
-        instance_offsets[APPENDED_RECORDS] = vec3<u32>(appended, 0u);
+        instance_offsets[APPENDED_RECORDS] = vec4<u32>(appended, 0u, 0u);
         let records = appended.y - appended.x;
         // At least one row, so no records dispatch no workgroups.
         let rows = max((records + MAX_WORKGROUPS_PER_DIMENSION - 1u) / MAX_WORKGROUPS_PER_DIMENSION, 1u);
         frame_draw.append_dispatch = DispatchIndirect((records + rows - 1u) / rows, rows, 1u);
-        instance_offsets[THIN_INDICES] = vec3<u32>(first.z, offset.z, 0u);
+        instance_offsets[THIN_INDICES] = vec4<u32>(first.z, offset.z, 0u, 0u);
         let index_capacity = arrayLength(&packed_indices);
         let first_thin_index = index_capacity - min(offset.z, index_capacity);
         if PHASE_TWO {
@@ -492,7 +511,7 @@ fn offset_blocks(@builtin(local_invocation_index) invocation: u32) {
 fn slot_offsets(slot: u32) -> vec3<u32> {
     let in_block = instance_offsets[slot];
     return saturating_add(
-        instance_offsets[INSTANCE_CAPACITY + slot / SCAN_BLOCK_SIZE],
+        instance_offsets[INSTANCE_CAPACITY + slot / SCAN_BLOCK_SIZE].xyz,
         vec3<u32>(in_block.x & SLOT_RECORD_MASK, in_block.yz)
     );
 }
@@ -529,7 +548,7 @@ fn thin_index(first_thin_index: u32) -> u32 {
 @compute @workgroup_size(SCAN_BLOCK_SIZE)
 fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let slot = invocation.x;
-    if slot >= instance_slot_count || all(instance_offsets[slot] == NOT_DRAWN) {
+    if slot >= instance_slot_count || all(instance_offsets[slot].xyz == NOT_DRAWN) {
         return;
     }
     let instance = instances[slot];
