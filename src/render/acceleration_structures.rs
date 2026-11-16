@@ -197,8 +197,7 @@ const REANCHOR_CELLS: i32 = (CHUNK_EDGE_METRES / ANCHOR_CELL_SIZE) as i32;
 /// The static TLAS (ADR 0020): each static Instance in an entry of its own,
 /// tagged with its slot, in a frame whose origin is the corner of an Anchor:
 /// the camera's when the first static Instance took an entry, or when a
-/// build last re-anchored it (ADR 0014), so the frames in between do not
-/// move it. Two TLASes hold it: rays
+/// build last re-anchored it (ADR 0014). Two TLASes hold it: rays
 /// trace the bound one while a worker thread brings the spare up to date
 /// and records its build, which the main thread submits (ADR 0016), and the
 /// spare is bound from the frame after that submit. A frame that changes a
@@ -511,10 +510,9 @@ impl StaticTlas {
 
     /// Hands the idle spare to a worker on `device` when its entries lack a
     /// change, the bound TLAS's build does, or the bound TLAS's Anchor is
-    /// more than `REANCHOR_CELLS` from `camera_anchor` along an axis; in the
-    /// latter two cases the worker records its build, in the bound TLAS's
-    /// frame, or, in the last, re-anchored at `camera_anchor`. Returns
-    /// whether it did.
+    /// more than `REANCHOR_CELLS` from `camera_anchor` along an axis. The
+    /// worker records its build in the latter two cases, and re-anchors it
+    /// at `camera_anchor` in the last alone. Returns whether it did.
     fn start(&mut self, device: &wgpu::Device, camera_anchor: [i32; 3]) -> bool {
         let spare_index = 1 - self.bound_index;
         let built_from = self.behind[self.bound_index]
@@ -525,7 +523,7 @@ impl StaticTlas {
                 > i64::from(REANCHOR_CELLS)
         });
         let records_build = built_from.is_some() || camera_strayed;
-        let anchor = if camera_strayed {
+        let build_anchor = if camera_strayed {
             camera_anchor
         } else {
             self.bound.anchor
@@ -544,8 +542,8 @@ impl StaticTlas {
             .name("Static TLAS Worker".to_string())
             .spawn(move || {
                 let started = Instant::now();
-                let moved =
-                    device.is_some() && std::mem::replace(&mut tlas.anchor, anchor) != anchor;
+                let moved = device.is_some()
+                    && std::mem::replace(&mut tlas.anchor, build_anchor) != build_anchor;
                 for change in batches.iter().flat_map(|batch| batch.changes.iter()) {
                     tlas.apply(change);
                 }
@@ -635,8 +633,8 @@ impl StaticTlas {
     }
 
     /// The Anchor whose corner is the bound TLAS's frame's origin: the
-    /// camera's when its build started, or in this frame's Frame data until
-    /// a static Instance takes an entry.
+    /// camera's when a build last re-anchored it, or in this frame's Frame
+    /// data until a static Instance takes an entry.
     pub fn anchor(&self) -> [i32; 3] {
         self.bound.anchor
     }
@@ -1291,8 +1289,7 @@ mod tests {
     /// composes every entry from the camera's Anchor, entries an earlier
     /// frame changed included.
     #[test]
-    fn a_build_keeps_its_anchor_until_the_camera_is_a_chunks_edge_away_and_a_far_camera_starts_one()
-    {
+    fn a_build_keeps_its_anchor_and_a_camera_past_a_chunks_edge_starts_one_that_re_anchors_it() {
         let Some(triangle) = Triangle::new() else {
             return;
         };
