@@ -65,7 +65,7 @@ pub(crate) struct ChunkFrame {
     /// of `unloaded`, then of each Chunk's Asset IDs.
     pub last_users: Vec<AssetId>,
     /// Chunks the camera came within the Load radius of this frame before
-    /// they loaded, arrivals after a teleport aside.
+    /// they loaded, those of a teleport's arrival and of its hold aside.
     pub late_chunks: u32,
     /// Whether the camera, since it last arrived, still waits for a Chunk
     /// within the Load radius to load.
@@ -162,6 +162,7 @@ impl ChunkStreamer {
             _ => 0.0,
         };
         let arrived = teleported || self.camera_before.is_none();
+        let arriving = arrived || frame.holding;
 
         while let Some(load) = io.take_finished() {
             let Some(requested_on) = self.in_flight.remove(&load.coordinates) else {
@@ -236,7 +237,7 @@ impl ChunkStreamer {
                 self.within_load_radius.insert(coordinates);
                 every_chunk_within_load_radius_loaded &= loaded;
                 let entered = !self.within_load_radius_before.contains(&coordinates);
-                if !arrived && !loaded && entered && self.counted_late.insert(coordinates) {
+                if !arriving && !loaded && entered && self.counted_late.insert(coordinates) {
                     frame.late_chunks += 1;
                 }
             }
@@ -579,6 +580,30 @@ mod tests {
         let holding: Vec<bool> = frames.iter().map(|frame| frame.holding).collect();
         assert_eq!(holding, [true, false, true, true, true, true, true, false]);
         assert_eq!(frames[7].loaded, [[21, 1]]);
+        assert!(frames.iter().all(|frame| frame.late_chunks == 0));
+    }
+
+    /// Loads take 200 frames. Flying east from a teleport, [22, 0] comes
+    /// within the radius on frame 154 and [22, -1] and [22, 1] on frame 195,
+    /// while the arrival's Chunks still load: they are the Fast travel's,
+    /// which holds until the last, requested on frame 179, loads, and none
+    /// is late. Column 23, 307 frames on, is requested the 201 frames ahead
+    /// the slowest load taught.
+    #[test]
+    fn a_chunk_reached_while_a_teleports_chunks_still_load_is_not_late() {
+        let (mut streamer, mut io) = (streamer(), ScriptedIo::new(1));
+        step(&mut streamer, &mut io, middle_of([0, 0]), false);
+        step(&mut streamer, &mut io, middle_of([0, 0]), false);
+        io.load_frames = 200;
+        let frames: Vec<ChunkFrame> = (0..600)
+            .map(|frame| {
+                let camera = middle_of([20, 0]) + DVec3::X * f64::from(frame) * 50.0 / 60.0;
+                step(&mut streamer, &mut io, camera, frame == 0)
+            })
+            .collect();
+
+        assert!(frames[378].holding);
+        assert!(!frames[379].holding);
         assert!(frames.iter().all(|frame| frame.late_chunks == 0));
     }
 
