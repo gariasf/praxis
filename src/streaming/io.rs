@@ -254,7 +254,7 @@ impl IoPool {
     /// Waits for every load in flight, into `ready` and `ready_mips`.
     fn receive_all(&mut self) -> anyhow::Result<()> {
         anyhow::ensure!(
-            self.in_flight > 0,
+            self.in_flight > 0 || !self.ready.is_empty(),
             "the Chunk streamer waits on loads the IO pool does not hold"
         );
         while self.in_flight > 0 {
@@ -1590,10 +1590,9 @@ mod tests {
             (chunks, far)
         };
         let near = [[0, 0], [-1, 0], [1, 0]];
-        let far_field = [[-2, 0], [2, 0]];
-        let of = |load, chunks: &[[i32; 2]]| -> Vec<(Load, [i32; 2])> {
-            chunks.iter().map(|&chunk| (load, chunk)).collect()
-        };
+        let chunk_reads = near.map(|chunk| (Load::Chunk, chunk));
+        let within_view = [[0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0]];
+        let far_proxy_reads = within_view.map(|chunk| (Load::FarProxy, chunk));
 
         let (chunks, _) = frame(MIDDLE, false, &[]);
         let requested: Vec<(Load, [i32; 2])> = requests
@@ -1603,18 +1602,15 @@ mod tests {
                 IoRequest::Mips(_) => unreachable!(),
             })
             .collect();
-        let mut expected = of(Load::Chunk, &near);
-        expected.extend(of(Load::FarProxy, &near));
-        expected.extend(of(Load::FarProxy, &far_field));
-        assert_eq!(requested, expected);
+        assert_eq!(requested, [&chunk_reads[..], &far_proxy_reads[..]].concat());
         assert!(chunks.holding);
 
-        let (chunks, far) = frame(MIDDLE, false, &of(Load::Chunk, &near));
+        let (chunks, far) = frame(MIDDLE, false, &chunk_reads);
         assert_eq!(chunks.loaded, near);
         assert!(!chunks.holding && chunks.settled);
         assert!(far.loaded.is_empty() && !far.settled);
 
-        let (_, far) = frame(MIDDLE, false, &expected[3..]);
+        let (_, far) = frame(MIDDLE, false, &far_proxy_reads);
         assert_eq!(far.loaded, [[0, 0], [-1, 0], [1, 0], [-2, 0]]);
         let (_, far) = frame(MIDDLE, false, &[]);
         assert_eq!(far.loaded, [[2, 0]]);
@@ -1649,6 +1645,18 @@ mod tests {
         io.receive();
         assert!(!reads_before(&io, [1, 0]));
         assert!(reads_before(&io, [0, 0]));
+    }
+
+    /// A wait for loads fails when the IO pool holds none, and returns when it
+    /// holds reads a frame's second streamer took before its first loaded them.
+    #[test]
+    fn a_wait_for_loads_finds_the_reads_taken_since_they_were_requested() {
+        let (mut io, _requests, finished_sender) = io_pool();
+        assert!(io.receive_all().is_err());
+        io.request(IoRequest::Chunk(Load::Chunk, [0, 0], AssetId(1)));
+        finished_sender.send(read_chunk([0, 0])).unwrap();
+        io.receive();
+        io.receive_all().unwrap();
     }
 
     /// Waiting for reads returns at once when the IO pool holds none, as when

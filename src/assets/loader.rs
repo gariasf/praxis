@@ -298,16 +298,10 @@ mod tests {
         for id in [ground, baked, other_baked] {
             cache.write(id, "key", &material.to_blob()).unwrap();
         }
+        let triangle = crate::assets::pools::tests::mesh(3, vec![0, 1, 2]);
         let primitive = |material| CookedPrimitive {
-            first_index: 0,
-            index_count: 3,
             material: Some(material),
-            texel_density: 0.0,
-            thin_radius_metres: None,
-            meshlets: vec![CookedMeshlet {
-                vertices: vec![0, 1, 2],
-                triangles: vec![[0, 1, 2]],
-            }],
+            ..triangle.primitives[0].clone()
         };
         let empty = CookedPrimitive {
             index_count: 0,
@@ -325,11 +319,8 @@ mod tests {
             (chunk_mesh, vec![primitive(ground)]),
         ] {
             let mesh = CookedMesh {
-                vertices: vec![CookedVertex::default(); 3],
-                indices: vec![0, 1, 2],
                 primitives,
-                coarser_lods: Vec::new(),
-                bounds: [[0.0; 3]; 2],
+                ..triangle.clone()
             };
             cache.write(id, "key", &mesh.to_blob().unwrap()).unwrap();
         }
