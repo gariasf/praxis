@@ -2,16 +2,14 @@
 // Meshlets of the LOD selected for each Instance they draw to the frame's
 // draw in slot order, which the main pass draws with one indirect call per
 // phase and depth pipeline, and one of both phases for the lit pipeline
-// (ADR 0019), Thin Primitives' Meshlets apart from the others (ADR 0027).
-// Phase
-// one draws the Instances visible the frame before; phase two, after the
-// depth pyramid, the other Instances in view that the pyramid does not
-// hide, and it records which Instances were visible for the next frame. With
-// the CULLING
-// Render switch on, they draw only the Instances whose Mesh bounds reach
-// into the view frustum; off, phase one draws every Instance in use. Its
-// bindings are declared from their bind groups' definitions
-// (src/render/bind_groups.rs).
+// (ADR 0019), Thin Primitives' Meshlets and small Instances' apart from the
+// others (ADR 0027). Phase one draws the Instances visible the frame before;
+// phase two, after the depth pyramid, the other Instances in view that the
+// pyramid does not hide, and it records which Instances were visible for the
+// next frame. With the CULLING Render switch on, they draw only the Instances
+// whose Mesh bounds reach into the view frustum and that keep a sample of
+// their pixel; off, phase one draws every Instance in use. Its bindings are
+// declared from their bind groups' definitions (src/render/bind_groups.rs).
 //
 // Slot order keeps the draw the same from run to run: on the M4 Pro, which
 // triangles a draw holds before another changes the derivatives some pixels
@@ -297,25 +295,45 @@ fn instance_lod(instance: InstanceData, mesh: MeshData) -> u32 {
 
 // The Meshlet records, the packed indices and the Thin Primitives' packed
 // indices that LOD `lod` of the Mesh at `mesh_index` in the Mesh table takes
-// in the frame's draw.
-fn lod_counts(mesh_index: u32, lod: u32) -> vec3<u32> {
-    let thin_triangles = meshes[mesh_index].thin_triangle_counts[lod];
+// in the frame's draw: every triangle of a `small` Instance counts as a Thin
+// Primitive's.
+fn lod_counts(mesh_index: u32, lod: u32, small: bool) -> vec3<u32> {
+    let triangles = meshes[mesh_index].triangle_counts[lod];
+    let thin_triangles = select(meshes[mesh_index].thin_triangle_counts[lod], triangles, small);
     return vec3<u32>(
         meshes[mesh_index].meshlet_counts[lod],
-        3u * (meshes[mesh_index].triangle_counts[lod] - thin_triangles),
+        3u * (triangles - thin_triangles),
         3u * thin_triangles
     );
 }
 
-// A drawn slot's offsets hold its Instance's LOD above SLOT_LOD_SHIFT bits
-// of its first Meshlet record within its block: an offset those bits cannot
-// hold is stored as their most, which is past the draw's records as the
-// offset is. No LOD fills the bits above, so no drawn slot reads NOT_DRAWN.
-const SLOT_RECORD_MASK = (1u << SLOT_LOD_SHIFT) - 1u;
+fn instance_coverage(instance: InstanceData, mesh: MeshData, view_depth: f32) -> f32 {
+    let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
+    let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);
+    return small_instance_coverage(
+        bounds_centre(instance, bounds_min, bounds_max),
+        instance.rotation_scale,
+        0.5 * (bounds_max - bounds_min),
+        view_depth,
+        camera.pixel_size_per_metre
+    );
+}
+
+// A drawn slot's offsets hold its Instance's LOD from bit SLOT_LOD_SHIFT,
+// whether it is small in the bit below, and under that its first Meshlet
+// record within its block: an offset those bits cannot hold is stored as
+// their most, which is past the draw's records as the offset is. No LOD
+// fills the bits above, so no drawn slot reads NOT_DRAWN.
+const SLOT_SMALL_SHIFT = SLOT_LOD_SHIFT - 1u;
+const SLOT_RECORD_MASK = (1u << SLOT_SMALL_SHIFT) - 1u;
 
 // The LOD the Instance in `slot`, which the phase draws, draws.
 fn slot_lod(slot: u32) -> u32 {
     return instance_offsets[slot].x >> SLOT_LOD_SHIFT;
+}
+
+fn slot_small(slot: u32) -> bool {
+    return extractBits(instance_offsets[slot].x, SLOT_SMALL_SHIFT, 1u) == 1u;
 }
 
 // Whether the Instance in `slot` was visible in the frame before, as phase
@@ -332,6 +350,8 @@ fn visible_before(slot: u32) -> bool {
 // Phase one draws an Instance in view that was visible the frame before.
 // Phase two finds each Instance in view visible unless it lies behind what
 // phase one drew, records which are, and draws those phase one did not.
+// With CULLING on, neither draws an Instance so small that it keeps no
+// sample.
 @compute @workgroup_size(SCAN_BLOCK_SIZE)
 fn offset_slots(
     @builtin(workgroup_id) block: vec3<u32>,
@@ -342,6 +362,7 @@ fn offset_slots(
     var drawn = false;
     var counts = vec3<u32>(0u);
     var lod = 0u;
+    var small = false;
     if slot < instance_slot_count && instances[slot].mesh != NO_MESH {
         let instance = instances[slot];
         let mesh = meshes[instance.mesh];
@@ -358,9 +379,15 @@ fn offset_slots(
         // A shadow proxy's Mesh has no Meshlets: rays trace it, no pass
         // draws it.
         drawn = drawn && mesh.meshlet_counts[0] != 0u;
+        // A Mesh with a Thin Primitive keeps that rule alone.
+        if drawn && mesh.thin_triangle_counts[0] == 0u {
+            let coverage = instance_coverage(instance, mesh, bounds.centre.w);
+            small = coverage < 1.0;
+            drawn = !CULLING || thin_kept_samples(coverage) != 0u;
+        }
         if drawn {
             lod = instance_lod(instance, mesh);
-            counts = lod_counts(instance.mesh, lod);
+            counts = lod_counts(instance.mesh, lod, small);
         }
     }
     if PHASE_TWO {
@@ -374,8 +401,10 @@ fn offset_slots(
             atomicLoad(&visible_words[invocation]);
     }
     if slot < instance_slot_count {
-        let record_and_lod = min(offset.x, SLOT_RECORD_MASK) | (lod << SLOT_LOD_SHIFT);
-        instance_offsets[slot] = select(NOT_DRAWN, vec3<u32>(record_and_lod, offset.yz), drawn);
+        let record_small_and_lod = min(offset.x, SLOT_RECORD_MASK)
+            | (u32(small) << SLOT_SMALL_SHIFT)
+            | (lod << SLOT_LOD_SHIFT);
+        instance_offsets[slot] = select(NOT_DRAWN, vec3<u32>(record_small_and_lod, offset.yz), drawn);
     }
     if invocation == SCAN_BLOCK_SIZE - 1u {
         instance_offsets[INSTANCE_CAPACITY + block.x] = saturating_add(offset, counts);
@@ -496,7 +525,7 @@ fn append_records(@builtin(global_invocation_id) invocation: vec3<u32>) {
     }
     let instance = instances[slot];
     let lod = slot_lod(slot);
-    let counts = lod_counts(instance.mesh, lod);
+    let counts = lod_counts(instance.mesh, lod, slot_small(slot));
     let first = slot_offsets(slot);
     if fits(first, counts) {
         let indices_end = first.y + counts.y;
@@ -531,10 +560,10 @@ const APPEND_WORKGROUP_SIZE = 32u;
 // A workgroup per Meshlet record the phase appends, dispatched indirectly in
 // the rows offset_blocks sized: writes the record's packed indices where its
 // Instance fits, at the Instance's first index plus its Meshlet's triangles
-// before it in the LOD, or for a Thin Primitive's Meshlet at the Instance's
-// first of theirs plus the LOD's triangles of theirs before it, an
-// invocation per index in turn, so that adjacent invocations write adjacent
-// indices.
+// before it in the LOD, or for a Thin Primitive's Meshlet, as every Meshlet
+// of a small Instance counts, at the Instance's first of theirs plus the
+// LOD's triangles of theirs before it, an invocation per index in turn, so
+// that adjacent invocations write adjacent indices.
 @compute @workgroup_size(APPEND_WORKGROUP_SIZE)
 fn append_triangles(
     @builtin(workgroup_id) workgroup: vec3<u32>,
@@ -551,14 +580,17 @@ fn append_triangles(
     let mesh_index = instances[record.instance_slot].mesh;
     let lod = slot_lod(record.instance_slot);
     let first = slot_offsets(record.instance_slot);
-    if !fits(first, lod_counts(mesh_index, lod)) {
+    let small = slot_small(record.instance_slot);
+    if !fits(first, lod_counts(mesh_index, lod, small)) {
         return;
     }
     // The LOD's triangles in cooked order, each with its corners as cooked,
     // so the draw rasterizes as the cooked index stream does.
     let triangles_before = meshlet.first_triangle - meshes[mesh_index].first_triangles[lod];
     var first_index = first.y + 3u * triangles_before;
-    if meshlet.thin_radius_metres > 0.0 {
+    if small {
+        first_index = thin_index(first.z) + 3u * triangles_before;
+    } else if meshlet.thin_radius_metres > 0.0 {
         let ordinary_triangles = meshes[mesh_index].triangle_counts[lod]
             - meshes[mesh_index].thin_triangle_counts[lod];
         first_index = thin_index(first.z) + 3u * (triangles_before - ordinary_triangles);

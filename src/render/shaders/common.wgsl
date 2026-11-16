@@ -233,6 +233,41 @@ fn thin_kept_samples(coverage: f32) -> u32 {
     return (0xfb910u >> (4u * count)) & 15u;
 }
 
+const SMALL_INSTANCE_WIDEST_PIXELS: f32 = 4.0;
+
+// First order in the bounds' size over their distance, which the sphere's share bounds.
+fn small_instance_coverage(
+    centre: vec3<f32>,
+    rotation_scale: mat3x3<f32>,
+    half_extent: vec3<f32>,
+    view_depth: f32,
+    pixel_size_per_metre: f32
+) -> f32 {
+    let half_axes = mat3x3<f32>(
+        rotation_scale[0] * half_extent.x,
+        rotation_scale[1] * half_extent.y,
+        rotation_scale[2] * half_extent.z
+    );
+    let pixel_metres = pixel_size_per_metre * view_depth;
+    let pixel_area = pixel_metres * pixel_metres;
+    let facing_volume = 4.0 * (abs(dot(centre, cross(half_axes[0], half_axes[1])))
+        + abs(dot(centre, cross(half_axes[1], half_axes[2])))
+        + abs(dot(centre, cross(half_axes[2], half_axes[0]))));
+    let area_share = facing_volume / (view_depth * pixel_area);
+    let sphere_diameter_squared = 4.0 * (dot(half_axes[0], half_axes[0])
+        + dot(half_axes[1], half_axes[1])
+        + dot(half_axes[2], half_axes[2]));
+    let sphere_share = sphere_diameter_squared
+        / (SMALL_INSTANCE_WIDEST_PIXELS * SMALL_INSTANCE_WIDEST_PIXELS * pixel_area);
+    let coverage = max(area_share, sphere_share);
+    return select(1.0, coverage, view_depth > 0.0 && coverage < 1.0);
+}
+
+// Under an eighth of coverage no sample is kept, so the scale stops there.
+fn small_instance_scale(coverage: f32) -> f32 {
+    return inverseSqrt(clamp(coverage, 0.125, 1.0));
+}
+
 // A Meshlet as the Mesh pool's Meshlet Arena holds it: its first vertex in
 // the Meshlet vertex Arena, each an index into the vertex Arena; its first
 // triangle in the Meshlet triangle Arena, each three corners indexing those

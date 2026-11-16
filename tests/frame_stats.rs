@@ -48,8 +48,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     assert!(frames.iter().all(|frame| frame.dropped_time.is_zero()));
     // Two rows of five spheres in one indirect draw, which the depth pre-pass
     // draws with one call, and the lit pass with two, phase two's into depth
-    // first; then the tonemapping pass's one triangle.
-    assert_eq!(last.draw_calls, 4);
+    // first, each followed by its Thin Primitives' and small Instances'; then
+    // the tonemapping pass's one triangle.
+    assert_eq!(last.draw_calls, 8);
     // A slot per sphere, none freed.
     assert_eq!(last.instance_slots_in_use, 10);
     // Every frame writes the 144-byte camera and 32-byte light uniforms and

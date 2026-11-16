@@ -878,13 +878,11 @@ impl Renderer {
             (&MATERIALS, &self.material_pool.bind_group),
             (&SCENE_GEOMETRY, &self.scene_geometry_bind_group),
         ];
-        let thin_primitives = self.mesh_pool.draws_thin_primitives();
         self.main_pass.record_depth_pass(
             &mut encoder,
             &self.render_targets,
             &bind_groups,
             CullingPhase::One,
-            thin_primitives,
             timestamps
                 .as_mut()
                 .map(|timestamps| timestamps.pass(DEPTH_PREPASS).render()),
@@ -908,7 +906,6 @@ impl Renderer {
                 &self.render_targets,
                 &bind_groups,
                 CullingPhase::Two,
-                thin_primitives,
                 timestamps
                     .as_mut()
                     .map(|timestamps| timestamps.pass(PHASE_TWO_DEPTH_PASS).render()),
@@ -926,7 +923,6 @@ impl Renderer {
             &self.render_targets,
             &bind_groups,
             frame.background,
-            thin_primitives,
             timestamps
                 .as_mut()
                 .map(|timestamps| timestamps.pass(LIT_PASS).render()),
@@ -944,10 +940,10 @@ impl Renderer {
         }
         // The depth pre-pass draws phase one's draw, and phase two's depth
         // pass or the lit pass phase two's into depth, then the lit pass both
-        // phases', each with one indirect call, and while a loaded Mesh has
-        // a Thin Primitive each phase's again for theirs; the tonemapping
-        // pass draws one triangle.
-        recorder.counters.draw_calls += if thin_primitives { 8 } else { 4 };
+        // phases', each with one indirect call, and each phase's again for
+        // its Thin Primitives and small Instances; the tonemapping pass
+        // draws one triangle.
+        recorder.counters.draw_calls += 8;
         self.gpu_stats.end_frame(
             &mut encoder,
             self.culling_pass.frame_draw(),
@@ -1155,7 +1151,7 @@ pub(crate) mod tests {
         let frame = triangle_frame(&mut renderer);
         let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
-        assert_eq!(recorder.counters.draw_calls, 4);
+        assert_eq!(recorder.counters.draw_calls, 8);
         assert!(shows(image.get_pixel(SIZE / 2, SIZE / 2).0, RED));
         // The Frame data's background, exposed (0.1, 0.2, 0.3), as GT7 shows
         // it in tests/capture.rs.
@@ -1293,7 +1289,7 @@ pub(crate) mod tests {
         ]);
         let (image, recorder, _) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
-        assert_eq!(recorder.counters.draw_calls, 4);
+        assert_eq!(recorder.counters.draw_calls, 8);
         let quarters = [(4, 4), (12, 4), (4, 12), (12, 12)].map(|(x, y)| image.get_pixel(x, y).0);
         let expected = [RED, GREEN, BLUE, BLUE];
         assert!(
@@ -1306,8 +1302,8 @@ pub(crate) mod tests {
     }
 
     /// Twice the Instances of a two-triangle Mesh draw twice the Instances
-    /// and triangles, read back from the GPU, in the same draw calls: one in
-    /// the depth pre-pass, one in phase two's depth pass, one in the lit
+    /// and triangles, read back from the GPU, in the same draw calls: two in
+    /// the depth pre-pass, two in phase two's depth pass, three in the lit
     /// pass and one in the tonemapping pass.
     #[test]
     fn doubling_the_instances_doubles_instances_and_triangles_drawn_not_draw_calls() {
@@ -1331,8 +1327,8 @@ pub(crate) mod tests {
             )
         };
 
-        assert_eq!(drawn(3), (3, 6, 4));
-        assert_eq!(drawn(6), (6, 12, 4));
+        assert_eq!(drawn(3), (3, 6, 8));
+        assert_eq!(drawn(6), (6, 12, 8));
     }
 
     /// Instances past a block of the culling pass's scans, and past a row of
@@ -2888,14 +2884,12 @@ pub(crate) mod tests {
             };
             let (_, _, gpu) = render_frame(&context, &mut renderer, &frame, SIZE, SIZE);
 
-            // The draw's index count, its first indirect argument, holds a
-            // triangle per Instance drawn, each a Meshlet record naming its
-            // slot.
-            let drawn = read_storage::<u32>(&context, renderer.culling_pass.frame_draw(), 1)[0] / 3;
+            // The frame's draw holds a triangle per Instance drawn, each a
+            // Meshlet record naming its slot.
             let records = read_storage::<[u32; 3]>(
                 &context,
                 renderer.culling_pass.meshlet_records(),
-                drawn as usize,
+                gpu.triangles_drawn as usize,
             );
             let expected: Vec<u32> = (0..placed.len())
                 .filter(|&slot| {
@@ -3381,6 +3375,67 @@ pub(crate) mod tests {
             }
         }
         kept
+    }
+
+    /// A square Instance facing the camera, placed so that a pixel wide it
+    /// covers one pixel: a pixel wide it keeps that pixel's four samples;
+    /// narrower, it still draws a pixel wide and keeps the samples nearest
+    /// its true area's share of four; under an eighth of a pixel's area it
+    /// is not drawn.
+    #[test]
+    fn an_instance_narrower_than_a_pixel_draws_a_pixel_wide_and_keeps_its_areas_share_of_samples() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        const SIDE: u32 = 64;
+        const DISTANCE_METRES: f32 = 10.0;
+        let switches = RenderSwitches {
+            // The lit pass keeps the depth this reads.
+            count_point_lights: true,
+            ..RenderSwitches::default()
+        };
+        let pixel_metres = pixel_size_per_metre(SIDE) * DISTANCE_METRES;
+        for (width_pixels, kept_samples) in [
+            (1.0, vec![0, 1, 2, 3]),
+            (0.5_f32.sqrt(), vec![0, 3]),
+            (0.5, vec![0]),
+            (0.3, vec![]),
+        ] {
+            let mut renderer = Renderer::new(&context, TARGET_FORMAT, SIDE, SIDE, switches);
+            let quad = load_quad(&mut renderer);
+            let white = emissive_material(&mut renderer, [1.0; 3]);
+            let scale = glam::Mat3::from_diagonal(glam::Vec3::splat(width_pixels * pixel_metres));
+            let frame = FrameData {
+                camera: CameraUniform {
+                    view_proj: projection_matrix(1.0).to_cols_array_2d(),
+                    exposure: 1.0,
+                    ..CameraUniform::default()
+                },
+                ..frame_of(vec![InstanceData {
+                    rotation_scale: padded_columns(scale),
+                    offset: [0.5 * pixel_metres, 0.5 * pixel_metres, -DISTANCE_METRES],
+                    ..instance(quad, white.index(), [0.0, 0.0])
+                }])
+            };
+            let (image, _, gpu) = render_frame(&context, &mut renderer, &frame, SIDE, SIDE);
+            let samples = read_depth_samples(&context, renderer.render_targets.depth());
+            let kept: Vec<(usize, usize)> = samples
+                .iter()
+                .enumerate()
+                .filter(|&(_, &depth)| depth > 0.0)
+                .map(|(index, _)| (index / 4, index % 4))
+                .collect();
+            let pixel = 31 * SIDE as usize + 32;
+            let expected: Vec<(usize, usize)> =
+                kept_samples.iter().map(|&sample| (pixel, sample)).collect();
+            assert_eq!(kept, expected, "{width_pixels} of a pixel wide");
+            assert_eq!(gpu.instances_drawn, u32::from(!kept_samples.is_empty()));
+            assert_eq!(
+                image.get_pixel(32, 31) == image.get_pixel(0, 0),
+                kept_samples.is_empty(),
+                "{width_pixels} of a pixel wide"
+            );
+        }
     }
 
     /// A Material that is black and unlit, so only its `emissive` colour

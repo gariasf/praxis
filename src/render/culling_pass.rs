@@ -65,8 +65,9 @@ impl CullingPhase {
 /// slots take one workgroup of blocks, a run of them to an invocation.
 pub(crate) const SCAN_BLOCK_SIZE: u32 = 256;
 
-/// The bits of a drawn slot's first Meshlet record within its scan block,
-/// which its offsets hold under its Instance's LOD.
+/// The bit from which a drawn slot's offsets hold its Instance's LOD, over
+/// whether the Instance is small, over its first Meshlet record within its
+/// scan block.
 pub(crate) const SLOT_LOD_SHIFT: u32 = 28;
 
 // A LOD short of all the bits above, which a slot not drawn holds set.
@@ -217,7 +218,7 @@ impl CullingPass {
         // index.
         assert!(draw_capacity.meshlet_records < 1 << (u32::BITS - MESHLET_MAX_VERTICES.ilog2()));
         // The most a slot's offsets hold of its first record is past them.
-        assert!(draw_capacity.meshlet_records < (1 << SLOT_LOD_SHIFT) - 1);
+        assert!(draw_capacity.meshlet_records < (1 << (SLOT_LOD_SHIFT - 1)) - 1);
         assert!(
             device.limits().max_compute_workgroups_per_dimension >= MAX_WORKGROUPS_PER_DIMENSION
         );

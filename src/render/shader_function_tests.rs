@@ -2365,6 +2365,158 @@ fn a_thin_primitive_keeps_the_samples_nearest_its_coverage() {
     }
 }
 
+/// An Instance whose bounds cover under a pixel's area keeps that share of
+/// its samples and is scaled until they cover a pixel's, and keeps none
+/// under an eighth; one the sphere about its bounds draws four pixels wide is
+/// scaled no further. Each case's coverage is a literal: a face of area `a`
+/// and normal `n` covers `a |n · centre| / depth³` a metre along the view
+/// axis, and a pixel there 1e-6 m² in all but one case.
+#[test]
+fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    const IDENTITY: [[f32; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+    let diagonal = std::f32::consts::FRAC_1_SQRT_2;
+    let turned = [
+        [diagonal, 0.0, -diagonal],
+        [0.0, 1.0, 0.0],
+        [diagonal, 0.0, diagonal],
+    ];
+    let ahead = [0.0, 0.0, -1000.0];
+    let pixel = 0.001;
+    // Centre, view depth, rotation-scale, half extent, pixel size a metre
+    // away; then coverage, scale and samples kept.
+    let cases = [
+        (ahead, 1000.0, IDENTITY, [0.5; 3], pixel, 1.0, 1.0, 0b1111),
+        (ahead, 1000.0, IDENTITY, [0.25; 3], pixel, 0.25, 2.0, 0b0001),
+        (
+            ahead, 1000.0, IDENTITY, [0.18; 3], pixel, 0.1296, 2.777_778, 0b0001,
+        ),
+        (
+            ahead, 1000.0, IDENTITY, [0.175; 3], pixel, 0.1225, 2.828_427, 0b0000,
+        ),
+        (
+            ahead, 1000.0, IDENTITY, [0.0; 3], pixel, 0.0, 2.828_427, 0b0000,
+        ),
+        (
+            ahead,
+            1000.0,
+            IDENTITY,
+            [0.5; 3],
+            2.0 * pixel,
+            0.25,
+            2.0,
+            0b0001,
+        ),
+        (
+            ahead, 1000.0, turned, [0.25; 3], pixel, 0.353_553, 1.681_793, 0b0001,
+        ),
+        (
+            [1000.0, 0.0, -1000.0],
+            1000.0,
+            IDENTITY,
+            [0.25; 3],
+            pixel,
+            0.5,
+            std::f64::consts::SQRT_2,
+            0b1001,
+        ),
+        (
+            ahead,
+            1000.0,
+            IDENTITY,
+            [1.0, 0.01, 0.01],
+            pixel,
+            0.250_05,
+            1.999_8,
+            0b0001,
+        ),
+        (
+            ahead,
+            1000.0,
+            IDENTITY,
+            [2.0, 0.01, 0.01],
+            pixel,
+            1.0,
+            1.0,
+            0b1111,
+        ),
+        (
+            [0.0, 0.0, -10.0],
+            10.0,
+            IDENTITY,
+            [0.5; 3],
+            pixel,
+            1.0,
+            1.0,
+            0b1111,
+        ),
+        (
+            [0.0, 0.0, 1000.0],
+            -1000.0,
+            IDENTITY,
+            [0.25; 3],
+            pixel,
+            1.0,
+            1.0,
+            0b1111,
+        ),
+        (
+            [1.0, 0.0, 0.0],
+            0.0,
+            IDENTITY,
+            [0.25; 3],
+            pixel,
+            1.0,
+            1.0,
+            0b1111,
+        ),
+    ];
+    let inputs = cases.map(|(centre, depth, rotation_scale, half_extent, pixel, ..)| {
+        let [first, second, third] = rotation_scale;
+        [
+            [centre[0], centre[1], centre[2], depth],
+            [first[0], first[1], first[2], half_extent[0]],
+            [second[0], second[1], second[2], half_extent[1]],
+            [third[0], third[1], third[2], half_extent[2]],
+            [pixel, 0.0, 0.0, 0.0],
+        ]
+    });
+    let coverage = "small_instance_coverage(
+        inputs[0].xyz,
+        mat3x3<f32>(inputs[1].xyz, inputs[2].xyz, inputs[3].xyz),
+        vec3<f32>(inputs[1].w, inputs[2].w, inputs[3].w),
+        inputs[0].w,
+        inputs[4].x
+    )";
+    let results = evaluate_cases(
+        &context,
+        &format!(
+            "vec4<f32>({coverage}, small_instance_scale({coverage}), \
+             f32(thin_kept_samples({coverage})), 0.0)"
+        ),
+        &inputs,
+        &[],
+    );
+    for ((centre, depth, _, half_extent, pixel, coverage, scale, samples), result) in
+        cases.into_iter().zip(results)
+    {
+        let case = format!(
+            "bounds of half extent {half_extent:?} at {centre:?}, {depth} m deep, under a pixel \
+             of {pixel} m a metre away"
+        );
+        assert_close(
+            result[0],
+            coverage,
+            2e-6,
+            format_args!("the coverage of {case}"),
+        );
+        assert_close(result[1], scale, 1e-5, format_args!("the scale of {case}"));
+        assert_eq!(result[2] as u32, samples, "the samples kept of {case}");
+    }
+}
+
 /// The culling pass draws the coarsest LOD whose LOD error, times its
 /// Instance's scale, is under the threshold times the distance: each case
 /// holds its LOD as a literal, over a chain whose errors double from 1 cm,

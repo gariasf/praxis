@@ -82,7 +82,11 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
             "array<CookedVertex>",
             wgpu::ShaderStages::VERTEX,
         ),
-        read_only_storage("meshes", "array<MeshData>", wgpu::ShaderStages::COMPUTE),
+        read_only_storage(
+            "meshes",
+            "array<MeshData>",
+            wgpu::ShaderStages::VERTEX.union(wgpu::ShaderStages::COMPUTE),
+        ),
         read_only_storage(
             "meshlets",
             "array<MeshletData>",
