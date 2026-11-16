@@ -1424,28 +1424,20 @@ mod generators {
         }
 
         #[test]
-        fn a_thin_primitive_keeps_every_triangle_at_each_lod() {
-            let post = || cylinder(0.025, 0.025, 1.0, 6).thin(0.025);
-            let beside_a_sphere = vec![
-                (post(), None),
-                (crate::scenes::uv_sphere(1.0, 64, 32), None),
-            ];
-            let alone = vec![(wire(30.0, 0.6, 0.015, 15, 3).thin(0.015), None)];
-            for (primitives, fewest_lods) in [(beside_a_sphere, 2), (alone, 1)] {
-                let mesh = crate::cook::mesh::cook(&primitives).unwrap();
-                let thin_index_counts: Vec<u32> = mesh
-                    .lods()
-                    .map(|(_, _, primitives)| primitives[0].index_count)
-                    .collect();
-                assert!(
-                    thin_index_counts.len() >= fewest_lods,
-                    "{thin_index_counts:?}"
-                );
-                assert_eq!(
-                    thin_index_counts,
-                    vec![primitives[0].0.indices.len() as u32; thin_index_counts.len()]
-                );
-            }
+        fn a_thin_primitive_keeps_every_triangle_at_each_lod_of_a_mesh_that_simplifies() {
+            let post = cylinder(0.025, 0.025, 1.0, 6).thin(0.025);
+            let post_index_count = post.indices.len() as u32;
+            let sphere = crate::scenes::uv_sphere(1.0, 64, 32);
+            let mesh = crate::cook::mesh::cook(&[(post, None), (sphere, None)]).unwrap();
+            let post_index_counts: Vec<u32> = mesh
+                .lods()
+                .map(|(_, _, lod_primitives)| lod_primitives[0].index_count)
+                .collect();
+            assert!(post_index_counts.len() > 1, "{post_index_counts:?}");
+            assert_eq!(
+                post_index_counts,
+                vec![post_index_count; post_index_counts.len()]
+            );
         }
 
         #[test]

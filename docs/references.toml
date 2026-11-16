@@ -6489,6 +6489,13 @@ quote = '''Kind_Border,   // not on an attribute seam, has exactly two open edge
 				result[i] = Kind_Locked;'''
 checked = 2026-11-14
 
+["meshoptimizer-0.25-vertex-lock"]
+url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L421-L467"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/meshoptimizer.h, the vertex lock flags (L421-L426) and the documentation of meshopt_simplifyWithAttributes (L467)"
+quote = '''Experimental: Simplification vertex flags/locks, for use in `vertex_lock` arrays in simplification APIs [...] /* Do not move this vertex. */
+	meshopt_SimplifyVertex_Lock = 1 << 0, [...] vertex_lock can be NULL; when it's not NULL, it should have a value for each vertex; 1 denotes vertices that can't be moved'''
+checked = 2026-11-16
+
 ["meshopt-0.6.2-simplify-options"]
 url = "https://docs.rs/crate/meshopt/0.6.2/source/src/simplify.rs"
 section = "`meshopt` crate 0.6.2, src/simplify.rs, SimplifyOptions (L5-L28), simplify_with_locks' lock type (L112), simplify_sloppy's doc comment (L282) and simplify_sloppy_with_locks (L361)"

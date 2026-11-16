@@ -292,7 +292,9 @@ pub(super) fn push_lod(
 /// triangles, the whole Mesh in one call so that a border between Primitives
 /// collapses on both sides alike, until `MESH_MAX_LODS` or a LOD that keeps
 /// more than `LOD_KEPT_INDICES_CEILING` of the one before, or nothing. A
-/// Thin Primitive's vertices are locked, so each LOD keeps its whole tube. A
+/// Thin Primitive's vertices are locked [ref:meshoptimizer-0.25-vertex-lock],
+/// so each LOD keeps its whole tube and the halving falls on the Mesh's other
+/// Primitives. A
 /// LOD's error is the sum of the simplifier's errors down to it
 /// [ref:meshoptimizer-0.25-lod-chain], each relative to the Mesh's extent
 /// and so times `simplify_scale` in metres
@@ -793,12 +795,18 @@ pub(crate) mod tests {
                 .map(|(geometry, _)| (geometry.clone(), None))
                 .collect();
             let cooked = cook(&primitives).unwrap();
-            for (_, _, primitives) in cooked.lods() {
-                let radii: Vec<_> = primitives
+            let lods: Vec<_> = cooked.lods().collect();
+            for (_, _, lod_primitives) in &lods {
+                let radii: Vec<_> = lod_primitives
                     .iter()
                     .map(|primitive| primitive.thin_radius_metres)
                     .collect();
                 assert_eq!(radii, thin_radii, "{name}");
+                for (primitive, lod_0_primitive) in lod_primitives.iter().zip(lods[0].2.iter()) {
+                    if primitive.thin_radius_metres.is_some() {
+                        assert_eq!(primitive.index_count, lod_0_primitive.index_count, "{name}");
+                    }
+                }
             }
         }
     }
