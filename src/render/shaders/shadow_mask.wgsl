@@ -135,7 +135,10 @@ fn first_intersection(flags: u32, origin: vec3<f32>, direction: vec3<f32>, start
 // own triangles: there it starts inside the surface, and passes the back of
 // the first triangle it meets, where it leaves the mesh. A ray that enters
 // a closed mesh meets a front face first, so whatever stands beyond still
-// shadows the point. `pixel_width` is a pixel's width at `position`.
+// shadows the point. A ray that leaves the surface passes a back face too,
+// one it meets within the LOD error the culling pass allows at `position`:
+// every BLAS holds its Mesh's LOD 0 (ADR 0020), and the LOD drawn can lie
+// that far inside it. `pixel_width` is a pixel's width at `position`.
 fn shadowed(
     position: vec3<f32>,
     pixel_width: f32,
@@ -163,18 +166,26 @@ fn shadowed(
         || (facing >= AGREEING_TRIANGLE_TURN_MARGIN
             && dot(triangle_normal, interpolated_normal) >= NORMALS_AGREE);
     let origin = tlas_position + triangle_normal * select(-offset, offset, leaves_surface);
-    // Any hit shadows a ray that leaves the surface. One that starts inside
-    // first finds where it leaves the mesh, then traces on from there: two
-    // turns at most, through the one call.
-    var flags = select(0u, RAY_FLAG_TERMINATE_ON_FIRST_HIT, leaves_surface);
+    // How far along it the ray passes a back face: one that starts inside
+    // passes the first it meets, wherever it leaves the mesh.
+    let pass_distance = select(
+        distance,
+        camera.lod_error_per_metre * length(position),
+        leaves_surface
+    );
+    // The nearest triangle shadows the ray unless it is a back face within
+    // that distance; the ray traces on from such a one, and any triangle past
+    // it shadows it: two turns at most, through the one call.
+    var flags = 0u;
     var start_distance = 0.0;
     var hidden = false;
     loop {
         let hit = first_intersection(flags, origin, direction, start_distance, distance);
         let found = hit.kind != RAY_QUERY_INTERSECTION_NONE;
         let any_hit = (flags & RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u;
-        if any_hit || !found || hit.front_face || hit.t + offset >= distance {
-            hidden = found && (any_hit || hit.front_face);
+        let shadows = any_hit || hit.front_face || hit.t > pass_distance;
+        if !found || shadows || hit.t + offset >= distance {
+            hidden = found && shadows;
             break;
         }
         flags = RAY_FLAG_TERMINATE_ON_FIRST_HIT;

@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 
-use crate::capture::{FrameWait, capture, render_frames};
+use crate::capture::{FrameWait, ReadBack, capture, render_frames};
 use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::culling_pass::CullingPhase;
@@ -809,6 +809,7 @@ pub fn traverse(context: &GpuContext) -> anyhow::Result<Traversal> {
         configuration.height,
         0..TRAVERSAL_FRAMES,
         &[],
+        ReadBack::Target,
         SIXTY_HERTZ,
         RenderSwitches::default(),
         frame_wait(context),
@@ -853,6 +854,7 @@ fn render_run(
         configuration.height,
         0..configuration.warm_up_frames + configuration.measured_frames,
         &[],
+        ReadBack::Target,
         // ADR 0022 judges Budgets at 60 Hz.
         SIXTY_HERTZ,
         switches,

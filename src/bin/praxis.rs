@@ -55,6 +55,13 @@ enum Command {
         forced_lod: Option<u32>,
     },
     #[cfg(feature = "cook")]
+    ShadowMaskDifference {
+        scene: String,
+        output: String,
+        size: String,
+        frames: Vec<u32>,
+    },
+    #[cfg(feature = "cook")]
     ExportScene {
         scene: String,
         directory: String,
@@ -71,6 +78,8 @@ enum Command {
         configuration: Configuration,
         scenes: Vec<String>,
         crowd_form: CrowdForm,
+        /// The LOD every Instance draws, in place of the one selected.
+        forced_lod: Option<u32>,
         publish: bool,
         /// The Experiment the results publish to, off every Series.
         experiment: Option<String>,
@@ -122,6 +131,13 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             forced_lod,
         } => capture(&scene, &output, &size, crowd_form, &frames, forced_lod),
         #[cfg(feature = "cook")]
+        Command::ShadowMaskDifference {
+            scene,
+            output,
+            size,
+            frames,
+        } => shadow_mask_difference(&scene, &output, &size, &frames),
+        #[cfg(feature = "cook")]
         Command::ExportScene {
             scene,
             directory,
@@ -138,6 +154,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             configuration,
             scenes,
             crowd_form,
+            forced_lod,
             publish,
             experiment,
         } => bench(
@@ -145,6 +162,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             configuration,
             &scenes,
             crowd_form,
+            forced_lod,
             publish,
             experiment.as_deref(),
         ),
@@ -237,15 +255,23 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         "only `bench` and `capture` take --crowd-form"
     );
     anyhow::ensure!(
-        frames.is_empty() || matches!(command, Some("capture" | "export-scene")),
-        "only `capture` and `export-scene` take --frame"
+        frames.is_empty()
+            || matches!(
+                command,
+                Some("capture" | "shadow-mask-difference" | "export-scene")
+            ),
+        "only `capture`, `shadow-mask-difference` and `export-scene` take --frame"
     );
     anyhow::ensure!(
-        forced_lod.is_none() || command == Some("capture"),
-        "only `capture` takes --lod"
+        forced_lod.is_none() || matches!(command, Some("bench" | "capture")),
+        "only `bench` and `capture` take --lod"
     );
     anyhow::ensure!(
-        frames.len() <= 1 || command == Some("capture"),
+        forced_lod.is_none() || command != Some("bench") || no_publish,
+        "a bench with --lod joins no Series, so it takes --no-publish"
+    );
+    anyhow::ensure!(
+        frames.len() <= 1 || command != Some("export-scene"),
         "`export-scene` takes one --frame"
     );
     let crowd_form = crowd_form.unwrap_or_default();
@@ -257,6 +283,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         },
         scenes: scenes.to_vec(),
         crowd_form,
+        forced_lod,
         publish: !no_publish,
         experiment: experiment.clone(),
     };
@@ -290,6 +317,20 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             frames,
             forced_lod,
         },
+        #[cfg(feature = "cook")]
+        [command, scene, output, size @ ..]
+            if command == "shadow-mask-difference" && size.len() <= 1 =>
+        {
+            Command::ShadowMaskDifference {
+                scene: scene.clone(),
+                output: output.clone(),
+                size: size
+                    .first()
+                    .map_or(DEFAULT_CAPTURE_SIZE, String::as_str)
+                    .into(),
+                frames,
+            }
+        }
         #[cfg(feature = "cook")]
         [command, scene, directory] if command == "export-scene" => Command::ExportScene {
             scene: scene.clone(),
@@ -361,6 +402,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             let (cook_commands, crowd_form_clause) = if cfg!(feature = "cook") {
                 (
                     "`cook [<scene>]`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>[,<n>...]] [--lod <n>]`, \
+                     `shadow-mask-difference <scene> <png path> [<width>x<height>] --frame <n>[,<n>...]`, \
                      `export-scene <scene> <directory> [--frame <n>]`, \
                      `difference <expected png> <actual png> <difference png>`, ",
                     "`capture` and `bench` also take",
@@ -370,7 +412,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             };
             anyhow::bail!(
                 "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
-             `preflight`, {cook_commands}`bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish | --experiment <name>] [<scene>...]`, \
+             `preflight`, {cook_commands}`bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish [--lod <n>] | --experiment <name>] [<scene>...]`, \
              `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history publish-night <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, `report <bench directory>`, or `traverse`; {crowd_form_clause} \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
                 ReferenceScene::ALL.map(ReferenceScene::name)
@@ -476,7 +518,9 @@ fn parse_scene(name: &str) -> anyhow::Result<ReferenceScene> {
 /// Benches the named Reference scenes, or with none every scene whose
 /// assets are present, prints one line per scene, and writes
 /// `<scene>.json` into `output`. A crowd form other than the default
-/// benches `crowd` alone, written as `crowd-<form>.json`. With `publish`,
+/// benches `crowd` alone, written as `crowd-<form>.json`. With `forced_lod`,
+/// every Instance draws that LOD, and a scene is written as
+/// `<scene>-lod-<n>.json`. With `publish`,
 /// the results then join the Bench history, as the `experiment` named; a
 /// publish that fails warns and fails no bench.
 fn bench(
@@ -484,6 +528,7 @@ fn bench(
     configuration: Configuration,
     scene_names: &[String],
     crowd_form: CrowdForm,
+    forced_lod: Option<u32>,
     publish: bool,
     experiment: Option<&str>,
 ) -> anyhow::Result<()> {
@@ -518,11 +563,15 @@ fn bench(
     for scene in scenes {
         let switches = RenderSwitches {
             crowd_form,
+            forced_lod,
             ..RenderSwitches::default()
         };
         let mut result = praxis::bench::run(&context, scene, configuration, switches, &start)?;
         if other_form {
             result.scene = format!("{crowd}-{}", crowd_form.name());
+        }
+        if let Some(lod) = forced_lod {
+            result.scene = format!("{}-lod-{lod}", result.scene);
         }
         let path = Path::new(output).join(format!("{}.json", result.scene));
         std::fs::write(&path, serde_json::to_string_pretty(&result)? + "\n")?;
@@ -831,10 +880,7 @@ fn capture(
     forced_lod: Option<u32>,
 ) -> anyhow::Result<()> {
     let scene = parse_scene(scene)?;
-    let (width, height) = size
-        .split_once('x')
-        .and_then(|(width, height)| Some((width.parse().ok()?, height.parse().ok()?)))
-        .ok_or_else(|| anyhow::anyhow!("size {size:?} is not <width>x<height>"))?;
+    let (width, height) = parse_size(size)?;
     let context = pollster::block_on(GpuContext::headless())?;
     let switches = RenderSwitches {
         count_point_lights: frames.is_empty(),
@@ -856,12 +902,7 @@ fn capture(
             frames,
             switches,
         )?;
-        let stem = output.strip_suffix(".png").unwrap_or(output);
-        let paths = frames.iter().map(|frame| match frames {
-            [_] => output.to_owned(),
-            _ => format!("{stem}-frame-{frame}.png"),
-        });
-        (paths.zip(pixels).collect(), None)
+        (frame_paths(output, frames).zip(pixels).collect(), None)
     };
     for (path, pixels) in &captures {
         image::save_buffer_with_format(
@@ -876,6 +917,65 @@ fn capture(
     }
     if let Some(last_frame) = last_frame {
         std::io::stdout().write_all(last_frame.to_string().as_bytes())?;
+    }
+    Ok(())
+}
+
+/// The width and height `size` names as `<width>x<height>`.
+#[cfg(feature = "cook")]
+fn parse_size(size: &str) -> anyhow::Result<(u32, u32)> {
+    size.split_once('x')
+        .and_then(|(width, height)| Some((width.parse().ok()?, height.parse().ok()?)))
+        .ok_or_else(|| anyhow::anyhow!("size {size:?} is not <width>x<height>"))
+}
+
+/// Where each of `frames` is written: one frame to `output`, each of
+/// several beside it as `<output stem>-frame-<n>.png`.
+#[cfg(feature = "cook")]
+fn frame_paths<'a>(output: &'a str, frames: &'a [u32]) -> impl Iterator<Item = String> + 'a {
+    let stem = output.strip_suffix(".png").unwrap_or(output);
+    frames.iter().map(move |frame| match frames {
+        [_] => output.to_owned(),
+        _ => format!("{stem}-frame-{frame}.png"),
+    })
+}
+
+/// Renders `frames` of the Reference scene named `scene` headless at `size`,
+/// and again with LOD 0 forced, prints for each frame how many pixels of its
+/// shadow mask differ between the two, and writes the image of them as
+/// `capture` names its frames' (`praxis::shadow_mask_differences`).
+#[cfg(feature = "cook")]
+fn shadow_mask_difference(
+    scene: &str,
+    output: &str,
+    size: &str,
+    frames: &[u32],
+) -> anyhow::Result<()> {
+    anyhow::ensure!(!frames.is_empty(), "`shadow-mask-difference` takes --frame");
+    let scene = parse_scene(scene)?;
+    let (width, height) = parse_size(size)?;
+    let context = pollster::block_on(GpuContext::headless())?;
+    let differences = praxis::shadow_mask_differences(&context, scene, width, height, frames)?;
+    for ((frame, path), difference) in frames
+        .iter()
+        .zip(frame_paths(output, frames))
+        .zip(differences)
+    {
+        image::save_buffer_with_format(
+            &path,
+            &difference.image,
+            width,
+            height,
+            image::ExtendedColorType::Rgba8,
+            image::ImageFormat::Png,
+        )?;
+        writeln!(
+            std::io::stdout(),
+            "{} frame {frame}: {} of {} shadow mask pixels differ from LOD 0's ({path})",
+            scene.name(),
+            difference.differing_pixels,
+            u64::from(width) * u64::from(height)
+        )?;
     }
     Ok(())
 }
@@ -1007,6 +1107,7 @@ mod tests {
             configuration,
             scenes,
             crowd_form,
+            forced_lod,
             publish,
             experiment,
         } = parse(&["bench", "out", "--ci", "town", "crowd"]).unwrap()
@@ -1017,6 +1118,7 @@ mod tests {
         assert_eq!(configuration.width, Configuration::CI.width);
         assert_eq!(scenes, ["town", "crowd"]);
         assert_eq!(crowd_form, CrowdForm::default());
+        assert_eq!(forced_lod, None);
         assert!(publish);
         assert_eq!(experiment, None);
     }
@@ -1192,7 +1294,7 @@ mod tests {
 
     #[cfg(feature = "cook")]
     #[test]
-    fn capture_alone_takes_a_forced_lod() {
+    fn capture_and_an_unpublished_bench_take_a_forced_lod() {
         let Command::Capture { forced_lod, .. } =
             parse(&["capture", "town", "out.png", "--lod", "0"]).unwrap()
         else {
@@ -1208,10 +1310,47 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("--lod takes a LOD's number"), "{error}");
+        let Command::Bench { forced_lod, .. } =
+            parse(&["bench", "out", "--no-publish", "--lod", "0", "town"]).unwrap()
+        else {
+            panic!("bench parsed as another command");
+        };
+        assert_eq!(forced_lod, Some(0));
         let error = parse(&["bench", "out", "--lod", "0"])
             .unwrap_err()
             .to_string();
-        assert!(error.contains("only `capture` takes --lod"), "{error}");
+        assert!(error.contains("it takes --no-publish"), "{error}");
+        let error = parse(&["report", "out", "--lod", "0"])
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("only `bench` and `capture` take --lod"),
+            "{error}"
+        );
+    }
+
+    #[cfg(feature = "cook")]
+    #[test]
+    fn shadow_mask_difference_takes_frames_and_a_size() {
+        let Command::ShadowMaskDifference { size, frames, .. } = parse(&[
+            "shadow-mask-difference",
+            "town",
+            "out.png",
+            "2560x1440",
+            "--frame",
+            "59,767,900",
+        ])
+        .unwrap() else {
+            panic!("shadow-mask-difference parsed as another command");
+        };
+        assert_eq!(size, "2560x1440");
+        assert_eq!(frames, [59, 767, 900]);
+        let Command::ShadowMaskDifference { size, .. } =
+            parse(&["shadow-mask-difference", "town", "out.png"]).unwrap()
+        else {
+            panic!("shadow-mask-difference parsed as another command");
+        };
+        assert_eq!(size, DEFAULT_CAPTURE_SIZE);
     }
 
     #[cfg(feature = "cook")]
@@ -1266,7 +1405,9 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(
-            error.contains("only `capture` and `export-scene` take --frame"),
+            error.contains(
+                "only `capture`, `shadow-mask-difference` and `export-scene` take --frame"
+            ),
             "{error}"
         );
     }

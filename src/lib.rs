@@ -39,8 +39,8 @@ mod transform;
 
 pub use assets::cooked;
 pub use capture::{
-    GOLDEN_DIRECTORY, GOLDEN_TOLERANCE, ImageDifference, capture, capture_frames, compare_images,
-    difference_image, golden_key,
+    GOLDEN_DIRECTORY, GOLDEN_TOLERANCE, ImageDifference, ShadowMaskDifference, capture,
+    capture_frames, compare_images, difference_image, golden_key, shadow_mask_differences,
 };
 pub use render::{CrowdForm, RenderSwitches, blas_bytes, compacted_blas_fraction, tlas_bytes};
 pub use scenes::ReferenceScene;

@@ -323,6 +323,11 @@ impl State {
         submission
     }
 
+    /// The shadow mask the last frame rendered wrote.
+    pub(crate) fn shadow_mask(&self) -> &wgpu::Texture {
+        self.renderer.shadow_mask()
+    }
+
     /// One past the last frame whose submission completed, as far as the
     /// submissions and polls since have seen.
     #[cfg(test)]
