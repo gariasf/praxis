@@ -2377,144 +2377,87 @@ fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
         return;
     };
     const IDENTITY: [[f32; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
-    let diagonal = std::f32::consts::FRAC_1_SQRT_2;
-    let turned = [
-        [diagonal, 0.0, -diagonal],
+    const EIGHTH_TURN_SINE: f32 = std::f32::consts::FRAC_1_SQRT_2;
+    const TURNED: [[f32; 3]; 3] = [
+        [EIGHTH_TURN_SINE, 0.0, -EIGHTH_TURN_SINE],
         [0.0, 1.0, 0.0],
-        [diagonal, 0.0, diagonal],
+        [EIGHTH_TURN_SINE, 0.0, EIGHTH_TURN_SINE],
     ];
-    let ahead = [0.0, 0.0, -1000.0];
-    let pixel = 0.001;
-    // Centre, view depth, rotation-scale, half extent, pixel size a metre
-    // away; then coverage, scale and samples kept.
-    let cases = [
-        (ahead, 1000.0, IDENTITY, [0.5; 3], pixel, 1.0, 1.0, 0b1111),
-        (ahead, 1000.0, IDENTITY, [0.25; 3], pixel, 0.25, 2.0, 0b0001),
-        (
-            ahead, 1000.0, IDENTITY, [0.18; 3], pixel, 0.1296, 2.777_778, 0b0001,
-        ),
-        (
-            ahead, 1000.0, IDENTITY, [0.175; 3], pixel, 0.1225, 2.828_427, 0b0000,
-        ),
-        (
-            ahead, 1000.0, IDENTITY, [0.0; 3], pixel, 0.0, 2.828_427, 0b0000,
-        ),
-        (
-            ahead,
-            1000.0,
-            IDENTITY,
-            [0.5; 3],
-            2.0 * pixel,
-            0.25,
-            2.0,
-            0b0001,
-        ),
-        (
-            ahead, 1000.0, turned, [0.25; 3], pixel, 0.353_553, 1.681_793, 0b0001,
-        ),
-        (
-            [1000.0, 0.0, -1000.0],
-            1000.0,
-            IDENTITY,
-            [0.25; 3],
-            pixel,
-            0.5,
-            std::f64::consts::SQRT_2,
-            0b1001,
-        ),
-        (
-            ahead,
-            1000.0,
-            IDENTITY,
-            [1.0, 0.01, 0.01],
-            pixel,
-            0.250_05,
-            1.999_8,
-            0b0001,
-        ),
-        (
-            ahead,
-            1000.0,
-            IDENTITY,
-            [2.0, 0.01, 0.01],
-            pixel,
-            1.0,
-            1.0,
-            0b1111,
-        ),
-        (
-            [0.0, 0.0, -10.0],
-            10.0,
-            IDENTITY,
-            [0.5; 3],
-            pixel,
-            1.0,
-            1.0,
-            0b1111,
-        ),
-        (
-            [0.0, 0.0, 1000.0],
-            -1000.0,
-            IDENTITY,
-            [0.25; 3],
-            pixel,
-            1.0,
-            1.0,
-            0b1111,
-        ),
-        (
-            [1.0, 0.0, 0.0],
-            0.0,
-            IDENTITY,
-            [0.25; 3],
-            pixel,
-            1.0,
-            1.0,
-            0b1111,
-        ),
-    ];
-    let inputs = cases.map(|(centre, depth, rotation_scale, half_extent, pixel, ..)| {
+    const AHEAD: [f32; 3] = [0.0, 0.0, -1000.0];
+    const ASIDE: [f32; 3] = [1000.0, 0.0, -1000.0];
+    const PIXEL_SIZE_PER_METRE: f32 = 0.001;
+    const SQRT_2: f64 = std::f64::consts::SQRT_2;
+    // Each case: the bounds' centre, with the view axis -Z, and half extent,
+    // then the coverage, the scale and the samples kept.
+    type Case = ([f32; 3], [f32; 3], f64, f64, u32);
+    let check = |rotation_scale: [[f32; 3]; 3], pixel_size_per_metre: f32, cases: &[Case]| {
         let [first, second, third] = rotation_scale;
-        [
-            [centre[0], centre[1], centre[2], depth],
-            [first[0], first[1], first[2], half_extent[0]],
-            [second[0], second[1], second[2], half_extent[1]],
-            [third[0], third[1], third[2], half_extent[2]],
-            [pixel, 0.0, 0.0, 0.0],
-        ]
-    });
-    let coverage = "small_instance_coverage(
-        inputs[0].xyz,
-        mat3x3<f32>(inputs[1].xyz, inputs[2].xyz, inputs[3].xyz),
-        vec3<f32>(inputs[1].w, inputs[2].w, inputs[3].w),
-        inputs[0].w,
-        inputs[4].x
-    )";
-    let results = evaluate_cases(
-        &context,
-        &format!(
+        let inputs: Vec<_> = (cases.iter())
+            .map(|&(centre, half_extent, ..)| {
+                [
+                    [centre[0], centre[1], centre[2], -centre[2]],
+                    [first[0], first[1], first[2], half_extent[0]],
+                    [second[0], second[1], second[2], half_extent[1]],
+                    [third[0], third[1], third[2], half_extent[2]],
+                    [pixel_size_per_metre, 0.0, 0.0, 0.0],
+                ]
+            })
+            .collect();
+        let coverage = "small_instance_coverage(
+            inputs[0].xyz,
+            mat3x3<f32>(inputs[1].xyz, inputs[2].xyz, inputs[3].xyz),
+            vec3<f32>(inputs[1].w, inputs[2].w, inputs[3].w),
+            inputs[0].w,
+            inputs[4].x
+        )";
+        let expression = format!(
             "vec4<f32>({coverage}, small_instance_scale({coverage}), \
              f32(thin_kept_samples({coverage})), 0.0)"
-        ),
-        &inputs,
-        &[],
+        );
+        let results = evaluate_cases(&context, &expression, &inputs, &[]);
+        for (&(centre, half_extent, coverage, scale, samples), result) in cases.iter().zip(results)
+        {
+            let case = format!(
+                "bounds of half extent {half_extent:?} at {centre:?}, turned by \
+                 {rotation_scale:?}, under a pixel of {pixel_size_per_metre} m a metre away"
+            );
+            assert_close(
+                result[0],
+                coverage,
+                2e-6,
+                format_args!("the coverage of {case}"),
+            );
+            assert_close(result[1], scale, 1e-5, format_args!("the scale of {case}"));
+            assert_eq!(result[2] as u32, samples, "the samples kept of {case}");
+        }
+    };
+    check(
+        IDENTITY,
+        PIXEL_SIZE_PER_METRE,
+        &[
+            (AHEAD, [0.5; 3], 1.0, 1.0, 0b1111),
+            (AHEAD, [0.25; 3], 0.25, 2.0, 0b0001),
+            (AHEAD, [0.18; 3], 0.1296, 2.777_778, 0b0001),
+            (AHEAD, [0.175; 3], 0.1225, 2.0 * SQRT_2, 0b0000),
+            (AHEAD, [0.0; 3], 0.0, 2.0 * SQRT_2, 0b0000),
+            (ASIDE, [0.25; 3], 0.5, SQRT_2, 0b1001),
+            (AHEAD, [1.0, 0.01, 0.01], 0.250_05, 1.999_8, 0b0001),
+            (AHEAD, [2.0, 0.01, 0.01], 1.0, 1.0, 0b1111),
+            ([0.0, 0.0, -10.0], [0.5; 3], 1.0, 1.0, 0b1111),
+            ([0.0, 0.0, 1000.0], [0.25; 3], 1.0, 1.0, 0b1111),
+            ([1.0, 0.0, 0.0], [0.25; 3], 1.0, 1.0, 0b1111),
+        ],
     );
-    for ((centre, depth, _, half_extent, pixel, coverage, scale, samples), result) in
-        cases.into_iter().zip(results)
-    {
-        let case = format!(
-            "bounds of half extent {half_extent:?} at {centre:?}, {depth} m deep, under a pixel \
-             of {pixel} m a metre away"
-        );
-        assert_close(
-            result[0],
-            coverage,
-            2e-6,
-            format_args!("the coverage of {case}"),
-        );
-        assert_close(result[1], scale, 1e-5, format_args!("the scale of {case}"));
-        assert_eq!(result[2] as u32, samples, "the samples kept of {case}");
-    }
+    let turned_cube = (AHEAD, [0.25; 3], 0.353_553, 1.681_793, 0b0001);
+    check(TURNED, PIXEL_SIZE_PER_METRE, &[turned_cube]);
+    let whole_cube = (AHEAD, [0.5; 3], 0.25, 2.0, 0b0001);
+    check(IDENTITY, 2.0 * PIXEL_SIZE_PER_METRE, &[whole_cube]);
+    const SCALED: [[f32; 3]; 3] = [[2.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.5]];
+    let scaled_box = (AHEAD, [0.125, 0.25, 0.5], 0.25, 2.0, 0b0001);
+    check(SCALED, PIXEL_SIZE_PER_METRE, &[scaled_box]);
+    const SHEARED: [[f32; 3]; 3] = [[1.0, 0.0, 0.0], [1.0, 1e-3, 0.0], [1.0, 0.0, 1e-3]];
+    let sheared_box = (AHEAD, [0.5; 3], 0.5625, 4.0 / 3.0, 0b1001);
+    check(SHEARED, PIXEL_SIZE_PER_METRE, &[sheared_box]);
 }
 
 /// The culling pass draws the coarsest LOD whose LOD error, times its

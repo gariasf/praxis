@@ -254,9 +254,20 @@ fn small_instance_coverage(
         + abs(dot(centre, cross(half_axes[1], half_axes[2])))
         + abs(dot(centre, cross(half_axes[2], half_axes[0]))));
     let area_share = facing_volume / (view_depth * pixel_area);
+    // The farthest corner's, which an Instance that shears moves past the axes' summed squares.
+    let skew = vec3<f32>(
+        dot(half_axes[0], half_axes[1]),
+        dot(half_axes[0], half_axes[2]),
+        dot(half_axes[1], half_axes[2])
+    );
+    let farthest_skew = max(
+        max(skew.x + skew.y + skew.z, skew.x - skew.y - skew.z),
+        max(skew.y - skew.x - skew.z, skew.z - skew.x - skew.y)
+    );
     let sphere_diameter_squared = 4.0 * (dot(half_axes[0], half_axes[0])
         + dot(half_axes[1], half_axes[1])
-        + dot(half_axes[2], half_axes[2]));
+        + dot(half_axes[2], half_axes[2])
+        + 2.0 * farthest_skew);
     let sphere_share = sphere_diameter_squared
         / (SMALL_INSTANCE_WIDEST_PIXELS * SMALL_INSTANCE_WIDEST_PIXELS * pixel_area);
     let coverage = max(area_share, sphere_share);

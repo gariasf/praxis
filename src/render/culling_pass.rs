@@ -6,7 +6,8 @@
 //! index per triangle corner, in slot order within each phase, which the
 //! main pass draws with one indirect call per phase and depth pipeline, and
 //! one of both phases for the lit pipeline (ADR 0019); the packed indices
-//! of Thin Primitives' Meshlets go apart, at the buffer's end, each phase's
+//! of Thin Primitives' Meshlets, among which every Meshlet of a small
+//! Instance counts throughout, go apart, at the buffer's end, each phase's
 //! in slot order, for the pipelines that draw them (ADR 0027). It runs in two
 //! phases: phase one draws the Instances visible the frame before, phase
 //! two, after the depth pyramid, the others in view that the pyramid does

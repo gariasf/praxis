@@ -3417,6 +3417,8 @@ pub(crate) mod tests {
                     ..instance(quad, white.index(), [0.0, 0.0])
                 }])
             };
+            // Twice: phase two draws it in the first frame, phase one in the next.
+            render_frame(&context, &mut renderer, &frame, SIDE, SIDE);
             let (image, _, gpu) = render_frame(&context, &mut renderer, &frame, SIDE, SIDE);
             let samples = read_depth_samples(&context, renderer.render_targets.depth());
             let kept: Vec<(usize, usize)> = samples
@@ -3425,9 +3427,11 @@ pub(crate) mod tests {
                 .filter(|&(_, &depth)| depth > 0.0)
                 .map(|(index, _)| (index / 4, index % 4))
                 .collect();
-            let pixel = 31 * SIDE as usize + 32;
-            let expected: Vec<(usize, usize)> =
-                kept_samples.iter().map(|&sample| (pixel, sample)).collect();
+            let pixel_index = 31 * SIDE as usize + 32;
+            let expected: Vec<(usize, usize)> = kept_samples
+                .iter()
+                .map(|&sample| (pixel_index, sample))
+                .collect();
             assert_eq!(kept, expected, "{width_pixels} of a pixel wide");
             assert_eq!(gpu.instances_drawn, u32::from(!kept_samples.is_empty()));
             assert_eq!(

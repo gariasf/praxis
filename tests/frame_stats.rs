@@ -46,10 +46,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 
     // 60 Hz frames run one or two Ticks each, under the cap.
     assert!(frames.iter().all(|frame| frame.dropped_time.is_zero()));
-    // Two rows of five spheres in one indirect draw, which the depth pre-pass
-    // draws with one call, and the lit pass with two, phase two's into depth
-    // first, each followed by its Thin Primitives' and small Instances'; then
-    // the tonemapping pass's one triangle.
+    // Two rows of five spheres in one indirect draw: the depth pre-pass and
+    // phase two's depth pass draw a phase each with one call, and the lit
+    // pass both with one; each is followed by a call per phase it draws for
+    // Thin Primitives and small Instances; then the tonemapping pass's one
+    // triangle.
     assert_eq!(last.draw_calls, 8);
     // A slot per sphere, none freed.
     assert_eq!(last.instance_slots_in_use, 10);

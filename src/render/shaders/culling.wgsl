@@ -2,8 +2,9 @@
 // Meshlets of the LOD selected for each Instance they draw to the frame's
 // draw in slot order, which the main pass draws with one indirect call per
 // phase and depth pipeline, and one of both phases for the lit pipeline
-// (ADR 0019), Thin Primitives' Meshlets and small Instances' apart from the
-// others (ADR 0027). Phase one draws the Instances visible the frame before;
+// (ADR 0019), Thin Primitives' Meshlets, among which every Meshlet of a
+// small Instance counts throughout, apart from the others (ADR 0027). Phase
+// one draws the Instances visible the frame before;
 // phase two, after the depth pyramid, the other Instances in view that the
 // pyramid does not hide, and it records which Instances were visible for the
 // next frame. With the CULLING Render switch on, they draw only the Instances
@@ -368,11 +369,16 @@ fn offset_slots(
         let mesh = meshes[instance.mesh];
         var bounds = clip_space_bounds(instance, mesh);
         var coverage = 1.0;
-        // A Mesh with a Thin Primitive keeps that rule alone.
+        // vs_thin takes a Meshlet with a radius as a Thin Primitive's, whatever its Instance.
         if mesh.thin_triangle_counts[0] == 0u {
             coverage = instance_coverage(instance, mesh, bounds.centre.w);
-            // The tests below take the bounds as the Instance draws them.
-            bounds.half_axes = bounds.half_axes * small_instance_scale(coverage);
+            // The tests below take the bounds as vs_thin draws them: wider across the view, as deep.
+            let widening = vec4<f32>(vec3<f32>(small_instance_scale(coverage)), 1.0);
+            bounds.half_axes = mat3x4<f32>(
+                bounds.half_axes[0] * widening,
+                bounds.half_axes[1] * widening,
+                bounds.half_axes[2] * widening
+            );
         }
         small = coverage < 1.0;
         visible = !CULLING || in_view_frustum(bounds);

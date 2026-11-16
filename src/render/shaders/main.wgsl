@@ -105,10 +105,9 @@ struct ThinVertexOutput {
 // A Thin Primitive's vertex, moved out from its tube's centre line, which
 // lies the radius behind it along its normal, until the tube draws a pixel
 // wide where it would draw narrower; or any other vertex, of a small
-// Instance, moved out from the centre of its Mesh bounds until they cover a
-// pixel's area. Every
-// pipeline that draws one runs this stage, so the lit pass meets the depths
-// the depth passes kept.
+// Instance, moved out from the centre of its Mesh bounds across the view
+// until they cover a pixel's area. Every pipeline that draws one runs this
+// stage, so the lit pass meets the depths the depth passes kept.
 @vertex
 fn vs_thin(@builtin(vertex_index) packed_index: u32) -> ThinVertexOutput {
     var out = vertex_output(packed_index);
@@ -133,26 +132,30 @@ fn vs_thin(@builtin(vertex_index) packed_index: u32) -> ThinVertexOutput {
             out.clip_position = camera.view_proj * vec4<f32>(out.camera_relative_position, 1.0);
         }
     } else {
-        let bounds_min = meshes[instance.mesh].bounds_min;
-        let bounds_max = meshes[instance.mesh].bounds_max;
-        let lowest = vec3<f32>(bounds_min[0], bounds_min[1], bounds_min[2]);
-        let highest = vec3<f32>(bounds_max[0], bounds_max[1], bounds_max[2]);
+        let stored_min = meshes[instance.mesh].bounds_min;
+        let stored_max = meshes[instance.mesh].bounds_max;
+        let bounds_min = vec3<f32>(stored_min[0], stored_min[1], stored_min[2]);
+        let bounds_max = vec3<f32>(stored_max[0], stored_max[1], stored_max[2]);
         let bounds_centre = camera_relative_position(
             instance.anchor,
             instance.offset,
             camera.anchor,
             camera.offset,
-            instance.rotation_scale * (0.5 * (lowest + highest))
+            instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
         );
         instance_coverage = small_instance_coverage(
             bounds_centre,
             instance.rotation_scale,
-            0.5 * (highest - lowest),
+            0.5 * (bounds_max - bounds_min),
             (camera.view_proj * vec4<f32>(bounds_centre, 1.0)).w,
             camera.pixel_size_per_metre
         );
-        out.camera_relative_position = bounds_centre
-            + (out.camera_relative_position - bounds_centre) * small_instance_scale(instance_coverage);
+        // Across the view only: each vertex keeps its depth, as the culling pass's box does.
+        let view_axis = vec3<f32>(camera.view_proj[0].w, camera.view_proj[1].w, camera.view_proj[2].w);
+        let from_centre = out.camera_relative_position - bounds_centre;
+        let along_view = view_axis * (dot(from_centre, view_axis) / max(dot(view_axis, view_axis), 1e-30));
+        out.camera_relative_position = bounds_centre + along_view
+            + (from_centre - along_view) * small_instance_scale(instance_coverage);
         out.clip_position = camera.view_proj * vec4<f32>(out.camera_relative_position, 1.0);
     }
     return ThinVertexOutput(
