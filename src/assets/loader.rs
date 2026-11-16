@@ -317,12 +317,10 @@ mod tests {
         };
         let (far_proxy, other_far_proxy, open_land, chunk_mesh) =
             (AssetId(11), AssetId(12), AssetId(13), AssetId(14));
+        let shell_and_ground = |baked| vec![primitive(baked), primitive(ground)];
         for (id, primitives) in [
-            (far_proxy, vec![primitive(baked), primitive(ground)]),
-            (
-                other_far_proxy,
-                vec![primitive(other_baked), primitive(ground)],
-            ),
+            (far_proxy, shell_and_ground(baked)),
+            (other_far_proxy, shell_and_ground(other_baked)),
             (open_land, vec![empty, primitive(ground)]),
             (chunk_mesh, vec![primitive(ground)]),
         ] {
@@ -356,12 +354,11 @@ mod tests {
         let [placement] = &chunk.placements[..] else {
             panic!("a Far proxy is one Placement");
         };
-        let loaded = placement.mesh;
         assert_eq!(
             placement.transform.translation,
             glam::dvec3(640.0, 0.0, -128.0)
         );
-        assert!(loader.mesh_pool.blas(loaded).is_none());
+        assert!(loader.mesh_pool.blas(placement.mesh).is_none());
         loader.far_proxy(open_land).unwrap();
         let unused = loader.mesh(chunk_mesh).unwrap();
         loader
@@ -375,7 +372,7 @@ mod tests {
 
         loader.mesh_pool.remove_user(far_proxy, MeshUse::FarProxy);
         loader.far_proxy(other_far_proxy).unwrap();
-        assert!(loader.mesh_pool.get(loaded).is_none());
+        assert!(loader.mesh_pool.get(placement.mesh).is_none());
         assert!(!loader.material_pool.is_loaded(baked));
         assert!(loader.mesh_pool.get(unused).is_some());
         std::fs::remove_dir_all(&directory).ok();

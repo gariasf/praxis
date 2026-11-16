@@ -15,8 +15,8 @@ use crate::{
 /// Thousandths of the geometry Arenas' Budget each Arena takes, in the
 /// order of `PoolCapacities`' Arenas: the shares of the bytes `helmet`'s,
 /// `town`'s and `world`'s Meshes put in each, every LOD's Meshlets and LOD
-/// 0's indices.
-const ARENA_PER_MILLE: [u64; 5] = [408, 265, 10, 145, 172];
+/// 0's indices, `world`'s with its densest far field's Far proxies.
+const ARENA_PER_MILLE: [u64; 5] = [658, 130, 11, 133, 68];
 
 /// A Mesh's bytes in the geometry Arenas: the mean of `town`'s Meshes when
 /// it had 19.
@@ -1362,11 +1362,11 @@ pub(crate) mod tests {
         assert_eq!(
             PoolCapacities::checked_in(),
             PoolCapacities {
-                vertex_arena_bytes: 34_225_520,
-                index_arena_bytes: 22_229_808,
-                meshlet_arena_bytes: 838_860,
-                meshlet_vertex_arena_bytes: 12_163_480,
-                meshlet_triangle_arena_bytes: 14_428_404,
+                vertex_arena_bytes: 55_197_040,
+                index_arena_bytes: 10_905_188,
+                meshlet_arena_bytes: 922_744,
+                meshlet_vertex_arena_bytes: 11_156_848,
+                meshlet_triangle_arena_bytes: 5_704_252,
                 meshes: 16_371,
                 materials: 222,
                 far_proxy_materials: 285,
@@ -1391,7 +1391,7 @@ pub(crate) mod tests {
         let memory = gpu_memory(&context);
         let mut pool = MeshPool::new(&context.device, &memory, &capacities);
         let bytes_by_kind = memory.bytes_by_kind();
-        assert_eq!(bytes_by_kind[GpuMemoryKind::GeometryArenas as usize], 10236);
+        assert_eq!(bytes_by_kind[GpuMemoryKind::GeometryArenas as usize], 10240);
         assert_eq!(
             bytes_by_kind[GpuMemoryKind::SceneAndPassBuffers as usize],
             2 * size_of::<MeshData>() as u64

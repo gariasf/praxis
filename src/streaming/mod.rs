@@ -718,20 +718,14 @@ mod tests {
         let runs = paths.into_iter().flat_map(|path| [(path, 8), (path, 300)]);
         for ((camera_at, frames), load_frames) in runs {
             let chunks = scene.chunk_coordinates();
-            let mut far_proxies =
-                ChunkStreamer::of_far_proxies(chunks, scene.view_distance_metres());
+            let mut streamer = ChunkStreamer::of_far_proxies(chunks, scene.view_distance_metres());
             let mut io = ScriptedIo::new(load_frames);
             let (mut most_held, mut late) = (0, 0);
             for frame in 0..frames {
                 let camera = camera_at(frame);
-                late += step(
-                    &mut far_proxies,
-                    &mut io,
-                    camera.position,
-                    camera.teleported,
-                )
-                .late_chunks;
-                most_held = most_held.max(far_proxies.loaded.len() + far_proxies.in_flight.len());
+                let stepped = step(&mut streamer, &mut io, camera.position, camera.teleported);
+                late += stepped.late_chunks;
+                most_held = most_held.max(streamer.loaded.len() + streamer.in_flight.len());
             }
             assert!(most_held > 200, "{most_held} Far proxies at most");
             assert!(
