@@ -209,7 +209,7 @@ const WINDOW_SIZE: glam::Vec3 = glam::Vec3::new(1.4, 1.8, 0.12);
 const RAILING_POSTS_PER_SIDE: u32 = 20;
 const RAILING_INSET: f64 = 0.3;
 const RAILING_HEIGHT: f64 = 1.0;
-const RAILING_RADIUS: f64 = 0.025;
+const RAILING_RADIUS_METRES: f64 = 0.025;
 /// A roof's plant stands on a grid of cells `ROOF_CELL` metres square.
 const ROOF_CELLS_PER_SIDE: u32 = 6;
 const ROOF_CELL: f64 = 2.2;
@@ -556,7 +556,8 @@ impl Block {
             }
             placed.push(TownRenderable::new(
                 TownMesh::TopRail,
-                roof + outward * half_side + glam::DVec3::Y * (RAILING_HEIGHT + RAILING_RADIUS),
+                roof + outward * half_side
+                    + glam::DVec3::Y * (RAILING_HEIGHT + RAILING_RADIUS_METRES),
                 facing(along),
             ));
         }
@@ -1001,8 +1002,8 @@ mod generators {
                 vec3(-half_length, height + 0.015, 0.0),
             )
         });
-        let railing_radius = super::RAILING_RADIUS as f32;
-        let rail_length = 2.0 * (super::BUILDING_HALF_SIDE - super::RAILING_INSET) as f32;
+        let railing_radius_metres = super::RAILING_RADIUS_METRES as f32;
+        let rail_length_metres = 2.0 * (super::BUILDING_HALF_SIDE - super::RAILING_INSET) as f32;
         let crown = [(1.8, 1.8, 2.2), (3.0, 1.4, 2.0), (4.1, 1.0, 1.8)]
             .map(|(base, radius, height)| raised(cylinder(radius, 0.0, height, 10), base));
         let meshes = [
@@ -1097,9 +1098,14 @@ mod generators {
                 vec![thin(
                     of(
                         "steel",
-                        vec![cylinder(railing_radius, railing_radius, 1.0, 6)],
+                        vec![cylinder(
+                            railing_radius_metres,
+                            railing_radius_metres,
+                            1.0,
+                            6,
+                        )],
                     ),
-                    railing_radius,
+                    railing_radius_metres,
                 )],
             ),
             (
@@ -1108,12 +1114,17 @@ mod generators {
                     of(
                         "steel",
                         vec![moved(
-                            cylinder(railing_radius, railing_radius, rail_length, 6),
+                            cylinder(
+                                railing_radius_metres,
+                                railing_radius_metres,
+                                rail_length_metres,
+                                6,
+                            ),
                             along_z,
-                            vec3(0.0, 0.0, -0.5 * rail_length),
+                            vec3(0.0, 0.0, -0.5 * rail_length_metres),
                         )],
                     ),
-                    railing_radius,
+                    railing_radius_metres,
                 )],
             ),
             (
@@ -1414,18 +1425,21 @@ mod generators {
 
         #[test]
         fn a_thin_primitives_cap_vertices_cook_with_their_rings_normals() {
-            const RADIUS_METRES: f32 = 0.025;
-            let post = cylinder(RADIUS_METRES, RADIUS_METRES, 1.0, 6).thin(RADIUS_METRES);
-            let mesh = crate::cook::mesh::cook(&[(post, None)]).expect("a tube cooks");
-            for vertex in &mesh.vertices {
-                let normal = Vec3::from(crate::cook::mesh::qtangent_normal(vertex.qtangent));
-                let centre = Vec3::from(vertex.position) - normal * RADIUS_METRES;
-                let from_axis_metres = vec3(centre.x, 0.0, centre.z).length();
-                assert!(
-                    from_axis_metres < 0.01 * RADIUS_METRES,
-                    "the vertex at {:?} widens from {from_axis_metres} m off the axis",
-                    vertex.position
-                );
+            let post = (cylinder(0.025, 0.025, 1.0, 6), 0.025, 0.0);
+            let tapered_pole = (cylinder(0.09, 0.06, 5.2, 8), 0.075, 0.015);
+            for (tube, radius_metres, taper_metres) in [post, tapered_pole] {
+                let mesh = crate::cook::mesh::cook(&[(tube.thin(radius_metres), None)])
+                    .expect("a tube cooks");
+                for vertex in &mesh.vertices {
+                    let normal = Vec3::from(crate::cook::mesh::qtangent_normal(vertex.qtangent));
+                    let centre = Vec3::from(vertex.position) - normal * radius_metres;
+                    let from_axis_metres = vec3(centre.x, 0.0, centre.z).length();
+                    assert!(
+                        from_axis_metres < taper_metres + 0.01 * radius_metres,
+                        "the vertex at {:?} widens from {from_axis_metres} m off the axis",
+                        vertex.position
+                    );
+                }
             }
         }
     }

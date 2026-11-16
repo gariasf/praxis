@@ -496,7 +496,8 @@ pub struct CookedPrimitive {
     /// is texels per metre, which mip priority reads (ADR 0017).
     pub texel_density: f32,
     /// Its radius, if it is a Thin Primitive: a vertex's position less its
-    /// normal times this is on its centre line, a cap's normal its ring's.
+    /// normal times this is on its centre line, or off it by what its ring's
+    /// radius differs by on a tapered tube; a cap's normal is its ring's.
     pub thin_radius_metres: Option<f32>,
     /// Its triangles in index order, each in exactly one Meshlet.
     pub meshlets: Vec<CookedMeshlet>,

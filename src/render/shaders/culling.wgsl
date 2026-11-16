@@ -122,9 +122,10 @@ fn near_plane_distance(clip: vec4<f32>) -> f32 {
     return clip.w - clip.z;
 }
 
-// An Instance's Mesh bounds in clip space: the box's centre, composed
-// relative to the camera as its vertices are (ADR 0014), and its half axes,
-// each a direction.
+// An Instance's Mesh bounds in clip space, grown to hold a Thin Primitive's
+// widening where the Mesh has one: the box's centre, composed relative to
+// the camera as its vertices are (ADR 0014), and its half axes, each a
+// direction.
 struct ClipBox {
     centre: vec4<f32>,
     half_axes: mat3x4<f32>,
@@ -142,7 +143,8 @@ fn bounds_centre(instance: InstanceData, bounds_min: vec3<f32>, bounds_max: vec3
 }
 
 // A Thin Primitive's widening moves a vertex out of its Mesh bounds by less
-// than the radius it draws at the box's farthest corner.
+// than the radius it draws at the box's farthest corner. Lengthening each
+// half axis by it holds every vertex only while the axes are orthogonal.
 fn clip_space_bounds(instance: InstanceData, mesh: MeshData) -> ClipBox {
     let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
     let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);

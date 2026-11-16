@@ -3257,10 +3257,8 @@ pub(crate) mod tests {
         }
     }
 
-    /// A Thin Primitive whose Mesh bounds end above the target, an eighth of
-    /// a pixel or more from it, is drawn where its widening reaches the
-    /// target's first row: rolled half a turn, its face towards the camera
-    /// draws down to two thirds of a pixel below its centre line.
+    /// Rolled half a turn, the tube's face towards the camera draws down to
+    /// two thirds of a pixel below its centre line, past its Mesh bounds.
     #[test]
     fn a_thin_primitive_above_the_target_is_drawn_where_its_widening_reaches_it() {
         let Some(context) = gpu_context() else {

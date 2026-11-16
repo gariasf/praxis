@@ -125,11 +125,9 @@ fn thin_primitive(geometry: &Geometry, radius_metres: f32) -> anyhow::Result<Geo
         .flatten()
         .collect();
     let mut ring_normals = HashMap::new();
-    for vertex in 0..geometry.positions.len() as u32 {
+    for (vertex, normal) in (0..).zip(&geometry.normals) {
         if ring_vertices.contains(&vertex) {
-            ring_normals
-                .entry(position_bits(vertex))
-                .or_insert(geometry.normals[vertex as usize]);
+            ring_normals.entry(position_bits(vertex)).or_insert(*normal);
         }
     }
     let widest_cap_edge_metres = 2.0 * radius_metres * (1.0 + THIN_RADIUS_TOLERANCE);
@@ -189,14 +187,12 @@ pub(super) fn lod_0(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh
     };
     let mut triangle_counts = Vec::new();
     for (primitive_index, (geometry, material)) in primitives.iter().enumerate() {
-        let tube = match geometry.thin_radius_metres {
-            Some(radius_metres) => Some(
-                thin_primitive(geometry, radius_metres)
-                    .with_context(|| format!("Primitive {primitive_index}"))?,
-            ),
-            None => None,
-        };
-        let geometry = tube.as_ref().unwrap_or(geometry);
+        let thin_geometry = geometry
+            .thin_radius_metres
+            .map(|radius_metres| thin_primitive(geometry, radius_metres))
+            .transpose()
+            .with_context(|| format!("Primitive {primitive_index}"))?;
+        let geometry = thin_geometry.as_ref().unwrap_or(geometry);
         let (vertices, indices) = cook_primitive(geometry);
         let triangles = indices.as_chunks::<3>().0;
         triangle_counts.push(meshlet_triangle_counts(triangles, vertices.len()));
@@ -774,7 +770,7 @@ pub(crate) mod tests {
     #[test]
     fn towns_wires_rails_aerials_lamps_and_poles_cook_as_thin_primitives() {
         let meshes = ReferenceScene::Town.meshes();
-        let thin_radii: [(&str, &[Option<f32>]); 6] = [
+        let thin_radii_by_mesh: [(&str, &[Option<f32>]); 6] = [
             ("wire", &[Some(0.015)]),
             ("railing-post", &[Some(0.025)]),
             ("top-rail", &[Some(0.025)]),
@@ -782,7 +778,7 @@ pub(crate) mod tests {
             ("lamp", &[Some(0.075), Some(0.04), None]),
             ("utility-pole", &[Some(0.115), Some(0.07)]),
         ];
-        for (name, thin_radii) in thin_radii {
+        for (name, thin_radii) in thin_radii_by_mesh {
             let (_, primitives) = meshes.iter().find(|(mesh, _)| *mesh == name).unwrap();
             let primitives: Vec<SourcePrimitive> = primitives
                 .iter()
