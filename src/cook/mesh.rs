@@ -97,9 +97,10 @@ const MAX_PIVOT_DISTANCE_METRES: f32 = 128.0;
 /// share of it.
 const THIN_RADIUS_TOLERANCE: f32 = 0.25;
 
-/// Refuses a Primitive declared thin whose triangles are neither the side of
-/// a tube of `radius_metres` nor a cap that closes one.
-fn check_thin_primitive(geometry: &Geometry, radius_metres: f32) -> anyhow::Result<()> {
+/// A Primitive declared thin, each cap vertex's normal its ring's, so a cap
+/// widens with its tube's side; or a refusal, where a triangle is neither the
+/// side of a tube of `radius_metres` nor a cap that closes one.
+fn thin_primitive(geometry: &Geometry, radius_metres: f32) -> anyhow::Result<Geometry> {
     anyhow::ensure!(
         radius_metres.is_finite() && radius_metres > 0.0,
         "it is declared thin with a radius of {radius_metres} m"
@@ -117,17 +118,22 @@ fn check_thin_primitive(geometry: &Geometry, radius_metres: f32) -> anyhow::Resu
     let edges =
         |&[first, second, third]: &[u32; 3]| [[first, second], [second, third], [third, first]];
     let triangles = geometry.indices.as_chunks::<3>().0;
-    let ring_positions: HashSet<[u32; 3]> = triangles
+    let ring_vertices: HashSet<u32> = triangles
         .iter()
         .flat_map(edges)
         .filter(|&edge| on_one_ring(edge))
         .flatten()
-        .map(position_bits)
         .collect();
+    let mut ring_normals = HashMap::new();
+    for (vertex, normal) in (0..).zip(&geometry.normals) {
+        if ring_vertices.contains(&vertex) {
+            ring_normals.entry(position_bits(vertex)).or_insert(*normal);
+        }
+    }
     let widest_cap_edge_metres = 2.0 * radius_metres * (1.0 + THIN_RADIUS_TOLERANCE);
     let stray = triangles.iter().find(|&triangle| {
         let on_rings =
-            (triangle.iter()).all(|&vertex| ring_positions.contains(&position_bits(vertex)));
+            (triangle.iter()).all(|&vertex| ring_normals.contains_key(&position_bits(vertex)));
         let is_side = edges(triangle).into_iter().any(on_one_ring);
         let is_cap = edges(triangle).into_iter().all(|[first, second]| {
             position(first).distance(position(second)) <= widest_cap_edge_metres
@@ -142,7 +148,15 @@ fn check_thin_primitive(geometry: &Geometry, radius_metres: f32) -> anyhow::Resu
             position(third)
         );
     }
-    Ok(())
+    let mut tube = geometry.clone();
+    for (vertex, normal) in (0..).zip(&mut tube.normals) {
+        if !ring_vertices.contains(&vertex)
+            && let Some(ring_normal) = ring_normals.get(&position_bits(vertex))
+        {
+            *normal = *ring_normal;
+        }
+    }
+    Ok(tube)
 }
 
 /// Cooks one Mesh from its Primitives' geometry and Material Asset IDs, or
@@ -173,10 +187,12 @@ pub(super) fn lod_0(primitives: &[SourcePrimitive]) -> anyhow::Result<CookedMesh
     };
     let mut triangle_counts = Vec::new();
     for (primitive_index, (geometry, material)) in primitives.iter().enumerate() {
-        if let Some(radius_metres) = geometry.thin_radius_metres {
-            check_thin_primitive(geometry, radius_metres)
-                .with_context(|| format!("Primitive {primitive_index}"))?;
-        }
+        let thin_geometry = geometry
+            .thin_radius_metres
+            .map(|radius_metres| thin_primitive(geometry, radius_metres))
+            .transpose()
+            .with_context(|| format!("Primitive {primitive_index}"))?;
+        let geometry = thin_geometry.as_ref().unwrap_or(geometry);
         let (vertices, indices) = cook_primitive(geometry);
         let triangles = indices.as_chunks::<3>().0;
         triangle_counts.push(meshlet_triangle_counts(triangles, vertices.len()));
@@ -393,7 +409,7 @@ fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
     Ok(lods)
 }
 
-fn qtangent_normal(qtangent: [i16; 4]) -> [f32; 3] {
+pub(crate) fn qtangent_normal(qtangent: [i16; 4]) -> [f32; 3] {
     // Scalar only: glam's SIMD rounds by architecture, and a Blob's bytes must not.
     let [x, y, z, w] = qtangent.map(f32::from);
     let length_squared = x * x + y * y + z * z + w * w;
@@ -752,9 +768,17 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn towns_wire_and_railing_post_cook_as_thin_primitives() {
+    fn towns_wires_rails_aerials_lamps_and_poles_cook_as_thin_primitives() {
         let meshes = ReferenceScene::Town.meshes();
-        for (name, radius_metres) in [("wire", 0.015), ("railing-post", 0.025)] {
+        let thin_radii_by_mesh: [(&str, &[Option<f32>]); 6] = [
+            ("wire", &[Some(0.015)]),
+            ("railing-post", &[Some(0.025)]),
+            ("top-rail", &[Some(0.025)]),
+            ("aerial", &[Some(0.025), Some(0.015)]),
+            ("lamp", &[Some(0.075), Some(0.04), None]),
+            ("utility-pole", &[Some(0.115), Some(0.07)]),
+        ];
+        for (name, thin_radii) in thin_radii_by_mesh {
             let (_, primitives) = meshes.iter().find(|(mesh, _)| *mesh == name).unwrap();
             let primitives: Vec<SourcePrimitive> = primitives
                 .iter()
@@ -766,7 +790,7 @@ pub(crate) mod tests {
                     .iter()
                     .map(|primitive| primitive.thin_radius_metres)
                     .collect();
-                assert_eq!(radii, [Some(radius_metres)], "{name}");
+                assert_eq!(radii, thin_radii, "{name}");
             }
         }
     }
@@ -952,7 +976,7 @@ pub(crate) mod tests {
     #[test]
     fn the_reference_scenes_meshes_cook_to_the_same_blobs_on_every_machine() {
         const BLOBS_SHA256: &str =
-            "a03cbf5cd01e7006a61ba530703ff0923f1e8922c34732be9254c07306218c2a";
+            "32090e71cfb67e02a1f80bb1ce793ea2be53db5f1d7b3c28a816d42afa18d1ae";
         let committed_gltf_meshes = reference_gltf_meshes()
             .into_iter()
             .filter(|(path, _)| path.starts_with("assets/NormalTangentTest/"));

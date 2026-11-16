@@ -3250,13 +3250,36 @@ pub(crate) mod tests {
             return;
         };
         for (width_pixels, kept_samples) in [(0.25, vec![(31, 0)]), (0.7, vec![(30, 3), (31, 0)])] {
-            assert_eq!(thin_primitive_samples(&context, width_pixels), kept_samples);
+            assert_eq!(
+                thin_primitive_samples(&context, width_pixels, 31.292, 0.0),
+                kept_samples
+            );
         }
     }
 
+    /// Rolled half a turn, the tube's face towards the camera draws down to
+    /// two thirds of a pixel below its centre line, past its Mesh bounds.
+    #[test]
+    fn a_thin_primitive_above_the_target_is_drawn_where_its_widening_reaches_it() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        assert_eq!(
+            thin_primitive_samples(&context, 0.25, -0.4, 180.0),
+            vec![(0, 0)]
+        );
+    }
+
     /// The row and sample of each sample a Thin Primitive `width_pixels` wide
-    /// keeps in every column of pixels it crosses.
-    fn thin_primitive_samples(context: &GpuContext, width_pixels: f32) -> Vec<(usize, usize)> {
+    /// keeps in every column of pixels it crosses, its centre line
+    /// `centre_row` rows of pixels down the target and its faces turned
+    /// `roll_degrees` about it.
+    fn thin_primitive_samples(
+        context: &GpuContext,
+        width_pixels: f32,
+        centre_row: f32,
+        roll_degrees: f32,
+    ) -> Vec<(usize, usize)> {
         const SIDE: u32 = 64;
         const DISTANCE_METRES: f32 = 10.0;
         let switches = RenderSwitches {
@@ -3270,7 +3293,7 @@ pub(crate) mod tests {
         // A tube of three faces along X, each vertex's normal radial: the
         // QTangent turns +Z about X onto it.
         let ring = [90.0_f32, -30.0, -150.0].map(|degrees| {
-            let angle = degrees.to_radians();
+            let angle = (degrees + roll_degrees).to_radians();
             let qtangent = [-(0.5 * angle).sin(), 0.0, 0.0, (0.5 * angle).cos()]
                 .map(|part| (part * f32::from(i16::MAX)).round() as i16);
             ([angle.sin(), angle.cos()], qtangent)
@@ -3322,10 +3345,11 @@ pub(crate) mod tests {
             .load(&mut renderer.load_staging, &mesh, &[None])
             .expect("the tube fits");
         let white = emissive_material(&mut renderer, [1.0; 3]);
-        // The tube's face towards the camera draws a pixel high, from two
-        // thirds of one above its centre line: this height puts row 31's
-        // first sample, an eighth of a pixel down it, half way up the face.
-        let height_metres = (32.0 - 31.292) * pixel_metres;
+        // Unrolled, the tube's face towards the camera draws a pixel high,
+        // from two thirds of one above its centre line: a centre line 31.292
+        // rows down puts row 31's first sample, an eighth of a pixel down it,
+        // half way up the face.
+        let height_metres = (0.5 * SIDE as f32 - centre_row) * pixel_metres;
         let frame = FrameData {
             camera: CameraUniform {
                 view_proj: projection_matrix(1.0).to_cols_array_2d(),
@@ -3345,11 +3369,18 @@ pub(crate) mod tests {
                 .filter(|&(row, sample)| samples[(row * SIDE as usize + column) * 4 + sample] > 0.0)
                 .collect()
         };
+        let kept = kept_in(12);
         for column in 12..52 {
-            assert_eq!(kept_in(column), kept_in(12), "column {column}");
-            assert_ne!(image.get_pixel(column as u32, 31), image.get_pixel(0, 0));
+            assert_eq!(kept_in(column), kept, "column {column}");
+            for &(row, _) in &kept {
+                assert_ne!(
+                    image.get_pixel(column as u32, row as u32),
+                    image.get_pixel(0, 0),
+                    "column {column}, row {row}"
+                );
+            }
         }
-        kept_in(12)
+        kept
     }
 
     /// A Material that is black and unlit, so only its `emissive` colour

@@ -18,7 +18,8 @@ use crate::{
 /// 0's indices.
 const ARENA_PER_MILLE: [u64; 5] = [408, 265, 10, 145, 172];
 
-/// A Mesh's bytes in the geometry Arenas: the mean of `town`'s 19 Meshes.
+/// A Mesh's bytes in the geometry Arenas: the mean of `town`'s Meshes when
+/// it had 19.
 const GEOMETRY_BYTES_PER_MESH: u64 = 5124;
 
 /// A Material's bytes in the texture pool: the largest of the Reference
