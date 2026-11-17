@@ -98,7 +98,8 @@ struct ThinVertexOutput {
     @location(3) @interpolate(flat) material_id: u32,
     @location(4) tangent_world: vec4<f32>,
     @location(5) @interpolate(flat) radius_metres: f32,
-    @location(6) pixel_metres: f32,
+    // At the centroid: read outside its triangle, a tube past its end distance would keep a sample.
+    @location(6) @interpolate(perspective, centroid) pixel_metres: f32,
     @location(7) @interpolate(flat) instance_coverage: f32,
 }
 
@@ -200,12 +201,17 @@ fn fs_thin_surface_normals(in: ThinVertexOutput) -> ThinSurfaceNormals {
     );
 }
 
-// Its triangle may reach samples the depth passes did not keep.
+// Its triangle may reach samples the depth passes did not keep. One that
+// keeps none writes nothing: another fragment's depth may equal its own.
 @fragment
 fn fs_thin_main(in: ThinVertexOutput, @builtin(sample_mask) covered_samples: u32) -> @location(0) vec4<f32> {
     let vertex =
         VertexOutput(in.clip_position, in.camera_relative_position, in.normal, in.uv, in.material_id, in.tangent_world);
-    return lit(vertex, covered_samples & thin_fragment_samples(in));
+    let kept_samples = covered_samples & thin_fragment_samples(in);
+    if kept_samples == 0u {
+        discard;
+    }
+    return lit(vertex, kept_samples);
 }
 
 fn vertex_output(packed_index: u32) -> VertexOutput {

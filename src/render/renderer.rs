@@ -3444,7 +3444,7 @@ pub(crate) mod tests {
         };
         for (width_pixels, kept_samples) in [(0.25, vec![(31, 0)]), (0.7, vec![(30, 3), (31, 0)])] {
             assert_eq!(
-                thin_primitive_samples(&context, width_pixels, 31.292, 0.0),
+                thin_primitive_samples(&context, width_pixels, 31.292, 0.0).0,
                 kept_samples
             );
         }
@@ -3458,21 +3458,37 @@ pub(crate) mod tests {
             return;
         };
         assert_eq!(
-            thin_primitive_samples(&context, 0.25, -0.4, 180.0),
+            thin_primitive_samples(&context, 0.25, -0.4, 180.0).0,
             vec![(0, 0)]
         );
+    }
+
+    /// Under a sixth of a pixel wide a tube keeps no sample, and the frame's
+    /// draw holds none of its six triangles.
+    #[test]
+    fn a_thin_primitive_that_keeps_no_sample_is_not_drawn() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        for (width_pixels, drawn) in [(0.18, (vec![(31, 0)], 6)), (0.15, (vec![], 0))] {
+            assert_eq!(
+                thin_primitive_samples(&context, width_pixels, 31.292, 0.0),
+                drawn,
+                "{width_pixels} of a pixel wide"
+            );
+        }
     }
 
     /// The row and sample of each sample a Thin Primitive `width_pixels` wide
     /// keeps in every column of pixels it crosses, its centre line
     /// `centre_row` rows of pixels down the target and its faces turned
-    /// `roll_degrees` about it.
+    /// `roll_degrees` about it; and the triangles the frame drew.
     fn thin_primitive_samples(
         context: &GpuContext,
         width_pixels: f32,
         centre_row: f32,
         roll_degrees: f32,
-    ) -> Vec<(usize, usize)> {
+    ) -> (Vec<(usize, usize)>, u32) {
         const SIDE: u32 = 64;
         const DISTANCE_METRES: f32 = 10.0;
         let switches = RenderSwitches {
@@ -3505,7 +3521,7 @@ pub(crate) mod tests {
                 ..instance(tube, white.index(), [0.0, 0.0])
             }])
         };
-        let (image, _, _) = render_frame(context, &mut renderer, &frame, SIDE, SIDE);
+        let (image, _, gpu) = render_frame(context, &mut renderer, &frame, SIDE, SIDE);
         let samples = read_depth_samples(context, renderer.render_targets.depth());
         let kept_in = |column: usize| -> Vec<(usize, usize)> {
             (0..SIDE as usize)
@@ -3524,7 +3540,7 @@ pub(crate) mod tests {
                 );
             }
         }
-        kept
+        (kept, gpu.triangles_drawn)
     }
 
     /// A square Instance facing the camera, placed so that a pixel wide it

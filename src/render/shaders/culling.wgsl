@@ -325,6 +325,24 @@ fn instance_coverage(instance: InstanceData, mesh: MeshData, view_depth: f32) ->
     );
 }
 
+// The most coverage vs_thin gives a tube of a Mesh that is all Thin Primitives.
+// The radius is the widest only while the Instance's axes are orthogonal.
+fn widest_tube_coverage(instance: InstanceData, mesh: MeshData, bounds: ClipBox) -> f32 {
+    let nearest_view_depth_metres = bounds.centre.w
+        - abs(bounds.half_axes[0].w) - abs(bounds.half_axes[1].w) - abs(bounds.half_axes[2].w);
+    let pixel_metres = camera.pixel_size_per_metre * nearest_view_depth_metres;
+    var radius_metres = 0.0;
+    for (var meshlet_in_lod = 0u; meshlet_in_lod < mesh.meshlet_counts[0]; meshlet_in_lod++) {
+        radius_metres = max(radius_metres, meshlets[mesh.first_meshlets[0] + meshlet_in_lod].thin_radius_metres);
+    }
+    radius_metres *= instance_scale(instance);
+    // At or behind the camera's plane vs_thin leaves the tube as it is.
+    if pixel_metres <= 0.0 || radius_metres <= 0.0 {
+        return 1.0;
+    }
+    return radius_metres / thin_drawn_radius(radius_metres, pixel_metres);
+}
+
 // A drawn slot's offsets hold its Instance's LOD from bit SLOT_LOD_SHIFT,
 // whether it is small in the bit below, and under that its first Meshlet
 // record within its block: an offset those bits cannot hold is stored as
@@ -361,7 +379,7 @@ fn visible_before(slot: u32) -> bool {
 // Phase two finds each Instance in view visible unless it lies behind what
 // phase one drew, records which are, and draws those phase one did not.
 // With CULLING on, neither draws an Instance so small that it keeps no
-// sample.
+// sample, nor one whose tubes all keep none.
 @compute @workgroup_size(SCAN_BLOCK_SIZE)
 fn offset_slots(
     @builtin(workgroup_id) block: vec3<u32>,
@@ -404,6 +422,9 @@ fn offset_slots(
         // draws it.
         drawn = drawn && mesh.meshlet_counts[0] != 0u;
         drawn = drawn && (!CULLING || thin_kept_samples(coverage) != 0u);
+        if drawn && CULLING && mesh.thin_triangle_counts[0] == mesh.triangle_counts[0] {
+            drawn = thin_kept_samples(widest_tube_coverage(instance, mesh, bounds)) != 0u;
+        }
         if drawn || !PHASE_TWO {
             lod = instance_lod(instance, mesh);
             lod_error_metres = mesh.lod_errors_metres[lod] * instance_scale(instance);
