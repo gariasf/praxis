@@ -37,7 +37,7 @@ impl DepthPyramidPass {
         render_targets: &RenderTargets,
         capacities: &RenderCapacities,
     ) -> DepthPyramidPass {
-        let shader = device.create_shader_module(shaders::DEPTH_PYRAMID.descriptor(capacities));
+        let shader = shaders::DEPTH_PYRAMID.create(device, capacities);
         // Level 0 reduces the depth target, each later level the one below.
         let reduce_depth_layout = DEPTH_PYRAMID_LEVEL.layout_of(device, &["level", "depth"]);
         let reduce_level_layout = DEPTH_PYRAMID_LEVEL.layout_of(device, &["level", "level_below"]);

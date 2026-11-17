@@ -105,7 +105,7 @@ impl FroxelPass {
                 ("light_counts", light_counts.as_entire_binding()),
             ],
         );
-        let shader = device.create_shader_module(shaders::FROXEL.descriptor(capacities));
+        let shader = shaders::FROXEL.create(device, capacities);
         let groups = [(&FROXEL_LISTS, &layout)];
         let pipeline_layout = pipeline_layout(device, "Froxel Pass Pipeline Layout", &groups);
         let pipeline =

@@ -213,6 +213,45 @@ impl ShaderModule {
         }
     }
 
+    /// The module compiled with `capacities`, under the runtime checks
+    /// `PRAXIS_PROBE_899` names; unset, or for a module other than the one
+    /// `PRAXIS_PROBE_899_MODULE` names, under all of wgpu's.
+    pub fn create(
+        &self,
+        device: &wgpu::Device,
+        capacities: &RenderCapacities,
+    ) -> wgpu::ShaderModule {
+        let descriptor = self.descriptor(capacities);
+        let variant = std::env::var("PRAXIS_PROBE_899").unwrap_or_default();
+        let only_module = std::env::var("PRAXIS_PROBE_899_MODULE").unwrap_or_default();
+        let checked = wgpu::ShaderRuntimeChecks::checked();
+        let runtime_checks = match variant.as_str() {
+            _ if !only_module.is_empty() && only_module != self.name => None,
+            "" => None,
+            "checked" => Some(checked),
+            "no-bounds" => Some(wgpu::ShaderRuntimeChecks {
+                bounds_checks: false,
+                ..checked
+            }),
+            "no-loop" => Some(wgpu::ShaderRuntimeChecks {
+                force_loop_bounding: false,
+                ..checked
+            }),
+            "no-int-div" => Some(wgpu::ShaderRuntimeChecks {
+                int_div_checks: false,
+                ..checked
+            }),
+            "unchecked" => Some(wgpu::ShaderRuntimeChecks::unchecked()),
+            other => panic!("PRAXIS_PROBE_899={other}: not a variant"),
+        };
+        tracing::info!(module = self.name, variant, ?runtime_checks, "shader module");
+        match runtime_checks {
+            None => device.create_shader_module(descriptor),
+            // Sound only while every loop of the module ends and no index leaves its binding.
+            Some(checks) => unsafe { device.create_shader_module_trusted(descriptor, checks) },
+        }
+    }
+
     /// The module's WGSL with `capacities`.
     pub fn source(&self, capacities: &RenderCapacities) -> String {
         self.assemble(capacities).0

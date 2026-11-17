@@ -292,7 +292,7 @@ impl CullingPass {
         let [bind_group, append_bind_group] =
             frame_draw_bind_groups(device, &frame_draw_layout, &buffers, render_targets);
 
-        let shader = device.create_shader_module(shaders::CULLING.descriptor(capacities));
+        let shader = shaders::CULLING.create(device, capacities);
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&FRAME_DRAW, &frame_draw_layout));
         let layout = pipeline_layout(device, "Culling Pass Pipeline Layout", &layouts);
