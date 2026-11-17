@@ -82,6 +82,19 @@ other geometry thinner than a pixel, whose coverage four samples quantise.
 
 ![Town's wires and window edges](differences/msaa-edges.png)
 
+## A coarser LOD against the source Mesh
+
+Tag: `deliberate until ADR 0019's LOD selection is superseded`.
+
+praxis draws, of each Instance, the coarsest LOD whose LOD error is under
+the LOD threshold, a pixel; `praxis export-scene` writes each Mesh's source,
+its LOD 0, so that is what Cycles renders. Shows on Instances small on
+screen, as lines along the silhouette and along a pattern's edges, heavier
+than 4x MSAA alone leaves on an Instance that draws LOD 0 (`orrery`'s three
+small spheres).
+
+![Orrery's three small spheres, drawn past LOD 0](differences/lod-outlines.png)
+
 ## BC compression and mips against source images
 
 Tag: `deliberate until ADR 0018's cooked BC formats are superseded`.
