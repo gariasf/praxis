@@ -83,8 +83,9 @@ pub struct ShadowMaskPass {
     /// One per static TLAS, as `StaticTlas::bindings` orders them.
     shadow_ray_scenes: [wgpu::BindGroup; 2],
     layout: wgpu::BindGroupLayout,
-    /// The camera, the lights' counts, the lights and the Froxel lists.
-    buffers: [(&'static str, wgpu::Buffer); 4],
+    /// The camera, the lights' counts, the lights, the Froxel lists and the
+    /// culling pass's per-slot offsets.
+    buffers: [(&'static str, wgpu::Buffer); 5],
     /// The lights that reach a surface of a pixel past its bits, summed over
     /// the surfaces of every pixel:
     /// cleared before the pass, copied to the GPU stats readback after it.
@@ -114,7 +115,8 @@ pub struct ShadowMaskPass {
 
 impl ShadowMaskPass {
     /// The pass, tracing against `static_tlas` and `dynamic_tlas`, reading the Renderer's `camera`, `light` and `lights`
-    /// buffers and the Froxel pass's `froxel_lists`, and writing the shadow
+    /// buffers, the Froxel pass's `froxel_lists` and the culling pass's
+    /// `instance_offsets`, and writing the shadow
     /// mask of `render_targets`, with its Froxel lookups as `switches` set,
     /// its shader module assembled with `capacities`.
     #[expect(clippy::too_many_arguments)]
@@ -123,7 +125,7 @@ impl ShadowMaskPass {
         memory: &GpuMemory,
         static_tlas: &StaticTlas,
         dynamic_tlas: &DynamicTlas,
-        buffers: [(&'static str, &wgpu::Buffer); 4],
+        buffers: [(&'static str, &wgpu::Buffer); 5],
         render_targets: &RenderTargets,
         switches: RenderSwitches,
         capacities: &RenderCapacities,
@@ -256,7 +258,7 @@ impl ShadowMaskPass {
     fn bind_groups(
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
-        buffers: &[(&'static str, wgpu::Buffer); 4],
+        buffers: &[(&'static str, wgpu::Buffer); 5],
         shadow_mask_lights_overflowed: &wgpu::Buffer,
         [second_surface_dispatch, shadow_edge_dispatch, stand_in]: [&wgpu::Buffer; 3],
         render_targets: &RenderTargets,
@@ -281,7 +283,7 @@ impl ShadowMaskPass {
     fn bind_group(
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
-        buffers: &[(&'static str, wgpu::Buffer); 4],
+        buffers: &[(&'static str, wgpu::Buffer); 5],
         shadow_mask_lights_overflowed: &wgpu::Buffer,
         [second_surface_dispatch, shadow_edge_dispatch]: [&wgpu::Buffer; 2],
         render_targets: &RenderTargets,

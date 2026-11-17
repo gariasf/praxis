@@ -185,7 +185,8 @@ struct FrameDrawBuffers {
     instance_slot_count: Counted<wgpu::Buffer>,
     /// Each slot's first Meshlet record, packed index and Thin Primitives'
     /// packed index within its block of `SCAN_BLOCK_SIZE` slots, then each
-    /// block's, then the phase's two entries (`culling.wgsl`).
+    /// block's, then the phase's two entries (`culling.wgsl`). A slot's
+    /// fourth word is the LOD error of the LOD it draws.
     instance_offsets: Counted<wgpu::Buffer>,
     meshlet_records: Counted<wgpu::Buffer>,
     packed_indices: Counted<wgpu::Buffer>,
@@ -242,7 +243,6 @@ impl CullingPass {
         );
         let instance_offsets = buffer(
             "Instance Offset Buffer",
-            // A vec3 of u32s takes four in an array.
             u64::from(capacities.instances + capacities.instances / SCAN_BLOCK_SIZE + 2)
                 * size_of::<[u32; 4]>() as u64,
             wgpu::BufferUsages::STORAGE,
@@ -401,6 +401,12 @@ impl CullingPass {
     /// The Instance slots in use, a u32 the CPU writes.
     pub fn instance_slot_count(&self) -> &wgpu::Buffer {
         &self.buffers.instance_slot_count
+    }
+
+    /// Each slot's offsets in the frame's draw and its drawn LOD's error,
+    /// which the shadow mask pass reads.
+    pub fn instance_offsets(&self) -> &wgpu::Buffer {
+        &self.buffers.instance_offsets
     }
 
     /// The frame's Meshlet records, which the main pass's vertex shader reads.

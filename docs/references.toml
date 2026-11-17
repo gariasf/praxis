@@ -4567,6 +4567,12 @@ quote = '''Any secondary ray starting from a primary hit must “see” the same
 checked = 2026-11-05
 cost = '''Figure 5 shows the render timings that we obtained on an NVIDIA GeForce RTX 2080Ti with 64×60 instances and eight LODs. [...] up to 2.2x for the top view where almost all the objects are rendered at a low LOD. [...] We saw an average LOD selection time of 0.018 ms and TLAS build time of 0.22 ms. [...] At a maximum of about 10%, however, this cost is limited. When the transition interval is 0 [...] you still have two instances per object in the TLAS instead of one. This accounts for only a 1.6% increase in render time.'''
 
+["tabellion-lamorlette-2004-ray-origin-offset"]
+url = "https://www.tabellion.org/et/paper/siggraph_2004_gi_for_films.pdf#page=3"
+section = "Tabellion and Lamorlette (PDI/DreamWorks), An Approximate Global Illumination System for Computer Generated Films, ACM Transactions on Graphics 23(3), SIGGRAPH 2004, pp. 469-476, §4.3 Ray Tracing Simplified Geometry, p. 3 of the authors' copy"
+quote = '''Since rays initiate from positions that lie on displaced micro-polygons, we are faced with the problem of detecting self-intersections. Traditional biasing techniques that ignore intersections near the ray origin cannot be applied here, since they would create significant light or shadow leak problems. [...] To prevent self-intersection artifacts, the offset distance used in this algorithm needs to be bigger than the maximum offset between the coarse and micro-polygon geometric tessellations.'''
+checked = 2026-11-16
+
 ["meister-2021-bvh-star-two-level"]
 url = "https://meistdan.github.io/publications/bvh_star/paper.pdf#page=11"
 section = "Meister, Ogaki, Benthin, Doyle, Guthe and Bittner, A Survey on Bounding Volume Hierarchies for Ray Tracing, Computer Graphics Forum 40(2), Eurographics 2021 STAR, p. 11, 5.3.3 Two-level Hierarchy"

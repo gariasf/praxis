@@ -124,6 +124,11 @@ fn first_intersection(flags: u32, mask: u32, origin: vec3<f32>, direction: vec3<
     return dynamic_hit;
 }
 
+// A cooked LOD error is an approximate measure, no bound
+// [ref:meshoptimizer-0.25-simplify-error]: `orrery`'s spheres meet LOD 0 up to
+// three times theirs high (docs/performance.md, Measurements behind the code).
+const LOD_ERROR_MARGIN: f32 = 3.0;
+
 // Whether either TLAS holds geometry within `distance` of the surface point
 // at `position`, relative to the camera, along `direction`, a unit vector:
 // one hard shadow ray (ADR 0020), in the frame both TLAS share, whose origin
@@ -136,10 +141,13 @@ fn first_intersection(flags: u32, mask: u32, origin: vec3<f32>, direction: vec3<
 // the first triangle it meets, where it leaves the mesh. A ray that enters
 // a closed mesh meets a front face first, so whatever stands beyond still
 // shadows the point. A ray that leaves the surface passes a back face too,
-// one it meets within the LOD error the culling pass allows at `position`:
-// every BLAS holds its Mesh's LOD 0 (ADR 0020), and the LOD drawn can lie
-// that far inside it. `pixel_width` is a pixel's width at `position`, and
-// the ray passes a Thin Primitive whose width class ends under it.
+// one it meets no higher above the surface than LOD_ERROR_MARGIN times the
+// LOD error of the LOD that face's Instance draws: every BLAS holds its
+// Mesh's LOD 0 (ADR 0020), and the LOD drawn can lie inside it; a tolerance
+// for hits near the origin has to exceed the largest offset between the two
+// tessellations [ref:tabellion-lamorlette-2004-ray-origin-offset].
+// `pixel_width` is a pixel's width at `position`, and the ray passes a Thin
+// Primitive whose width class ends under it.
 fn shadowed(
     position: vec3<f32>,
     pixel_width: f32,
@@ -167,16 +175,9 @@ fn shadowed(
         || (facing >= AGREEING_TRIANGLE_TURN_MARGIN
             && dot(triangle_normal, interpolated_normal) >= NORMALS_AGREE);
     let origin = tlas_position + triangle_normal * select(-offset, offset, leaves_surface);
-    // How far along it the ray passes a back face: one that starts inside
-    // passes the first it meets, wherever it leaves the mesh.
-    let pass_distance = select(
-        distance,
-        camera.lod_error_per_metre * length(position),
-        leaves_surface
-    );
-    // The nearest triangle shadows the ray unless it is a back face within
-    // that distance; the ray traces on from such a one, and any triangle past
-    // it shadows it: two turns at most, through the one call.
+    // The nearest triangle shadows the ray unless it is a back face the ray
+    // passes; the ray traces on from such a one, and any triangle past it
+    // shadows it: two turns at most, through the one call.
     let mask = shadow_ray_mask(pixel_width);
     var flags = 0u;
     var start_distance = 0.0;
@@ -185,7 +186,13 @@ fn shadowed(
         let hit = first_intersection(flags, mask, origin, direction, start_distance, distance);
         let found = hit.kind != RAY_QUERY_INTERSECTION_NONE;
         let any_hit = (flags & RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u;
-        let shadows = any_hit || hit.front_face || hit.t > pass_distance;
+        // The stored normal errs by as much as the margin, so the height is its upper bound.
+        let height = offset + hit.t * (facing + AGREEING_TRIANGLE_TURN_MARGIN);
+        // A TLAS entry's custom data is its Instance's slot, whose fourth word the culling pass wrote.
+        let drawn_lod_error = bitcast<f32>(instance_offsets[hit.instance_custom_data].w);
+        let shadows = any_hit
+            || hit.front_face
+            || (leaves_surface && height > LOD_ERROR_MARGIN * drawn_lod_error);
         if !found || shadows || hit.t + offset >= distance {
             hidden = found && shadows;
             break;

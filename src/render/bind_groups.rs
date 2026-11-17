@@ -128,7 +128,7 @@ pub const FRAME_DRAW: BindGroupDefinition = BindGroupDefinition {
     label: "Frame Draw Bind Group",
     bindings: &[
         uniform("instance_slot_count", "u32", wgpu::ShaderStages::COMPUTE),
-        storage("instance_offsets", "array<vec3<u32>>"),
+        storage("instance_offsets", "array<vec4<u32>>"),
         storage("meshlet_records", "array<MeshletRecord>"),
         storage("packed_indices", "array<u32>"),
         storage("frame_draw", "FrameDraw"),
@@ -200,7 +200,8 @@ pub const BENDS: BindGroupDefinition = BindGroupDefinition {
 };
 
 /// Group 3 of the shadow mask pass, which builds the mask: the camera, the
-/// lights and the Froxel lists, which `FRAME` holds, the depth target and the
+/// lights and the Froxel lists, which `FRAME` holds, the culling pass's
+/// per-slot offsets, which `FRAME_DRAW` holds, the depth target and the
 /// surface normals, and what the pass writes: the shadow mask, which samples
 /// show its second surface and the first directional lights' verdicts at
 /// each sample, how many lights it had no bit for, which the CPU reads back,
@@ -220,6 +221,14 @@ pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
             ..read_only_storage(
                 "froxel_lists",
                 "array<FroxelList>",
+                wgpu::ShaderStages::COMPUTE,
+            )
+        },
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage(
+                "instance_offsets",
+                "array<vec4<u32>>",
                 wgpu::ShaderStages::COMPUTE,
             )
         },
