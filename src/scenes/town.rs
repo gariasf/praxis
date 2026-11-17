@@ -1424,6 +1424,23 @@ mod generators {
         }
 
         #[test]
+        fn a_thin_primitive_keeps_every_triangle_at_each_lod_of_a_mesh_that_simplifies() {
+            let post = cylinder(0.025, 0.025, 1.0, 6).thin(0.025);
+            let post_index_count = post.indices.len() as u32;
+            let sphere = crate::scenes::uv_sphere(1.0, 64, 32);
+            let mesh = crate::cook::mesh::cook(&[(post, None), (sphere, None)]).unwrap();
+            let post_index_counts: Vec<u32> = mesh
+                .lods()
+                .map(|(_, _, lod_primitives)| lod_primitives[0].index_count)
+                .collect();
+            assert!(post_index_counts.len() > 1, "{post_index_counts:?}");
+            assert_eq!(
+                post_index_counts,
+                vec![post_index_count; post_index_counts.len()]
+            );
+        }
+
+        #[test]
         fn a_thin_primitives_cap_vertices_cook_with_their_rings_normals() {
             let post = (cylinder(0.025, 0.025, 1.0, 6), 0.025, 0.0);
             let tapered_pole = (cylinder(0.09, 0.06, 5.2, 8), 0.075, 0.015);

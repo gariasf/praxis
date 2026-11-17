@@ -37,7 +37,7 @@ pub(crate) const MAX_TEXTURE_SIDE: u32 = 8192;
 /// Starts every Mesh Blob, followed by `MESH_FORMAT_VERSION`.
 pub(crate) const MESH_MAGIC: [u8; 4] = *b"PXME";
 /// As `MATERIAL_FORMAT_VERSION`, for Mesh Blobs.
-pub(crate) const MESH_FORMAT_VERSION: u32 = 7;
+pub(crate) const MESH_FORMAT_VERSION: u32 = 8;
 /// The most LODs a Mesh's LOD chain holds, LOD 0 among them.
 pub(crate) const MESH_MAX_LODS: usize = 8;
 /// The most vertices a Meshlet holds: a packed index carries the vertex

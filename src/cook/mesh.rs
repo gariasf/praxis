@@ -292,6 +292,9 @@ pub(super) fn push_lod(
 /// triangles, the whole Mesh in one call so that a border between Primitives
 /// collapses on both sides alike, until `MESH_MAX_LODS` or a LOD that keeps
 /// more than `LOD_KEPT_INDICES_CEILING` of the one before, or nothing. A
+/// Thin Primitive's vertices are locked [ref:meshoptimizer-0.25-vertex-lock],
+/// so each LOD keeps its whole tube and the halving falls on the Mesh's other
+/// Primitives. A
 /// LOD's error is the sum of the simplifier's errors down to it
 /// [ref:meshoptimizer-0.25-lod-chain], each relative to the Mesh's extent
 /// and so times `simplify_scale` in metres
@@ -338,7 +341,14 @@ fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
         LOD_UV_WEIGHT,
         LOD_UV_WEIGHT,
     ];
-    let unlocked = vec![false; mesh.vertices.len()];
+    let locked: Vec<bool> = primitive_of_vertex
+        .iter()
+        .map(|&primitive_index| {
+            mesh.primitives[primitive_index]
+                .thin_radius_metres
+                .is_some()
+        })
+        .collect();
     let mut lods = Vec::new();
     let mut finer = mesh.indices.clone();
     let mut error_metres = 0.0;
@@ -350,7 +360,7 @@ fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
             attributes.as_flattened(),
             &weights,
             size_of::<[f32; 5]>(),
-            &unlocked,
+            &locked,
             finer.len() / 6 * 3,
             // No error limit [ref:meshoptimizer-0.25-simplify-error].
             f32::MAX,
@@ -785,12 +795,18 @@ pub(crate) mod tests {
                 .map(|(geometry, _)| (geometry.clone(), None))
                 .collect();
             let cooked = cook(&primitives).unwrap();
-            for (_, _, primitives) in cooked.lods() {
-                let radii: Vec<_> = primitives
+            let lods: Vec<_> = cooked.lods().collect();
+            for (_, _, lod_primitives) in &lods {
+                let radii: Vec<_> = lod_primitives
                     .iter()
                     .map(|primitive| primitive.thin_radius_metres)
                     .collect();
                 assert_eq!(radii, thin_radii, "{name}");
+                for (primitive, lod_0_primitive) in lod_primitives.iter().zip(lods[0].2.iter()) {
+                    if primitive.thin_radius_metres.is_some() {
+                        assert_eq!(primitive.index_count, lod_0_primitive.index_count, "{name}");
+                    }
+                }
             }
         }
     }
@@ -976,7 +992,7 @@ pub(crate) mod tests {
     #[test]
     fn the_reference_scenes_meshes_cook_to_the_same_blobs_on_every_machine() {
         const BLOBS_SHA256: &str =
-            "32090e71cfb67e02a1f80bb1ce793ea2be53db5f1d7b3c28a816d42afa18d1ae";
+            "f277cb20eae77bc605ef6c4e0ecfd8792ce8ff8e405cef3da2de2f51fc6d9c6d";
         let committed_gltf_meshes = reference_gltf_meshes()
             .into_iter()
             .filter(|(path, _)| path.starts_with("assets/NormalTangentTest/"));
