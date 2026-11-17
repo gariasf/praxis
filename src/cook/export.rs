@@ -168,7 +168,7 @@ pub fn export_scene(
                 let id = recorder.materials[material_handle.index() as usize];
                 Some(exported.material(id)?)
             }
-            // As prepare, which skips it.
+            // As prepare skips one whose Primitives all have triangles.
             None if exported.meshes[&mesh].materials.contains(&None) => {
                 tracing::warn!(
                     mesh,

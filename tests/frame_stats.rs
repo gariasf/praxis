@@ -16,6 +16,11 @@ const TOWN_TRIANGLES: u32 = 10_024_932;
 /// 24 triangles, and their triangles.
 const WORLD_INSTANCES: u32 = 164_332;
 const WORLD_TRIANGLES: u32 = 1_779_800;
+/// The Far proxies of the 224 Chunks within `world`'s View distance of its
+/// first camera, less the 8 within its Load radius, with their triangles as
+/// cooked, and the ground past the View distance, two triangles.
+const WORLD_FAR_FIELD_INSTANCES: u32 = 224 - 8 + 1;
+const WORLD_FAR_FIELD_TRIANGLES: u32 = 396_018 + 2;
 
 /// Frames per capture: one second at 60 Hz.
 const FRAME_COUNT: usize = 60;
@@ -331,7 +336,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 /// far-coplanar's tiles, town and `world`'s settlement lie partly out of
 /// any one view, so all three are drawn with culling off, which their
 /// Goldens compare with culling on: the frame's draw holds every tile, the
-/// whole town and every Instance within `world`'s Load radius.
+/// whole town, and every Instance within `world`'s Load radius with the
+/// Far proxies past it and the ground past them.
 /// After the first frame, each frame writes the Instances of what moves
 /// alone, town's and `world`'s 10,000 birds among them, and those of the
 /// Chunks `world`'s camera leaves, and leaves no Moving Instance out of the
@@ -391,9 +397,13 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             // birds circle.
             ReferenceScene::Town => (TOWN_INSTANCES, TOWN_TRIANGLES, 10_000),
             // Every Instance of the Chunks within its Load radius of the
-            // camera, as its generator places them, and their triangles;
-            // its birds circle.
-            ReferenceScene::World => (WORLD_INSTANCES, WORLD_TRIANGLES, 10_000),
+            // camera, as its generator places them, and their triangles,
+            // and its Far field's; its birds circle.
+            ReferenceScene::World => (
+                WORLD_INSTANCES + WORLD_FAR_FIELD_INSTANCES,
+                WORLD_TRIANGLES + WORLD_FAR_FIELD_TRIANGLES,
+                10_000,
+            ),
         };
         // The 144-byte camera and 32-byte light uniforms, the sun and the
         // 1,024 lamps' lights of 48 bytes, and each bird's 128-byte Instance

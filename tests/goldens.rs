@@ -9,7 +9,8 @@
 //! must match it lit through Froxel lists, both with shadow rays off, so no
 //! list misses a light that reaches its Froxel. `town` takes both checks at
 //! eight frames along its camera path, the others at their Goldens' frames.
-//! `world` has Goldens at three frames along its flight into a settlement,
+//! `world` has Goldens at four frames along its flight into a settlement
+//! and out of it,
 //! `<scene>-frame-<n>.png` beside `<scene>.png`; the others one.
 //! Each scene with LOD 0 forced must match its Golden too, or, where LOD
 //! selection changes the image, the LOD 0 Golden beside it,
@@ -311,10 +312,11 @@ fn capture(
 /// The frame a Golden is: `praxis::capture`'s last.
 const GOLDEN_FRAME: u32 = 59;
 
-/// `world`'s Golden frames: over farmland with its settlement popping in at
-/// the Load radius, at the settlement's edge, and over its roofs. CI's
+/// `world`'s Golden frames: over farmland with its settlement across the
+/// Load radius, at the settlement's edge, over its roofs, and over the
+/// farmland past it with the next settlement whole in the Far field. CI's
 /// shipping job cooks what these load (`.github/workflows/ci.yml`).
-const WORLD_FRAMES: [u32; 3] = [GOLDEN_FRAME, 300, 599];
+const WORLD_FRAMES: [u32; 4] = [GOLDEN_FRAME, 300, 599, 1500];
 const _: () = assert!(WORLD_FRAMES[0] == GOLDEN_FRAME);
 
 /// The frames of `scene` its Goldens are.

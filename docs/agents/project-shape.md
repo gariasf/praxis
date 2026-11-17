@@ -49,7 +49,10 @@ src/
                                  a Chunk loaded through the AssetLoader
                                  into the World's LoadedChunks, which
                                  prepare writes into the Chunk's range of
-                                 Instance slots
+                                 Instance slots, and a Far proxy into its
+                                 ResidentFarProxies, drawn the same way,
+                                 as is its FarGround, the ground past the
+                                 View distance
   scenes/                      # Reference scenes: generated content,
                                  camera paths in frames, frame deltas,
                                  the Spin system (the orrery, town's and

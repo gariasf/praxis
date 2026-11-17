@@ -20,7 +20,8 @@ use crate::scenes::ReferenceScene;
 use crate::streaming::chunks::{load_cooked_chunk, load_far_proxy};
 use crate::streaming::mips::{MipPriority, MipRequest};
 use crate::streaming::{
-    ChunkFrame, ChunkIo, ChunkStreamer, FinishedLoad, LoadedChunk, LoadedChunks, distance_metres,
+    ChunkFrame, ChunkIo, ChunkStreamer, FinishedLoad, LoadedChunk, LoadedChunks,
+    ResidentFarProxies, distance_metres,
 };
 
 const IO_THREADS: usize = 4;
@@ -484,14 +485,15 @@ struct FarProxies {
     streamer: ChunkStreamer,
     /// Far proxies loaded into the pools that the streamer has not taken.
     awaiting_placement: Vec<LoadedChunk>,
-    /// The Resident Far proxies, in load order, each a Chunk of one
-    /// Placement; one held is past the View distance.
-    resident: Vec<LoadedChunk>,
+    /// The coordinates of the Chunks drawn this frame, in order, kept for
+    /// its memory.
+    drawn_chunks: Vec<[i32; 2]>,
 }
 
 /// A Reference scene's Chunks streamed around the camera: the Chunk
 /// streamer, served by the IO pool, keeping the World's `LoadedChunks`; and
-/// the Far proxies of a scene with a Far field, served after its Chunks.
+/// the Far proxies of a scene with a Far field, served after its Chunks,
+/// keeping the World's `ResidentFarProxies`.
 pub(crate) struct ChunkStreaming {
     streamer: ChunkStreamer,
     far_proxies: Option<FarProxies>,
@@ -556,7 +558,7 @@ impl ChunkStreaming {
                 view_distance_metres,
             ),
             awaiting_placement: Vec::new(),
-            resident: Vec::new(),
+            drawn_chunks: Vec::new(),
         });
         Ok(Self {
             streamer: ChunkStreamer::new(scene.chunk_coordinates(), load_radius_metres),
@@ -662,7 +664,9 @@ impl ChunkStreaming {
     /// to the frame's caps on loads and load bytes; places those loaded, in
     /// the order loaded, whose Meshes' BLASes the GPU has built and
     /// compacted, up to the frame's cap on placed Instances; and keeps the
-    /// World's `LoadedChunks` to what the streamer holds. With
+    /// World's `LoadedChunks` to what the streamer holds, and its
+    /// `ResidentFarProxies` to what the Far proxies' holds, each held while
+    /// its Chunk is drawn. With
     /// `settle`, waits until the frame is Settled, loading the Chunks of
     /// each wait together once all have arrived, in coordinate order and
     /// past the frame's caps, so their order never depends on the IO pool's
@@ -763,17 +767,26 @@ impl ChunkStreaming {
             let mut loaded_chunks = world.resource_mut::<LoadedChunks>();
             let chunks = &mut loaded_chunks.bypass_change_detection().0;
             let (finished, pools) = (&mut *frame_io.finished, &mut *frame_io.pools);
-            if keep_loaded_chunks(chunks, frame, finished, pools, MeshUse::DrawnAndTraced) {
+            if keep_loaded_chunks(chunks, frame, &[], finished, pools, MeshUse::DrawnAndTraced) {
                 loaded_chunks.set_changed();
             }
             if let Some(far_proxies) = far_proxies {
+                let drawn_chunks = &mut far_proxies.drawn_chunks;
+                drawn_chunks.clear();
+                let drawn = loaded_chunks.0.iter().filter(|chunk| !chunk.held);
+                drawn_chunks.extend(drawn.map(|chunk| chunk.coordinates));
+                drawn_chunks.sort_unstable();
                 frame_io.serve_far_proxies(&mut far_proxies.awaiting_placement);
                 let frame = (far_proxies.streamer).update(camera, teleported, &mut frame_io);
                 streamed.late_far_proxies += frame.late_chunks;
                 settled &= frame.settled;
                 let (finished, pools) = (&mut *frame_io.finished, &mut *frame_io.pools);
-                let resident = &mut far_proxies.resident;
-                keep_loaded_chunks(resident, frame, finished, pools, MeshUse::FarProxy);
+                let mut resident = world.resource_mut::<ResidentFarProxies>();
+                let proxies = &mut resident.bypass_change_detection().0;
+                let mesh_use = MeshUse::FarProxy;
+                if keep_loaded_chunks(proxies, frame, drawn_chunks, finished, pools, mesh_use) {
+                    resident.set_changed();
+                }
             }
             let mip_streaming = MipStreaming {
                 io,
@@ -807,7 +820,8 @@ impl MipStreaming<'_> {
     /// Applies the mips the IO pool read, finest-needed first, then in Asset
     /// ID order, up to the frame's load bytes, or, while settling, all of them once nothing is
     /// in flight, as the Chunk streamer's last take found it; then requests
-    /// the mips the loaded Chunks' drawn Placements need from the camera,
+    /// the mips the drawn Chunks' Placements and the drawn Far proxies need
+    /// from the camera,
     /// finest-needed first, and counts the late mips. Returns whether no
     /// request is in flight. Without mip streaming, it does nothing.
     fn stream(mut self, world: &World, streamed: &mut StreamedFrame) -> bool {
@@ -824,14 +838,20 @@ impl MipStreaming<'_> {
         let chunks = world
             .get_resource::<LoadedChunks>()
             .map_or(&[][..], |chunks| &chunks.0);
+        let far_proxies = world
+            .get_resource::<ResidentFarProxies>()
+            .map_or(&[][..], |far_proxies| &far_proxies.0);
         let Renderer {
             mesh_pool,
             material_pool,
             ..
         } = &*self.renderer;
-        let (late_mips, requests) =
-            self.priority
-                .plan(camera, chunks, mesh_pool.meshes(), material_pool);
+        let (late_mips, requests) = self.priority.plan(
+            camera,
+            chunks.iter().chain(far_proxies),
+            mesh_pool.meshes(),
+            material_pool,
+        );
         streamed.late_mips = late_mips;
         for request in requests {
             self.io.request(IoRequest::Mips(request.clone()));
@@ -890,12 +910,14 @@ impl MipStreaming<'_> {
 }
 
 /// Moves the loads the streamer took this frame from `finished` into
-/// `chunks`, removes those it unloaded, marks those it holds, and gives back
-/// the pool users, of Meshes loaded for `mesh_use`, of those it unloaded or
-/// dropped. Returns whether `chunks` changed.
+/// `chunks`, removes those it unloaded, marks as held those it holds and
+/// those at `also_held`, coordinates in order, and gives back the pool
+/// users, of Meshes loaded for `mesh_use`, of those it unloaded or dropped.
+/// Returns whether `chunks` changed.
 fn keep_loaded_chunks(
     chunks: &mut Vec<LoadedChunk>,
     frame: &ChunkFrame,
+    also_held: &[[i32; 2]],
     finished: &mut BTreeMap<[i32; 2], LoadedChunk>,
     renderer: &mut Renderer,
     mesh_use: MeshUse,
@@ -921,7 +943,8 @@ fn keep_loaded_chunks(
         changed = true;
     }
     for chunk in chunks.iter_mut() {
-        let held = frame.held.binary_search(&chunk.coordinates).is_ok();
+        let held = frame.held.binary_search(&chunk.coordinates).is_ok()
+            || also_held.binary_search(&chunk.coordinates).is_ok();
         changed |= chunk.held != held;
         chunk.held = held;
     }

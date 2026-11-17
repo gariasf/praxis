@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The capture gallery for the visual audit: every Reference scene at
 # 2560x1440 at the Goldens' frame, `town` at the eight frames the Goldens
-# test checks, `world` at its three Goldens' frames and `crowd` in both its
+# test checks, `world` at its four Goldens' frames and `crowd` in both its
 # shadow forms, written to
 # target/tmp/gallery/<scene>-frame-<n>.png. Given an earlier gallery's
 # directory, it also writes <scene>-frame-<n>-difference.png beside each
@@ -41,7 +41,7 @@ baseline_failures=0
 # The Goldens test's GOLDEN_FRAME and TOWN_FRAMES (tests/goldens.rs).
 golden_frame=59
 town_frames=(59 300 500 700 900 1200 1500 1800)
-world_frames=(59 300 599)
+world_frames=(59 300 599 1500)
 
 [[ -z "$against" || "$against/" != "$(pwd)/$gallery/"* ]] ||
   { echo "copy the earlier gallery out of $gallery first" >&2; exit 1; }

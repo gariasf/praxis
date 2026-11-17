@@ -19,7 +19,7 @@ use crate::scenes::{
     wrap_around_camera,
 };
 use crate::stats::{FrameRecorder, FrameStats, GpuFrameStats};
-use crate::streaming::{ChunkStreaming, LoadedChunks};
+use crate::streaming::{ChunkStreaming, FarGround, LoadedChunks, ResidentFarProxies};
 use crate::threading::single_threaded_schedule;
 use crate::time::{FixedTime, Time, fixed_schedule, run_ticks};
 use crate::transform::{
@@ -114,12 +114,18 @@ impl Simulation {
         };
         spawn(&mut world, loader).with_context(|| format!("loading {}", scene.name()))?;
         world.insert_resource(LoadedChunks::default());
+        world.insert_resource(ResidentFarProxies::default());
         world.insert_resource(scene.environment());
         world.spawn(scene.sun());
         // A child's translation is relative to its parent, so only roots move.
         let mut root_query = world.query_filtered::<&mut Transform, Without<ChildOf>>();
         for mut transform in root_query.iter_mut(&mut world) {
             transform.translation += shift;
+        }
+        if let Some(mut far_ground) = world.get_resource_mut::<FarGround>()
+            && let Some(far_ground) = &mut far_ground.0
+        {
+            far_ground.shift(shift);
         }
         // Ticks propagate World transforms as they end; frames drawn before
         // the first Tick draw these.
@@ -804,6 +810,205 @@ mod tests {
         assert_eq!(counters.late_chunks, 2);
         let bytes_read: u64 = frame_stats.iter().map(|stats| stats.bytes_read).sum();
         assert_eq!(counters.bytes_read, bytes_read);
+    }
+
+    #[cfg(feature = "cook")]
+    const FAR_FIELD_SIZE: (u32, u32) = (320, 180);
+
+    /// A State of `world` moved by `shift`, and a target to read its frames
+    /// back from.
+    #[cfg(feature = "cook")]
+    fn world_state(
+        context: &crate::gpu::GpuContext,
+        shift: glam::DVec3,
+        switches: RenderSwitches,
+    ) -> (State, wgpu::Texture) {
+        let (width, height) = FAR_FIELD_SIZE;
+        let format = crate::capture::TARGET_FORMAT;
+        let scene = ReferenceScene::World;
+        let state = State::new(context, format, width, height, scene, shift, switches)
+            .expect("world loads");
+        let target = context.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Far Field Target"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        (state, target)
+    }
+
+    /// Draws a frame from `camera`, Settled if `settle`, and reads it back.
+    #[cfg(feature = "cook")]
+    fn draw_from(
+        context: &crate::gpu::GpuContext,
+        state: &mut State,
+        target: &wgpu::Texture,
+        camera: crate::camera::Camera,
+        settle: bool,
+    ) -> Vec<u8> {
+        state.simulation.world.insert_resource(camera);
+        let frame_delta = ReferenceScene::World.frame_delta();
+        if settle {
+            state
+                .update_settled(frame_delta)
+                .expect("the frame settles");
+        } else {
+            state.update(frame_delta);
+        }
+        state.render(&target.create_view(&wgpu::TextureViewDescriptor::default()));
+        crate::capture::read_back(context, target).expect("the frame reads back")
+    }
+
+    /// What draws the Chunk at `coordinates`.
+    #[cfg(feature = "cook")]
+    fn drawn_as(state: &State, coordinates: [i32; 2]) -> &'static str {
+        let drawn = |chunks: &[crate::streaming::LoadedChunk]| {
+            chunks
+                .iter()
+                .any(|chunk| chunk.coordinates == coordinates && !chunk.held)
+        };
+        let world = &state.simulation.world;
+        let placements = drawn(&world.resource::<LoadedChunks>().0);
+        let far_proxy = drawn(&world.resource::<ResidentFarProxies>().0);
+        match (placements, far_proxy) {
+            (true, false) => "its Placements",
+            (false, true) => "its Far proxy",
+            (true, true) => "both",
+            (false, false) => "neither",
+        }
+    }
+
+    /// The pixels of `image` that are not the ground's green.
+    #[cfg(feature = "cook")]
+    fn built_pixels(image: &[u8]) -> usize {
+        let built = |pixel: &&[u8; 4]| pixel[1] <= pixel[0].max(pixel[2]).saturating_add(16);
+        image.as_chunks::<4>().0.iter().filter(built).count()
+    }
+
+    /// With a Load radius of 0 m and no shadow rays, `world`'s camera hangs
+    /// 250 m over the middle of a Chunk of its settlement, then of the next
+    /// Chunk north. Over the first, that Chunk draws its Placements and the
+    /// next its Far proxy. On the frame the camera comes over the next, a
+    /// Late Chunk, it still draws its Far proxy, and the first, now held,
+    /// draws its own again, their roofs and walls over half the picture.
+    /// Once Settled, the next Chunk draws its Placements: more Instances and
+    /// triangles than its Far proxy, as much roof and wall, and the same
+    /// picture in over two pixels of three: its windows and the birds differ.
+    #[cfg(feature = "cook")]
+    #[test]
+    fn a_far_proxy_draws_exactly_while_its_chunk_does_not() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let scene = ReferenceScene::World;
+        let switches = RenderSwitches {
+            shadow_rays: false,
+            wait_for_static_tlas: true,
+            ..RenderSwitches::default()
+        };
+        let (mut state, target) = world_state(&context, glam::DVec3::ZERO, switches);
+        state.streaming.set_load_radius(0.0);
+        let chunk_edge_metres = crate::cooked::CHUNK_EDGE_METRES;
+        let over_roofs = scene.camera_at(599, glam::DVec3::ZERO).position;
+        let next = [over_roofs.x, over_roofs.z].map(|metres| (metres / chunk_edge_metres).floor());
+        let [next, first] = [0.0, 1.0].map(|south| [next[0] as i32, (next[1] + south) as i32]);
+        let over = |[x, z]: [i32; 2]| {
+            let middle = |coordinate: i32| (f64::from(coordinate) + 0.5) * chunk_edge_metres;
+            let position = glam::dvec3(middle(x), 250.0, middle(z));
+            crate::camera::Camera::looking_at(position, position + glam::dvec3(0.0, -250.0, -1.0))
+        };
+
+        draw_from(&context, &mut state, &target, over(first), true);
+        assert_eq!(drawn_as(&state, first), "its Placements");
+        assert_eq!(drawn_as(&state, next), "its Far proxy");
+        let [_, albedo, _] = scene.far_proxy_baked_ids(next);
+        let residency = state.renderer.material_pool.texture_residency(albedo);
+        let (_, finest_resident_mip) = residency.expect("the Far proxy's albedo is loaded");
+        assert_eq!(finest_resident_mip, 0, "its atlas streamed in whole");
+
+        let late = draw_from(&context, &mut state, &target, over(next), false);
+        assert_eq!(state.frame_stats().late_chunks, 1);
+        assert_eq!(drawn_as(&state, first), "its Far proxy");
+        assert_eq!(drawn_as(&state, next), "its Far proxy");
+
+        let settled = draw_from(&context, &mut state, &target, over(next), true);
+        assert_eq!(drawn_as(&state, first), "its Far proxy");
+        assert_eq!(drawn_as(&state, next), "its Placements");
+
+        state.flush_gpu_frame_stats().expect("GPU stats read back");
+        let [late_stats, settled_stats] = [1, 2].map(|frame| state.gpu_frame_stats()[frame]);
+        assert!(
+            late_stats.instances_drawn < settled_stats.instances_drawn,
+            "{} Instances draw the Far proxies, {} the Chunk",
+            late_stats.instances_drawn,
+            settled_stats.instances_drawn
+        );
+        assert!(late_stats.triangles_drawn < settled_stats.triangles_drawn);
+        let difference = crate::capture::compare_images(&settled, &late);
+        let pixels = (FAR_FIELD_SIZE.0 * FAR_FIELD_SIZE.1) as usize;
+        let [late_built, settled_built] = [&late, &settled].map(|image| built_pixels(image));
+        assert!(
+            late_built * 2 > pixels && late_built.abs_diff(settled_built) * 20 < pixels,
+            "the Far proxies cover {late_built} of {pixels} pixels, the Chunk {settled_built}"
+        );
+        assert!(
+            difference.differing_pixels * 3 < pixels,
+            "the Far proxy differs from its Chunk in {} of {pixels} pixels",
+            difference.differing_pixels
+        );
+    }
+
+    /// `world`'s Far field and the ground past it, seen from its camera's
+    /// frame 59, draw the same image with the world at the origin and moved
+    /// by its own half size along both axes, whole Anchor cells: no World
+    /// position reaches the GPU in f32 (ADR 0014).
+    #[cfg(feature = "cook")]
+    #[test]
+    fn the_far_field_draws_alike_at_the_origin_and_at_the_worlds_far_corner() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let scene = ReferenceScene::World;
+        let switches = RenderSwitches {
+            wait_for_static_tlas: true,
+            ..RenderSwitches::default()
+        };
+        let far_corner = glam::dvec3(5120.0, 0.0, 5120.0);
+        let [at_origin, at_far_corner] = [glam::DVec3::ZERO, far_corner].map(|shift| {
+            let (mut state, target) = world_state(&context, shift, switches);
+            let image = draw_from(
+                &context,
+                &mut state,
+                &target,
+                scene.camera_at(59, shift),
+                true,
+            );
+            let camera = scene.camera_at(59, shift);
+            let far_proxies = &state.simulation.world.resource::<ResidentFarProxies>().0;
+            let ahead_at_the_view_distance = far_proxies.iter().any(|proxy| {
+                let to_proxy = proxy.placements[0].transform.translation - camera.position;
+                let ahead = to_proxy.normalize().dot(camera.forward().as_dvec3()) > 0.95;
+                !proxy.held && ahead && to_proxy.length() > scene.view_distance_metres()
+            });
+            assert!(
+                ahead_at_the_view_distance,
+                "a Far proxy 2 km out is in view"
+            );
+            image
+        });
+        assert!(
+            at_origin == at_far_corner,
+            "the far corner draws otherwise: {:?}",
+            crate::capture::compare_images(&at_origin, &at_far_corner)
+        );
     }
 
     /// Read before any loads, `texture_wall`'s four Chunks, each writing

@@ -42,7 +42,7 @@ struct Placed {
     uvs: Vec<[Vec2; 3]>,
     /// Each triangle's Material in the cook's list, none for a Placement
     /// the runtime does not draw: one without a Material whose Mesh has a
-    /// Primitive that names none.
+    /// Primitive with triangles that names none.
     materials: Vec<Option<usize>>,
     lowest: Vec3,
     highest: Vec3,
@@ -62,8 +62,9 @@ fn placed(
     materials: &mut Vec<(AssetId, f32)>,
 ) -> Placed {
     let (mut triangles, mut uvs, mut drawn_with) = (Vec::new(), Vec::new(), Vec::new());
-    let drawn =
-        placement.material.is_some() || (primitives.iter()).all(|(_, material)| material.is_some());
+    let drawn = placement.material.is_some()
+        || (primitives.iter())
+            .all(|(geometry, material)| material.is_some() || geometry.indices.is_empty());
     for (geometry, material) in primitives {
         let named = placement.material.or(*material).filter(|_| drawn);
         let material = named.map(|material| {
