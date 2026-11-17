@@ -363,6 +363,7 @@
     "started_unix_seconds": 1794815140
   },
   "renderables_refused": 0,
+  "rerecorded_baseline": true,
   "scene": "normal-tangent",
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {
