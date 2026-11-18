@@ -284,7 +284,7 @@ fn froxel_mask_bit(froxel: u32, index: u32) -> u32 {
     var low = 0u;
     var high = count;
     while low < high {
-        let middle = (low + high) / 2u;
+        let middle = low + (high - low) / 2u;
         if froxel_lists[froxel].lights[middle] < index {
             low = middle + 1u;
         } else {

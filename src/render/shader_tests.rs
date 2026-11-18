@@ -1,10 +1,12 @@
 //! Every shader module is checked here without a GPU, as wgpu checks it when
 //! it creates a shader module (backend code generation aside), every WGSL
 //! file under `src/` is a part of some module, each binding is visible to
-//! exactly the stages that use it, and each struct whose bytes the CPU
-//! writes is compared with its Rust twin.
+//! exactly the stages that use it, each struct whose bytes the CPU writes is
+//! compared with its Rust twin, and each loop of a module compiled without
+//! loop bounding ends by its own text.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use wgpu::naga;
@@ -17,7 +19,7 @@ use crate::render::bend_pass::BendData;
 use crate::render::bind_groups::{
     BindGroupDefinition, Binding, Writer, read_only_storage, uniform,
 };
-use crate::render::shaders::{MODULES, Part, ShaderModule};
+use crate::render::shaders::{LOOPS_UNBOUNDED, MODULES, Part, ShaderModule};
 use crate::render::{CameraUniform, InstanceData, LightData, LightUniform, RenderCapacities};
 
 #[test]
@@ -133,6 +135,80 @@ fn every_wgsl_file_is_a_part_of_some_module() {
         .map(|file| format!("{}: no shader module uses it", file.display()))
         .collect();
     assert!(unused.is_empty(), "{}", unused.join("\n"));
+}
+
+/// The loops that end without being counted, each as its part holds it,
+/// whole or by its header.
+const PINNED_LOOPS: [&str; 3] = [
+    // `middle` lies in `low..high`, so either branch shrinks the interval.
+    "    while low < high {
+        let middle = low + (high - low) / 2u;
+        if froxel_lists[froxel].lights[middle] < index {
+            low = middle + 1u;
+        } else {
+            high = middle;
+        }
+    }\n",
+    // The stride doubles up to `SCAN_BLOCK_SIZE`, which is at most 2^31.
+    "    for (var stride = 1u; stride < SCAN_BLOCK_SIZE; stride *= 2u) {\n",
+    // The bound is at most three times `MESHLET_MAX_TRIANGLES`, so no step wraps under it.
+    "    for (var index = invocation; index < 3u * min(meshlet.triangle_count, MESHLET_MAX_TRIANGLES); index += APPEND_WORKGROUP_SIZE) {\n",
+];
+
+#[test]
+fn every_loop_wgpu_leaves_unbounded_ends() {
+    let parts: Vec<Part> = LOOPS_UNBOUNDED
+        .iter()
+        .flat_map(|module| module.parts)
+        .copied()
+        .collect();
+    let problems: BTreeSet<String> = loop_problems(&parts, &PINNED_LOOPS).into_iter().collect();
+    assert!(
+        problems.is_empty(),
+        "{}",
+        problems.into_iter().collect::<Vec<_>>().join("\n")
+    );
+}
+
+#[test]
+fn a_loop_whose_text_does_not_end_it_fails() {
+    let part = Part {
+        path: "loops.wgsl",
+        source: "fn loops(count: u32) {
+    for (var counted = 0u; counted < count; counted++) {
+        for (var inner = counted; inner < 4u && counted < 2u; inner++) { // while
+        }
+    }
+    for (var stride = 1u; stride < count; stride *= 2u) {
+    }
+    for (var either = 0u; either < count || true; either++) {
+    }
+    for (var written = 0u; written < count; written++) {
+        if written == 1u {
+            written -= 1u;
+        }
+    }
+    while true {
+    }
+    loop {
+    }
+    // The pinned loop:
+    while count < 2u {
+    }
+}
+",
+    };
+    assert_eq!(
+        loop_problems(&[part], &["    while count < 2u {\n", "    loop {}\n"]),
+        [
+            "no part holds the pinned loop `loop {}`",
+            "loops.wgsl:6: `for (var stride = 1u; stride < count; stride *= 2u) {` is neither a counted loop nor a pinned one",
+            "loops.wgsl:8: `for (var either = 0u; either < count || true; either++) {` is neither a counted loop nor a pinned one",
+            "loops.wgsl:10: its body writes `written`",
+            "loops.wgsl:15: `while true {` is neither a counted loop nor a pinned one",
+            "loops.wgsl:17: `loop {` is neither a counted loop nor a pinned one",
+        ]
+    );
 }
 
 /// The floor requires ray queries (ADRs 0020, 0021), so a module that
@@ -586,6 +662,107 @@ fn wgsl_files() -> Vec<PathBuf> {
     }
     files.sort();
     files
+}
+
+/// What keeps the text of `parts` from showing that their loops end: a loop
+/// that is neither within one of `pinned` nor counted, by a counter its
+/// header declares, compares with `<` alone and steps by `++`, which reaches
+/// any bound; a `for` loop whose body writes its counter; and a loop of
+/// `pinned` that no part holds.
+fn loop_problems(parts: &[Part], pinned: &[&str]) -> Vec<String> {
+    let mut problems: Vec<String> = pinned
+        .iter()
+        .filter(|pin| !parts.iter().any(|part| part.source.contains(**pin)))
+        .map(|pin| format!("no part holds the pinned loop `{}`", pin.trim()))
+        .collect();
+    for part in parts {
+        let pinned_ranges: Vec<Range<usize>> = pinned
+            .iter()
+            .flat_map(|pin| part.source.match_indices(pin))
+            .map(|(start, pin)| start..start + pin.len())
+            .collect();
+        let mut offset = 0;
+        let lines: Vec<(usize, &str)> = part
+            .source
+            .split_inclusive('\n')
+            .map(|line| {
+                let start = offset;
+                offset += line.len();
+                (start, line.split("//").next().unwrap_or_default())
+            })
+            .collect();
+        for (index, &(start, line)) in lines.iter().enumerate() {
+            let is_loop = line
+                .split(|character| !is_word(character))
+                .any(|word| matches!(word, "for" | "while" | "loop"));
+            if !is_loop {
+                continue;
+            }
+            let location = format!("{}:{}", part.path, index + 1);
+            let counter = for_counter(line);
+            let is_pinned = pinned_ranges.iter().any(|range| range.contains(&start));
+            if !is_pinned && !counter.is_some_and(|(_, counted)| counted) {
+                problems.push(format!(
+                    "{location}: `{}` is neither a counted loop nor a pinned one",
+                    line.trim()
+                ));
+            }
+            let Some((name, _)) = counter else {
+                continue;
+            };
+            let mut depth = 1;
+            for &(_, body_line) in &lines[index + 1..] {
+                depth += body_line.matches('{').count() as isize;
+                depth -= body_line.matches('}').count() as isize;
+                if depth <= 0 {
+                    break;
+                }
+                if writes(body_line, name) {
+                    problems.push(format!("{location}: its body writes `{name}`"));
+                    break;
+                }
+            }
+        }
+    }
+    problems
+}
+
+fn is_word(character: char) -> bool {
+    character.is_alphanumeric() || character == '_'
+}
+
+/// The counter a `for` header declares, and whether the header counts with
+/// it: compares it with `<` alone and steps it by `++`.
+fn for_counter(header: &str) -> Option<(&str, bool)> {
+    let (name, rest) = header.trim().strip_prefix("for (var ")?.split_once(" = ")?;
+    let mut clauses = rest.split(';').skip(1).map(str::trim);
+    let condition = clauses.next()?;
+    let counted = condition.starts_with(&format!("{name} < "))
+        && !condition.contains("||")
+        && clauses.next()? == format!("{name}++) {{");
+    Some((name, counted))
+}
+
+/// Whether `line` assigns to the variable `name`, steps it or takes its
+/// address.
+fn writes(line: &str, name: &str) -> bool {
+    line.match_indices(name).any(|(start, _)| {
+        let before = line[..start].chars().next_back();
+        let after = &line[start + name.len()..];
+        if before.is_some_and(|character| is_word(character) || character == '.')
+            || after.starts_with(is_word)
+        {
+            return false;
+        }
+        let after = after.trim_start();
+        before == Some('&')
+            || (after.starts_with('=') && !after.starts_with("=="))
+            || [
+                "++", "--", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=",
+            ]
+            .iter()
+            .any(|operator| after.starts_with(operator))
+    })
 }
 
 /// A Rust struct whose bytes the GPU reads, and the WGSL struct it must match.
