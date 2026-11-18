@@ -195,7 +195,7 @@ fn hal_built_bytes<A: wgpu::hal::Api>(
 const REANCHOR_CELLS: i32 = (CHUNK_EDGE_METRES / ANCHOR_CELL_SIZE) as i32;
 
 /// Frames a Far proxy's entry change waits for a build that another change
-/// or a re-anchor starts before it starts one itself: two seconds at 60 Hz.
+/// or a re-anchor starts before it starts one itself.
 const FAR_PROXY_BUILD_WAIT_FRAMES: u64 = 120;
 
 /// The static TLAS (ADR 0020): each static Instance in an entry of its own,
@@ -235,7 +235,7 @@ pub struct StaticTlas {
     /// Static Instances it had no free entry for, by slot, which take the
     /// entries still free after a later frame's writes, lowest slot first.
     left_out: BTreeMap<u32, StaticInstance>,
-    /// The slots whose entries hold Far proxies.
+    /// The slots whose static Instance is a Far proxy's.
     far_proxy_slots: HashSet<u32>,
 }
 
@@ -282,7 +282,8 @@ enum Spare {
     /// On the worker, which takes the entry changes it lacks and, when it
     /// builds, takes it to the bound TLAS's Anchor, or to the camera's once
     /// that is more than `REANCHOR_CELLS` away, and records its build.
-    /// `built_from` is the frame of the earliest change the bound TLAS lacks.
+    /// `built_from` is the frame of the earliest change the bound TLAS lacks
+    /// that starts a build.
     Working {
         worker: std::thread::JoinHandle<Work>,
         built_from: Option<u64>,
@@ -503,7 +504,7 @@ impl StaticTlas {
         {
             let (slot, instance) = self.left_out.pop_first().expect("not empty");
             self.hold(slot, entry);
-            starts_build = true;
+            starts_build |= !self.far_proxy_slots.contains(&slot);
             changes.push(EntryChange {
                 entry,
                 instance: Some(instance),
@@ -1596,11 +1597,12 @@ mod tests {
     /// Without waiting, a Far proxy's entry change starts no build for
     /// `FAR_PROXY_BUILD_WAIT_FRAMES`, then starts one, which the frames
     /// until a change is traced do not count. Another Instance's change
-    /// starts a build at once, which brings the Far proxy's change before it
-    /// and counts from its own frame, as does its release, which brings a
-    /// Far proxy's.
+    /// starts a build in its own frame, which brings the Far proxy's change
+    /// before it and counts from its own frame, as does its release, which
+    /// brings a Far proxy's. Waiting, a Far proxy's change is built in its
+    /// own frame.
     #[test]
-    fn a_far_proxys_entry_change_waits_for_another_build_or_two_seconds() {
+    fn a_far_proxys_entry_change_waits_for_another_build_or_its_frames() {
         let Some(mut triangle) = Triangle::new() else {
             return;
         };
@@ -1622,7 +1624,7 @@ mod tests {
             mesh: far_proxy_mesh.index,
             ..ordinary(x)
         };
-        let update = |tlas: &mut StaticTlas, writes: Vec<(u32, InstanceData)>| {
+        let frame = |writes: Vec<(u32, InstanceData)>| {
             let mut frame = FrameData {
                 camera: CameraUniform {
                     anchor: LOAD_ANCHOR,
@@ -1639,21 +1641,23 @@ mod tests {
                     moving: false,
                 });
             }
-            triangle.update_once(tlas, &frame, false)
+            frame
         };
-        // The frames from the one that writes to the one that submits a
-        // build, and what the next, which binds it, reports.
-        let bind = |tlas: &mut StaticTlas, writes: Vec<(u32, InstanceData)>| {
-            let mut submitted = update(tlas, writes);
+        let update = |tlas: &mut StaticTlas, writes: Vec<(u32, InstanceData)>| {
+            std::thread::sleep(Duration::from_millis(1));
+            triangle.update_once(tlas, &frame(writes), false)
+        };
+        let building = |tlas: &StaticTlas| !matches!(tlas.spare, Some(Spare::Idle(_)));
+        // The updates that write nothing until one submits a build, and what
+        // the next, which binds it, reports.
+        let bind = |tlas: &mut StaticTlas| {
             let mut frames = 1;
-            while submitted.build_time.is_none() {
-                std::thread::sleep(Duration::from_millis(1));
-                submitted = update(tlas, Vec::new());
+            while update(tlas, Vec::new()).build_time.is_none() {
                 frames += 1;
                 assert!(frames < 10_000, "no build was submitted");
             }
             let binding = update(tlas, Vec::new());
-            while !matches!(tlas.spare, Some(Spare::Idle(_))) {
+            while building(tlas) {
                 update(tlas, Vec::new());
             }
             (frames, binding)
@@ -1661,24 +1665,50 @@ mod tests {
         let points = [[0.8, 0.0, 0.0], [5.8, 0.0, 0.0], [10.8, 0.0, 0.0]];
         let traced = |tlas: &StaticTlas| trace_down(context, &tlas.bound.tlas, &points);
 
-        let (frames, binding) = bind(&mut tlas, vec![(0, far_proxy(0.0))]);
-        assert!(u64::from(frames) > FAR_PROXY_BUILD_WAIT_FRAMES, "{frames}");
+        update(&mut tlas, vec![(0, far_proxy(0.0))]);
+        for _ in 1..FAR_PROXY_BUILD_WAIT_FRAMES {
+            assert_eq!(update(&mut tlas, Vec::new()).build_time, None);
+        }
+        assert!(
+            !building(&tlas),
+            "the worker took the change without a build"
+        );
+        assert_eq!(update(&mut tlas, Vec::new()).build_time, None);
+        assert!(
+            building(&tlas),
+            "the build starts once the change has waited"
+        );
+        let (_, binding) = bind(&mut tlas);
         assert_eq!(binding.frames_until_traced, None);
         assert_eq!(traced(&tlas), [Some(0), None, None]);
 
         update(&mut tlas, vec![(1, far_proxy(5.0))]);
-        let (frames, binding) = bind(&mut tlas, vec![(2, ordinary(10.0))]);
-        assert!(u64::from(frames) < FAR_PROXY_BUILD_WAIT_FRAMES, "{frames}");
-        assert_eq!(binding.frames_until_traced, Some(frames));
+        while building(&tlas) {
+            update(&mut tlas, Vec::new());
+        }
+        update(&mut tlas, vec![(2, ordinary(10.0))]);
+        assert!(matches!(
+            tlas.spare,
+            Some(Spare::Working {
+                built_from: Some(_),
+                ..
+            })
+        ));
+        let (frames, binding) = bind(&mut tlas);
+        assert_eq!(binding.frames_until_traced, Some(frames + 1));
         assert_eq!(traced(&tlas), [Some(0), Some(1), Some(2)]);
 
         update(&mut tlas, vec![(1, freed())]);
         for _ in 0..10 {
             assert_eq!(update(&mut tlas, Vec::new()).build_time, None);
         }
-        let (frames, binding) = bind(&mut tlas, vec![(2, freed())]);
-        assert_eq!(binding.frames_until_traced, Some(frames));
+        update(&mut tlas, vec![(2, freed())]);
+        let (frames, binding) = bind(&mut tlas);
+        assert_eq!(binding.frames_until_traced, Some(frames + 1));
         assert_eq!(traced(&tlas), [Some(0), None, None]);
+
+        let waited = triangle.update_once(&mut tlas, &frame(vec![(1, far_proxy(5.0))]), true);
+        assert!(waited.build_time.is_some());
     }
 
     /// Its entries are not its Instances' slots: a static Instance in a slot
