@@ -111,7 +111,8 @@ pub enum MeshUse {
     /// Drawn and traced, a Mesh the GPU bends whose BLAS is updated each
     /// frame from its bent shape: built to allow updates, never compacted.
     Refitted,
-    /// Drawn alone, as it was cooked: a Far proxy's load, which builds no BLAS.
+    /// Drawn and traced: a Far proxy's load, whose baked Material takes an
+    /// entry of the Material table's count for Far proxies.
     FarProxy,
 }
 
@@ -124,7 +125,7 @@ impl MeshUse {
     /// Whether rays trace it, so it needs a BLAS and the index stream the
     /// BLAS is built from.
     fn traced(self) -> bool {
-        !matches!(self, MeshUse::Drawn | MeshUse::FarProxy)
+        self != MeshUse::Drawn
     }
 
     /// Whether Renderables share one entry per Asset ID: a bent Mesh is its
