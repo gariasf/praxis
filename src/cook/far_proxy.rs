@@ -734,7 +734,7 @@ mod tests {
         assert!((pixel_metres(256.0) - PIXEL_METRES).abs() < 1e-4);
         assert!((1..=5832).contains(&(shell.index_count / 3)));
         let atlas_texels_per_metre = shell.texel_density * 2048.0;
-        assert!((atlas_texels_per_metre * PIXEL_METRES - 0.5).abs() < 1e-3);
+        assert!((atlas_texels_per_metre * bake::texel_metres(PIXEL_METRES) - 1.0).abs() < 1e-3);
         let flat_roofed = &proxy.coarser_lods[0];
         assert!(flat_roofed.error_metres <= 2.0 * PIXEL_METRES);
         assert!(flat_roofed.primitives[0].index_count * 100 <= shell.index_count * 85);

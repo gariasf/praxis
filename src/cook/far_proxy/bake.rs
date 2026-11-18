@@ -17,6 +17,7 @@ const SAMPLES_PER_SIDE: u32 = 4;
 const REACH_PIXELS: f32 = 2.0;
 const GUTTER_TEXELS: u32 = 4 / TEXEL_PIXELS;
 const GRID_TEXELS: u32 = 8 / TEXEL_PIXELS;
+const _: () = assert!(4 % TEXEL_PIXELS == 0);
 const LIKE_NORMAL_COSINE: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
 pub(super) fn settings() -> String {
