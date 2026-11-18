@@ -104,7 +104,8 @@ pub struct RenderSwitches {
     /// priority (ADR 0017).
     pub residency: bool,
     /// Whether a frame that hands the static TLAS's spare to its worker
-    /// waits for it, so which frame binds a build never depends on the
+    /// waits for it, and a Far proxy's entry change starts a build as any
+    /// other does, so which frame binds a build never depends on the
     /// worker's timing, as a capture needs. Off, as it ships, a frame takes
     /// the worker's result once it is done.
     pub wait_for_static_tlas: bool,
