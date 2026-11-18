@@ -160,7 +160,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.engine_changed != 'false' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 110
     steps:
       # The field guides' test asks git whether each page's commit is on main.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -182,6 +182,9 @@ jobs:
       # after `praxis cook` on a dev machine (ADR 0018).
       - name: Cook
         run: cargo run -- cook
+
+      - name: The capture-seam test alone
+        run: cargo test --lib a_far_proxy_casts
 
       - name: Test
         env:
