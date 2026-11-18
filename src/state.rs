@@ -815,6 +815,16 @@ mod tests {
     #[cfg(feature = "cook")]
     const FAR_FIELD_SIZE: (u32, u32) = (320, 180);
 
+    /// The lock a test holds while it holds States of `world`: each takes
+    /// 3 GB on lavapipe, and CI's runner has 16 GB.
+    #[cfg(feature = "cook")]
+    fn one_world_test_at_a_time() -> std::sync::MutexGuard<'static, ()> {
+        static WORLD_STATES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        WORLD_STATES
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     /// A State of `world` moved by `shift`, and a target to read its frames
     /// back from.
     #[cfg(feature = "cook")]
@@ -908,6 +918,7 @@ mod tests {
         let Some(context) = crate::assets::pools::tests::gpu_context() else {
             return;
         };
+        let _world_states = one_world_test_at_a_time();
         let scene = ReferenceScene::World;
         let switches = RenderSwitches {
             shadow_rays: false,
@@ -987,6 +998,7 @@ mod tests {
         let Some(context) = crate::assets::pools::tests::gpu_context() else {
             return;
         };
+        let _world_states = one_world_test_at_a_time();
         let scene = ReferenceScene::World;
         let switches = RenderSwitches {
             wait_for_static_tlas: true,
@@ -1106,6 +1118,7 @@ mod tests {
         let Some(context) = crate::assets::pools::tests::gpu_context() else {
             return;
         };
+        let _world_states = one_world_test_at_a_time();
         let scene = ReferenceScene::World;
         let switches = RenderSwitches {
             wait_for_static_tlas: true,
