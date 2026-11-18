@@ -42,8 +42,8 @@ const ALL_SAMPLES: u32 = (1 << SAMPLE_COUNT) - 1;
 // A packed index holds a Meshlet vertex in whole bits.
 const _: () = assert!(MESHLET_MAX_VERTICES.is_power_of_two());
 
-// Neither counter wraps under its bound: `exclusive_scan`'s doubling stride,
-// and `append_triangles`' index, a workgroup's invocations a step.
+// Neither `exclusive_scan`'s doubling stride nor `append_triangles`' index
+// wraps under its bound.
 const _: () = assert!(SCAN_BLOCK_SIZE <= 1 << 31 && 3 * MESHLET_MAX_TRIANGLES < 1 << 31);
 
 /// One WGSL file of this directory.
@@ -242,8 +242,7 @@ impl ShaderModule {
         // SAFETY: without loop bounding a backend compiler may take an
         // infinite loop for unreachable code [ref:wgpu-types-30-loop-bounding],
         // so the module holds none: each loop of its parts ends whatever its
-        // buffers hold, which `shader_tests` checks. Every other check stays
-        // on.
+        // buffers hold, which `shader_tests` checks.
         unsafe { device.create_shader_module_trusted(self.descriptor(capacities), runtime_checks) }
     }
 

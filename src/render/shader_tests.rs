@@ -183,10 +183,15 @@ fn a_loop_whose_text_does_not_end_it_fails() {
     }
     for (var either = 0u; either < count || true; either++) {
     }
+    for (var restarted = 0u; restarted < restart(&restarted); restarted++) {
+    }
     for (var written = 0u; written < count; written++) {
         if written == 1u {
             written -= 1u;
         }
+    }
+    for (var pointed = 0u; pointed < count; pointed++) {
+        let pointer = & pointed;
     }
     while true {
     }
@@ -198,15 +203,25 @@ fn a_loop_whose_text_does_not_end_it_fails() {
 }
 ",
     };
+    let commented = Part {
+        path: "commented.wgsl",
+        source: "/* // */ loop {}\n",
+    };
     assert_eq!(
-        loop_problems(&[part], &["    while count < 2u {\n", "    loop {}\n"]),
+        loop_problems(
+            &[part, commented],
+            &["    while count < 2u {\n", "    loop {}\n"]
+        ),
         [
             "no part holds the pinned loop `loop {}`",
             "loops.wgsl:6: `for (var stride = 1u; stride < count; stride *= 2u) {` is neither a counted loop nor a pinned one",
             "loops.wgsl:8: `for (var either = 0u; either < count || true; either++) {` is neither a counted loop nor a pinned one",
-            "loops.wgsl:10: its body writes `written`",
-            "loops.wgsl:15: `while true {` is neither a counted loop nor a pinned one",
-            "loops.wgsl:17: `loop {` is neither a counted loop nor a pinned one",
+            "loops.wgsl:10: `for (var restarted = 0u; restarted < restart(&restarted); restarted++) {` is neither a counted loop nor a pinned one",
+            "loops.wgsl:12: its body writes `written`",
+            "loops.wgsl:17: its body writes `pointed`",
+            "loops.wgsl:20: `while true {` is neither a counted loop nor a pinned one",
+            "loops.wgsl:22: `loop {` is neither a counted loop nor a pinned one",
+            "commented.wgsl: a block comment may hide a loop",
         ]
     );
 }
@@ -667,8 +682,8 @@ fn wgsl_files() -> Vec<PathBuf> {
 /// What keeps the text of `parts` from showing that their loops end: a loop
 /// that is neither within one of `pinned` nor counted, by a counter its
 /// header declares, compares with `<` alone and steps by `++`, which reaches
-/// any bound; a `for` loop whose body writes its counter; and a loop of
-/// `pinned` that no part holds.
+/// any bound; a `for` loop whose body writes its counter; a block comment,
+/// which this reads as code; and a loop of `pinned` that no part holds.
 fn loop_problems(parts: &[Part], pinned: &[&str]) -> Vec<String> {
     let mut problems: Vec<String> = pinned
         .iter()
@@ -676,6 +691,9 @@ fn loop_problems(parts: &[Part], pinned: &[&str]) -> Vec<String> {
         .map(|pin| format!("no part holds the pinned loop `{}`", pin.trim()))
         .collect();
     for part in parts {
+        if part.source.contains("/*") {
+            problems.push(format!("{}: a block comment may hide a loop", part.path));
+        }
         let pinned_ranges: Vec<Range<usize>> = pinned
             .iter()
             .flat_map(|pin| part.source.match_indices(pin))
@@ -693,7 +711,7 @@ fn loop_problems(parts: &[Part], pinned: &[&str]) -> Vec<String> {
             .collect();
         for (index, &(start, line)) in lines.iter().enumerate() {
             let is_loop = line
-                .split(|character| !is_word(character))
+                .split(|character| !is_word_character(character))
                 .any(|word| matches!(word, "for" | "while" | "loop"));
             if !is_loop {
                 continue;
@@ -727,18 +745,19 @@ fn loop_problems(parts: &[Part], pinned: &[&str]) -> Vec<String> {
     problems
 }
 
-fn is_word(character: char) -> bool {
+fn is_word_character(character: char) -> bool {
     character.is_alphanumeric() || character == '_'
 }
 
 /// The counter a `for` header declares, and whether the header counts with
-/// it: compares it with `<` alone and steps it by `++`.
+/// it: compares it with `<` alone, without writing it, and steps it by `++`.
 fn for_counter(header: &str) -> Option<(&str, bool)> {
     let (name, rest) = header.trim().strip_prefix("for (var ")?.split_once(" = ")?;
     let mut clauses = rest.split(';').skip(1).map(str::trim);
     let condition = clauses.next()?;
     let counted = condition.starts_with(&format!("{name} < "))
         && !condition.contains("||")
+        && !writes(condition, name)
         && clauses.next()? == format!("{name}++) {{");
     Some((name, counted))
 }
@@ -749,13 +768,14 @@ fn writes(line: &str, name: &str) -> bool {
     line.match_indices(name).any(|(start, _)| {
         let before = line[..start].chars().next_back();
         let after = &line[start + name.len()..];
-        if before.is_some_and(|character| is_word(character) || character == '.')
-            || after.starts_with(is_word)
+        if before.is_some_and(|character| is_word_character(character) || character == '.')
+            || after.starts_with(is_word_character)
         {
             return false;
         }
         let after = after.trim_start();
-        before == Some('&')
+        let before = line[..start].trim_end();
+        (before.ends_with('&') && !before.ends_with("&&"))
             || (after.starts_with('=') && !after.starts_with("=="))
             || [
                 "++", "--", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=",
