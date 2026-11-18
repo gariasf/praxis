@@ -445,7 +445,7 @@ mod tests {
                     assert_eq!(atlas.levels.len(), atlas.width.ilog2() as usize + 1);
                 }
                 let texels_per_metre = shell.texel_density * albedo_atlas.width as f32;
-                assert!((texels_per_metre * 0.1473 - 1.0).abs() < 1e-3);
+                assert!((texels_per_metre * 0.1473 - 0.5).abs() < 1e-3);
                 expected.extend([material, albedo, metallic_roughness]);
 
                 let material_entry = cache_path.join("index").join(material.to_string());

@@ -310,7 +310,8 @@ pub(super) fn cook<'sources>(
         }),
         ..faceted(&positions, &finest)
     };
-    let atlas = bake::Atlas::chart_shell(&mut shell, pixel_metres)?;
+    let texel_metres = bake::texel_metres(pixel_metres);
+    let atlas = bake::Atlas::chart_shell(&mut shell, texel_metres)?;
     let material = atlas.as_ref().map(|_| material);
     let mut proxy = mesh::lod_0(&[
         (shell, material),
@@ -341,7 +342,7 @@ pub(super) fn cook<'sources>(
         mesh::push_lod(&mut proxy, error_metres, &[&shell, &ground_geometry])?;
         finer_indices = coarser.len();
     }
-    let sample_metres = bake::sample_metres(pixel_metres);
+    let sample_metres = bake::sample_metres(texel_metres);
     let transfer = atlas.map(|atlas| Transfer {
         atlas,
         surfaces,
@@ -653,7 +654,7 @@ mod tests {
         for (x, y, colour, roughness_and_metallic) in [
             (1.0, 0.5, red, brick_surface),
             (1.2, 1.5, red, brick_surface),
-            (0.3, 2.6, red, brick_surface),
+            (0.7, 2.6, red, brick_surface),
             (3.0, 0.5, blue, brick_surface),
             (3.7, 0.5, blue, brick_surface),
             (2.3, 2.6, blue, brick_surface),
@@ -672,7 +673,7 @@ mod tests {
     }
 
     #[test]
-    fn no_chart_bleeds_into_another_down_to_mip_3() {
+    fn no_chart_bleeds_into_another_down_to_mip_2() {
         let plates = [
             ([4.0, 3.0], dvec3(10.0, 0.0, 100.0), 10),
             ([2.0, 1.0], dvec3(20.0, 0.0, 90.0), 11),
@@ -692,7 +693,7 @@ mod tests {
         let all = [&plates[..], &[uncovered]].concat();
         let (proxy, [albedo, metallic_roughness]) = baked(&all, &[], &material_of);
 
-        let outside_every_chart = Vec2::splat(127.5 / 128.0);
+        let outside_every_chart = Vec2::splat(63.5 / 64.0);
         let on_the_uncovered = uv_at(&proxy, Vec3::new(50.0, 1.0, 60.0));
         let fill = albedo.sample(0, outside_every_chart);
         assert!(fill[..3].iter().all(|channel| *channel > 0.01), "{fill:?}");
@@ -704,7 +705,7 @@ mod tests {
             for (across, up) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0), (0.5, 0.5)] {
                 let point = centre.as_vec3() + Vec3::new((across - 0.5) * width, up * height, 0.0);
                 let uv = uv_at(&proxy, point);
-                for level in 0..=3 {
+                for level in 0..=2 {
                     let what = format!("{point} at mip {level}");
                     assert_reads(albedo.sample(level, uv), &colour(material), &what);
                     let read = metallic_roughness.sample(level, uv);
@@ -732,8 +733,8 @@ mod tests {
         };
         assert!((pixel_metres(256.0) - PIXEL_METRES).abs() < 1e-4);
         assert!((1..=5832).contains(&(shell.index_count / 3)));
-        let atlas_texels_per_metre = shell.texel_density * 4096.0;
-        assert!((atlas_texels_per_metre * PIXEL_METRES - 1.0).abs() < 1e-3);
+        let atlas_texels_per_metre = shell.texel_density * 2048.0;
+        assert!((atlas_texels_per_metre * PIXEL_METRES - 0.5).abs() < 1e-3);
         let flat_roofed = &proxy.coarser_lods[0];
         assert!(flat_roofed.error_metres <= 2.0 * PIXEL_METRES);
         assert!(flat_roofed.primitives[0].index_count * 100 <= shell.index_count * 85);
