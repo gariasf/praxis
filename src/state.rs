@@ -966,19 +966,21 @@ mod tests {
         );
     }
 
-    /// With the sun 35° up in the south, `world`'s camera hangs 250 m over
+    /// With the sun 34° up in the south, `world`'s camera hangs 250 m over
     /// the border of two Chunks of its settlement, a metre into the northern
     /// one, in two States: one of a Load radius of 0 m, where the southern
     /// Chunk draws its Far proxy, and one of 32 m, where both draw their
     /// Placements. In all but a pixel in 250, the northern Chunk's
     /// Placements take the shadows the Far proxy casts across the street as
-    /// they take the Chunk's, and the Far proxy's half, shadowed as its
-    /// Chunk's is, differs from it in under a third of its pixels. A metre
-    /// into the southern Chunk the two swap in the first State, over frames
-    /// that neither settle nor run a Tick: every static TLAS build bound
-    /// brings its changes within ten frames, the swap's among them, and the
-    /// northern Chunk's Far proxy then draws its Chunk's shadows as the
-    /// southern one's did.
+    /// they take the Chunk's, and the frame's other half, where the Far
+    /// proxy is shadowed as its Chunk is, differs in under a third of its
+    /// pixels. A metre into the southern Chunk the two swap in the first
+    /// State, over frames that neither settle nor run a Tick: every static
+    /// TLAS build bound brings its changes within ten frames, and on the
+    /// frame that binds the swap's the northern half, now the Far proxy's,
+    /// is as bright as its Chunk's within a twentieth, where an unshadowed
+    /// one is a tenth brighter. Settled, it differs from its Chunk as the
+    /// southern one did.
     #[cfg(feature = "cook")]
     #[test]
     fn a_far_proxy_casts_and_takes_its_chunks_shadows_and_a_swap_is_traced_within_ten_frames() {
@@ -992,8 +994,9 @@ mod tests {
         };
         let chunk_edge_metres = crate::cooked::CHUNK_EDGE_METRES;
         let over_roofs = scene.camera_at(599, glam::DVec3::ZERO).position;
-        let north = [over_roofs.x, over_roofs.z].map(|metres| (metres / chunk_edge_metres).floor());
-        let [north, south] = [0.0, 1.0].map(|step| [north[0] as i32, (north[1] + step) as i32]);
+        let [column, row] =
+            [over_roofs.x, over_roofs.z].map(|metres| (metres / chunk_edge_metres).floor() as i32);
+        let (north, south) = ([column, row], [column, row + 1]);
         let over_the_border = |metres_south: f64| {
             let middle_x = (f64::from(north[0]) + 0.5) * chunk_edge_metres;
             let border_z = f64::from(south[1]) * chunk_edge_metres;
@@ -1014,7 +1017,7 @@ mod tests {
         let (mut swapping, swapping_target) = with_load_radius(0.0);
         let (mut loaded, loaded_target) = with_load_radius(32.0);
         // A static TLAS build is bound the frame after the one that settles.
-        let traced = |state: &mut State, target: &wgpu::Texture, metres_south: f64| {
+        let traced_frame = |state: &mut State, target: &wgpu::Texture, metres_south: f64| {
             draw_from(&context, state, target, over_the_border(metres_south), true);
             draw_from(&context, state, target, over_the_border(metres_south), true)
         };
@@ -1025,32 +1028,36 @@ mod tests {
             height / 2 + street_rows..height,
         ];
         let half_pixels = (width * halves[0].len() as u32) as usize;
-        let differing_pixels = |image: &[u8], other: &[u8], rows: &std::ops::Range<u32>| {
-            let row_bytes = 4 * width as usize;
-            let bytes = rows.start as usize * row_bytes..rows.end as usize * row_bytes;
-            crate::capture::compare_images(&image[bytes.clone()], &other[bytes]).differing_pixels
+        let assert_shadowed_alike = |with_far_proxy: &[u8], with_chunk: &[u8], far_proxy_half| {
+            let differing = halves.clone().map(|rows| {
+                let row_bytes = 4 * width as usize;
+                let bytes = rows.start as usize * row_bytes..rows.end as usize * row_bytes;
+                crate::capture::compare_images(&with_chunk[bytes.clone()], &with_far_proxy[bytes])
+                    .differing_pixels
+            });
+            let placements_differing = differing[1 - far_proxy_half];
+            assert!(
+                placements_differing * 250 < half_pixels,
+                "the Far proxy shadows the Placements unlike its Chunk in {placements_differing} of {half_pixels} pixels"
+            );
+            let far_proxy_differing = differing[far_proxy_half];
+            assert!(
+                far_proxy_differing * 3 < half_pixels,
+                "the Far proxy differs from its Chunk in {far_proxy_differing} of {half_pixels} pixels"
+            );
         };
 
-        let proxy_south = traced(&mut swapping, &swapping_target, -1.0);
+        let with_far_proxy = traced_frame(&mut swapping, &swapping_target, -1.0);
         assert_eq!(drawn_as(&swapping, north), "its Placements");
         assert_eq!(drawn_as(&swapping, south), "its Far proxy");
-        let chunks = traced(&mut loaded, &loaded_target, -1.0);
+        let with_chunk = traced_frame(&mut loaded, &loaded_target, -1.0);
         assert_eq!(drawn_as(&loaded, north), "its Placements");
         assert_eq!(drawn_as(&loaded, south), "its Placements");
-        let [placements, far_proxy] =
-            [0, 1].map(|half| differing_pixels(&proxy_south, &chunks, &halves[half]));
-        assert!(
-            placements * 250 < half_pixels,
-            "the Far proxy shadows the Placements unlike its Chunk in {placements} of {half_pixels} pixels"
-        );
-        assert!(
-            far_proxy * 3 < half_pixels,
-            "the Far proxy differs from its Chunk in {far_proxy} of {half_pixels} pixels"
-        );
+        assert_shadowed_alike(&with_far_proxy, &with_chunk, 1);
 
         let view = swapping_target.create_view(&wgpu::TextureViewDescriptor::default());
         let mut frames_until_traced = Vec::new();
-        let (mut swapped, mut swap_traced) = (false, false);
+        let (mut swapped, mut swap_traced) = (false, None);
         for _ in 0..20_000 {
             swapping
                 .simulation
@@ -1058,33 +1065,35 @@ mod tests {
                 .insert_resource(over_the_border(1.0));
             swapping.update(Duration::ZERO);
             swapping.render(&view);
-            let traced = swapping.frame_stats().frames_until_traced;
-            frames_until_traced.extend(traced);
-            swap_traced = swapped && traced.is_some();
-            if swap_traced {
+            let bound_after = swapping.frame_stats().frames_until_traced;
+            frames_until_traced.extend(bound_after);
+            if swapped && bound_after.is_some() {
+                swap_traced = crate::capture::read_back(&context, &swapping_target).ok();
                 break;
             }
             swapped = drawn_as(&swapping, south) == "its Placements";
             std::thread::sleep(Duration::from_millis(1));
         }
         assert_eq!(drawn_as(&swapping, north), "its Far proxy");
+        let swap_traced = swap_traced.expect("the swap's build is bound and its frame reads back");
         assert!(
-            swap_traced && frames_until_traced.iter().all(|&frames| frames <= 10),
+            frames_until_traced.iter().all(|&frames| frames <= 10),
             "{frames_until_traced:?} frames"
         );
-        let proxy_north = traced(&mut swapping, &swapping_target, 1.0);
-        let chunks = traced(&mut loaded, &loaded_target, 1.0);
+        let with_chunk = traced_frame(&mut loaded, &loaded_target, 1.0);
         assert_eq!(drawn_as(&loaded, north), "its Placements");
-        let [far_proxy, placements] =
-            [0, 1].map(|half| differing_pixels(&proxy_north, &chunks, &halves[half]));
+        let northern_brightness = |image: &[u8]| {
+            let bytes = &image[..4 * (width * halves[0].end) as usize];
+            bytes.iter().map(|&byte| u64::from(byte)).sum::<u64>()
+        };
+        let [far_proxy_brightness, chunk_brightness] =
+            [&swap_traced, &with_chunk].map(|image| northern_brightness(image));
         assert!(
-            placements * 250 < half_pixels,
-            "the Placements differ in {placements} of {half_pixels} pixels"
+            far_proxy_brightness.abs_diff(chunk_brightness) * 20 < chunk_brightness,
+            "the Far proxy's half sums to {far_proxy_brightness}, its Chunk's to {chunk_brightness}"
         );
-        assert!(
-            far_proxy * 3 < half_pixels,
-            "the Far proxy differs from its Chunk in {far_proxy} of {half_pixels} pixels"
-        );
+        let with_far_proxy = traced_frame(&mut swapping, &swapping_target, 1.0);
+        assert_shadowed_alike(&with_far_proxy, &with_chunk, 0);
     }
 
     /// `world`'s Far field and the ground past it, seen from its camera's

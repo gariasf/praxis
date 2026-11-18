@@ -194,7 +194,7 @@ The band between the Load radius and the View distance, where Far proxies are dr
 _Avoid_: Distant terrain, background, horizon
 
 **Late Far proxy**:
-A Far proxy that is not Resident while its Chunk is in the Far field: counted once, when its Chunk comes within the View distance before it has loaded.
+A Far proxy that is not Resident while its Chunk is in the Far field: counted once, when its Chunk comes within the View distance before it has loaded, that is, before it was placed, which a streamed load does once its Mesh's BLAS is built and compacted.
 _Avoid_: Missing proxy, far pop-in
 
 **Late mip**:
