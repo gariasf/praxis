@@ -103,7 +103,7 @@ impl PoolCapacities {
 pub enum MeshUse {
     DrawnAndTraced,
     /// Drawn alone: a Mesh the GPU bends, whose BLAS, built from its rest
-    /// shape, would cast another shape's shadow.
+    /// shape, would cast another shape's shadow, or one that casts none.
     Drawn,
     /// Traced alone: a shadow proxy, which no pass draws, so it keeps no
     /// Meshlets and needs no Material.
@@ -509,7 +509,9 @@ impl MeshPool {
             });
         };
         let handle = self.meshes.insert(Mesh {
-            needs_material_handle: mesh_use.drawn() && materials.contains(&None),
+            needs_material_handle: mesh_use.drawn()
+                && (mesh.primitives.iter().zip(materials))
+                    .any(|(primitive, material)| material.is_none() && primitive.index_count > 0),
             vertices: vertices.offset..vertices.offset + mesh.vertices.len() as u32,
             bounds: mesh.bounds,
             texel_densities: mesh

@@ -15,7 +15,7 @@ use crate::render::{
     CameraUniform, DYNAMIC_TLAS_CAPACITY, InstanceData, LightData, LightUniform, NO_MATERIAL,
     NO_MESH, RenderCapacities,
 };
-use crate::streaming::{LoadedChunk, LoadedChunks};
+use crate::streaming::{FarGround, LoadedChunk, LoadedChunks, ResidentFarProxies};
 use crate::threading::compute_pool;
 use crate::time::FixedTime;
 use crate::transform::{PreviousWorldTransform, WorldTransform};
@@ -372,8 +372,8 @@ impl InstanceSlots {
 
     /// Gives back the ranges of the Chunks `loaded` no longer holds, into
     /// `freed_ranges`.
-    fn free_unloaded(&mut self, loaded: &[LoadedChunk]) {
-        let loaded: HashSet<AssetId> = loaded.iter().map(|chunk| chunk.id).collect();
+    fn free_unloaded<'chunks>(&mut self, loaded: impl Iterator<Item = &'chunks LoadedChunk>) {
+        let loaded: HashSet<AssetId> = loaded.map(|chunk| chunk.id).collect();
         let freed_ranges = &mut self.freed_ranges;
         self.by_chunk.retain(|chunk, slots| {
             let kept = loaded.contains(chunk);
@@ -515,7 +515,7 @@ impl FramePreparer {
     /// Material Handle, else with the Material the Primitive names; one whose
     /// Mesh is not in `meshes`, whose Material Handle `material_generations`
     /// finds no Material for, or that has no Material Handle where a
-    /// Primitive names no Material, is skipped with a warning: it keeps its
+    /// Primitive with triangles names no Material, is skipped with a warning: it keeps its
     /// slot, which holds an Instance with no Mesh until the Renderable is
     /// drawn. One that finds the Instance buffer full is refused, warned
     /// about once and counted every frame, and neither written nor drawn
@@ -542,7 +542,9 @@ impl FramePreparer {
     /// Placements counted among the refused Renderables every frame until a
     /// range fits it. A Chunk gone from `LoadedChunks` gives its range back:
     /// its slots take Instances with no Mesh, and Chunks may take the range
-    /// from the next frame.
+    /// from the next frame. Each Far proxy in the World's
+    /// `ResidentFarProxies` is drawn as a Chunk of one Placement is, its
+    /// range taken after the loaded Chunks', and so is its `FarGround`.
     ///
     /// Only new Renderables, blended ones and those whose World transform,
     /// Mesh or Material changed since the last `prepare` write their
@@ -609,6 +611,19 @@ impl FramePreparer {
             .as_ref()
             .is_some_and(|chunks| chunks.is_changed());
         let chunks = loaded_chunks.map_or(&[][..], |chunks| &chunks.into_inner().0);
+        let far_proxies = world.get_resource_ref::<ResidentFarProxies>();
+        let chunks_changed = chunks_changed
+            || far_proxies
+                .as_ref()
+                .is_some_and(|far_proxies| far_proxies.is_changed());
+        let far_proxies = far_proxies.map_or(&[][..], |proxies| &proxies.into_inner().0);
+        let far_ground = world.get_resource_ref::<FarGround>();
+        let chunks_changed = chunks_changed
+            || far_ground
+                .as_ref()
+                .is_some_and(|far_ground| far_ground.is_changed());
+        let far_ground = far_ground.and_then(|far_ground| far_ground.into_inner().0.as_ref());
+        let chunks_and_far_field = || chunks.iter().chain(far_proxies).chain(far_ground);
         let directional_light_count = prepare_lights(
             world,
             directional_light_query,
@@ -645,7 +660,7 @@ impl FramePreparer {
         *renderables_refused = 0;
         instance_slots.join_freed_ranges();
         if chunks_changed {
-            instance_slots.free_unloaded(chunks);
+            instance_slots.free_unloaded(chunks_and_far_field());
         }
         let rewritten_free_ranges = if *rewrite_every_instance {
             instance_slots.free_ranges.as_slice()
@@ -665,7 +680,7 @@ impl FramePreparer {
             || pools_freed
             || !instance_slots.refused_chunks.is_empty()
         {
-            for chunk in chunks {
+            for chunk in chunks_and_far_field() {
                 let slots = match instance_slots.by_chunk.get_mut(&chunk.id) {
                     Some(slots)
                         if !*rewrite_every_instance
@@ -908,8 +923,8 @@ fn draws_a_freed_entry(
 /// Writes the Instances of `chunk`'s Placements into `slots`, in its order.
 /// A Placement whose Mesh is not in `meshes`, whose Material Handle
 /// `material_generations` finds no Material for, or that has none where a
-/// Primitive of its Mesh names no Material writes an Instance with no Mesh,
-/// warned about.
+/// Primitive of its Mesh with triangles names no Material writes an Instance
+/// with no Mesh, warned about.
 fn write_chunk(
     frame: &mut FrameData,
     chunk: &LoadedChunk,
@@ -1404,6 +1419,62 @@ mod tests {
             .push(chunk(6, 1));
         assert_eq!(frames.prepare(), [2]);
         assert_eq!(frames.preparer.frame().instance_slot_count, 9);
+    }
+
+    /// A Resident Far proxy takes a slot after the loaded Chunks' ranges and
+    /// is drawn there while its Chunk is held; once its Chunk is drawn and it
+    /// is held, the two swap in one frame; released, its slot takes an
+    /// Instance with no Mesh.
+    #[test]
+    fn a_far_proxy_draws_in_a_slot_of_its_own_and_swaps_with_its_chunk() {
+        let mut frames = Frames::new();
+        let mesh = frames.mesh;
+        let chunk = |id: u128, placements: u32, held: bool| LoadedChunk {
+            id: AssetId(id),
+            coordinates: [0, 0],
+            placements: (0..placements)
+                .map(|x| ChunkPlacement {
+                    transform: Transform::from_translation(glam::dvec3(x.into(), 0.0, 0.0)),
+                    mesh,
+                    material: Some(MaterialHandle {
+                        index: 0,
+                        generation: 0,
+                    }),
+                })
+                .collect(),
+            lights: Vec::new(),
+            meshes: Vec::new(),
+            materials: Vec::new(),
+            held,
+        };
+        let drawn = |frames: &Frames| -> Vec<bool> {
+            let instances = &frames.preparer.frame().instances;
+            instances
+                .iter()
+                .map(|instance| instance.mesh != NO_MESH)
+                .collect()
+        };
+        frames
+            .world
+            .insert_resource(LoadedChunks(vec![chunk(1, 2, true)]));
+        frames
+            .world
+            .insert_resource(ResidentFarProxies(vec![chunk(2, 1, false)]));
+        assert_eq!(frames.prepare(), [0, 1, 2]);
+        assert_eq!(drawn(&frames), [false, false, true]);
+        assert!(frames.prepare().is_empty());
+
+        frames.world.resource_mut::<LoadedChunks>().0[0].held = false;
+        frames.world.resource_mut::<ResidentFarProxies>().0[0].held = true;
+        assert_eq!(frames.prepare(), [0, 1, 2]);
+        assert_eq!(drawn(&frames), [true, true, false]);
+
+        frames.world.resource_mut::<ResidentFarProxies>().0[0].held = false;
+        assert_eq!(frames.prepare(), [2]);
+        assert_eq!(drawn(&frames), [true]);
+        frames.world.resource_mut::<ResidentFarProxies>().0.clear();
+        assert_eq!(frames.prepare(), [2]);
+        assert_eq!(drawn(&frames), [false]);
     }
 
     #[test]

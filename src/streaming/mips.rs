@@ -82,19 +82,20 @@ pub(crate) struct MipPriority {
 
 impl MipPriority {
     /// The finest mip each Texture `chunks`' drawn Placements sample needs
-    /// from `camera`, against what `materials` holds Resident. Returns the
+    /// from `camera`, `chunks` being the loaded Chunks and the Resident Far
+    /// proxies, against what `materials` holds Resident. Returns the
     /// late mips, those needed and not Resident, and the requests for those
     /// not yet requested whose move finds room in its Channel, free or by an
     /// eviction, finest-needed first, then by Asset ID.
-    pub(crate) fn plan(
+    pub(crate) fn plan<'chunks>(
         &mut self,
         camera: DVec3,
-        chunks: &[LoadedChunk],
+        chunks: impl Iterator<Item = &'chunks LoadedChunk> + Clone,
         meshes: &LoadedMeshes,
         materials: &MaterialPool,
     ) -> (u32, &[MipRequest]) {
-        if self.uses.len() > chunks.len() {
-            let loaded: HashSet<AssetId> = chunks.iter().map(|chunk| chunk.id).collect();
+        if self.uses.len() > chunks.clone().count() {
+            let loaded: HashSet<AssetId> = chunks.clone().map(|chunk| chunk.id).collect();
             self.uses.retain(|chunk, _| loaded.contains(chunk));
         }
         let material_frees = materials.generations().frees();

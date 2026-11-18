@@ -13,11 +13,14 @@ use super::town::{FlockGrid, random, spawn_flocks};
 use super::{ReferenceScene, WrapsAroundCamera};
 use crate::assets::AssetLoader;
 use crate::camera::Camera;
+use crate::components::Transform;
 use crate::cooked::CHUNK_EDGE_METRES;
 #[cfg(feature = "cook")]
 use crate::cooked::chunk_origin;
 #[cfg(feature = "cook")]
 use crate::cooked::{CookedLight, CookedPlacement};
+use crate::streaming::chunks::ChunkPlacement;
+use crate::streaming::{FarGround, LoadedChunk};
 
 /// Chunks along each side, centred on the origin.
 pub(super) const CHUNKS_PER_SIDE: i32 = 40;
@@ -36,6 +39,16 @@ const SETTLEMENT_HALF_SIZE_METRES: f64 = BLOCKS_PER_SIDE as f64 * BLOCK_PITCH_ME
 /// The most a settlement's centre strays from its region's, which keeps
 /// 64 m of open land between neighbouring settlements.
 const SETTLEMENT_STRAY_METRES: f64 = REGION_METRES / 2.0 - SETTLEMENT_HALF_SIZE_METRES - 32.0;
+
+/// The ground past the View distance (ADR 0026): one ground tile scaled to
+/// reach this far from the world's middle, where from the camera's 60 m it
+/// ends a tenth of a pixel under the horizon at 1440p. No ray traces it.
+const FAR_GROUND_HALF_SIZE_METRES: f64 = 1_024_000.0;
+/// How far under the ground tiles it lies, so that every Chunk's and Far
+/// proxy's tiles draw over it: f32 places a vertex that far out to 62.5 mm,
+/// and the depth it showed through at is in `docs/performance.md`,
+/// "Measurements behind the code".
+const FAR_GROUND_DEPTH_METRES: f64 = 0.5;
 
 /// The settlement whose region the camera flies into, column then row.
 const CAMERA_SETTLEMENT: [u32; 2] = [4, 4];
@@ -225,9 +238,30 @@ pub(crate) fn traversal_camera_at(frame: u32) -> Camera {
     }
 }
 
-/// Spawns 10,000 birds in flocks about the camera's first position, each
-/// flock kept within half the flocks' span of the camera as it flies.
+/// Places the ground past the View distance about the world's middle, and
+/// spawns 10,000 birds in flocks about the camera's first position, each flock
+/// kept within half the flocks' span of the camera as it flies.
 pub(crate) fn spawn_world(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
+    let ground_id = ReferenceScene::World.mesh_id("ground");
+    let ground = loader.untraced_mesh(ground_id)?;
+    let tiles_across = (2.0 * FAR_GROUND_HALF_SIZE_METRES / GROUND_TILE_METRES) as f32;
+    let transform = Transform {
+        scale: glam::Vec3::splat(tiles_across),
+        ..Transform::from_translation(glam::DVec3::NEG_Y * FAR_GROUND_DEPTH_METRES)
+    };
+    world.insert_resource(FarGround(Some(LoadedChunk {
+        id: ground_id,
+        coordinates: [0, 0],
+        placements: vec![ChunkPlacement {
+            transform,
+            mesh: ground,
+            material: None,
+        }],
+        lights: Vec::new(),
+        meshes: vec![ground_id],
+        materials: Vec::new(),
+        held: false,
+    })));
     let bird = loader.mesh(ReferenceScene::World.mesh_id("bird"))?;
     let grid = FlockGrid {
         middle: camera_at(0).position * glam::DVec3::new(1.0, 0.0, 1.0),

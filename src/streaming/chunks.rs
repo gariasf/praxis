@@ -12,6 +12,18 @@ use crate::cooked::{AssetId, CHUNK_EDGE_METRES, CookedChunk, chunk_origin};
 #[derive(Resource, Default)]
 pub struct LoadedChunks(pub Vec<LoadedChunk>);
 
+/// The Resident Far proxies, in load order, each a Chunk of one Placement.
+/// Prepare draws each as it does a loaded Chunk: all but those held, which
+/// are past the View distance or have their Chunk drawn.
+#[derive(Resource, Default)]
+pub struct ResidentFarProxies(pub Vec<LoadedChunk>);
+
+/// The ground past the View distance of a scene that has one: a Chunk of one
+/// Placement that is never held, which prepare draws as it does a loaded
+/// Chunk.
+#[derive(Resource, Default)]
+pub struct FarGround(pub Option<LoadedChunk>);
+
 /// A loaded Chunk: its Placements and point lights at their World
 /// positions, with the Handles its Placements draw with, and the Asset IDs
 /// it counts as a user of. A held Chunk is neither drawn, traced nor lit.

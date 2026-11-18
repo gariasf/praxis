@@ -14,7 +14,7 @@ use glam::DVec3;
 
 #[cfg(feature = "cook")]
 pub(crate) use chunks::load_chunk;
-pub(crate) use chunks::{LoadedChunk, LoadedChunks};
+pub(crate) use chunks::{FarGround, LoadedChunk, LoadedChunks, ResidentFarProxies};
 pub(crate) use io::ChunkStreaming;
 
 use crate::cooked::{AssetId, CHUNK_EDGE_METRES};

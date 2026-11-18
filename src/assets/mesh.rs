@@ -4,8 +4,8 @@ use crate::cooked::MESH_MAX_LODS;
 /// A Mesh in the Mesh pool, as prepare needs it; the pool's GPU tables hold
 /// what the GPU draws it from.
 pub struct Mesh {
-    /// Whether a Primitive names no Material, so that only a Renderable with
-    /// a Material Handle draws it.
+    /// Whether a Primitive with triangles names no Material, so that only a
+    /// Renderable with a Material Handle draws it.
     pub needs_material_handle: bool,
     /// Its range of the vertex Arena, which a bend writes.
     pub vertices: std::ops::Range<u32>,

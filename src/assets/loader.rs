@@ -29,6 +29,12 @@ pub trait AssetLoader {
     /// shape. Its cooked bounds must hold every shape it bends to.
     fn bent_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle>;
 
+    /// Loads the Mesh `id` as `bent_mesh` does, a copy of its own that no
+    /// ray traces: one that casts no shadow where it is placed.
+    fn untraced_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
+        self.bent_mesh(id)
+    }
+
     /// Loads the Mesh `id` as `bent_mesh` does, and traced through a BLAS
     /// updated each frame from the shape the GPU bends it to.
     fn refitted_mesh(&mut self, id: AssetId) -> anyhow::Result<MeshHandle>;
@@ -350,7 +356,12 @@ mod tests {
             glam::dvec3(640.0, 0.0, -128.0)
         );
         assert!(loader.mesh_pool.blas(placement.mesh).is_none());
-        loader.far_proxy(open_land).unwrap();
+        let open_land_proxy = loader.far_proxy(open_land).unwrap();
+        let open_land_mesh = loader.mesh_pool.get(open_land_proxy).unwrap();
+        assert!(
+            !open_land_mesh.needs_material_handle,
+            "a Primitive without triangles needs no Material"
+        );
         let unused = loader.mesh(chunk_mesh).unwrap();
         loader
             .mesh_pool
