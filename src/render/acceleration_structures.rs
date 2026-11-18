@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -235,8 +235,9 @@ pub struct StaticTlas {
     /// Static Instances it had no free entry for, by slot, which take the
     /// entries still free after a later frame's writes, lowest slot first.
     left_out: BTreeMap<u32, StaticInstance>,
-    /// The slots whose static Instance is a Far proxy's.
-    far_proxy_slots: HashSet<u32>,
+    /// Whether each slot's static Instance is a Far proxy's, by slot, up to
+    /// the highest slot that held one.
+    far_proxy_by_slot: Vec<bool>,
 }
 
 /// One of the static TLAS's two TLASes, in the frame whose origin is the
@@ -369,7 +370,7 @@ impl StaticTlas {
             free_entries: Vec::new(),
             end: 0,
             left_out: BTreeMap::new(),
-            far_proxy_slots: HashSet::new(),
+            far_proxy_by_slot: Vec::new(),
         }
     }
 
@@ -462,7 +463,8 @@ impl StaticTlas {
                         ))
                     })
                     .flatten();
-                let held_far_proxy = self.far_proxy_slots.remove(&slot);
+                let held_far_proxy =
+                    (self.far_proxy_by_slot.get_mut(slot as usize)).is_some_and(std::mem::take);
                 let Some((blas, thin_radius_metres, far_proxy)) = blas else {
                     if let Some(entry) = self.release(slot) {
                         starts_build |= !held_far_proxy;
@@ -474,7 +476,11 @@ impl StaticTlas {
                     continue;
                 };
                 if far_proxy {
-                    self.far_proxy_slots.insert(slot);
+                    let slot = slot as usize;
+                    if slot >= self.far_proxy_by_slot.len() {
+                        self.far_proxy_by_slot.resize(slot + 1, false);
+                    }
+                    self.far_proxy_by_slot[slot] = true;
                 }
                 let instance = StaticInstance {
                     tlas_instance: tlas_instance(
@@ -504,7 +510,7 @@ impl StaticTlas {
         {
             let (slot, instance) = self.left_out.pop_first().expect("not empty");
             self.hold(slot, entry);
-            starts_build |= !self.far_proxy_slots.contains(&slot);
+            starts_build |= self.far_proxy_by_slot.get(slot as usize) != Some(&true);
             changes.push(EntryChange {
                 entry,
                 instance: Some(instance),
