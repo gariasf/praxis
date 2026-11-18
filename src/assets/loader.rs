@@ -144,8 +144,8 @@ impl AssetLoader for PoolLoader<'_> {
 }
 
 impl PoolLoader<'_> {
-    /// Loads the Mesh `id` as a Far proxy's: drawn, with no BLAS built, and
-    /// its first Primitive's Material, the one baked for it, in the Material
+    /// Loads the Mesh `id` as a Far proxy's: drawn and traced, and its first
+    /// Primitive's Material, the one baked for it, in the Material
     /// table's count for Far proxies; or counts one more user of it if it is
     /// loaded.
     pub(crate) fn far_proxy(&mut self, id: AssetId) -> anyhow::Result<MeshHandle> {
@@ -278,14 +278,14 @@ mod tests {
     use crate::stats::gpu_memory::tests::gpu_memory;
     use crate::streaming::chunks::load_far_proxy;
 
-    /// A Far proxy's Mesh loads without a BLAS, as one Placement at its
+    /// A Far proxy's Mesh loads with a BLAS, as one Placement at its
     /// Chunk's centre on the ground, open land's with an empty
     /// first Primitive; the Material baked for it takes an entry of the Far
     /// proxies' count and its ground's one of the others'. With that count
     /// full, a further Far proxy is refused while the first is in use, and
     /// frees it once it is not, leaving a Chunk's unused Mesh loaded.
     #[test]
-    fn a_far_proxy_loads_untraced_and_its_baked_material_makes_room_among_far_proxies_alone() {
+    fn a_far_proxy_loads_traced_and_its_baked_material_makes_room_among_far_proxies_alone() {
         let Some(context) = gpu_context() else {
             return;
         };
@@ -355,7 +355,7 @@ mod tests {
             placement.transform.translation,
             glam::dvec3(640.0, 0.0, -128.0)
         );
-        assert!(loader.mesh_pool.blas(placement.mesh).is_none());
+        assert!(loader.mesh_pool.blas(placement.mesh).is_some());
         let open_land_proxy = loader.far_proxy(open_land).unwrap();
         let open_land_mesh = loader.mesh_pool.get(open_land_proxy).unwrap();
         assert!(
