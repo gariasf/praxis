@@ -42,6 +42,10 @@ const ALL_SAMPLES: u32 = (1 << SAMPLE_COUNT) - 1;
 // A packed index holds a Meshlet vertex in whole bits.
 const _: () = assert!(MESHLET_MAX_VERTICES.is_power_of_two());
 
+// Neither `exclusive_scan`'s doubling stride nor `append_triangles`' index
+// wraps under its bound.
+const _: () = assert!(SCAN_BLOCK_SIZE <= 1 << 31 && 3 * MESHLET_MAX_TRIANGLES < 1 << 31);
+
 /// One WGSL file of this directory.
 #[derive(Clone, Copy)]
 pub struct Part {
@@ -184,6 +188,10 @@ pub const SHARED: ShaderModule = ShaderModule {
     parts: &[COMMON, SHADING, HDR, GT7, DISPLAY],
 };
 
+/// The modules wgpu compiles without bounding their loops: every loop of
+/// their parts ends whatever its buffers hold, which `shader_tests` checks.
+pub const LOOPS_UNBOUNDED: [ShaderModule; 2] = [MAIN, CULLING];
+
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
 pub const MODULES: [ShaderModule; 11] = [
@@ -211,6 +219,31 @@ impl ShaderModule {
             label: Some(self.name),
             source: wgpu::ShaderSource::Wgsl(self.source(capacities).into()),
         }
+    }
+
+    /// The module compiled with `capacities` under every runtime check of
+    /// wgpu's but loop bounding. Only a module of `LOOPS_UNBOUNDED` is.
+    pub fn create_with_unbounded_loops(
+        &self,
+        device: &wgpu::Device,
+        capacities: &RenderCapacities,
+    ) -> wgpu::ShaderModule {
+        assert!(
+            LOOPS_UNBOUNDED
+                .iter()
+                .any(|module| module.name == self.name),
+            "{}: no test checks that its loops end",
+            self.name
+        );
+        let runtime_checks = wgpu::ShaderRuntimeChecks {
+            force_loop_bounding: false,
+            ..wgpu::ShaderRuntimeChecks::checked()
+        };
+        // SAFETY: without loop bounding a backend compiler may take an
+        // infinite loop for unreachable code [ref:wgpu-types-30-loop-bounding],
+        // so the module holds none: each loop of its parts ends whatever its
+        // buffers hold, which `shader_tests` checks.
+        unsafe { device.create_shader_module_trusted(self.descriptor(capacities), runtime_checks) }
     }
 
     /// The module's WGSL with `capacities`.

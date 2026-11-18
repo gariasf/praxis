@@ -1534,6 +1534,17 @@ quote = '''/// # Safety
 pub const unsafe fn enabled() -> Self {'''
 checked = 2026-10-27
 
+["wgpu-types-30-loop-bounding"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-types/src/shader.rs#L26-L31"
+section = "wgpu-types 30.0.2, ShaderRuntimeChecks::force_loop_bounding"
+quote = '''/// If false, the caller MUST ensure that all passed shaders do not contain any infinite loops.
+///
+/// If it does, backend compilers MAY treat such a loop as unreachable code and draw
+/// conclusions about other safety-critical code paths. This option SHOULD NOT be disabled
+/// when running untrusted code.
+pub force_loop_bounding: bool,'''
+checked = 2026-11-18
+
 ["wgpu-core-30-experimental-features-gate"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/instance.rs#L907-L916"
 section = "wgpu-core 30.0.1, Adapter::create_device_and_queue, experimental features check"

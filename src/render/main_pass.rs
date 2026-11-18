@@ -83,7 +83,7 @@ impl MainPass {
             &meshlet_records_buffer,
             render_targets,
         );
-        let shader = device.create_shader_module(shaders::MAIN.descriptor(capacities));
+        let shader = shaders::MAIN.create_with_unbounded_loops(device, capacities);
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&MAIN_PASS_INPUTS, &inputs_layout));
         let lit_layout = pipeline_layout(device, "Lit Pass Pipeline Layout", &layouts);

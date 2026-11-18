@@ -644,7 +644,7 @@ fn append_triangles(
             - meshes[mesh_index].thin_triangle_counts[lod];
         first_index = thin_index(first.z) + 3u * (triangles_before - ordinary_triangles);
     }
-    for (var index = invocation; index < 3u * meshlet.triangle_count; index += APPEND_WORKGROUP_SIZE) {
+    for (var index = invocation; index < 3u * min(meshlet.triangle_count, MESHLET_MAX_TRIANGLES); index += APPEND_WORKGROUP_SIZE) {
         let corners = meshlet_triangles[meshlet.first_triangle + index / 3u];
         let vertex = extractBits(corners, 8u * (index % 3u), 8u);
         packed_indices[first_index + index] = pack_index(record_index, vertex);
