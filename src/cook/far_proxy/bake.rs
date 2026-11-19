@@ -12,20 +12,26 @@ use crate::cook::texture::{FASTEST_BC7_PROFILE, LoadedImage, Mips, linear_to_srg
 use crate::cooked::{AssetId, MAX_TEXTURE_SIDE};
 use crate::scenes::Geometry;
 
+const TEXEL_PIXELS: u32 = 2;
 const SAMPLES_PER_SIDE: u32 = 4;
 const REACH_PIXELS: f32 = 2.0;
-const GUTTER_TEXELS: u32 = 4;
-const GRID_TEXELS: u32 = 8;
+const GUTTER_TEXELS: u32 = 4 / TEXEL_PIXELS;
+const GRID_TEXELS: u32 = 8 / TEXEL_PIXELS;
+const _: () = assert!(4 % TEXEL_PIXELS == 0);
 const LIKE_NORMAL_COSINE: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
 pub(super) fn settings() -> String {
     format!(
-        "charted a texel a pixel, a rectangle a planar face with {GUTTER_TEXELS} texels of gutter on a grid of {GRID_TEXELS}, a coarser LOD's faces in the nearest chart whose normal is within a cosine of {LIKE_NORMAL_COSINE} of theirs, baked at {SAMPLES_PER_SIDE}x{SAMPLES_PER_SIDE} samples a texel from the outermost source within {REACH_PIXELS} pixels of a face at the finest mip no finer than a sample, dilated, the charts' mean elsewhere, under a Material of unit factors, its albedo encoded at {FASTEST_BC7_PROFILE}"
+        "charted a texel {TEXEL_PIXELS} pixels, a rectangle a planar face with {GUTTER_TEXELS} texels of gutter on a grid of {GRID_TEXELS}, a coarser LOD's faces in the nearest chart whose normal is within a cosine of {LIKE_NORMAL_COSINE} of theirs, baked at {SAMPLES_PER_SIDE}x{SAMPLES_PER_SIDE} samples a texel from the outermost source within {REACH_PIXELS} pixels of a face at the finest mip no finer than a sample, dilated, the charts' mean elsewhere, under a Material of unit factors, its albedo encoded at {FASTEST_BC7_PROFILE}"
     )
 }
 
 pub(super) fn reach_metres(pixel_metres: f32) -> f32 {
     REACH_PIXELS * pixel_metres
+}
+
+pub(super) fn texel_metres(pixel_metres: f32) -> f32 {
+    TEXEL_PIXELS as f32 * pixel_metres
 }
 
 pub(super) fn sample_metres(texel_metres: f32) -> f32 {
@@ -551,8 +557,11 @@ mod tests {
         let mut cells = vec![false; (256 / GRID_TEXELS).pow(2) as usize];
         for chart in &atlas.charts {
             let first_cell = (chart.position_texels - GUTTER_TEXELS) / GRID_TEXELS;
-            assert_eq!(chart.position_texels % GRID_TEXELS, UVec2::splat(4));
-            let past = chart.position_texels + chart.size_texels + 4;
+            assert_eq!(
+                chart.position_texels % GRID_TEXELS,
+                UVec2::splat(GUTTER_TEXELS)
+            );
+            let past = chart.position_texels + chart.size_texels + GUTTER_TEXELS;
             let end_cell = past.map(|texels| texels.div_ceil(GRID_TEXELS));
             assert!(end_cell.cmple(UVec2::splat(256 / GRID_TEXELS)).all());
             for row in first_cell.y..end_cell.y {
