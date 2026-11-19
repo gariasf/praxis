@@ -40,6 +40,7 @@ enum TownMesh {
     RailingPost,
     TopRail,
     Lamp,
+    LampHead,
     UtilityPole,
     Wire,
     Tree,
@@ -55,7 +56,7 @@ enum TownMesh {
 impl TownMesh {
     /// Every Mesh, in the order of its discriminant, which indexes its
     /// Handle when loaded.
-    const ALL: [TownMesh; 20] = [
+    const ALL: [TownMesh; 21] = [
         TownMesh::Ground,
         TownMesh::Box,
         TownMesh::AirConditioner,
@@ -67,6 +68,7 @@ impl TownMesh {
         TownMesh::RailingPost,
         TownMesh::TopRail,
         TownMesh::Lamp,
+        TownMesh::LampHead,
         TownMesh::UtilityPole,
         TownMesh::Wire,
         TownMesh::Tree,
@@ -92,6 +94,7 @@ impl TownMesh {
             TownMesh::RailingPost => "railing-post",
             TownMesh::TopRail => "top-rail",
             TownMesh::Lamp => "lamp",
+            TownMesh::LampHead => "lamp-head",
             TownMesh::UtilityPole => "utility-pole",
             TownMesh::Wire => "wire",
             TownMesh::Tree => "tree",
@@ -390,6 +393,7 @@ fn placements() -> (Vec<TownRenderable>, Vec<glam::DVec3>) {
     let mut lights = Vec::with_capacity(LAMP_COUNT);
     for &(_, position, rotation) in &corners {
         placed.push(TownRenderable::new(TownMesh::Lamp, position, rotation));
+        placed.push(TownRenderable::new(TownMesh::LampHead, position, rotation));
         lights.push(position + rotation.as_dquat() * LAMP_LIGHT_POSITION);
     }
     place_poles_and_wires(&mut placed);
@@ -1142,11 +1146,14 @@ mod generators {
                         ),
                         0.04,
                     ),
-                    of(
-                        "steel",
-                        vec![cuboid(vec3(-0.18, 4.85, 0.95), vec3(0.18, 5.05, 1.45))],
-                    ),
                 ],
+            ),
+            (
+                TownMesh::LampHead,
+                vec![of(
+                    "steel",
+                    vec![cuboid(vec3(-0.18, 4.85, 0.95), vec3(0.18, 5.05, 1.45))],
+                )],
             ),
             (
                 TownMesh::UtilityPole,
