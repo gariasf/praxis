@@ -26,9 +26,9 @@ praxis's ambient, a stand-in for ADR 0020's irradiance probes, reaches every
 surface at full strength, darkened only by a Material's occlusion texture.
 Cycles' white world is blocked by whatever lies between a surface and the
 sky. Shows wherever geometry hides the sky: a street's shaded walls and
-pavement (`town`, `world`), and the reflections of metals, which in Cycles see the
-object itself or its neighbours (`helmet`'s and `pbr-sweep`'s metals,
-`normal-tangent`'s domes). Until the probes land.
+pavement (`town`, `world`), and the reflections of metals, which in Cycles
+see the object itself or its neighbours (`helmet`'s and `pbr-sweep`'s
+metals, `normal-tangent`'s domes). Until the probes land.
 
 ![Town's shaded street: praxis brighter where the walls hide the sky](differences/ambient-street.png)
 
@@ -105,9 +105,11 @@ a Material baked for it; `praxis export-scene world` writes the Chunks within
 the View distance whole, each Placement's own Mesh and Material at LOD 0, so
 Cycles renders and traces those. Shows past the Load radius as a line along
 each roof's edge, Cycles brighter above it and praxis below, where the
-proxy's roof sits a pixel off the Placements' (`world`). Past the View
-distance both draw only the ground under the far field, and a Far proxy that
-praxis holds beyond it is not exported.
+proxy's roof sits a pixel off the Placements' (`world`). The shadows Far
+proxies cast and take match the Placements' at the gallery's frames. praxis
+keeps a Far proxy Resident, and draws it, out to a Chunk's edge past the View
+distance; there Cycles draws only the ground, which both draw past the View
+distance.
 
 ![World's far settlement: a line along each roof's edge](differences/far-proxy-roofs.png)
 

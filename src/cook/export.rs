@@ -43,8 +43,8 @@ pub const SCENE_FORMAT_VERSION: u32 = 1;
 /// names; nothing is cooked into the Cooked cache and no GPU is used.
 /// A scene with a Far field writes, of its Chunks, those within its View
 /// distance of the camera at `frame`, each whole, where praxis draws Far
-/// proxies past the Load radius. `crowd` is refused: its figures' shapes
-/// exist only on the GPU.
+/// proxies past the Load radius, and its ground past the View distance.
+/// `crowd` is refused: its figures' shapes exist only on the GPU.
 pub fn export_scene(
     scene: ReferenceScene,
     frame: Option<u32>,
@@ -239,8 +239,8 @@ pub fn export_scene(
     Ok(())
 }
 
-/// The Chunks of `scene`, whose generator makes each Chunk alone, within its
-/// View distance of `camera`, loaded through `loader`.
+/// The Chunks of `scene` within its View distance of `camera`, each
+/// generated alone and loaded through `loader`.
 fn chunks_in_view(
     scene: ReferenceScene,
     camera: glam::DVec3,
