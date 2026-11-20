@@ -237,7 +237,7 @@ impl RequestQueue {
     }
 
     /// Takes the first request it may, if any, without waiting.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "cook"))]
     fn try_pop(&self) -> Option<IoRequest> {
         let mut queued = self.queued.lock().unwrap_or_else(PoisonError::into_inner);
         queued.take()
