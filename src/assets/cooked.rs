@@ -383,6 +383,19 @@ impl CookedTexture {
         Self::decode(blob, resident_tail_level)
     }
 
+    /// Parses a Texture Blob as `from_blob` does, decoding its mips from the
+    /// one `finest_level` picks from its side, its mip 0's larger dimension,
+    /// or from its Resident tail's first where that is finer.
+    pub fn down_to_from_blob(
+        blob: &[u8],
+        finest_level: impl FnOnce(u32) -> u32,
+    ) -> anyhow::Result<Self> {
+        Self::decode(blob, |format, width, height, mip_level_count| {
+            let tail_level = resident_tail_level(format, width, height, mip_level_count);
+            finest_level(width.max(height)).min(tail_level)
+        })
+    }
+
     /// Mips `levels` of a Texture Blob, each mip's blocks, parsed as
     /// `from_blob` does.
     pub fn mips_from_blob(blob: &[u8], levels: Range<u32>) -> anyhow::Result<Vec<Vec<u8>>> {

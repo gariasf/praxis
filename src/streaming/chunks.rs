@@ -115,22 +115,27 @@ pub(crate) fn load_cooked_chunk(
     })
 }
 
+/// Where the Far proxy of the Chunk at `coordinates` is placed: unrotated,
+/// at the Chunk's centre on the ground (ADR 0026).
+pub(crate) fn far_proxy_transform(coordinates: [i32; 2]) -> Transform {
+    let half_edge_metres = CHUNK_EDGE_METRES / 2.0;
+    let pivot = glam::dvec3(half_edge_metres, 0.0, half_edge_metres);
+    Transform {
+        translation: chunk_origin(coordinates) + pivot,
+        rotation: glam::Quat::IDENTITY,
+        scale: glam::Vec3::ONE,
+    }
+}
+
 /// Loads the Far proxy of the Chunk at `coordinates`, the Mesh `id`, through
-/// `loader`, as a Chunk of one Placement: its Mesh, unrotated, at the
-/// Chunk's centre on the ground (ADR 0026).
+/// `loader`, as a Chunk of one Placement at its `far_proxy_transform`.
 pub(crate) fn load_far_proxy(
     loader: &mut PoolLoader,
     id: AssetId,
     coordinates: [i32; 2],
 ) -> anyhow::Result<LoadedChunk> {
-    let half_edge_metres = CHUNK_EDGE_METRES / 2.0;
-    let pivot = glam::dvec3(half_edge_metres, 0.0, half_edge_metres);
     let placement = ChunkPlacement {
-        transform: Transform {
-            translation: chunk_origin(coordinates) + pivot,
-            rotation: glam::Quat::IDENTITY,
-            scale: glam::Vec3::ONE,
-        },
+        transform: far_proxy_transform(coordinates),
         mesh: loader.far_proxy(id)?,
         material: None,
     };

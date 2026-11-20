@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ops::Range;
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -17,14 +17,18 @@ use crate::camera::Camera;
 use crate::cooked::{AssetId, CookedCache, CookedChunk, CookedMaterial, CookedMesh, CookedTexture};
 use crate::render::{Renderer, mips_written_bytes, texture_written_bytes};
 use crate::scenes::ReferenceScene;
-use crate::streaming::chunks::{load_cooked_chunk, load_far_proxy};
-use crate::streaming::mips::{MipPriority, MipRequest, Sight};
+use crate::streaming::chunks::{far_proxy_transform, load_cooked_chunk, load_far_proxy};
+use crate::streaming::mips::{MipPriority, MipRequest, Sight, placement_finest_mip_needed};
 use crate::streaming::{
     ChunkFrame, ChunkIo, ChunkStreamer, FinishedLoad, LoadedChunk, LoadedChunks,
     ResidentFarProxies, distance_metres,
 };
 
 const IO_THREADS: usize = 4;
+
+/// The IO threads that may read Far proxies at once: all but one, so a
+/// Chunk's read or a Texture's mips never wait for a Far proxy's decode.
+const FAR_PROXY_READERS: usize = IO_THREADS - 1;
 
 /// The Asset IDs the IO pool need not decode: those loaded, and those
 /// decoded but not yet loaded. One the pools free leaves it as it is freed.
@@ -132,11 +136,127 @@ struct DecodedMips {
 }
 
 /// What the IO pool reads: the Chunk or the Far proxy with an Asset ID at
-/// its coordinates, with the Assets it names, or a Texture's mips.
+/// its coordinates, with the Assets it names, a Far proxy's Textures down to
+/// the mip its distance from a camera needs, where it gives one; or a
+/// Texture's mips.
 #[derive(Debug)]
 enum IoRequest {
-    Chunk(Load, [i32; 2], AssetId),
+    Chunk(Load, [i32; 2], AssetId, Option<DVec3>),
     Mips(MipRequest),
+}
+
+impl IoRequest {
+    fn lane(&self) -> Lane {
+        match self {
+            IoRequest::Chunk(Load::Chunk, ..) => Lane::Chunk,
+            IoRequest::Mips(_) => Lane::Mips,
+            IoRequest::Chunk(Load::FarProxy, ..) => Lane::FarProxy,
+        }
+    }
+}
+
+/// Which requests the IO pool takes before which: those of an earlier lane
+/// first.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum Lane {
+    Chunk,
+    Mips,
+    FarProxy,
+}
+
+/// The requests the IO pool's threads have not taken, by lane, then in the
+/// order requested, until it closes.
+#[derive(Default)]
+struct RequestQueue {
+    queued: Mutex<QueuedRequests>,
+    arrived: Condvar,
+}
+
+#[derive(Default)]
+struct QueuedRequests {
+    requests: BTreeMap<(Lane, u64), IoRequest>,
+    pushed: u64,
+    /// The Chunk reads taken and not yet finished.
+    chunk_reads: usize,
+    /// The Far proxy reads taken and not yet finished.
+    far_proxy_reads: usize,
+    closed: bool,
+}
+
+impl QueuedRequests {
+    /// Takes the first request, but a Far proxy's while a Chunk read is
+    /// taken or `FAR_PROXY_READERS` threads read one.
+    fn take(&mut self) -> Option<IoRequest> {
+        let entry = self.requests.first_entry()?;
+        let (lane, _) = *entry.key();
+        match lane {
+            Lane::Chunk => self.chunk_reads += 1,
+            Lane::Mips => {}
+            Lane::FarProxy => {
+                if self.chunk_reads > 0 || self.far_proxy_reads >= FAR_PROXY_READERS {
+                    return None;
+                }
+                self.far_proxy_reads += 1;
+            }
+        }
+        Some(entry.remove())
+    }
+}
+
+impl RequestQueue {
+    /// Queues `request`, or gives it back once closed.
+    fn push(&self, request: IoRequest) -> Result<(), IoRequest> {
+        let mut queued = self.queued.lock().unwrap_or_else(PoisonError::into_inner);
+        if queued.closed {
+            return Err(request);
+        }
+        let key = (request.lane(), queued.pushed);
+        queued.pushed += 1;
+        queued.requests.insert(key, request);
+        self.arrived.notify_one();
+        Ok(())
+    }
+
+    /// Takes the first request it may, waiting for one: None once closed. A
+    /// Far proxy's read taken is `finished` once read.
+    fn pop(&self) -> Option<IoRequest> {
+        let mut queued = self.queued.lock().unwrap_or_else(PoisonError::into_inner);
+        loop {
+            if queued.closed {
+                return None;
+            }
+            if let Some(request) = queued.take() {
+                return Some(request);
+            }
+            queued = (self.arrived.wait(queued)).unwrap_or_else(PoisonError::into_inner);
+        }
+    }
+
+    /// Takes the first request it may, if any, without waiting.
+    #[cfg(test)]
+    fn try_pop(&self) -> Option<IoRequest> {
+        let mut queued = self.queued.lock().unwrap_or_else(PoisonError::into_inner);
+        queued.take()
+    }
+
+    /// Ends a read of `lane` that `pop` gave, so a Far proxy's may be taken.
+    fn finished(&self, lane: Lane) {
+        let mut queued = self.queued.lock().unwrap_or_else(PoisonError::into_inner);
+        match lane {
+            Lane::Chunk => queued.chunk_reads -= 1,
+            Lane::Mips => return,
+            Lane::FarProxy => queued.far_proxy_reads -= 1,
+        }
+        self.arrived.notify_all();
+    }
+
+    /// Refuses further requests, and wakes every thread waiting, which then
+    /// takes none.
+    fn close(&self) {
+        let mut queued = self.queued.lock().unwrap_or_else(PoisonError::into_inner);
+        queued.closed = true;
+        self.arrived.notify_all();
+    }
 }
 
 enum Finished {
@@ -148,7 +268,7 @@ enum Finished {
 /// Textures' mips, from the Cooked cache and decode them, off the main
 /// thread.
 struct IoPool {
-    requests: Option<mpsc::Sender<IoRequest>>,
+    requests: Arc<RequestQueue>,
     finished: mpsc::Receiver<Finished>,
     threads: Vec<JoinHandle<()>>,
     in_flight: usize,
@@ -166,13 +286,12 @@ struct IoPool {
 
 impl IoPool {
     fn new(cache: Arc<CookedCache>, claimed: Claimed) -> anyhow::Result<Self> {
-        let (request_sender, request_receiver) = mpsc::channel::<IoRequest>();
+        let requests = Arc::new(RequestQueue::default());
         let (finished_sender, finished) = mpsc::channel();
-        let request_receiver = Arc::new(Mutex::new(request_receiver));
         let threads = (0..IO_THREADS)
             .map(|_| {
                 let (requests, finished, cache, claimed) = (
-                    request_receiver.clone(),
+                    requests.clone(),
                     finished_sender.clone(),
                     cache.clone(),
                     claimed.clone(),
@@ -180,23 +299,26 @@ impl IoPool {
                 std::thread::Builder::new()
                     .name("IO Pool".to_string())
                     .spawn(move || {
-                        loop {
-                            let request = requests
-                                .lock()
-                                .unwrap_or_else(PoisonError::into_inner)
-                                .recv();
+                        while let Some(request) = requests.pop() {
+                            let lane = request.lane();
                             let finished_load = match request {
-                                Ok(IoRequest::Chunk(load, coordinates, id)) => {
-                                    let decoded =
-                                        decode_chunk(&cache, &claimed, load, id, coordinates);
+                                IoRequest::Chunk(load, coordinates, id, camera) => {
+                                    let decoded = decode_chunk(
+                                        &cache,
+                                        &claimed,
+                                        load,
+                                        id,
+                                        coordinates,
+                                        camera,
+                                    );
                                     Finished::Chunk(load, coordinates, Box::new(decoded))
                                 }
-                                Ok(IoRequest::Mips(request)) => {
+                                IoRequest::Mips(request) => {
                                     let decoded = decode_mips(&cache, &request);
                                     Finished::Mips(request, decoded)
                                 }
-                                Err(_) => return,
                             };
+                            requests.finished(lane);
                             if finished.send(finished_load).is_err() {
                                 return;
                             }
@@ -206,7 +328,7 @@ impl IoPool {
             })
             .collect::<anyhow::Result<_>>()?;
         Ok(Self {
-            requests: Some(request_sender),
+            requests,
             finished,
             threads,
             in_flight: 0,
@@ -219,15 +341,11 @@ impl IoPool {
 
     fn request(&mut self, request: IoRequest) {
         let chunk_read = match &request {
-            IoRequest::Chunk(load, coordinates, _) => Some((*load, *coordinates)),
+            IoRequest::Chunk(load, coordinates, _, _) => Some((*load, *coordinates)),
             IoRequest::Mips(_) => None,
         };
-        let refused = match &self.requests {
-            Some(requests) => requests.send(request).err().map(|error| error.0),
-            None => Some(request),
-        };
-        match refused {
-            None => {
+        match self.requests.push(request) {
+            Ok(()) => {
                 self.in_flight += 1;
                 if let Some(chunk_read) = chunk_read {
                     self.chunk_reads
@@ -235,7 +353,7 @@ impl IoPool {
                     self.chunk_reads_requested += 1;
                 }
             }
-            Some(request) => tracing::error!(?request, "not requested: the IO pool stopped"),
+            Err(request) => tracing::error!(?request, "not requested: the IO pool stopped"),
         }
     }
 
@@ -289,7 +407,7 @@ impl IoPool {
 
 impl Drop for IoPool {
     fn drop(&mut self) {
-        self.requests = None;
+        self.requests.close();
         for thread in self.threads.drain(..) {
             thread.join().ok();
         }
@@ -298,13 +416,16 @@ impl Drop for IoPool {
 
 /// Reads and decodes the Chunk `id` at `coordinates` from `cache`, and each
 /// Mesh, Material and Texture it names that `claimed` lacks, which it
-/// claims; of a Far proxy, the Mesh `id` and what it names.
+/// claims; of a Far proxy, the Mesh `id` and what it names. Each Texture is
+/// its Resident tail, or, of a Far proxy read for a `camera`, its mips down
+/// to the one its distance from there needs.
 fn decode_chunk(
     cache: &CookedCache,
     claimed: &Mutex<HashSet<AssetId>>,
     load: Load,
     id: AssetId,
     coordinates: [i32; 2],
+    camera: Option<DVec3>,
 ) -> anyhow::Result<DecodedChunk> {
     let mut bytes_read = 0;
     let mut read = |asset: AssetId| {
@@ -336,15 +457,22 @@ fn decode_chunk(
         meshes.insert(id);
     }
     let mut materials: Vec<AssetId> = placement_materials.iter().copied().collect();
+    let mut densest_uses = HashMap::new();
     for &mesh_id in &meshes {
         if claim(mesh_id) {
             let mesh = CookedMesh::from_blob(&read(mesh_id)?)
                 .with_context(|| format!("reading Mesh {mesh_id}"))?;
-            materials.extend(
-                mesh.primitives
-                    .iter()
-                    .filter_map(|primitive| primitive.material),
-            );
+            for primitive in &mesh.primitives {
+                if let Some(material) = primitive.material {
+                    materials.push(material);
+                    keep_densest(
+                        &mut densest_uses,
+                        material,
+                        primitive.texel_density,
+                        mesh.bounds,
+                    );
+                }
+            }
             assets.meshes.insert(mesh_id, mesh);
         }
     }
@@ -354,13 +482,28 @@ fn decode_chunk(
             let material = CookedMaterial::from_blob(&read(material_id)?)
                 .with_context(|| format!("reading Material {material_id}"))?;
             textures.extend(material.textures.iter().flatten());
+            if let Some(&(texel_density, bounds)) = densest_uses.get(&material_id) {
+                for &texture in material.textures.iter().flatten() {
+                    keep_densest(&mut densest_uses, texture, texel_density, bounds);
+                }
+            }
             assets.materials.insert(material_id, material);
         }
     }
+    let far_proxy_camera = camera.filter(|_| load == Load::FarProxy);
     for texture_id in textures {
         if claim(texture_id) {
-            let texture = CookedTexture::resident_tail_from_blob(&read(texture_id)?)
-                .with_context(|| format!("reading Texture {texture_id}"))?;
+            let blob = read(texture_id)?;
+            let texture = match (far_proxy_camera, densest_uses.get(&texture_id)) {
+                (Some(camera), Some(&(texel_density, bounds))) => {
+                    let transform = far_proxy_transform(coordinates);
+                    CookedTexture::down_to_from_blob(&blob, |side| {
+                        placement_finest_mip_needed(camera, &transform, bounds, texel_density, side)
+                    })
+                }
+                _ => CookedTexture::resident_tail_from_blob(&blob),
+            };
+            let texture = texture.with_context(|| format!("reading Texture {texture_id}"))?;
             assets.textures.insert(texture_id, texture);
         }
     }
@@ -374,6 +517,20 @@ fn decode_chunk(
         bytes_read,
         reads_requested_before_it_came_back: 0,
     })
+}
+
+/// Keeps, as `asset`'s in `densest_uses`, the densest of the texel densities
+/// it is sampled at, with the bounds of the Mesh sampling it so.
+fn keep_densest(
+    densest_uses: &mut HashMap<AssetId, (f32, [[f32; 3]; 2])>,
+    asset: AssetId,
+    texel_density: f32,
+    bounds: [[f32; 3]; 2],
+) {
+    let densest = densest_uses.entry(asset).or_insert((texel_density, bounds));
+    if texel_density > densest.0 {
+        *densest = (texel_density, bounds);
+    }
 }
 
 /// Reads and decodes `request`'s mips from `cache`.
@@ -750,6 +907,7 @@ impl ChunkStreaming {
         let camera = world.resource::<Camera>().position - self.shift;
         let mut streamed = StreamedFrame::default();
         let mut placed_instances = 0;
+        let reads_far_proxy_mips = renderer.material_pool.streams_mips();
         if settle {
             renderer.mesh_pool.wait_for_blases();
         } else {
@@ -778,6 +936,7 @@ impl ChunkStreaming {
                 cook_chunk,
                 io,
                 load: Load::Chunk,
+                reads_far_proxy_mips,
                 scene: *scene,
                 shift: *shift,
                 camera,
@@ -1039,6 +1198,9 @@ struct FrameIo<'a, Pools> {
     io: &'a mut IoPool,
     /// Which of the two the streamer it serves loads.
     load: Load,
+    /// Whether a Far proxy is read with its Textures' mips down to the one
+    /// its distance needs, as mips stream, rather than their tails alone.
+    reads_far_proxy_mips: bool,
     scene: ReferenceScene,
     shift: DVec3,
     /// The camera's position in the scene's own placement.
@@ -1330,7 +1492,9 @@ where
             let error = format!("{error:#}");
             tracing::error!(?load, ?coordinates, error, "Chunk or Far proxy not cooked");
         }
-        self.io.request(IoRequest::Chunk(load, coordinates, id));
+        let camera = (load == Load::FarProxy && self.reads_far_proxy_mips).then_some(self.camera);
+        self.io
+            .request(IoRequest::Chunk(load, coordinates, id, camera));
     }
 
     fn take_finished(&mut self) -> Option<FinishedLoad> {
@@ -1388,11 +1552,11 @@ mod tests {
 
     /// An IO pool without threads, with the end its requests arrive at and
     /// the end that finishes them.
-    fn io_pool() -> (IoPool, mpsc::Receiver<IoRequest>, mpsc::Sender<Finished>) {
-        let (request_sender, requests) = mpsc::channel();
+    fn io_pool() -> (IoPool, Arc<RequestQueue>, mpsc::Sender<Finished>) {
+        let requests = Arc::new(RequestQueue::default());
         let (finished_sender, finished) = mpsc::channel();
         let io = IoPool {
-            requests: Some(request_sender),
+            requests: requests.clone(),
             finished,
             threads: Vec::new(),
             in_flight: 0,
@@ -1513,6 +1677,7 @@ mod tests {
                 cook_chunk: &mut None,
                 io: &mut io,
                 load: Load::Chunk,
+                reads_far_proxy_mips: false,
                 scene: ReferenceScene::TextureWall,
                 shift: DVec3::ZERO,
                 camera,
@@ -1629,17 +1794,12 @@ mod tests {
         );
     }
 
-    /// A row of seven Chunks, a Load radius of 256 m, a View distance of
-    /// 512 m, four loads a frame. The first frame requests the three Chunks
-    /// within the Load radius, then the five Far proxies within the View
-    /// distance, nearest first; the hold ends with no Far proxy read; a jump
-    /// three Chunks east releases the two past the View distance's edge.
     /// A row of seven Chunks, [-3, 0] to [3, 0], streamed with a Load radius
     /// of 256 m and a View distance of 512 m, four loads a frame, through an
     /// IO pool without threads into `NoPools`.
     struct RowOfSeven {
         io: IoPool,
-        requests: mpsc::Receiver<IoRequest>,
+        requests: Arc<RequestQueue>,
         finished_sender: mpsc::Sender<Finished>,
         cache: CookedCache,
         claimed: Mutex<HashSet<AssetId>>,
@@ -1683,6 +1843,7 @@ mod tests {
                 cook_chunk: &mut None,
                 io: &mut self.io,
                 load: Load::Chunk,
+                reads_far_proxy_mips: true,
                 scene: ReferenceScene::World,
                 shift: DVec3::ZERO,
                 camera,
@@ -1715,6 +1876,12 @@ mod tests {
         }
     }
 
+    /// A row of seven Chunks, a Load radius of 256 m, a View distance of
+    /// 512 m, four loads a frame. The first frame requests the three Chunks
+    /// within the Load radius, then the five Far proxies within the View
+    /// distance, nearest first, each read for the camera's distance and no
+    /// Chunk so; the hold ends with no Far proxy read; a jump three Chunks
+    /// east releases the two past the View distance's edge.
     #[test]
     fn far_proxies_are_requested_after_the_chunks_and_released_an_edge_past_the_view_distance() {
         let mut row = RowOfSeven::new();
@@ -1724,11 +1891,13 @@ mod tests {
         let far_proxy_reads = within_view.map(|chunk| (Load::FarProxy, chunk));
 
         let (chunks, _) = row.frame(MIDDLE, false, &[]);
-        let requested: Vec<(Load, [i32; 2])> = row
-            .requests
-            .try_iter()
+        let queued = std::mem::take(&mut row.requests.queued.lock().unwrap().requests);
+        let requested: Vec<(Load, [i32; 2])> = (queued.into_values())
             .map(|request| match request {
-                IoRequest::Chunk(load, coordinates, _) => (load, coordinates),
+                IoRequest::Chunk(load, coordinates, _, camera) => {
+                    assert_eq!(camera.is_some(), load == Load::FarProxy);
+                    (load, coordinates)
+                }
                 IoRequest::Mips(_) => unreachable!(),
             })
             .collect();
@@ -1826,18 +1995,70 @@ mod tests {
             Err(_) => unreachable!(),
         };
 
-        io.request(IoRequest::Chunk(Load::Chunk, [0, 0], AssetId(1)));
-        io.request(IoRequest::Chunk(Load::Chunk, [1, 0], AssetId(1)));
+        io.request(IoRequest::Chunk(Load::Chunk, [0, 0], AssetId(1), None));
+        io.request(IoRequest::Chunk(Load::Chunk, [1, 0], AssetId(1), None));
         finish([1, 0]);
         io.receive();
         assert!(reads_before(&io, [1, 0]));
 
-        io.request(IoRequest::Chunk(Load::Chunk, [2, 0], AssetId(1)));
+        io.request(IoRequest::Chunk(Load::Chunk, [2, 0], AssetId(1), None));
         assert!(reads_before(&io, [1, 0]));
         finish([0, 0]);
         io.receive();
         assert!(!reads_before(&io, [1, 0]));
         assert!(reads_before(&io, [0, 0]));
+    }
+
+    /// The IO pool takes Chunk reads first, then mips, then Far proxy reads,
+    /// each in the order requested, a Far proxy's only once no Chunk read is
+    /// taken and while fewer than all threads but one read one, so a Far
+    /// proxy's read of its mips never holds back a Chunk's; once closed it
+    /// refuses and gives nothing.
+    #[test]
+    fn requests_are_taken_chunks_first_then_mips_then_far_proxies() {
+        let queue = RequestQueue::default();
+        let chunk = |load, x| IoRequest::Chunk(load, [x, 0], AssetId(1), None);
+        let mips = |texture| {
+            IoRequest::Mips(MipRequest {
+                texture: AssetId(texture),
+                levels: 0..3,
+            })
+        };
+        let requests = [
+            chunk(Load::FarProxy, 1),
+            mips(10),
+            chunk(Load::Chunk, 2),
+            chunk(Load::FarProxy, 3),
+            mips(11),
+            chunk(Load::Chunk, 4),
+            chunk(Load::FarProxy, 5),
+            chunk(Load::FarProxy, 7),
+        ];
+        for request in requests {
+            queue.push(request).unwrap();
+        }
+        let take_all = || {
+            let taken = std::iter::from_fn(|| queue.try_pop());
+            let named = taken.map(|request| match request {
+                IoRequest::Chunk(Load::Chunk, [x, _], ..) => format!("chunk {x}"),
+                IoRequest::Chunk(Load::FarProxy, [x, _], ..) => format!("far proxy {x}"),
+                IoRequest::Mips(request) => format!("mips {}", request.texture.0),
+            });
+            named.collect::<Vec<_>>()
+        };
+        assert_eq!(take_all(), ["chunk 2", "chunk 4", "mips 10", "mips 11"]);
+        queue.finished(Lane::Chunk);
+        assert!(take_all().is_empty());
+        queue.finished(Lane::Chunk);
+        assert_eq!(FAR_PROXY_READERS, 3);
+        assert_eq!(take_all(), ["far proxy 1", "far proxy 3", "far proxy 5"]);
+        queue.finished(Lane::FarProxy);
+        assert_eq!(take_all(), ["far proxy 7"]);
+
+        queue.push(mips(12)).unwrap();
+        queue.close();
+        assert!(queue.push(mips(13)).is_err());
+        assert!(queue.pop().is_none());
     }
 
     /// A wait for loads fails when the IO pool holds none, and returns when it
@@ -1846,7 +2067,7 @@ mod tests {
     fn a_wait_for_loads_finds_the_reads_taken_since_they_were_requested() {
         let (mut io, _requests, finished_sender) = io_pool();
         assert!(io.receive_all().is_err());
-        io.request(IoRequest::Chunk(Load::Chunk, [0, 0], AssetId(1)));
+        io.request(IoRequest::Chunk(Load::Chunk, [0, 0], AssetId(1), None));
         finished_sender.send(read_chunk([0, 0])).unwrap();
         io.receive();
         io.receive_all().unwrap();
@@ -1988,5 +2209,94 @@ mod tests {
         let available = |id| id == material;
         decoded.textures.clear();
         assert!(!decoded.lacks(&[], &[material], available));
+    }
+
+    /// A Far proxy read for a camera decodes its atlas down to the mip its
+    /// distance needs, and no further than its Resident tail: a 2,048² BC7
+    /// atlas, tail from mip 3, sampled at one texel per pixel at a metre,
+    /// needs mip 1 from 2.5 m and its tail from 100 m, or unread for none.
+    #[test]
+    fn a_far_proxy_read_for_a_camera_decodes_its_atlas_down_to_the_mip_its_distance_needs() {
+        use crate::cooked::{CookedPrimitive, CookedVertex, chunk_origin, level_bytes};
+
+        let directory =
+            std::env::temp_dir().join(format!("praxis-io-far-proxy-mips-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        let (mesh_id, material_id, texture_id) = (AssetId(1), AssetId(2), AssetId(3));
+        let one_texel_per_pixel_at_one_metre = 1.7138 / 0.000_575_3;
+        let side = 2048;
+        let triangle = [[0, 1, 2]];
+        let mesh = CookedMesh {
+            vertices: (0..3)
+                .map(|vertex| CookedVertex {
+                    position: [0.0; 3],
+                    uv: [vertex as f32, 0.0],
+                    qtangent: [0, 0, 0, i16::MAX],
+                })
+                .collect(),
+            indices: vec![0, 1, 2],
+            primitives: vec![CookedPrimitive {
+                first_index: 0,
+                index_count: 3,
+                material: Some(material_id),
+                texel_density: (one_texel_per_pixel_at_one_metre / f64::from(side)) as f32,
+                thin_radius_metres: None,
+                meshlets: crate::cooked::CookedMeshlet::split(&triangle, [1]).unwrap(),
+            }],
+            coarser_lods: Vec::new(),
+            bounds: [[0.0; 3]; 2],
+        };
+        let mut material = CookedMaterial {
+            base_color: [1.0; 4],
+            metallic: 0.0,
+            roughness: 1.0,
+            emissive: [0.0; 3],
+            normal_scale: 1.0,
+            textures: [None; 5],
+        };
+        material.textures[0] = Some(texture_id);
+        let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
+        let texture = CookedTexture {
+            format,
+            width: side,
+            height: side,
+            first_level: 0,
+            levels: (0..12)
+                .map(|level| vec![level as u8; level_bytes(format, side, side, level)])
+                .collect(),
+        };
+        cache
+            .write(mesh_id, "key", &mesh.to_blob().unwrap())
+            .unwrap();
+        cache
+            .write(material_id, "key", &material.to_blob())
+            .unwrap();
+        let texture_blob = texture.to_blob(1).unwrap();
+        cache.write(texture_id, "key", &texture_blob).unwrap();
+        let coordinates = [1, 2];
+        let centre = chunk_origin(coordinates) + DVec3::new(128.0, 0.0, 128.0);
+        let first_level_read = |camera: Option<DVec3>| {
+            let claimed = Mutex::new(HashSet::new());
+            let decoded = decode_chunk(
+                &cache,
+                &claimed,
+                Load::FarProxy,
+                mesh_id,
+                coordinates,
+                camera,
+            );
+            let mut decoded = decoded.unwrap();
+            let read = decoded.assets.textures.remove(&texture_id).unwrap();
+            let first_level = read.first_level as usize;
+            assert_eq!(read.levels, texture.levels[first_level..]);
+            first_level
+        };
+
+        let from = |metres| Some(centre + DVec3::new(metres, 0.0, 0.0));
+        assert_eq!(
+            [from(2.5), from(100.0), None].map(first_level_read),
+            [1, 3, 3]
+        );
+        std::fs::remove_dir_all(&directory).ok();
     }
 }
