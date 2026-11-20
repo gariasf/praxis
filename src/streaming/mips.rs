@@ -13,7 +13,7 @@ use crate::assets::material::EvictionRank;
 use crate::assets::{LoadedMeshes, MaterialPool};
 use crate::camera::FIELD_OF_VIEW;
 use crate::components::Transform;
-use crate::cooked::AssetId;
+use crate::cooked::{AssetId, CHUNK_EDGE_METRES};
 use crate::streaming::{LEAST_LEAD_FRAMES, LoadedChunk};
 
 /// The view mip priority judges against: 1440 pixels tall at 16:9.
@@ -112,7 +112,9 @@ impl MipPriority {
     /// Resident Far proxies, each with its Sight, against what `materials`
     /// holds Resident: from `camera`, or, as the camera closes on a
     /// Placement at its rate since the last `plan`, from where it will be
-    /// `LEAD_FRAMES` later, unless it `teleported`. Returns the late mips,
+    /// `LEAD_FRAMES` later, at most a Chunk edge nearer, as the Chunk
+    /// streamer requests no further than one past its radius, unless it
+    /// `teleported`. Returns the late mips,
     /// those the drawn Placements need from `camera` that are not Resident,
     /// and the requests for those not yet requested whose move finds room
     /// in its Channel, free or by an eviction, finest-needed first, then by
@@ -154,7 +156,8 @@ impl MipPriority {
                 };
                 let distance = distance_from(camera);
                 let closing = camera_before.map_or(0.0, |before| distance_from(before) - distance);
-                let distance_ahead = (distance - closing.max(0.0) * LEAD_FRAMES).max(0.0);
+                let lead_metres = (closing.max(0.0) * LEAD_FRAMES).min(CHUNK_EDGE_METRES);
+                let distance_ahead = (distance - lead_metres).max(0.0);
                 let texels_per_metre = texture_use.texels_per_metre;
                 let level = finest_mip_needed(texels_per_metre, distance_ahead);
                 keep_finest(&mut self.needed, texture_use.texture, level);
@@ -498,7 +501,10 @@ mod tests {
     /// A drawn Texture at its tail, mip 3, 8.5 m away, then 8.2 m: closing
     /// 0.3 m a frame, it is 3.4 m away `LEAD_FRAMES` later, so mip 1 is
     /// requested while mip 3 still serves it and none is late; after a
-    /// teleport to the same place nothing is requested.
+    /// teleport to the same place nothing is requested. Closing 18.6 m in a
+    /// frame to 300 m away, it would be 2.4 m away `LEAD_FRAMES` later, but
+    /// the lead reaches no further than a Chunk edge, 256 m, to 44 m, where
+    /// mip 5 serves it, so nothing is requested.
     #[test]
     fn a_surface_the_camera_closes_on_has_its_mips_requested_a_lead_ahead() {
         let Some(context) = crate::assets::pools::tests::gpu_context() else {
@@ -507,7 +513,7 @@ mod tests {
         let texture = AssetId(10);
         let (pool, mut staging) = pool_of_tails(&context, &[texture]);
         let chunks = [chunk(1, false)];
-        let plan_from = |teleported: bool| {
+        let plan_from = |first_z: f64, second_z: f64, teleported: bool| {
             let mut priority = MipPriority::default();
             priority
                 .uses
@@ -525,13 +531,14 @@ mod tests {
                     .collect();
                 (late_mips, requested)
             };
-            assert_eq!(plan(-8.5, false), (0, vec![]));
-            plan(-8.2, teleported)
+            assert_eq!(plan(first_z, false), (0, vec![]));
+            plan(second_z, teleported)
         };
 
-        assert_eq!(LEAD_FRAMES, 16.0);
-        assert_eq!(plan_from(false), (0, vec![(texture, 1..3)]));
-        assert_eq!(plan_from(true), (0, vec![]));
+        assert_eq!((LEAD_FRAMES, CHUNK_EDGE_METRES), (16.0, 256.0));
+        assert_eq!(plan_from(-8.5, -8.2, false), (0, vec![(texture, 1..3)]));
+        assert_eq!(plan_from(-8.5, -8.2, true), (0, vec![]));
+        assert_eq!(plan_from(-318.6, -300.0, false), (0, vec![]));
         staging.submit(&context.queue);
     }
 }
