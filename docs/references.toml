@@ -1931,6 +1931,36 @@ section = "bevy_tasks 0.18.1, lib.rs: the threaded TaskPool and Scope with multi
 quote = '''cfg::multi_threaded! { if { mod task_pool; [...] pub use task_pool::{Scope, TaskPool, TaskPoolBuilder}; [...] } else { mod single_threaded_task_pool; pub use single_threaded_task_pool::{Scope, TaskPool, TaskPoolBuilder, ThreadExecutor};'''
 checked = 2026-10-27
 
+["bevy-tasks-0.18.1-scope-polls-results-first"]
+url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_tasks/src/task_pool.rs#L512-L530"
+section = "bevy_tasks 0.18.1, task_pool.rs, TaskPool::execute_global_scope, which TaskPool::scope waits through on the main thread: it polls the spawned tasks' results first, and runs the pool's executor only while one is pending"
+quote = '''async fn execute_global_scope<'scope, 'ticker, T>( [...] let _result = AssertUnwindSafe(executor.run(tick_forever))
+                    .catch_unwind()
+                    .await
+                    .is_ok();
+            }
+        };
+        get_results.or(execute_forever).await'''
+checked = 2026-11-20
+
+["futures-lite-2.6.1-or-polls-first-future-first"]
+url = "https://github.com/smol-rs/futures-lite/blob/v2.6.1/src/future.rs#L448-L458"
+section = "futures-lite 2.6.1, future.rs, Or::poll, the combinator behind bevy_tasks' get_results.or(execute_forever)"
+quote = '''if let Poll::Ready(t) = this.future1.poll(cx) {
+            return Poll::Ready(t);
+        }
+        if let Poll::Ready(t) = this.future2.poll(cx) {
+            return Poll::Ready(t);
+        }'''
+checked = 2026-11-20
+
+["async-executor-1.14.0-run-makes-a-runner"]
+url = "https://github.com/smol-rs/async-executor/blob/v1.14.0/src/lib.rs#L740-L741"
+section = "async-executor 1.14.0, lib.rs, State::run, which Executor::run awaits; Runner::new (L979-L992) allocates the Runner's local queue and registers it"
+quote = '''pub async fn run<T>(&self, future: impl Future<Output = T>) -> T {
+        let mut runner = Runner::new(self);'''
+checked = 2026-11-20
+
 ["async-executor-1.14.0-global-queue"]
 url = "https://github.com/smol-rs/async-executor/blob/v1.14.0/src/lib.rs#L357-L364"
 section = "async-executor 1.14.0, lib.rs, Executor::schedule, which every spawned task's Runnable goes through; State::new (L675-L677) makes the queue ConcurrentQueue::unbounded(); bevy_tasks 0.18.1's Scope::spawn (task_pool.rs L646-L650) spawns on the pool's Executor, a wrapper of this one (executor.rs L19)"

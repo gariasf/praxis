@@ -188,9 +188,10 @@ struct DrawnRenderable {
 /// its World transform blended `blend_weight` of the way from the previous
 /// Tick's, one compute pool task per `INSTANCES_PER_TASK` Instances once
 /// there are two (ADR 0016): the tasks spawned, which allocate, depend on the
-/// frame, never on the machine's thread count. Each task takes
-/// `INSTANCES_PER_BATCH` at a time until none are left, as the pool's threads
-/// wake one after another. `drawn` is in index order.
+/// frame, never on the machine's thread count. Each task, and the main thread
+/// once it has spawned them, takes `INSTANCES_PER_BATCH` at a time until none
+/// are left, as the pool's threads wake one after another. `drawn` is in index
+/// order.
 fn fill_instances(
     instances: &mut [InstanceData],
     drawn: &[DrawnRenderable],
@@ -228,22 +229,37 @@ fn fill_instances(
         first_index: 0,
         drawn,
     });
+    let fill_batches = || {
+        loop {
+            let batch = batches
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .next();
+            let Some((instances, first_index, drawn)) = batch else {
+                break;
+            };
+            fill(instances, first_index, drawn);
+        }
+    };
+    run_on_pool_and_main_thread(compute_pool, task_count, &fill_batches);
+}
+
+/// Runs `work` in `task_count` compute pool tasks, and on the main thread
+/// once it has spawned them, returning when every task has.
+fn run_on_pool_and_main_thread(
+    compute_pool: &bevy_tasks::TaskPool,
+    task_count: usize,
+    work: &(dyn Fn() + Sync),
+) {
     compute_pool.scope(|scope| {
         for _ in 0..task_count {
-            let (batches, fill) = (&batches, &fill);
-            scope.spawn(async move {
-                loop {
-                    let batch = batches
-                        .write()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .next();
-                    let Some((instances, first_index, drawn)) = batch else {
-                        break;
-                    };
-                    fill(instances, first_index, drawn);
-                }
-            });
+            scope.spawn(async move { work() });
         }
+        // A task only the main thread runs stays pending, so every run allocates the executor's
+        // Runner [ref:bevy-tasks-0.18.1-scope-polls-results-first]
+        // [ref:futures-lite-2.6.1-or-polls-first-future-first] [ref:async-executor-1.14.0-run-makes-a-runner].
+        scope.spawn_on_scope(async {});
+        work();
     });
 }
 
@@ -2258,11 +2274,10 @@ mod tests {
         }
     }
 
-    /// Three compute pool tasks a frame. A frame allocates two fewer when
-    /// the workers finish its tasks before the main thread waits for them,
-    /// and the pool's threads may still be starting in the first, so each
-    /// preparer's highest count after its first frame is compared: it is the
-    /// same for a preparer made after others' frames ran.
+    /// Three compute pool tasks a frame. The pool's queue takes a block once
+    /// every 31 tasks spawned, and its threads may still be starting in the
+    /// first frame, so each preparer's highest count after its first frame is
+    /// compared: it is the same for a preparer made after others' frames ran.
     #[test]
     fn a_frames_allocations_do_not_depend_on_the_preparers_before_it() {
         let highest_after_the_first_frame = || {
@@ -2294,5 +2309,49 @@ mod tests {
         };
         let highest: [u64; 3] = std::array::from_fn(|_| highest_after_the_first_frame());
         assert_eq!(highest, [highest[0]; 3]);
+    }
+
+    /// The main thread's own queue takes a block once every 31 runs, so the
+    /// counts may differ by that one allocation, and by nothing more.
+    #[test]
+    fn work_on_the_pool_allocates_the_same_whenever_the_workers_finish() {
+        let compute_pool = crate::threading::compute_pool();
+        let every_thread = std::sync::Barrier::new(compute_pool.thread_num() + 1);
+        compute_pool.scope(|scope| {
+            for _ in 0..=compute_pool.thread_num() {
+                scope.spawn(async {
+                    every_thread.wait();
+                });
+            }
+        });
+        let main_thread_id = std::thread::current().id();
+        let slow_on_the_main_thread = || {
+            if std::thread::current().id() == main_thread_id {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        let quick = || {};
+        let tasks_filling_one_queue_block = 31;
+        let mut recorder = crate::stats::FrameRecorder::new();
+        let mut counts = Vec::new();
+        for run in 0..18 {
+            let work: &(dyn Fn() + Sync) = if run % 2 == 0 {
+                &slow_on_the_main_thread
+            } else {
+                &quick
+            };
+            recorder.begin();
+            run_on_pool_and_main_thread(&compute_pool, tasks_filling_one_queue_block, work);
+            recorder.end();
+            if run >= 2 {
+                counts.push(recorder.counters.heap_allocations);
+            }
+        }
+        let (fewest, most) = (counts.iter().min(), counts.iter().max());
+        assert!(
+            most.zip(fewest)
+                .is_some_and(|(most, fewest)| most - fewest <= 1),
+            "{counts:?}"
+        );
     }
 }
