@@ -1,0 +1,10 @@
+{
+  "scene": "world",
+  "frame": 59,
+  "width": 2560,
+  "height": 1440,
+  "commit": "efa870d10ed12e3ab8742895cf59e73a1a694be7",
+  "blender": "5.2.3 LTS",
+  "mean_difference_steps": 2.334,
+  "linear_rmse": 0.00499
+}
