@@ -115,6 +115,12 @@ pub struct FrameStats {
     pub holding: bool,
     /// On the frame a Fast travel's hold ends, its time from the jump.
     pub fast_travel_hold: Option<Duration>,
+    /// Whether a Fast travel's hold has ended and its Far field's fill, until
+    /// every Far proxy within the View distance is Resident, has not.
+    pub far_field_filling: bool,
+    /// On the frame a Fast travel's Far field's fill ends, its time from the
+    /// end of its hold.
+    pub far_field_fill: Option<Duration>,
     /// Readbacks of GPU stats the frame skipped, its own or an earlier
     /// frame's, as their ring slot was not ready and the main thread never
     /// waits on the GPU (ADR 0016).

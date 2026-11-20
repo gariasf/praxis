@@ -682,8 +682,10 @@ mod tests {
     use std::io::Write;
 
     use super::*;
-    use crate::assets::PoolCapacities;
-    use crate::cooked::AssetId;
+    use crate::assets::material::{SLICES_PER_CLASS, TextureShape};
+    use crate::assets::{ARENA_ELEMENT_BYTES, MaterialChannel, PoolCapacities};
+    use crate::bench::Budgets;
+    use crate::cooked::{AssetId, level_bytes};
     use crate::render::{DYNAMIC_TLAS_CAPACITY, RenderCapacities};
     use crate::scenes::ReferenceScene;
     use crate::streaming::distance_metres;
@@ -761,13 +763,68 @@ mod tests {
         }
     }
 
-    /// From a camera anywhere on a 64 m grid, the static Instances of the
-    /// Chunks within the Load radius fit the static TLAS, and those within
-    /// the hold radius, with the 10,000 Moving Instances, fit the Instance
-    /// buffer; and the Materials those Chunks name, with those the world's
-    /// Meshes name, fit the Material table, at the checked-in Budgets.
+    /// The Texture classes and slices `count` Textures of one shape open, as
+    /// `ClassTable::place` opens them: one slice, then twice the class
+    /// before's, up to `SLICES_PER_CLASS`.
+    fn classes_and_slices(count: u32) -> (u32, u32) {
+        let (mut classes, mut slices, mut next_class_slices) = (0, 0, 1);
+        while slices < count {
+            (classes, slices) = (classes + 1, slices + next_class_slices);
+            next_class_slices = (next_class_slices * 2).min(SLICES_PER_CLASS);
+        }
+        (classes, slices)
+    }
+
+    /// The texture pool bytes and the Texture classes of one Channel's
+    /// Textures in `format`, square, by side and count, every mip Resident:
+    /// each Texture's chain in a class of its shape, whose mips past the
+    /// Resident tail's the texture pool holds, and its tail in one of its own.
+    fn channel_bytes_and_classes(
+        format: wgpu::TextureFormat,
+        textures: &BTreeMap<u32, u32>,
+    ) -> (u64, u32) {
+        let (mut bytes, mut classes) = (0, 0);
+        let mut tails = BTreeMap::<u32, u32>::new();
+        for (&side, &count) in textures {
+            let shape = TextureShape {
+                width: side,
+                height: side,
+                mip_level_count: side.ilog2() + 1,
+                format,
+            };
+            let tail_level = shape.resident_tail_level();
+            *tails.entry(side >> tail_level).or_default() += count;
+            if tail_level == 0 {
+                continue;
+            }
+            let (chain_classes, slices) = classes_and_slices(count);
+            let levels = 0..tail_level as usize;
+            let slice_bytes: usize = levels
+                .map(|level| level_bytes(format, side, side, level))
+                .sum();
+            bytes += u64::from(slices) * slice_bytes as u64;
+            classes += chain_classes;
+        }
+        let tail_classes = tails.values().map(|&count| classes_and_slices(count).0);
+        (bytes, classes + tail_classes.sum::<u32>())
+    }
+
+    /// From a camera anywhere on a 64 m grid, what `world` loads fits the
+    /// capacities the checked-in Budgets give, its Far proxies cooked, each
+    /// count's most over the cameras summed with the others': the
+    /// static Instances of the Chunks within the Load radius, with the Far
+    /// proxies within the View distance's hold radius, fit the static TLAS;
+    /// those of the Chunks within the hold radius, with the same Far
+    /// proxies, the untraced far ground and the 10,000 Moving Instances, the
+    /// Instance buffer; the world's Meshes with those Far proxies' fit each
+    /// geometry Arena and the Mesh table;
+    /// the Materials those Chunks name, with those the world's Meshes name,
+    /// the Material table's count, and the Far proxies' baked Materials its
+    /// count for them; and their Textures, every mip Resident, the texture
+    /// pool and each Channel's Texture classes.
     #[test]
     fn the_densest_view_fits_the_capacities_the_budgets_give() {
+        let scene = ReferenceScene::World;
         let (placements, _) = static_content();
         let mut per_chunk = BTreeMap::<[i32; 2], (u32, BTreeSet<AssetId>)>::new();
         for placement in &placements {
@@ -781,11 +838,43 @@ mod tests {
         let mesh_materials: BTreeSet<&str> = (meshes().iter())
             .flat_map(|(_, primitives)| primitives.iter().filter_map(|(_, material)| *material))
             .collect();
-        let load_radius_metres = ReferenceScene::World.load_radius_metres();
+        let textured: BTreeSet<AssetId> = (materials().into_iter())
+            .filter(|(_, material)| material.textures[MaterialChannel::Albedo as usize].is_some())
+            .map(|(name, _)| scene.material_id(&name))
+            .collect();
+
+        let pools = PoolCapacities::checked_in();
+        let capacities = RenderCapacities::checked_in();
+        let arena_capacities = [
+            pools.vertex_arena_bytes,
+            pools.index_arena_bytes,
+            pools.meshlet_arena_bytes,
+            pools.meshlet_vertex_arena_bytes,
+            pools.meshlet_triangle_arena_bytes,
+        ];
+        let arena_bytes_of = |elements: [usize; 5]| -> [u64; 5] {
+            std::array::from_fn(|arena| elements[arena] as u64 * ARENA_ELEMENT_BYTES[arena])
+        };
+        let (far_proxies, scene_meshes) = crate::cook::far_field_contents(scene);
+        assert_eq!(far_proxies.len(), per_chunk.len());
+        let mut meshes_bytes = [0; 5];
+        for elements in &scene_meshes {
+            let bytes = arena_bytes_of(*elements);
+            (0..5).for_each(|arena| meshes_bytes[arena] += bytes[arena]);
+        }
+        let far_proxy_bytes: Vec<[u64; 5]> = (far_proxies.iter())
+            .map(|proxy| arena_bytes_of(proxy.arena_elements))
+            .collect();
+
+        let load_radius_metres = scene.load_radius_metres();
         let hold_radius_metres = load_radius_metres + CHUNK_EDGE_METRES;
+        let far_hold_radius_metres = scene.view_distance_metres() + CHUNK_EDGE_METRES;
         let step_metres = 64.0;
         let steps = (2.0 * WORLD_HALF_SIZE_METRES / step_metres) as u32;
         let (mut most_loaded, mut most_held, mut most_materials) = (0, 0, 0);
+        let (mut most_far_proxies, mut most_baked) = (0, 0);
+        let mut most_arena_bytes = [0; 5];
+        let (mut most_pool_bytes, mut most_classes) = (0, 0);
         for column in 0..=steps {
             for row in 0..=steps {
                 let at = |index: u32| -WORLD_HALF_SIZE_METRES + f64::from(index) * step_metres;
@@ -805,27 +894,73 @@ mod tests {
                     .flat_map(|(_, materials)| materials)
                     .collect();
                 most_materials = most_materials.max(materials_held.len() + mesh_materials.len());
+
+                let resident = (far_proxies.iter().zip(&far_proxy_bytes)).filter(|(proxy, _)| {
+                    distance_metres(camera, proxy.coordinates) <= far_hold_radius_metres
+                });
+                let (mut far_proxy_count, mut baked) = (0, 0);
+                let mut arena_bytes = meshes_bytes;
+                let mut albedos = BTreeMap::<u32, u32>::new();
+                let mut metallic_roughness = BTreeMap::<u32, u32>::new();
+                let facades = materials_held.iter().filter(|id| textured.contains(id));
+                albedos.insert(FACADE_TEXTURE_SIDE, facades.count() as u32);
+                for (proxy, bytes) in resident {
+                    far_proxy_count += 1;
+                    (0..5).for_each(|arena| arena_bytes[arena] += bytes[arena]);
+                    if let Some(side) = proxy.atlas_side_texels {
+                        baked += 1;
+                        *albedos.entry(side).or_default() += 1;
+                        *metallic_roughness.entry(side).or_default() += 1;
+                    }
+                }
+                most_far_proxies = most_far_proxies.max(far_proxy_count);
+                most_baked = most_baked.max(baked);
+                for (most, bytes) in most_arena_bytes.iter_mut().zip(arena_bytes) {
+                    *most = (*most).max(bytes);
+                }
+                let (albedo_bytes, albedo_classes) =
+                    channel_bytes_and_classes(wgpu::TextureFormat::Bc7RgbaUnormSrgb, &albedos);
+                let (data_bytes, data_classes) =
+                    channel_bytes_and_classes(wgpu::TextureFormat::Bc5RgUnorm, &metallic_roughness);
+                most_pool_bytes = most_pool_bytes.max(albedo_bytes + data_bytes);
+                most_classes = most_classes.max(albedo_classes.max(data_classes));
             }
         }
-        let capacities = RenderCapacities::checked_in();
+
+        let far_ground_instances = 1;
+        let pool_budget = Budgets::checked_in().gpu_memory_bytes_by_kind.texture_pool;
         writeln!(
             std::io::stderr(),
-            "{} static Instances, {most_loaded} at most within the Load radius, {most_held} within the hold radius; {most_materials} Materials",
-            placements.len()
+            "{} static Instances, {most_loaded} at most within the Load radius of {} static TLAS entries, {most_held} within the hold radius of {} slots, {most_far_proxies} Far proxies, {most_baked} baked; {most_materials} Materials; Arenas {most_arena_bytes:?} bytes of {arena_capacities:?}; texture pool {most_pool_bytes} bytes of {pool_budget}, {most_classes} Texture classes",
+            placements.len(),
+            capacities.static_tlas_instances,
+            capacities.instances,
         )
         .ok();
         assert!(
-            most_loaded <= capacities.static_tlas_instances,
+            most_loaded + most_far_proxies <= capacities.static_tlas_instances,
             "{most_loaded} loaded"
         );
         assert!(
-            most_held + DYNAMIC_TLAS_CAPACITY <= capacities.instances,
+            most_held + most_far_proxies + far_ground_instances + DYNAMIC_TLAS_CAPACITY
+                <= capacities.instances,
             "{most_held} held"
         );
-        let material_capacity = PoolCapacities::checked_in().materials as usize;
+        for (arena, (bytes, capacity)) in most_arena_bytes.iter().zip(arena_capacities).enumerate()
+        {
+            assert!(*bytes <= capacity, "Arena {arena}: {bytes} bytes");
+        }
+        assert!(scene_meshes.len() as u32 + most_far_proxies <= pools.meshes);
+        let material_capacity = pools.materials as usize;
         assert!(
             most_materials <= material_capacity,
             "{most_materials} Materials"
         );
+        assert!(
+            most_baked <= pools.far_proxy_materials,
+            "{most_baked} baked"
+        );
+        assert!(most_pool_bytes <= pool_budget, "{most_pool_bytes} bytes");
+        assert!(most_classes <= pools.texture_classes_per_channel);
     }
 }

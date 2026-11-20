@@ -202,7 +202,7 @@ A mip of a Texture that a frame's drawn Chunks need, by its priority from where 
 _Avoid_: Missing mip, texture pop
 
 **Fast travel**:
-A teleport of the camera. The Chunk streamer holds until every Chunk within the Load radius has loaded, the camera path pauses until then, and the hold is timed from the jump. None of its Chunks is a Late Chunk, and none of the Far proxies that fill the Far field after it is a Late Far proxy.
+A teleport of the camera. The Chunk streamer holds until every Chunk within the Load radius has loaded, the camera path pauses until then, and the hold is timed from the jump. Its fill, from the hold's end until every Far proxy within the View distance is Resident, is timed too. None of its Chunks is a Late Chunk, and none of the Far proxies that fill the Far field after it is a Late Far proxy.
 _Avoid_: Warp, jump
 
 **View distance**:

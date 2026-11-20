@@ -529,6 +529,58 @@ impl Sources {
 /// directory.
 pub const ASSETS_DIRECTORY: &str = "assets";
 
+/// A Far proxy as its cook leaves it: the elements its Mesh takes in each
+/// Arena, and its baked atlas's side in texels, none without a Material.
+#[cfg(test)]
+pub(crate) struct FarProxyContents {
+    pub coordinates: [i32; 2],
+    pub arena_elements: [usize; 5],
+    pub atlas_side_texels: Option<u32>,
+}
+
+/// Cooks every Far proxy's Mesh of `scene` on every thread, its Material
+/// charted and not baked, and every Mesh `scene` reads; gives each Far proxy's
+/// contents, and the elements in each Arena of each Mesh drawn and traced and
+/// of the far ground's, drawn alone.
+#[cfg(test)]
+pub(crate) fn far_field_contents(
+    scene: ReferenceScene,
+) -> (Vec<FarProxyContents>, Vec<[usize; 5]>) {
+    use crate::assets::{MeshUse, arena_elements};
+    let read = || read_sources(Path::new(ASSETS_DIRECTORY), &[scene], Some(&[])).unwrap();
+    let coordinates = scene.chunk_coordinates();
+    let threads = std::thread::available_parallelism().map_or(1, |threads| threads.get());
+    let far_proxies = std::thread::scope(|scope| {
+        let bands = coordinates.chunks(coordinates.len().div_ceil(threads));
+        let workers: Vec<_> = (bands.map(|band| {
+            scope.spawn(move || {
+                let mut sources = read();
+                let cooked = band.iter().map(|&coordinates| {
+                    let (mesh, transfer) = sources.far_proxy_mesh(scene, coordinates).unwrap();
+                    FarProxyContents {
+                        coordinates,
+                        arena_elements: arena_elements(&mesh, MeshUse::FarProxy),
+                        atlas_side_texels: transfer.map(|transfer| transfer.atlas_side_texels()),
+                    }
+                });
+                cooked.collect::<Vec<_>>()
+            })
+        }))
+        .collect();
+        let joined = workers.into_iter().map(|worker| worker.join().unwrap());
+        joined.flatten().collect()
+    });
+    let mut meshes = Vec::new();
+    for (id, _, _, primitives) in &read().meshes {
+        let mesh = mesh::cook(primitives).unwrap();
+        meshes.push(arena_elements(&mesh, MeshUse::DrawnAndTraced));
+        if scene.far_field_ground() == Some(*id) {
+            meshes.push(arena_elements(&mesh, MeshUse::Drawn));
+        }
+    }
+    (far_proxies, meshes)
+}
+
 /// Cooks the sources `assets/manifest.json` lists that are present, and the
 /// procedural Assets of `scenes`, into `cache`; `praxis cook` cooks every
 /// Reference scene's.

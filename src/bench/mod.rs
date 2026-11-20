@@ -251,7 +251,11 @@ pub struct Measurements {
     pub counter_frames: CounterFrames,
     /// The measured frames' Fast travel, when one's hold ended in them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub fast_travel_hold: Option<FastTravelHold>,
+    pub fast_travel_hold: Option<FastTravelSpan>,
+    /// The measured frames' Fast travel's Far field's fill, when it ended in
+    /// them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub far_field_fill: Option<FastTravelSpan>,
     /// The most frames a newly loaded Chunk's Instances waited to be traced
     /// in the measured frames, when a static TLAS build brought one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -568,24 +572,41 @@ pub struct CounterFrames {
     pub counters: Counters,
 }
 
-/// A Fast travel's hold: the longest time from a jump until every Chunk
-/// within the Load radius loaded, and the frames every hold took.
+/// A span of the Fast travels in some frames, their hold or their Far
+/// field's fill: the longest one's time and the frames all of them took.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct FastTravelHold {
+pub struct FastTravelSpan {
     pub milliseconds: f64,
     pub frames: u32,
 }
 
-impl FastTravelHold {
-    /// The hold of the Fast travels whose holds ended in `frames`.
-    fn of(frames: &[FrameStats]) -> Option<Self> {
-        let longest = frames
-            .iter()
-            .filter_map(|stats| stats.fast_travel_hold)
-            .max()?;
+impl FastTravelSpan {
+    /// The holds that ended in `frames`, each from its jump until every
+    /// Chunk within the Load radius loaded.
+    fn hold(frames: &[FrameStats]) -> Option<Self> {
+        Self::of(
+            frames,
+            |stats| stats.fast_travel_hold,
+            |stats| stats.holding,
+        )
+    }
+
+    /// The fills that ended in `frames`, each from its hold's end until
+    /// every Far proxy within the View distance was Resident.
+    fn fill(frames: &[FrameStats]) -> Option<Self> {
+        let time = |stats: &FrameStats| stats.far_field_fill;
+        Self::of(frames, time, |stats| stats.far_field_filling)
+    }
+
+    fn of(
+        frames: &[FrameStats],
+        time: impl Fn(&FrameStats) -> Option<Duration>,
+        counted: impl Fn(&FrameStats) -> bool,
+    ) -> Option<Self> {
+        let longest = frames.iter().filter_map(time).max()?;
         Some(Self {
             milliseconds: longest.as_secs_f64() * 1e3,
-            frames: frames.iter().filter(|stats| stats.holding).count() as u32,
+            frames: frames.iter().filter(|stats| counted(stats)).count() as u32,
         })
     }
 }
@@ -593,7 +614,7 @@ impl FastTravelHold {
 /// What `traverse` measured of the world's traversal: the CPU and GPU
 /// frames after the reference warm-up, and over every frame its Late
 /// Chunks, Late Far proxies, late mips, peak GPU memory in all and of each kind, refusals,
-/// Chunks not loaded and Fast travel's hold.
+/// Chunks not loaded and Fast travel's hold and fill.
 #[derive(Debug)]
 pub struct Traversal {
     pub frames: usize,
@@ -613,7 +634,8 @@ pub struct Traversal {
     /// The most lights one frame had no room for.
     pub lights_refused: u64,
     pub chunks_not_loaded: u64,
-    pub fast_travel_hold: Option<FastTravelHold>,
+    pub fast_travel_hold: Option<FastTravelSpan>,
+    pub far_field_fill: Option<FastTravelSpan>,
 }
 
 impl Traversal {
@@ -659,7 +681,8 @@ impl Traversal {
             renderables_refused: most(|stats| stats.renderables_refused).into(),
             lights_refused: most(|stats| stats.lights_overflowed).into(),
             chunks_not_loaded: total(|stats| stats.chunks_not_loaded),
-            fast_travel_hold: FastTravelHold::of(frames),
+            fast_travel_hold: FastTravelSpan::hold(frames),
+            far_field_fill: FastTravelSpan::fill(frames),
         }
     }
 }
@@ -1029,7 +1052,8 @@ fn measure(
                 &frames[COUNTER_FRAMES.start as usize..COUNTER_FRAMES.end as usize],
             ),
         },
-        fast_travel_hold: FastTravelHold::of(measured),
+        fast_travel_hold: FastTravelSpan::hold(measured),
+        far_field_fill: FastTravelSpan::fill(measured),
         frames_until_traced: (measured.iter())
             .filter_map(|stats| stats.frames_until_traced)
             .max(),
@@ -1122,6 +1146,13 @@ impl std::fmt::Display for Measurements {
                 formatter,
                 " fast_travel_hold_ms={:.1} fast_travel_hold_frames={}",
                 hold.milliseconds, hold.frames
+            )?;
+        }
+        if let Some(fill) = self.far_field_fill {
+            write!(
+                formatter,
+                " far_field_fill_ms={:.1} far_field_fill_frames={}",
+                fill.milliseconds, fill.frames
             )?;
         }
         if let Some(frames) = self.frames_until_traced {
@@ -1751,6 +1782,7 @@ mod tests {
                 counters: COUNTERS,
             },
             fast_travel_hold: None,
+            far_field_fill: None,
             frames_until_traced: None,
             blas_compaction_microseconds: None,
             aliasing: None,
@@ -2745,7 +2777,8 @@ mod tests {
     }
 
     #[test]
-    fn the_measured_frames_fast_travel_hold_traced_frames_and_blas_compaction_are_measured() {
+    fn the_measured_frames_fast_travel_hold_and_fill_traced_frames_and_blas_compaction_are_measured()
+     {
         let configuration = Configuration::REFERENCE;
         let mut frames = frames(configuration);
         let compaction = |stats: &mut FrameStats, microseconds| {
@@ -2759,6 +2792,9 @@ mod tests {
         frames[400].holding = true;
         frames[401].holding = true;
         frames[402].fast_travel_hold = Some(Duration::from_millis(250));
+        frames[5].far_field_fill = Some(Duration::from_secs(9));
+        (frames[402].far_field_filling, frames[403].far_field_filling) = (true, true);
+        frames[404].far_field_fill = Some(Duration::from_millis(120));
         frames[500].frames_until_traced = Some(2);
         frames[600].frames_until_traced = Some(4);
         compaction(&mut frames[700], 1000);
@@ -2774,8 +2810,15 @@ mod tests {
         .expect("every frame read back its GPU stats");
         assert_eq!(
             measurements.fast_travel_hold,
-            Some(FastTravelHold {
+            Some(FastTravelSpan {
                 milliseconds: 250.0,
+                frames: 2
+            })
+        );
+        assert_eq!(
+            measurements.far_field_fill,
+            Some(FastTravelSpan {
+                milliseconds: 120.0,
                 frames: 2
             })
         );
@@ -2792,8 +2835,9 @@ mod tests {
             &frames_without_rays(configuration),
         )
         .expect("every frame read back its GPU stats");
-        let measured = (still.fast_travel_hold, still.frames_until_traced);
+        let measured = (still.fast_travel_hold, still.far_field_fill);
         assert_eq!(measured, (None, None));
+        assert_eq!(still.frames_until_traced, None);
         assert_eq!(still.blas_compaction_microseconds, None);
     }
 
@@ -2908,6 +2952,8 @@ mod tests {
         frames[1000].gpu_memory_bytes_by_kind[GpuMemoryKind::Staging as usize] = 60;
         frames[1001].holding = true;
         frames[1002].fast_travel_hold = Some(Duration::from_millis(80));
+        frames[1002].far_field_filling = true;
+        frames[1003].far_field_fill = Some(Duration::from_millis(40));
         frames[5].materials_refused = 2;
         frames[1003].materials_refused = 1;
         frames[6].meshes_refused = 1;
@@ -2938,10 +2984,22 @@ mod tests {
         assert_eq!(traversal.chunks_not_loaded, 3);
         assert_eq!(
             traversal.fast_travel_hold,
-            Some(FastTravelHold {
+            Some(FastTravelSpan {
                 milliseconds: 80.0,
                 frames: 1
             })
+        );
+        assert_eq!(
+            traversal.far_field_fill,
+            Some(FastTravelSpan {
+                milliseconds: 40.0,
+                frames: 1
+            })
+        );
+        assert!(
+            traversal
+                .to_string()
+                .contains("| Far-field fill, ms | 40.0 |")
         );
     }
 

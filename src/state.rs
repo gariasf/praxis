@@ -291,6 +291,8 @@ impl State {
         self.recorder.counters.late_mips = streamed.late_mips;
         self.recorder.counters.holding = streamed.holding;
         self.recorder.counters.fast_travel_hold = streamed.fast_travel_hold;
+        self.recorder.counters.far_field_filling = streamed.far_field_filling;
+        self.recorder.counters.far_field_fill = streamed.far_field_fill;
         self.recorder.stage("stream_chunks", started);
 
         let started = Instant::now();
