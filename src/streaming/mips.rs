@@ -152,7 +152,7 @@ impl MipPriority {
             }
             for texture_use in uses.iter() {
                 let distance_from = |position: DVec3| {
-                    (position.distance(texture_use.centre) - texture_use.radius).max(0.0)
+                    distance_to_sphere(position, texture_use.centre, texture_use.radius)
                 };
                 let distance = distance_from(camera);
                 let closing = camera_before.map_or(0.0, |before| distance_from(before) - distance);
@@ -312,12 +312,43 @@ fn texture_uses(
                     texture,
                     centre,
                     radius,
-                    texels_per_metre: f64::from(texel_density) * f64::from(side) / smallest_scale,
+                    texels_per_metre: texels_per_metre(texel_density, side, smallest_scale),
                 });
             }
         }
     }
     uses
+}
+
+/// The finest mip of a Texture `side` texels across at mip 0 that a Mesh
+/// with `bounds`, placed by `transform` and sampling it at `texel_density`,
+/// needs from `camera`, as `plan` judges a drawn use.
+pub(crate) fn placement_finest_mip_needed(
+    camera: DVec3,
+    transform: &Transform,
+    bounds: [[f32; 3]; 2],
+    texel_density: f32,
+    side: u32,
+) -> u32 {
+    let (centre, radius, smallest_scale) = placement_sphere(transform, bounds);
+    let distance = distance_to_sphere(camera, centre, radius);
+    finest_mip_needed(
+        texels_per_metre(texel_density, side, smallest_scale),
+        distance,
+    )
+}
+
+/// The distance from `position` to the sphere of `radius` around `centre`,
+/// 0 within it.
+fn distance_to_sphere(position: DVec3, centre: DVec3, radius: f64) -> f64 {
+    (position.distance(centre) - radius).max(0.0)
+}
+
+/// The texels per metre of a surface, at mip 0, of a Texture `side` texels
+/// across that a Primitive samples at `texel_density`, placed at
+/// `smallest_scale`.
+fn texels_per_metre(texel_density: f32, side: u32, smallest_scale: f64) -> f64 {
+    f64::from(texel_density) * f64::from(side) / smallest_scale
 }
 
 /// The centre and radius of the sphere around `bounds`, a Mesh's, placed
