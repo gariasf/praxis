@@ -1,2 +1,4 @@
 # Scripts run under Git Bash on Windows too, where a CRLF breaks bash.
 *.sh text eol=lf
+# The shader tests match WGSL lines ending in LF, and include_str! embeds its bytes.
+*.wgsl text eol=lf
