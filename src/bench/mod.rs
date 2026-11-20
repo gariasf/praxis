@@ -716,6 +716,8 @@ pub enum CompareMode {
     Local,
     /// Deterministic counters only: times depend on the machine and its load.
     Ci,
+    /// `Ci`, and a judged counter of `Counters` that fell fails as one that rose does.
+    Recording,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1143,7 +1145,8 @@ impl std::fmt::Display for Measurements {
 /// measured frames' counters, unless the Baseline's measured frames streamed:
 /// then their counter frames', and the measured frames' refusals as well.
 /// Runs of other lengths compare their counter frames', and only with
-/// `CompareMode::Ci`, as their times cover other frames.
+/// `CompareMode::Ci` or `CompareMode::Recording`, as their times cover other
+/// frames.
 pub fn compare(
     current: &Measurements,
     baseline: &Measurements,
@@ -1153,10 +1156,16 @@ pub fn compare(
     ensure_comparable(current, baseline)?;
     let (counters, baseline_counters) = compared_counters(current, baseline);
     let mut findings = Vec::new();
+    let counter_fails = |current: u64, baseline: u64| match mode {
+        CompareMode::Recording => current != baseline,
+        CompareMode::Local | CompareMode::Ci => current > baseline,
+    };
     for ((metric, current), (_, baseline)) in
         counters.named().into_iter().zip(baseline_counters.named())
     {
-        if current > baseline && !matches!(metric, "late_mips" | "tlas_build_allocations") {
+        if counter_fails(current, baseline)
+            && !matches!(metric, "late_mips" | "tlas_build_allocations")
+        {
             findings.push(Finding {
                 metric,
                 verdict: Verdict::Fail,
@@ -1172,7 +1181,7 @@ pub fn compare(
             .zip(baseline.counters.named())
             .filter(|((metric, _), _)| Counters::REFUSALS.contains(metric));
         for ((metric, value), (_, baseline_value)) in refusals {
-            if value > baseline_value {
+            if counter_fails(value, baseline_value) {
                 findings.push(Finding {
                     metric,
                     verdict: Verdict::Fail,
@@ -1196,7 +1205,7 @@ pub fn compare(
         }
     }
     check_aliasing(&mut findings, current.aliasing, baseline.aliasing);
-    if mode == CompareMode::Ci {
+    if matches!(mode, CompareMode::Ci | CompareMode::Recording) {
         return Ok(findings);
     }
 
@@ -1920,6 +1929,51 @@ mod tests {
                 ("lights_overflowed", Verdict::Fail),
                 ("shadow_mask_lights_overflowed", Verdict::Fail)
             ]
+        );
+    }
+
+    #[test]
+    fn a_recording_fails_a_counter_that_fell_where_the_gate_passes_it() {
+        let mut current = baseline();
+        current.counters.heap_allocations -= 1;
+        for gate in [CompareMode::Local, CompareMode::Ci] {
+            assert_eq!(verdicts(&current, &baseline(), gate), []);
+        }
+        assert_eq!(
+            verdicts(&current, &baseline(), CompareMode::Recording),
+            [("heap_allocations", Verdict::Fail)]
+        );
+        current.counters.heap_allocations += 2;
+        assert_eq!(
+            verdicts(&current, &baseline(), CompareMode::Recording),
+            [("heap_allocations", Verdict::Fail)]
+        );
+
+        let mut baseline_refused = baseline();
+        baseline_refused.counters.chunks_loaded = 39;
+        baseline_refused.counters.lights_overflowed = 1;
+        let mut streamed = baseline();
+        streamed.counters.chunks_loaded = 40;
+        assert_eq!(verdicts(&streamed, &baseline_refused, CompareMode::Ci), []);
+        assert_eq!(
+            verdicts(&streamed, &baseline_refused, CompareMode::Recording),
+            [("lights_overflowed", Verdict::Fail)]
+        );
+    }
+
+    #[test]
+    fn a_recording_passes_slower_times_and_a_fall_of_the_counters_reported_only() {
+        let mut slower = baseline();
+        slower.cpu_frame_microseconds.median = 5000.0;
+        slower.gpu_frame_microseconds.median = 50_000.0;
+        assert_ne!(verdicts(&slower, &baseline(), CompareMode::Local), []);
+        assert_eq!(verdicts(&slower, &baseline(), CompareMode::Recording), []);
+        let mut baseline_late = baseline();
+        baseline_late.counters.late_mips = 12;
+        baseline_late.counters.tlas_build_allocations = 12;
+        assert_eq!(
+            verdicts(&baseline(), &baseline_late, CompareMode::Recording),
+            []
         );
     }
 

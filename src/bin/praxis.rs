@@ -390,6 +390,12 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             results: results.clone(),
             mode: CompareMode::Ci,
         },
+        [command, results, flag] if command == "compare" && flag == "--recording" => {
+            Command::Compare {
+                results: results.clone(),
+                mode: CompareMode::Recording,
+            }
+        }
         [command, results] if command == "report" => Command::Report {
             results: results.clone(),
         },
@@ -413,7 +419,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             anyhow::bail!(
                 "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `preflight`, {cook_commands}`bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish [--lod <n>] | --experiment <name>] [<scene>...]`, \
-             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history publish-night <night directory>`, `history regressions`, `compare <bench directory> [--ci]`, `report <bench directory>`, or `traverse`; {crowd_form_clause} \
+             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history publish-night <night directory>`, `history regressions`, `compare <bench directory> [--ci | --recording]`, `report <bench directory>`, or `traverse`; {crowd_form_clause} \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
                 ReferenceScene::ALL.map(ReferenceScene::name)
             )
@@ -1419,5 +1425,20 @@ mod tests {
         };
         assert_eq!(results, "out");
         assert!(matches!(parse(&["traverse"]).unwrap(), Command::Traverse));
+    }
+
+    #[test]
+    fn compare_parses_its_mode() {
+        for (flag, expected) in [
+            (None, CompareMode::Local),
+            (Some("--ci"), CompareMode::Ci),
+            (Some("--recording"), CompareMode::Recording),
+        ] {
+            let arguments: Vec<&str> = ["compare", "out"].into_iter().chain(flag).collect();
+            let Command::Compare { results, mode } = parse(&arguments).unwrap() else {
+                panic!("{arguments:?} is a compare");
+            };
+            assert_eq!((results.as_str(), mode), ("out", expected));
+        }
     }
 }

@@ -90,12 +90,12 @@ jobs:
 
       # `adapter_key` must stay `praxis::bench::baseline_directory`'s name
       # for an adapter on Vulkan.
-      - name: Record the Baselines CI would fail
+      - name: Record the Baselines CI would fail, and those a counter fell below
         run: |
           for result in target/bench/*.json; do
             scene_directory=$(mktemp -d)
             cp "$result" "$scene_directory"
-            if ! target/release/praxis compare "$scene_directory" --ci; then
+            if ! target/release/praxis compare "$scene_directory" --recording; then
               adapter_key=$(jq -r .adapter "$result" | tr '[:upper:]' '[:lower:]' |
                 sed -E 's/[^a-z0-9]+/-/g; s/^-//; s/-$//')
               baseline_directory=target/lavapipe-files/bench/baselines/$adapter_key
