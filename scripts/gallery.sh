@@ -138,9 +138,8 @@ capture() {
       { printf 'FAIL  %s  %s\n' "$image" "$difference"; exit 1; }
     printf 'ok    %-34s %s\n' "$image" "$difference"
   fi
-  # export-scene refuses crowd, whose figures the GPU bends, and would
-  # generate all of world's 16 million Placements.
-  if [[ -n "${PRAXIS_BLENDER:-}" && "$scene" != crowd && "$scene" != world ]]; then
+  # export-scene refuses crowd, whose figures the GPU bends.
+  if [[ -n "${PRAXIS_BLENDER:-}" && "$scene" != crowd ]]; then
     reference "$name" "$scene" "$frame"
   fi
 }

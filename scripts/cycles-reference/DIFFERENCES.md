@@ -26,7 +26,7 @@ praxis's ambient, a stand-in for ADR 0020's irradiance probes, reaches every
 surface at full strength, darkened only by a Material's occlusion texture.
 Cycles' white world is blocked by whatever lies between a surface and the
 sky. Shows wherever geometry hides the sky: a street's shaded walls and
-pavement (`town`), and the reflections of metals, which in Cycles see the
+pavement (`town`, `world`), and the reflections of metals, which in Cycles see the
 object itself or its neighbours (`helmet`'s and `pbr-sweep`'s metals,
 `normal-tangent`'s domes). Until the probes land.
 
@@ -94,6 +94,22 @@ than 4x MSAA alone leaves on an Instance that draws LOD 0 (`orrery`'s three
 small spheres).
 
 ![Orrery's three small spheres, drawn past LOD 0](differences/lod-outlines.png)
+
+## Far proxies against the Chunks' own Meshes
+
+Tag: `deliberate until ADR 0026's Far proxies are superseded`.
+
+Past the Load radius praxis draws and traces each Chunk's Far proxy, its
+Placements merged and simplified to within a pixel at the Load radius, under
+a Material baked for it; `praxis export-scene world` writes the Chunks within
+the View distance whole, each Placement's own Mesh and Material at LOD 0, so
+Cycles renders and traces those. Shows past the Load radius as a line along
+each roof's edge, Cycles brighter above it and praxis below, where the
+proxy's roof sits a pixel off the Placements' (`world`). Past the View
+distance both draw only the ground under the far field, and a Far proxy that
+praxis holds beyond it is not exported.
+
+![World's far settlement: a line along each roof's edge](differences/far-proxy-roofs.png)
 
 ## BC compression and mips against source images
 
