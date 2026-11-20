@@ -4,6 +4,7 @@
 
 mod import;
 mod night;
+mod rerecord;
 mod suspects;
 mod verdicts;
 
@@ -19,6 +20,7 @@ use crate::scenes::ReferenceScene;
 
 pub use import::import_baselines;
 pub use night::{NextRun, next_run, publish_night};
+pub use rerecord::rerecord_baselines;
 pub use verdicts::{GitHubIssues, IssueTracker, Suspect, bisect, file_regressions, suspects};
 
 const REMOTE: &str = "origin";

@@ -20,7 +20,11 @@ src/
                                  import`: the Baselines committed before
                                  it, by Harness version era;
                                  history/suspects.rs, which Series
-                                 records are Suspects
+                                 records are Suspects;
+                                 history/rerecord.rs, `praxis history
+                                 rerecord`: a sweep's runs re-record the
+                                 counters of the Baselines they moved,
+                                 timings kept, with the commits between
   stats/                       # frame stats: CPU and GPU times, counts,
                                  the GPU memory ledger by kind,
                                  counting allocator
@@ -177,7 +181,10 @@ scripts/sweep.sh               # the nightly sweep: re-benches a slower
                                  a needs-triage issue per pinned Regression
                                  (`praxis history regressions`), then
                                  benches main's scenes lacking a record on a
-                                 Series here, on a quiet machine; beside it
+                                 Series here, on a quiet machine; on the RTX
+                                 2070 SUPER then runs the Goldens test and
+                                 opens a pull request re-recording the
+                                 counters that moved; beside it
                                  its launchd
                                  (sweep.plist) and Task Scheduler
                                  (sweep-task.xml) definitions

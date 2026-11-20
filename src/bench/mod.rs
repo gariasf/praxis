@@ -5,7 +5,7 @@ mod report;
 pub use history::{
     GitHubIssues, IssueTracker, NextRun, Publication, ReleaseBuild, Suspect, bisect,
     check_experiment_name, file_regressions, import_baselines, next_run, publish,
-    publish_experiment, publish_night, suspects, unrecorded_scenes,
+    publish_experiment, publish_night, rerecord_baselines, suspects, unrecorded_scenes,
 };
 pub use provenance::{BenchStart, Checkout, Provenance};
 pub use report::report;
@@ -1154,44 +1154,7 @@ pub fn compare(
     mode: CompareMode,
 ) -> anyhow::Result<Vec<Finding>> {
     ensure_comparable(current, baseline)?;
-    let (counters, baseline_counters) = compared_counters(current, baseline);
-    let mut findings = Vec::new();
-    let counter_fails = |current: u64, baseline: u64| match mode {
-        CompareMode::Recording => current != baseline,
-        CompareMode::Local | CompareMode::Ci => current > baseline,
-    };
-    for ((metric, current), (_, baseline)) in
-        counters.named().into_iter().zip(baseline_counters.named())
-    {
-        if counter_fails(current, baseline)
-            && !matches!(metric, "late_mips" | "tlas_build_allocations")
-        {
-            findings.push(Finding {
-                metric,
-                verdict: Verdict::Fail,
-                detail: format!("{current} against Baseline {baseline}"),
-            });
-        }
-    }
-    if current.measured_frames == baseline.measured_frames
-        && compares_counter_frames(current, baseline)
-    {
-        let measured = current.counters.named().into_iter();
-        let refusals = measured
-            .zip(baseline.counters.named())
-            .filter(|((metric, _), _)| Counters::REFUSALS.contains(metric));
-        for ((metric, value), (_, baseline_value)) in refusals {
-            if counter_fails(value, baseline_value) {
-                findings.push(Finding {
-                    metric,
-                    verdict: Verdict::Fail,
-                    detail: format!(
-                        "{value} in the measured frames against Baseline {baseline_value}"
-                    ),
-                });
-            }
-        }
-    }
+    let mut findings = counter_findings(current, baseline, mode);
     check_budget(
         &mut findings,
         "gpu_memory_bytes",
@@ -1339,6 +1302,66 @@ pub fn compare(
             finding.detail = format!("{}; {load_averages}", finding.detail);
         }
     }
+    Ok(findings)
+}
+
+/// Every counter of `current` that fails against `baseline` in `mode`: the
+/// compared counters (`compared_counters`), and the refusals in the measured
+/// frames where both measured as many and compare those.
+fn counter_findings(
+    current: &Measurements,
+    baseline: &Measurements,
+    mode: CompareMode,
+) -> Vec<Finding> {
+    let (counters, baseline_counters) = compared_counters(current, baseline);
+    let mut findings = Vec::new();
+    let counter_fails = |current: u64, baseline: u64| match mode {
+        CompareMode::Recording => current != baseline,
+        CompareMode::Local | CompareMode::Ci => current > baseline,
+    };
+    for ((metric, current), (_, baseline)) in
+        counters.named().into_iter().zip(baseline_counters.named())
+    {
+        if counter_fails(current, baseline)
+            && !matches!(metric, "late_mips" | "tlas_build_allocations")
+        {
+            findings.push(Finding {
+                metric,
+                verdict: Verdict::Fail,
+                detail: format!("{current} against Baseline {baseline}"),
+            });
+        }
+    }
+    if current.measured_frames == baseline.measured_frames
+        && compares_counter_frames(current, baseline)
+    {
+        let measured = current.counters.named().into_iter();
+        let refusals = measured
+            .zip(baseline.counters.named())
+            .filter(|((metric, _), _)| Counters::REFUSALS.contains(metric));
+        for ((metric, value), (_, baseline_value)) in refusals {
+            if counter_fails(value, baseline_value) {
+                findings.push(Finding {
+                    metric,
+                    verdict: Verdict::Fail,
+                    detail: format!(
+                        "{value} in the measured frames against Baseline {baseline_value}"
+                    ),
+                });
+            }
+        }
+    }
+    findings
+}
+
+/// Every counter and `Aliasing` metric of `current` that a recording would
+/// fail against `baseline`, which must have run its scene in its profile at
+/// its size: what `compare` fails in `CompareMode::Recording` but Budgets.
+fn counters_moved(current: &Measurements, baseline: &Measurements) -> anyhow::Result<Vec<Finding>> {
+    ensure_comparable(current, baseline)?;
+    let mut findings = counter_findings(current, baseline, CompareMode::Recording);
+    check_aliasing(&mut findings, current.aliasing, baseline.aliasing);
+    findings.retain(|finding| finding.verdict == Verdict::Fail);
     Ok(findings)
 }
 
