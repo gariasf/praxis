@@ -67,7 +67,6 @@ pub struct GpuMemoryBudgets {
 
 impl GpuMemoryBudgets {
     /// `bytes` for every kind.
-    #[cfg(test)]
     pub const fn each(bytes: u64) -> Self {
         Self {
             geometry_arenas: bytes,
