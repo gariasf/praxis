@@ -44,7 +44,7 @@ const LONGEST_RETRY_FRAMES: u64 = 1024;
 
 /// The fewest frames before the camera would come within the Load radius
 /// of a Chunk that the streamer requests it, whatever its loads have taken.
-const LEAST_LEAD_FRAMES: u64 = 16;
+pub(crate) const LEAST_LEAD_FRAMES: u64 = 16;
 
 /// What one frame's update decided. Coordinates are x then z.
 #[derive(Clone, Debug, Default)]

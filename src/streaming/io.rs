@@ -18,7 +18,7 @@ use crate::cooked::{AssetId, CookedCache, CookedChunk, CookedMaterial, CookedMes
 use crate::render::{Renderer, mips_written_bytes, texture_written_bytes};
 use crate::scenes::ReferenceScene;
 use crate::streaming::chunks::{load_cooked_chunk, load_far_proxy};
-use crate::streaming::mips::{MipPriority, MipRequest};
+use crate::streaming::mips::{MipPriority, MipRequest, Sight};
 use crate::streaming::{
     ChunkFrame, ChunkIo, ChunkStreamer, FinishedLoad, LoadedChunk, LoadedChunks,
     ResidentFarProxies, distance_metres,
@@ -788,11 +788,16 @@ impl ChunkStreaming {
                     resident.set_changed();
                 }
             }
+            let drawn_chunks = far_proxies
+                .as_ref()
+                .map_or(&[][..], |far_proxies| &far_proxies.drawn_chunks);
             let mip_streaming = MipStreaming {
                 io,
                 priority: mips,
                 renderer,
                 settle,
+                teleported,
+                drawn_chunks,
                 load_bytes_per_frame: *load_bytes_per_frame,
             };
             let mips_settled = mip_streaming.stream(world, &mut streamed);
@@ -813,6 +818,9 @@ struct MipStreaming<'a> {
     priority: &'a mut MipPriority,
     renderer: &'a mut Renderer,
     settle: bool,
+    teleported: bool,
+    /// The coordinates of the Chunks drawn this frame, in order.
+    drawn_chunks: &'a [[i32; 2]],
     load_bytes_per_frame: u64,
 }
 
@@ -820,8 +828,8 @@ impl MipStreaming<'_> {
     /// Applies the mips the IO pool read, finest-needed first, then in Asset
     /// ID order, up to the frame's load bytes, or, while settling, all of them once nothing is
     /// in flight, as the Chunk streamer's last take found it; then requests
-    /// the mips the drawn Chunks' Placements and the drawn Far proxies need
-    /// from the camera,
+    /// the mips the Placements of the drawn Chunks and Far proxies need, and
+    /// of those held past their radius, from the camera a lead ahead,
     /// finest-needed first, and counts the late mips. Returns whether no
     /// request is in flight. Without mip streaming, it does nothing.
     fn stream(mut self, world: &World, streamed: &mut StreamedFrame) -> bool {
@@ -846,9 +854,29 @@ impl MipStreaming<'_> {
             material_pool,
             ..
         } = &*self.renderer;
+        let chunk_sight = |chunk: &LoadedChunk| {
+            if chunk.held {
+                Sight::Ahead
+            } else {
+                Sight::Drawn
+            }
+        };
+        let drawn_chunks = self.drawn_chunks;
+        let far_proxy_sight = |far_proxy: &LoadedChunk| {
+            let replaced = drawn_chunks.binary_search(&far_proxy.coordinates).is_ok();
+            match (far_proxy.held, replaced) {
+                (false, _) => Sight::Drawn,
+                (true, false) => Sight::Ahead,
+                (true, true) => Sight::Replaced,
+            }
+        };
+        let chunks = chunks.iter().map(|chunk| (chunk, chunk_sight(chunk)));
+        let far_proxies =
+            (far_proxies.iter()).map(|far_proxy| (far_proxy, far_proxy_sight(far_proxy)));
         let (late_mips, requests) = self.priority.plan(
             camera,
-            chunks.iter().chain(far_proxies),
+            self.teleported,
+            chunks.chain(far_proxies),
             mesh_pool.meshes(),
             material_pool,
         );
