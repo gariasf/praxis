@@ -1,7 +1,8 @@
 //! Mip priority (ADR 0017): the finest mip each streamed Texture needs, the
 //! finest any loaded Chunk's Placement sampling it needs from its distance
 //! and its Primitive's UV texel density against the 1440p pixel footprint,
-//! and the mips to request from the IO pool for it, finest-needed first.
+//! and the mips to request from the IO pool for it, finest-needed first,
+//! from where the camera will be once a read has had time to land.
 
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -12,8 +13,8 @@ use crate::assets::material::EvictionRank;
 use crate::assets::{LoadedMeshes, MaterialPool};
 use crate::camera::FIELD_OF_VIEW;
 use crate::components::Transform;
-use crate::cooked::AssetId;
-use crate::streaming::LoadedChunk;
+use crate::cooked::{AssetId, CHUNK_EDGE_METRES};
+use crate::streaming::{LEAST_LEAD_FRAMES, LoadedChunk};
 
 /// The view mip priority judges against: 1440 pixels tall at 16:9.
 const PRIORITY_VIEW_HEIGHT_PIXELS: f64 = 1440.0;
@@ -40,6 +41,25 @@ fn finest_mip_needed(texels_per_metre: f64, distance_metres: f64) -> u32 {
     texels_per_pixel.max(1.0).log2().floor() as u32
 }
 
+/// Frames before the camera, closing on a surface at its last frame's
+/// rate, would reach it that its mips are requested: the Chunk streamer's
+/// least lead.
+const LEAD_FRAMES: f64 = LEAST_LEAD_FRAMES as f64;
+
+/// How a loaded Chunk or Far proxy is seen this frame, for its mips.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Sight {
+    /// Drawn: a mip it needs that is not Resident is late.
+    Drawn,
+    /// Held past its radius, where the camera may come to draw it: its mips
+    /// are requested as a drawn one's are, and none is late
+    /// [ref:ue-5.8-texture-streaming-hidden-prefetch].
+    Ahead,
+    /// A Far proxy held while its Chunk is drawn in its place: it needs no
+    /// mip.
+    Replaced,
+}
+
 /// One Placement's use of a Texture that streams: the sphere around its
 /// Mesh's bounds, and the Texture's texels per metre of its surface at
 /// mip 0.
@@ -63,8 +83,14 @@ pub(crate) struct MipRequest {
 pub(crate) struct MipPriority {
     /// Each loaded Chunk's uses, by its Asset ID.
     uses: HashMap<AssetId, Vec<TextureUse>>,
-    /// The finest mip each Texture needs this frame, kept for its memory.
+    /// The finest mip each Texture needs, from where the camera will be a
+    /// lead ahead, kept for its memory.
     needed: HashMap<AssetId, u32>,
+    /// The finest mip each Texture's drawn uses need from where the camera
+    /// is, kept for its memory.
+    drawn_needed: HashMap<AssetId, u32>,
+    /// The camera's position at the last `plan`.
+    camera_before: Option<DVec3>,
     /// The `plan`s so far.
     plans: u64,
     /// The last `plan` that found each Texture needing its finest Resident
@@ -81,21 +107,28 @@ pub(crate) struct MipPriority {
 }
 
 impl MipPriority {
-    /// The finest mip each Texture `chunks`' drawn Placements sample needs
-    /// from `camera`, `chunks` being the loaded Chunks and the Resident Far
-    /// proxies, against what `materials` holds Resident. Returns the
-    /// late mips, those needed and not Resident, and the requests for those
-    /// not yet requested whose move finds room in its Channel, free or by an
-    /// eviction, finest-needed first, then by Asset ID.
+    /// The finest mip each Texture `chunks`' Placements sample needs, those
+    /// drawn and held ahead, `chunks` being the loaded Chunks and the
+    /// Resident Far proxies, each with its Sight, against what `materials`
+    /// holds Resident: from `camera`, or, as the camera closes on a
+    /// Placement at its rate since the last `plan`, from where it will be
+    /// `LEAD_FRAMES` later, at most a Chunk edge nearer, as the Chunk
+    /// streamer requests no further than one past its radius, unless it
+    /// `teleported`. Returns the late mips,
+    /// those the drawn Placements need from `camera` that are not Resident,
+    /// and the requests for those not yet requested whose move finds room
+    /// in its Channel, free or by an eviction, finest-needed first, then by
+    /// Asset ID.
     pub(crate) fn plan<'chunks>(
         &mut self,
         camera: DVec3,
-        chunks: impl Iterator<Item = &'chunks LoadedChunk> + Clone,
+        teleported: bool,
+        chunks: impl Iterator<Item = (&'chunks LoadedChunk, Sight)> + Clone,
         meshes: &LoadedMeshes,
         materials: &MaterialPool,
     ) -> (u32, &[MipRequest]) {
         if self.uses.len() > chunks.clone().count() {
-            let loaded: HashSet<AssetId> = chunks.clone().map(|chunk| chunk.id).collect();
+            let loaded: HashSet<AssetId> = chunks.clone().map(|(chunk, _)| chunk.id).collect();
             self.uses.retain(|chunk, _| loaded.contains(chunk));
         }
         let material_frees = materials.generations().frees();
@@ -104,21 +137,34 @@ impl MipPriority {
             self.last_used_plan
                 .retain(|&texture, _| materials.is_texture_loaded(texture));
         }
+        let camera_before = self.camera_before.replace(camera);
+        let camera_before = camera_before.filter(|_| !teleported);
         self.needed.clear();
+        self.drawn_needed.clear();
         self.plans += 1;
-        for chunk in chunks {
+        for (chunk, sight) in chunks {
             let uses = self
                 .uses
                 .entry(chunk.id)
                 .or_insert_with(|| texture_uses(chunk, meshes, materials));
-            if chunk.held {
+            if sight == Sight::Replaced {
                 continue;
             }
             for texture_use in uses.iter() {
-                let distance = (camera.distance(texture_use.centre) - texture_use.radius).max(0.0);
-                let level = finest_mip_needed(texture_use.texels_per_metre, distance);
-                let needed = self.needed.entry(texture_use.texture).or_insert(level);
-                *needed = (*needed).min(level);
+                let distance_from = |position: DVec3| {
+                    (position.distance(texture_use.centre) - texture_use.radius).max(0.0)
+                };
+                let distance = distance_from(camera);
+                let closing = camera_before.map_or(0.0, |before| distance_from(before) - distance);
+                let lead_metres = (closing.max(0.0) * LEAD_FRAMES).min(CHUNK_EDGE_METRES);
+                let distance_ahead = (distance - lead_metres).max(0.0);
+                let texels_per_metre = texture_use.texels_per_metre;
+                let level = finest_mip_needed(texels_per_metre, distance_ahead);
+                keep_finest(&mut self.needed, texture_use.texture, level);
+                if sight == Sight::Drawn {
+                    let level = finest_mip_needed(texels_per_metre, distance);
+                    keep_finest(&mut self.drawn_needed, texture_use.texture, level);
+                }
             }
         }
         for (&texture, &needed) in &self.needed {
@@ -128,6 +174,11 @@ impl MipPriority {
             }
         }
         let mut late_mips = 0;
+        for (&texture, &needed) in &self.drawn_needed {
+            if let Some((_, resident)) = materials.texture_residency(texture) {
+                late_mips += resident.saturating_sub(needed);
+            }
+        }
         self.requests.clear();
         let (needed_by_texture, last_used_plan) = (&self.needed, &self.last_used_plan);
         let eviction_rank = |texture, resident_level| {
@@ -147,7 +198,6 @@ impl MipPriority {
             if needed >= resident {
                 continue;
             }
-            late_mips += resident - needed;
             if self.in_flight.contains(&texture) || self.refused.contains(&texture) {
                 continue;
             }
@@ -203,6 +253,12 @@ impl MipPriority {
             self.refused.insert(texture);
         }
     }
+}
+
+/// Keeps `level` as `texture`'s in `needed` where it is finer.
+fn keep_finest(needed: &mut HashMap<AssetId, u32>, texture: AssetId, level: u32) {
+    let finest = needed.entry(texture).or_insert(level);
+    *finest = (*finest).min(level);
 }
 
 /// `MipPriority::eviction_rank` from its `needed` and `last_used_plan`.
@@ -322,5 +378,167 @@ mod tests {
                 last_used_plan: 0
             })
         );
+    }
+
+    struct TailReader {
+        texture: crate::cooked::CookedTexture,
+    }
+
+    impl crate::assets::AssetReader for TailReader {
+        fn material(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMaterial> {
+            anyhow::bail!("no Material {id}")
+        }
+        fn texture(&self, _id: AssetId) -> anyhow::Result<crate::cooked::CookedTexture> {
+            Ok(self.texture.clone())
+        }
+        fn mesh(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMesh> {
+            anyhow::bail!("no Mesh {id}")
+        }
+        fn chunk(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedChunk> {
+            anyhow::bail!("no Chunk {id}")
+        }
+    }
+
+    /// A Material pool holding `textures`, 2,048² BC7 Textures with only
+    /// their Resident tails, from mip 3, Resident.
+    fn pool_of_tails(
+        context: &crate::gpu::GpuContext,
+        textures: &[AssetId],
+    ) -> (MaterialPool, crate::render::staging::LoadStaging) {
+        let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
+        let level = |level| vec![0; crate::cooked::level_bytes(format, 2048, 2048, level)];
+        let reader = TailReader {
+            texture: crate::cooked::CookedTexture {
+                format,
+                width: 2048,
+                height: 2048,
+                first_level: 3,
+                levels: (3..12).map(level).collect(),
+            },
+        };
+        let mut staging = crate::render::staging::LoadStaging::new(context.device.clone());
+        let mut pool = MaterialPool::new(
+            &context.device,
+            &crate::stats::gpu_memory::tests::gpu_memory(context),
+            &mut staging,
+            &crate::assets::PoolCapacities::checked_in(),
+            false,
+        );
+        for &texture in textures {
+            let channel = crate::assets::MaterialChannel::Albedo;
+            pool.load_texture(
+                &context.device,
+                &mut staging,
+                &reader,
+                channel,
+                texture,
+                &mut |_| false,
+            )
+            .expect("a tail loads");
+        }
+        (pool, staging)
+    }
+
+    fn chunk(id: u128, held: bool) -> LoadedChunk {
+        LoadedChunk {
+            id: AssetId(id),
+            coordinates: [0, 0],
+            placements: Vec::new(),
+            lights: Vec::new(),
+            meshes: Vec::new(),
+            materials: Vec::new(),
+            held,
+        }
+    }
+
+    /// One texel a pixel at 1 m: a use `distance` metres away needs mip
+    /// ⌊log₂ distance⌋.
+    fn texture_use(texture: AssetId, distance: f64) -> TextureUse {
+        TextureUse {
+            texture,
+            centre: DVec3::new(0.0, 0.0, distance),
+            radius: 0.0,
+            texels_per_metre: 1.0 / finest_pixel_metres_per_metre(),
+        }
+    }
+
+    /// Three Textures at their tails, mip 3, each needing mip 1: the drawn
+    /// Chunk's is late by two mips and requested; the one of a Chunk held
+    /// ahead is requested and not late; the one of a Far proxy whose Chunk
+    /// is drawn in its place is neither.
+    #[test]
+    fn a_chunk_held_ahead_has_its_mips_requested_without_counting_them_late() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let [drawn, ahead, replaced] = [10, 11, 12].map(AssetId);
+        let (pool, mut staging) = pool_of_tails(&context, &[drawn, ahead, replaced]);
+        let chunks = [chunk(1, false), chunk(2, true), chunk(3, true)];
+        let mut priority = MipPriority::default();
+        for (chunk, texture) in chunks.iter().zip([drawn, ahead, replaced]) {
+            priority
+                .uses
+                .insert(chunk.id, vec![texture_use(texture, 2.5)]);
+        }
+        let sights = [Sight::Drawn, Sight::Ahead, Sight::Replaced];
+
+        let (late_mips, requests) = priority.plan(
+            DVec3::ZERO,
+            false,
+            chunks.iter().zip(sights),
+            &LoadedMeshes::default(),
+            &pool,
+        );
+
+        let requested: Vec<_> = (requests.iter())
+            .map(|request| (request.texture, request.levels.clone()))
+            .collect();
+        assert_eq!(late_mips, 2);
+        assert_eq!(requested, [(drawn, 1..3), (ahead, 1..3)]);
+        staging.submit(&context.queue);
+    }
+
+    /// A drawn Texture at its tail, mip 3, 8.5 m away, then 8.2 m: closing
+    /// 0.3 m a frame, it is 3.4 m away `LEAD_FRAMES` later, so mip 1 is
+    /// requested while mip 3 still serves it and none is late; after a
+    /// teleport to the same place nothing is requested. Closing 18.6 m in a
+    /// frame to 300 m away, it would be 2.4 m away `LEAD_FRAMES` later, but
+    /// the lead reaches no further than a Chunk edge, 256 m, to 44 m, where
+    /// mip 5 serves it, so nothing is requested.
+    #[test]
+    fn a_surface_the_camera_closes_on_has_its_mips_requested_a_lead_ahead() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let texture = AssetId(10);
+        let (pool, mut staging) = pool_of_tails(&context, &[texture]);
+        let chunks = [chunk(1, false)];
+        let plan_from = |first_z: f64, second_z: f64, teleported: bool| {
+            let mut priority = MipPriority::default();
+            priority
+                .uses
+                .insert(AssetId(1), vec![texture_use(texture, 0.0)]);
+            let mut plan = |camera_z: f64, teleported: bool| {
+                let (late_mips, requests) = priority.plan(
+                    DVec3::new(0.0, 0.0, camera_z),
+                    teleported,
+                    chunks.iter().zip([Sight::Drawn]),
+                    &LoadedMeshes::default(),
+                    &pool,
+                );
+                let requested: Vec<_> = (requests.iter())
+                    .map(|request| (request.texture, request.levels.clone()))
+                    .collect();
+                (late_mips, requested)
+            };
+            assert_eq!(plan(first_z, false), (0, vec![]));
+            plan(second_z, teleported)
+        };
+
+        assert_eq!((LEAD_FRAMES, CHUNK_EDGE_METRES), (16.0, 256.0));
+        assert_eq!(plan_from(-8.5, -8.2, false), (0, vec![(texture, 1..3)]));
+        assert_eq!(plan_from(-8.5, -8.2, true), (0, vec![]));
+        assert_eq!(plan_from(-318.6, -300.0, false), (0, vec![]));
+        staging.submit(&context.queue);
     }
 }

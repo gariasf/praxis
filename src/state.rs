@@ -1435,8 +1435,9 @@ mod tests {
     }
 
     /// A Chunk whose 10 m quad samples a 2,048² Texture with mip 0 red, mip 1
-    /// green and its Resident tail, mips 3 on, yellow: seen from 200 m, only
-    /// the tail loads and draws; 40 m away, mip 1 streams in, the finest the
+    /// green and its Resident tail, mips 3 on, yellow, the camera teleported
+    /// to each distance: seen from 200 m, only the tail loads and draws;
+    /// 40 m away, mip 1 streams in, the finest the
     /// quad needs there; 0.2 m away, the next frame still draws mip 1, with
     /// one mip late, and once Settled draws mip 0, with none late. A second
     /// Placement of the quad, 800 m behind every camera position, only rays
@@ -1594,6 +1595,7 @@ mod tests {
                 glam::DVec3::ZERO,
             );
             camera.ev100 = scene.camera_at(0, glam::DVec3::ZERO).ev100;
+            camera.teleported = true;
             state.simulation.world.insert_resource(camera);
             if settle {
                 state
