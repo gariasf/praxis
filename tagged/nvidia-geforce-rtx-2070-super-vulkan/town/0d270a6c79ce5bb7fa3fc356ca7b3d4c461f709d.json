@@ -19,7 +19,7 @@
   },
   "cpu_frame_microseconds": {
     "median": 25567.1,
-    "p95": 29468.6
+    "p95": 29468.600000000002
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
@@ -49,7 +49,7 @@
       "p95": 661.376
     },
     "culling_phase_two": {
-      "median": 127.296,
+      "median": 127.29599999999999,
       "p95": 139.008
     },
     "depth_prepass": {
@@ -57,7 +57,7 @@
       "p95": 1626.976
     },
     "depth_pyramid_pass": {
-      "median": 211.264,
+      "median": 211.26399999999998,
       "p95": 221.728
     },
     "dynamic_tlas_build": {

@@ -31,8 +31,8 @@
     "p95": 177180.452
   },
   "gpu_frame_microseconds": {
-    "median": 218481.525,
-    "p95": 225804.189
+    "median": 218481.52500000002,
+    "p95": 225804.18899999998
   },
   "gpu_memory_bytes": 424402248,
   "gpu_pass_microseconds": {
@@ -46,7 +46,7 @@
     },
     "culling_phase_one": {
       "median": 814.476,
-      "p95": 916.008
+      "p95": 916.0079999999999
     },
     "culling_phase_two": {
       "median": 359.872,
@@ -78,7 +78,7 @@
     },
     "shadow_mask_pass": {
       "median": 37102.047999999995,
-      "p95": 42019.893
+      "p95": 42019.893000000004
     },
     "tonemapping_pass": {
       "median": 5366.0419999999995,
@@ -94,7 +94,7 @@
   "provenance": {
     "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/normal-tangent.json",
     "commit": "ffd08bf6c3a5186153b8127c1161c750d1861c1d",
-    "gpu_frame_p95_over_median": 1.033516170303187,
+    "gpu_frame_p95_over_median": 1.0335161703031868,
     "harness_version": 9,
     "source": "baseline-commit",
     "source_hash": "1322341dae8503909f81b09d405886e28bb7d6d0"

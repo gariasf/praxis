@@ -15,13 +15,13 @@
     "uploaded_bytes": 288
   },
   "cpu_frame_microseconds": {
-    "median": 24.958,
+    "median": 24.958000000000002,
     "p95": 32.083
   },
   "draw_calls": 11,
   "gpu_main_pass_microseconds": {
     "median": 356.375,
-    "p95": 362.792
+    "p95": 362.79200000000003
   },
   "gpu_memory_bytes": 135009340,
   "heap_allocations": 59,

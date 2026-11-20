@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.042,
+    "median": 0.041999999999999996,
     "p95": 0.08399999999999999
   },
   "gpu_frame_microseconds": {
@@ -46,7 +46,7 @@
     },
     "culling_phase_two": {
       "median": 18.208,
-      "p95": 21.167
+      "p95": 21.166999999999998
     },
     "depth_prepass": {
       "median": 153.959,
@@ -78,7 +78,7 @@
     },
     "tonemapping_pass": {
       "median": 1001.459,
-      "p95": 1563.833
+      "p95": 1563.8329999999999
     }
   },
   "heap_allocations": 326,

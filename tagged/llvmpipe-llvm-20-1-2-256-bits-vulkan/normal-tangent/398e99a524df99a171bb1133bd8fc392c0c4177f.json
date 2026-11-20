@@ -4,7 +4,7 @@
   "committed_unix_seconds": 1791973356,
   "cpu_frame_microseconds": {
     "median": 10907.38,
-    "p95": 11837.457
+    "p95": 11837.456999999999
   },
   "draw_calls": 1,
   "gpu_main_pass_microseconds": {

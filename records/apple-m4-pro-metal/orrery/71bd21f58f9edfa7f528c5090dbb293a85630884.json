@@ -21,7 +21,7 @@
   },
   "cpu_frame_microseconds": {
     "median": 374.583,
-    "p95": 509.708
+    "p95": 509.70799999999997
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
@@ -71,7 +71,7 @@
       "p95": 7.375
     },
     "lit_pass": {
-      "median": 1755.708,
+      "median": 1755.7079999999999,
       "p95": 1868.75
     },
     "phase_two_depth_pass": {

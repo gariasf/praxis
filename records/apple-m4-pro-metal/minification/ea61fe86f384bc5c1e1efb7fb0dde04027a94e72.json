@@ -51,7 +51,7 @@
   },
   "froxel_lights_overflowed": 0,
   "gate_microseconds": {
-    "maximum": 1286.708,
+    "maximum": 1286.7079999999999,
     "median": 847.875,
     "p95": 853.2919999999999,
     "p99": 859.541
@@ -76,7 +76,7 @@
       "p99": 102.625
     },
     "depth_pyramid_pass": {
-      "maximum": 229.91600000000005,
+      "maximum": 229.91600000000003,
       "median": 212.75,
       "p95": 214.917,
       "p99": 217.083
@@ -88,7 +88,7 @@
       "p99": 6.458
     },
     "lit_pass": {
-      "maximum": 917.166,
+      "maximum": 917.1659999999999,
       "median": 482.083,
       "p95": 484.625,
       "p99": 486.334
@@ -125,13 +125,13 @@
     },
     "culling_phase_one": {
       "maximum": 67.542,
-      "median": 23.792,
+      "median": 23.791999999999998,
       "p95": 24.459,
       "p99": 26.833
     },
     "culling_phase_two": {
       "maximum": 23.0,
-      "median": 19.833,
+      "median": 19.833000000000002,
       "p95": 20.375,
       "p99": 20.667
     },
@@ -214,7 +214,7 @@
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {
     "maximum": 2417.042,
-    "median": 1823.626,
+    "median": 1823.6260000000002,
     "p95": 1835.7070000000003,
     "p99": 1922.0
   },

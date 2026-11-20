@@ -25,8 +25,8 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.2,
-    "p95": 0.4
+    "median": 0.19999999999999998,
+    "p95": 0.39999999999999997
   },
   "gate_microseconds": {
     "median": 571.36,
@@ -34,7 +34,7 @@
   },
   "gate_pass_microseconds": {
     "culling_phase_one": {
-      "median": 44.48,
+      "median": 44.480000000000004,
       "p95": 45.056
     },
     "culling_phase_two": {
@@ -59,7 +59,7 @@
     }
   },
   "gpu_frame_microseconds": {
-    "median": 1611.072,
+    "median": 1611.0720000000001,
     "p95": 1643.936
   },
   "gpu_memory_bytes": 767629931,
@@ -102,7 +102,7 @@
     },
     "phase_two_depth_pass": {
       "median": 0.448,
-      "p95": 1.376
+      "p95": 1.3760000000000001
     },
     "shadow_mask_pass": {
       "median": 795.264,
@@ -119,14 +119,14 @@
   "instances_overflowed": 0,
   "lit_pass_wait_microseconds": {
     "median": 8.192,
-    "p95": 9.408
+    "p95": 9.408000000000001
   },
   "measured_frames": 1800,
   "profile": "release",
   "provenance": {
     "baseline": "bench/baselines/nvidia-geforce-rtx-2070-super-dx12/pbr-sweep.json",
     "commit": "109311850d0cabb82f55ef36c193faad6861ad6f",
-    "gpu_frame_p95_over_median": 1.0203988400270132,
+    "gpu_frame_p95_over_median": 1.020398840027013,
     "harness_version": 10,
     "source": "baseline-rerecorded",
     "source_hash": "b087fbf12248e612d0f2d101ece93bb983c2b991"

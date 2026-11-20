@@ -49,13 +49,13 @@
     "any_with_component": {
       "maximum": 0.6659999999999999,
       "median": 0.041,
-      "p95": 0.042,
+      "p95": 0.041999999999999996,
       "p99": 0.08399999999999999
     },
     "clear_just_pressed": {
       "maximum": 0.458,
       "median": 0.041,
-      "p95": 0.042,
+      "p95": 0.041999999999999996,
       "p99": 0.08399999999999999
     },
     "dynamic_tlas": {
@@ -66,8 +66,8 @@
     },
     "dynamic_tlas_submit": {
       "maximum": 87.209,
-      "median": 21.208,
-      "p95": 29.917,
+      "median": 21.208000000000002,
+      "p95": 29.916999999999998,
       "p99": 35.25
     },
     "encode": {
@@ -79,12 +79,12 @@
     "fly_camera": {
       "maximum": 0.25,
       "median": 0.041,
-      "p95": 0.042,
+      "p95": 0.041999999999999996,
       "p99": 0.125
     },
     "prepare_frame": {
       "maximum": 9.875,
-      "median": 0.959,
+      "median": 0.9590000000000001,
       "p95": 2.25,
       "p99": 5.833
     },
@@ -98,24 +98,24 @@
       "maximum": 5.542,
       "median": 0.041,
       "p95": 0.083,
-      "p99": 0.209
+      "p99": 0.20900000000000002
     },
     "record_previous_world_transforms": {
       "maximum": 3.584,
       "median": 0.125,
-      "p95": 0.208,
+      "p95": 0.20800000000000002,
       "p99": 0.417
     },
     "reset_teleported": {
       "maximum": 4.1659999999999995,
-      "median": 0.042,
+      "median": 0.041999999999999996,
       "p95": 0.08399999999999999,
       "p99": 0.126
     },
     "resource_exists": {
-      "maximum": 0.208,
+      "maximum": 0.20800000000000002,
       "median": 0.041,
-      "p95": 0.042,
+      "p95": 0.041999999999999996,
       "p99": 0.08399999999999999
     },
     "spin": {
@@ -133,7 +133,7 @@
     "stream_chunks": {
       "maximum": 8.959,
       "median": 0.417,
-      "p95": 0.917,
+      "p95": 0.9169999999999999,
       "p99": 2.2910000000000004
     },
     "submit": {
@@ -204,7 +204,7 @@
       "maximum": 439.5,
       "median": 91.417,
       "p95": 92.208,
-      "p99": 93.208
+      "p99": 93.20800000000001
     },
     "depth_pyramid_pass": {
       "maximum": 417.125,
@@ -257,7 +257,7 @@
     },
     "culling_phase_one_slots": {
       "maximum": 26.542,
-      "median": 21.417,
+      "median": 21.416999999999998,
       "p95": 22.042,
       "p99": 22.334
     },
@@ -271,7 +271,7 @@
       "maximum": 26.834,
       "median": 17.958,
       "p95": 20.875,
-      "p99": 22.292
+      "p99": 22.291999999999998
     },
     "culling_phase_two_triangles": {
       "maximum": 9.292,
@@ -288,7 +288,7 @@
     "depth_pyramid_pass": {
       "maximum": 703.917,
       "median": 203.417,
-      "p95": 204.45899999999995,
+      "p95": 204.45899999999997,
       "p99": 205.916
     },
     "dynamic_tlas_build": {
@@ -300,7 +300,7 @@
     "froxel_pass": {
       "maximum": 10.667,
       "median": 8.875,
-      "p95": 9.334,
+      "p95": 9.334000000000001,
       "p99": 9.542
     },
     "lit_pass": {
@@ -350,7 +350,7 @@
     "baseline": "bench/baselines/apple-m4-pro/orrery.json",
     "commit": "31fae9d1a87999b7902e4b89daa510e647693129",
     "gpu_frame_p95_over_median": 1.0402145922746782,
-    "gpu_frame_p95_over_neighbours": 1.010417105984564,
+    "gpu_frame_p95_over_neighbours": 1.0104171059845641,
     "harness_version": 12,
     "source": "baseline-rerecorded",
     "source_hash": "9cd0be2a3f0f3627d9c7cbb9b197fcbf4aecbe05"
@@ -360,7 +360,7 @@
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {
     "maximum": 2564.9579999999996,
-    "median": 1948.209,
+    "median": 1948.2089999999998,
     "p95": 2055.8749999999995,
     "p99": 2134.167
   },

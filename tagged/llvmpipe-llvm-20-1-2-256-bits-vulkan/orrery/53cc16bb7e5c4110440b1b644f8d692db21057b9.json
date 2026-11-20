@@ -24,7 +24,7 @@
   "draw_calls": 4,
   "gpu_frame_microseconds": {
     "median": 88044.46100000001,
-    "p95": 101572.743
+    "p95": 101572.74299999999
   },
   "gpu_memory_bytes": 319559484,
   "gpu_pass_microseconds": {
@@ -46,7 +46,7 @@
     },
     "lit_pass": {
       "median": 77896.618,
-      "p95": 90606.103
+      "p95": 90606.10299999999
     },
     "tonemapping_pass": {
       "median": 5083.515,

@@ -74,7 +74,7 @@
     },
     "phase_two_depth_pass": {
       "median": 102.904,
-      "p95": 126.381
+      "p95": 126.38100000000001
     },
     "shadow_mask_pass": {
       "median": 5819.95,

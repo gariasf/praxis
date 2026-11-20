@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.042,
+    "median": 0.041999999999999996,
     "p95": 0.08399999999999999
   },
   "gate_microseconds": {
@@ -53,7 +53,7 @@
       "p95": 20.209
     },
     "depth_prepass": {
-      "median": 95.459,
+      "median": 95.45899999999999,
       "p95": 96.25
     },
     "depth_pyramid_pass": {
@@ -77,7 +77,7 @@
       "p95": 12.5
     },
     "shadow_mask_pass": {
-      "median": 1367.167,
+      "median": 1367.1670000000001,
       "p95": 1475.5
     },
     "tonemapping_pass": {
@@ -102,7 +102,7 @@
   "scene": "pbr-sweep",
   "shadow_ray_microseconds": {
     "median": 1442.333,
-    "p95": 1622.3759999999995
+    "p95": 1622.3759999999997
   },
   "tags": [
     "machine not quiet"

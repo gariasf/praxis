@@ -44,7 +44,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "maximum": 7.249,
+    "maximum": 7.2490000000000006,
     "median": 0.083,
     "p95": 0.167,
     "p99": 0.415
@@ -59,7 +59,7 @@
   "gate_pass_microseconds": {
     "culling_phase_one": {
       "maximum": 86.959,
-      "median": 37.916,
+      "median": 37.916000000000004,
       "p95": 38.834,
       "p99": 39.416
     },
@@ -97,8 +97,8 @@
   "gpu_frame_microseconds": {
     "maximum": 4300.125,
     "median": 3689.708,
-    "p95": 3699.208,
-    "p99": 3918.584
+    "p95": 3699.2079999999996,
+    "p99": 3918.5840000000003
   },
   "gpu_memory_bytes": 759085265,
   "gpu_memory_bytes_by_kind": {
@@ -127,7 +127,7 @@
       "maximum": 84.625,
       "median": 37.375,
       "p95": 38.125,
-      "p99": 38.459
+      "p99": 38.458999999999996
     },
     "culling_phase_two": {
       "maximum": 22.25,
@@ -163,7 +163,7 @@
       "maximum": 915.708,
       "median": 476.333,
       "p95": 480.75,
-      "p99": 484.042
+      "p99": 484.04200000000003
     },
     "phase_two_depth_pass": {
       "maximum": 13.417,
@@ -204,7 +204,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/normal-tangent.json",
     "commit": "c839b66abcd45cc30fc8f04e18f065da7db71065",
-    "gpu_frame_p95_over_median": 1.002574729490789,
+    "gpu_frame_p95_over_median": 1.0025747294907887,
     "harness_version": 11,
     "source": "baseline-rerecorded",
     "source_hash": "ea61fe86f384bc5c1e1efb7fb0dde04027a94e72"

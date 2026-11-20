@@ -27,7 +27,7 @@
     "p95": 0.491
   },
   "gate_microseconds": {
-    "median": 40809.372,
+    "median": 40809.371999999996,
     "p95": 42471.776000000005
   },
   "gpu_frame_microseconds": {

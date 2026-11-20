@@ -45,8 +45,8 @@
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
     "maximum": 4176.334,
-    "median": 1223.332,
-    "p95": 1351.082,
+    "median": 1223.3319999999999,
+    "p95": 1351.0819999999999,
     "p99": 1418.583
   },
   "froxel_lights_overflowed": 0,
@@ -54,7 +54,7 @@
     "maximum": 9387.958,
     "median": 8568.5,
     "p95": 8855.292000000001,
-    "p99": 9055.791
+    "p99": 9055.791000000001
   },
   "gate_pass_microseconds": {
     "culling_phase_one": {
@@ -71,8 +71,8 @@
     },
     "depth_prepass": {
       "maximum": 2171.4579999999996,
-      "median": 1730.792,
-      "p95": 1790.833,
+      "median": 1730.7920000000001,
+      "p95": 1790.8329999999999,
       "p99": 1797.667
     },
     "depth_pyramid_pass": {
@@ -97,7 +97,7 @@
   "gpu_frame_microseconds": {
     "maximum": 21218.458,
     "median": 20008.0,
-    "p95": 20220.833,
+    "p95": 20220.833000000002,
     "p99": 20718.125
   },
   "gpu_memory_bytes": 839578814,
@@ -124,10 +124,10 @@
       "p99": 0.0
     },
     "culling_phase_one": {
-      "maximum": 1725.542,
+      "maximum": 1725.5420000000001,
       "median": 1145.75,
-      "p95": 1183.708,
-      "p99": 1192.208
+      "p95": 1183.7079999999999,
+      "p99": 1192.2079999999999
     },
     "culling_phase_two": {
       "maximum": 274.709,
@@ -148,7 +148,7 @@
       "p99": 239.208
     },
     "dynamic_tlas_build": {
-      "maximum": 125.667,
+      "maximum": 125.66699999999999,
       "median": 0.0,
       "p95": 79.5,
       "p99": 103.083
@@ -181,7 +181,7 @@
       "maximum": 732.6659999999999,
       "median": 324.79200000000003,
       "p95": 370.416,
-      "p99": 379.333
+      "p99": 379.33299999999997
     }
   },
   "heap_allocations": 10510,
@@ -204,7 +204,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/town.json",
     "commit": "c839b66abcd45cc30fc8f04e18f065da7db71065",
-    "gpu_frame_p95_over_median": 1.0106373950419831,
+    "gpu_frame_p95_over_median": 1.0106373950419834,
     "harness_version": 11,
     "source": "baseline-rerecorded",
     "source_hash": "ea61fe86f384bc5c1e1efb7fb0dde04027a94e72"
@@ -216,7 +216,7 @@
     "maximum": 12242.542000000003,
     "median": 10936.125,
     "p95": 11441.75,
-    "p99": 11766.083
+    "p99": 11766.082999999999
   },
   "static_instances_left_out": 0,
   "triangles_drawn": 5552306,

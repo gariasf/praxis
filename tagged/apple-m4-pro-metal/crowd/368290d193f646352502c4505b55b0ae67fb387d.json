@@ -18,7 +18,7 @@
     "uploaded_bytes": 322192
   },
   "cpu_frame_microseconds": {
-    "median": 938.208,
+    "median": 938.2080000000001,
     "p95": 1267.5
   },
   "draw_calls": 4,
@@ -49,7 +49,7 @@
       "p95": 252.375
     },
     "depth_pyramid_pass": {
-      "median": 254.66600000000005,
+      "median": 254.66600000000003,
       "p95": 260.166
     },
     "dynamic_tlas_build": {

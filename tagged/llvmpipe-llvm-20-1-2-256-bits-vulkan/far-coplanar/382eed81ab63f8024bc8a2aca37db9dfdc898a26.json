@@ -19,7 +19,7 @@
   },
   "cpu_frame_microseconds": {
     "median": 13602.231,
-    "p95": 14636.479
+    "p95": 14636.479000000001
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
@@ -27,7 +27,7 @@
     "p95": 0.19
   },
   "gpu_frame_microseconds": {
-    "median": 13537.243,
+    "median": 13537.242999999999,
     "p95": 14592.287
   },
   "gpu_memory_bytes": 325771556,
@@ -46,7 +46,7 @@
     },
     "depth_pyramid_pass": {
       "median": 898.7370000000001,
-      "p95": 1113.631
+      "p95": 1113.6309999999999
     },
     "dynamic_tlas_build": {
       "median": 0.0,

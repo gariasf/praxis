@@ -33,7 +33,7 @@
     "p95": 854.209
   },
   "gpu_frame_microseconds": {
-    "median": 4094.708,
+    "median": 4094.7079999999996,
     "p95": 4123.667
   },
   "gpu_memory_bytes": 663385443,

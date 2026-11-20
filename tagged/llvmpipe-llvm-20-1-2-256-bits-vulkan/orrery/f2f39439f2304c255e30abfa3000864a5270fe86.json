@@ -31,7 +31,7 @@
     "p95": 99810.861
   },
   "gpu_frame_microseconds": {
-    "median": 120545.301,
+    "median": 120545.30099999999,
     "p95": 135696.791
   },
   "gpu_memory_bytes": 400631028,
@@ -78,7 +78,7 @@
     },
     "shadow_mask_pass": {
       "median": 24433.607,
-      "p95": 31056.474
+      "p95": 31056.474000000002
     },
     "tonemapping_pass": {
       "median": 5069.686000000001,

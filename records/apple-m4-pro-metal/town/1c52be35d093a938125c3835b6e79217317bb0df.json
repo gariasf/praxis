@@ -33,7 +33,7 @@
     "p95": 8893.375
   },
   "gpu_frame_microseconds": {
-    "median": 19069.833,
+    "median": 19069.833000000002,
     "p95": 19258.334
   },
   "gpu_memory_bytes": 764009620,
@@ -47,7 +47,7 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 1135.833,
+      "median": 1135.8329999999999,
       "p95": 1173.458
     },
     "culling_phase_two": {
@@ -96,7 +96,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/town.json",
     "commit": "6aec92785bf5dafebebc0369b8e4e422adb2b8f2",
-    "gpu_frame_p95_over_median": 1.0098847745546593,
+    "gpu_frame_p95_over_median": 1.009884774554659,
     "harness_version": 10,
     "source": "baseline-commit",
     "source_hash": "1c52be35d093a938125c3835b6e79217317bb0df"

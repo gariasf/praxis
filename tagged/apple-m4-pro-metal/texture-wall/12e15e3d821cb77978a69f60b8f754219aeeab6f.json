@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.208,
+    "median": 0.20800000000000002,
     "p95": 0.542
   },
   "gate_microseconds": {
@@ -45,7 +45,7 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 50.541,
+      "median": 50.541000000000004,
       "p95": 85.667
     },
     "culling_phase_two": {
@@ -70,7 +70,7 @@
     },
     "lit_pass": {
       "median": 593.583,
-      "p95": 1013.75
+      "p95": 1013.7499999999999
     },
     "phase_two_depth_pass": {
       "median": 16.541999999999998,
@@ -78,7 +78,7 @@
     },
     "shadow_mask_pass": {
       "median": 2197.708,
-      "p95": 4006.624999999999
+      "p95": 4006.6249999999995
     },
     "tonemapping_pass": {
       "median": 1379.458,

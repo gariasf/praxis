@@ -27,7 +27,7 @@
     "p95": 0.572
   },
   "gate_microseconds": {
-    "median": 61715.393,
+    "median": 61715.393000000004,
     "p95": 64419.428
   },
   "gpu_frame_microseconds": {
@@ -49,7 +49,7 @@
       "p95": 826.917
     },
     "culling_phase_two": {
-      "median": 371.119,
+      "median": 371.11899999999997,
       "p95": 427.374
     },
     "depth_prepass": {
@@ -73,11 +73,11 @@
       "p95": 61519.448
     },
     "phase_two_depth_pass": {
-      "median": 140.378,
+      "median": 140.37800000000001,
       "p95": 174.205
     },
     "shadow_mask_pass": {
-      "median": 15984.861,
+      "median": 15984.860999999999,
       "p95": 17402.220999999998
     },
     "tonemapping_pass": {
@@ -101,8 +101,8 @@
   },
   "scene": "uv-grid",
   "shadow_ray_microseconds": {
-    "median": 18142.075999999983,
-    "p95": 21035.056999999983
+    "median": 18142.075999999986,
+    "p95": 21035.056999999986
   },
   "tags": [
     "640x360 over 256 frames, not CI's configuration"

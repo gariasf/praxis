@@ -25,7 +25,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.2,
+    "median": 0.19999999999999998,
     "p95": 0.3
   },
   "gate_microseconds": {
@@ -52,7 +52,7 @@
     },
     "culling_phase_two": {
       "median": 17.759999999999998,
-      "p95": 18.24
+      "p95": 18.240000000000002
     },
     "depth_prepass": {
       "median": 53.248000000000005,
@@ -84,7 +84,7 @@
     },
     "tonemapping_pass": {
       "median": 192.704,
-      "p95": 197.312
+      "p95": 197.31199999999998
     }
   },
   "heap_allocations": 353,
@@ -103,8 +103,8 @@
   },
   "scene": "pbr-sweep",
   "shadow_ray_microseconds": {
-    "median": 928.0,
-    "p95": 983.52
+    "median": 928.0000000000001,
+    "p95": 983.5200000000001
   },
   "triangles_drawn": 22080,
   "uploaded_bytes": 416,

@@ -34,7 +34,7 @@
   },
   "gpu_frame_microseconds": {
     "median": 9395.04,
-    "p95": 9618.208
+    "p95": 9618.207999999999
   },
   "gpu_memory_bytes": 868263018,
   "gpu_pass_microseconds": {
@@ -63,7 +63,7 @@
       "p95": 154.912
     },
     "dynamic_tlas_build": {
-      "median": 215.776,
+      "median": 215.77599999999998,
       "p95": 221.568
     },
     "froxel_pass": {
@@ -104,7 +104,7 @@
   "scene": "town",
   "shadow_ray_microseconds": {
     "median": 3994.88,
-    "p95": 4076.704
+    "p95": 4076.7039999999997
   },
   "triangles_drawn": 5552214,
   "uploaded_bytes": 1969376,

@@ -9,7 +9,7 @@
   "draw_calls": 2,
   "gpu_main_pass_microseconds": {
     "median": 397.208,
-    "p95": 398.583
+    "p95": 398.58299999999997
   },
   "gpu_memory_bytes": 16082228,
   "heap_allocations": 74,

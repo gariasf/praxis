@@ -29,7 +29,7 @@
     "p95": 388.29099999999994
   },
   "gate_microseconds": {
-    "median": 1296.958,
+    "median": 1296.9579999999999,
     "p95": 1340.209
   },
   "gpu_frame_microseconds": {
@@ -51,11 +51,11 @@
       "p95": 95.542
     },
     "culling_phase_two": {
-      "median": 21.208,
-      "p95": 22.167
+      "median": 21.208000000000002,
+      "p95": 22.166999999999998
     },
     "depth_prepass": {
-      "median": 384.042,
+      "median": 384.04200000000003,
       "p95": 394.208
     },
     "depth_pyramid_pass": {
@@ -80,7 +80,7 @@
     },
     "shadow_mask_pass": {
       "median": 1950.292,
-      "p95": 1973.625
+      "p95": 1973.6250000000002
     },
     "tonemapping_pass": {
       "median": 319.667,

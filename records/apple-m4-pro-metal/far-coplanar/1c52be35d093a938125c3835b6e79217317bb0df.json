@@ -48,7 +48,7 @@
     },
     "culling_phase_one": {
       "median": 29.709,
-      "p95": 30.833
+      "p95": 30.833000000000002
     },
     "culling_phase_two": {
       "median": 20.459,
@@ -72,7 +72,7 @@
     },
     "lit_pass": {
       "median": 357.292,
-      "p95": 367.667
+      "p95": 367.66700000000003
     },
     "phase_two_depth_pass": {
       "median": 12.167,
@@ -103,7 +103,7 @@
   },
   "scene": "far-coplanar",
   "shadow_ray_microseconds": {
-    "median": 1566.2509999999995,
+    "median": 1566.2509999999997,
     "p95": 1580.5410000000002
   },
   "triangles_drawn": 4,

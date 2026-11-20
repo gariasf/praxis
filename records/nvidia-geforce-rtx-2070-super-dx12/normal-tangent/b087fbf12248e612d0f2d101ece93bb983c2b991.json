@@ -25,8 +25,8 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.2,
-    "p95": 0.4
+    "median": 0.19999999999999998,
+    "p95": 0.39999999999999997
   },
   "gate_microseconds": {
     "median": 595.872,
@@ -42,7 +42,7 @@
       "p95": 39.296
     },
     "depth_prepass": {
-      "median": 29.344,
+      "median": 29.343999999999998,
       "p95": 30.432
     },
     "depth_pyramid_pass": {
@@ -59,7 +59,7 @@
     }
   },
   "gpu_frame_microseconds": {
-    "median": 1639.168,
+    "median": 1639.1680000000001,
     "p95": 1646.592
   },
   "gpu_memory_bytes": 787362898,
@@ -73,12 +73,12 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 51.2,
+      "median": 51.199999999999996,
       "p95": 52.864
     },
     "culling_phase_two": {
       "median": 35.264,
-      "p95": 36.736
+      "p95": 36.736000000000004
     },
     "depth_prepass": {
       "median": 55.168,
@@ -93,7 +93,7 @@
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 9.184,
+      "median": 9.184000000000001,
       "p95": 10.176
     },
     "lit_pass": {
@@ -102,7 +102,7 @@
     },
     "phase_two_depth_pass": {
       "median": 0.448,
-      "p95": 1.344
+      "p95": 1.3439999999999999
     },
     "shadow_mask_pass": {
       "median": 794.6239999999999,
@@ -119,7 +119,7 @@
   "instances_overflowed": 0,
   "lit_pass_wait_microseconds": {
     "median": 8.192,
-    "p95": 9.344
+    "p95": 9.344000000000001
   },
   "measured_frames": 1800,
   "profile": "release",

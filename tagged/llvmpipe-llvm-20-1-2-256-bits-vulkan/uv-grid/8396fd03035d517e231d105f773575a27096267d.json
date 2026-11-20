@@ -16,7 +16,7 @@
   },
   "cpu_frame_microseconds": {
     "median": 52804.27,
-    "p95": 55575.037
+    "p95": 55575.037000000004
   },
   "draw_calls": 1,
   "gpu_main_pass_microseconds": {

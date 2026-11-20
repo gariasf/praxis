@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "gpu_frame_microseconds": {
-    "median": 15299.459,
+    "median": 15299.458999999999,
     "p95": 16657.333
   },
   "gpu_memory_bytes": 416790571,
@@ -37,7 +37,7 @@
       "p95": 63.167
     },
     "depth_prepass": {
-      "median": 410.083,
+      "median": 410.08299999999997,
       "p95": 419.792
     },
     "depth_pyramid_pass": {
@@ -46,7 +46,7 @@
     },
     "froxel_pass": {
       "median": 26.125,
-      "p95": 28.292
+      "p95": 28.291999999999998
     },
     "lit_pass": {
       "median": 965.417,
@@ -66,7 +66,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/texture-wall.json",
     "commit": "1d9fde248b2dbf5a15b044dda49d47ac295d2e24",
-    "gpu_frame_p95_over_median": 1.0887530729027737,
+    "gpu_frame_p95_over_median": 1.088753072902774,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "948c4a1f54b149d62d02ff36b7b69fee1e3c5402"

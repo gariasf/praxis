@@ -29,8 +29,8 @@
   "gpu_memory_bytes": 406926071,
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 31.042,
-      "p95": 31.917
+      "median": 31.041999999999998,
+      "p95": 31.916999999999998
     },
     "culling_phase_two": {
       "median": 16.75,
@@ -46,7 +46,7 @@
     },
     "lit_pass": {
       "median": 402.041,
-      "p95": 404.208
+      "p95": 404.20799999999997
     },
     "tonemapping_pass": {
       "median": 705.708,

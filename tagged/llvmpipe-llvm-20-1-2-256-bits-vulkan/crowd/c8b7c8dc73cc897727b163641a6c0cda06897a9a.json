@@ -49,7 +49,7 @@
       "p95": 2936.362
     },
     "culling_phase_two": {
-      "median": 444.783,
+      "median": 444.78299999999996,
       "p95": 511.8949999999999
     },
     "depth_prepass": {
@@ -57,7 +57,7 @@
       "p95": 56692.292
     },
     "depth_pyramid_pass": {
-      "median": 1706.727,
+      "median": 1706.7269999999999,
       "p95": 2126.947
     },
     "dynamic_tlas_build": {
@@ -69,7 +69,7 @@
       "p95": 258.37100000000004
     },
     "lit_pass": {
-      "median": 100094.698,
+      "median": 100094.69799999999,
       "p95": 104882.058
     },
     "phase_two_depth_pass": {
@@ -77,7 +77,7 @@
       "p95": 136.477
     },
     "shadow_mask_pass": {
-      "median": 28985.74,
+      "median": 28985.739999999998,
       "p95": 31481.35
     },
     "tonemapping_pass": {

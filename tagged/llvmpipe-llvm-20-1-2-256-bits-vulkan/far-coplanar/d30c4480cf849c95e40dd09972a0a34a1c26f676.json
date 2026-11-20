@@ -23,21 +23,21 @@
   },
   "draw_calls": 2,
   "gpu_frame_microseconds": {
-    "median": 14676.254,
+    "median": 14676.253999999999,
     "p95": 15029.77
   },
   "gpu_memory_bytes": 307830836,
   "gpu_pass_microseconds": {
     "culling_pass": {
       "median": 327.994,
-      "p95": 414.355
+      "p95": 414.35499999999996
     },
     "depth_prepass": {
       "median": 947.998,
-      "p95": 1005.245
+      "p95": 1005.2450000000001
     },
     "lit_pass": {
-      "median": 13130.149,
+      "median": 13130.149000000001,
       "p95": 13400.736
     }
   },
@@ -50,7 +50,7 @@
   "provenance": {
     "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/far-coplanar.json",
     "commit": "93355f150544f6f0437c3239cf90b217e9ff8541",
-    "gpu_frame_p95_over_median": 1.0240876179984346,
+    "gpu_frame_p95_over_median": 1.0240876179984348,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "d30c4480cf849c95e40dd09972a0a34a1c26f676"

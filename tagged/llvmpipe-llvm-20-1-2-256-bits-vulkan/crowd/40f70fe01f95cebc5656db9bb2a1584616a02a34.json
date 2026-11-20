@@ -38,7 +38,7 @@
   "gpu_pass_microseconds": {
     "bend_pass": {
       "median": 2317.681,
-      "p95": 2886.26
+      "p95": 2886.2599999999998
     },
     "blas_refit": {
       "median": 0.0,
@@ -57,16 +57,16 @@
       "p95": 44761.784
     },
     "depth_pyramid_pass": {
-      "median": 1560.783,
+      "median": 1560.7830000000001,
       "p95": 2038.378
     },
     "dynamic_tlas_build": {
-      "median": 11655.319,
+      "median": 11655.319000000001,
       "p95": 13448.689
     },
     "froxel_pass": {
       "median": 153.002,
-      "p95": 190.138
+      "p95": 190.13799999999998
     },
     "lit_pass": {
       "median": 76566.098,
@@ -74,10 +74,10 @@
     },
     "phase_two_depth_pass": {
       "median": 96.727,
-      "p95": 121.164
+      "p95": 121.16399999999999
     },
     "shadow_mask_pass": {
-      "median": 19798.007,
+      "median": 19798.006999999998,
       "p95": 22175.63
     },
     "tonemapping_pass": {

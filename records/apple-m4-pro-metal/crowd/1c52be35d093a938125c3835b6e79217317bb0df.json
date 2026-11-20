@@ -39,7 +39,7 @@
   "gpu_memory_bytes": 664077519,
   "gpu_pass_microseconds": {
     "bend_pass": {
-      "median": 29.542,
+      "median": 29.541999999999998,
       "p95": 30.959
     },
     "blas_refit": {
@@ -56,7 +56,7 @@
     },
     "depth_prepass": {
       "median": 386.584,
-      "p95": 396.667
+      "p95": 396.66700000000003
     },
     "depth_pyramid_pass": {
       "median": 214.625,
@@ -79,7 +79,7 @@
       "p95": 12.625
     },
     "shadow_mask_pass": {
-      "median": 1887.083,
+      "median": 1887.0829999999999,
       "p95": 1911.0
     },
     "tonemapping_pass": {

@@ -34,11 +34,11 @@
     },
     "culling_phase_two": {
       "median": 16.792,
-      "p95": 19.917
+      "p95": 19.916999999999998
     },
     "depth_prepass": {
       "median": 97.292,
-      "p95": 106.583
+      "p95": 106.58300000000001
     },
     "depth_pyramid_pass": {
       "median": 257.375,

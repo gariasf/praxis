@@ -24,7 +24,7 @@
   "draw_calls": 4,
   "gpu_frame_microseconds": {
     "median": 942.5,
-    "p95": 977.791
+    "p95": 977.7909999999999
   },
   "gpu_memory_bytes": 421957296,
   "gpu_pass_microseconds": {

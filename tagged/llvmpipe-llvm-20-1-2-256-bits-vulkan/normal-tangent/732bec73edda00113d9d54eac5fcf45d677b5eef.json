@@ -5,12 +5,12 @@
   "committed_unix_seconds": 1792155451,
   "cpu_frame_microseconds": {
     "median": 62724.979,
-    "p95": 64538.194
+    "p95": 64538.193999999996
   },
   "draw_calls": 1,
   "gpu_main_pass_microseconds": {
     "median": 62624.028,
-    "p95": 64459.948
+    "p95": 64459.948000000004
   },
   "gpu_memory_bytes": 54073916,
   "heap_allocations": 79,

@@ -29,12 +29,12 @@
   "gpu_memory_bytes": 244057188,
   "gpu_pass_microseconds": {
     "culling_pass": {
-      "median": 220.759,
+      "median": 220.75900000000001,
       "p95": 259.647
     },
     "main_pass": {
       "median": 25659.157,
-      "p95": 29452.579
+      "p95": 29452.578999999998
     }
   },
   "heap_allocations": 120,

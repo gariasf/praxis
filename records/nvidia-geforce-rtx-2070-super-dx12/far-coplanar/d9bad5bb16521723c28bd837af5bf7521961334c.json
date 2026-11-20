@@ -35,10 +35,10 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "maximum": 0.4,
-    "median": 0.2,
-    "p95": 0.4,
-    "p99": 0.4
+    "maximum": 0.39999999999999997,
+    "median": 0.19999999999999998,
+    "p95": 0.39999999999999997,
+    "p99": 0.39999999999999997
   },
   "froxel_lights_overflowed": 0,
   "gate_microseconds": {
@@ -56,8 +56,8 @@
     },
     "culling_phase_two": {
       "maximum": 45.056,
-      "median": 40.8,
-      "p95": 43.008,
+      "median": 40.800000000000004,
+      "p95": 43.007999999999996,
       "p99": 43.744
     },
     "depth_prepass": {
@@ -117,11 +117,11 @@
     "culling_phase_one": {
       "maximum": 270.56,
       "median": 47.04,
-      "p95": 47.328,
-      "p99": 48.288
+      "p95": 47.327999999999996,
+      "p99": 48.288000000000004
     },
     "culling_phase_two": {
-      "maximum": 40.608,
+      "maximum": 40.608000000000004,
       "median": 37.792,
       "p95": 38.912000000000006,
       "p99": 38.912000000000006
@@ -151,15 +151,15 @@
       "p99": 11.584
     },
     "lit_pass": {
-      "maximum": 920.704,
+      "maximum": 920.7040000000001,
       "median": 468.992,
-      "p95": 476.576,
+      "p95": 476.57599999999996,
       "p99": 486.464
     },
     "phase_two_depth_pass": {
       "maximum": 1.504,
       "median": 0.448,
-      "p95": 1.376,
+      "p95": 1.3760000000000001,
       "p99": 1.44
     },
     "shadow_mask_pass": {
@@ -184,7 +184,7 @@
     "maximum": 12.288,
     "median": 8.864,
     "p95": 10.24,
-    "p99": 10.88
+    "p99": 10.879999999999999
   },
   "measured_frames": 1800,
   "moving_instances_left_out": 0,
@@ -201,7 +201,7 @@
   "scene": "far-coplanar",
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {
-    "maximum": 1279.744,
+    "maximum": 1279.7440000000001,
     "median": 581.3439999999998,
     "p95": 603.4879999999998,
     "p99": 622.4000000000001

@@ -23,25 +23,25 @@
   },
   "draw_calls": 4,
   "gpu_frame_microseconds": {
-    "median": 23012.672,
+    "median": 23012.672000000002,
     "p95": 24279.889
   },
   "gpu_memory_bytes": 314259612,
   "gpu_pass_microseconds": {
     "culling_phase_one": {
       "median": 649.442,
-      "p95": 2129.807
+      "p95": 2129.8070000000002
     },
     "culling_phase_two": {
-      "median": 251.276,
+      "median": 251.27599999999998,
       "p95": 291.62699999999995
     },
     "depth_prepass": {
       "median": 441.486,
-      "p95": 501.53
+      "p95": 501.53000000000003
     },
     "depth_pyramid_pass": {
-      "median": 1193.006,
+      "median": 1193.0059999999999,
       "p95": 1389.815
     },
     "lit_pass": {
@@ -62,7 +62,7 @@
   "provenance": {
     "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/texture-wall.json",
     "commit": "32e4877892980bdbdea668b7972bd7d3a7868cf5",
-    "gpu_frame_p95_over_median": 1.0550660523037048,
+    "gpu_frame_p95_over_median": 1.0550660523037045,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "d73cbff10412e784e68f2d8d91227b97a4e862f3"

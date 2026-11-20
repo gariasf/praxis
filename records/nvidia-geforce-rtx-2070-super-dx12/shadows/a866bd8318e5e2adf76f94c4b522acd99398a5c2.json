@@ -23,8 +23,8 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.1,
-    "p95": 0.2
+    "median": 0.09999999999999999,
+    "p95": 0.19999999999999998
   },
   "gate_microseconds": {
     "median": 688.736,
@@ -32,7 +32,7 @@
   },
   "gpu_frame_microseconds": {
     "median": 1985.344,
-    "p95": 2004.864
+    "p95": 2004.8639999999998
   },
   "gpu_memory_bytes": 620171029,
   "gpu_pass_microseconds": {
@@ -46,7 +46,7 @@
     },
     "culling_phase_one": {
       "median": 25.952,
-      "p95": 26.624
+      "p95": 26.624000000000002
     },
     "culling_phase_two": {
       "median": 13.952,
@@ -69,20 +69,20 @@
       "p95": 9.856
     },
     "lit_pass": {
-      "median": 393.472,
+      "median": 393.47200000000004,
       "p95": 403.456
     },
     "phase_two_depth_pass": {
       "median": 0.448,
-      "p95": 1.376
+      "p95": 1.3760000000000001
     },
     "shadow_mask_pass": {
       "median": 1078.6560000000002,
       "p95": 1085.44
     },
     "tonemapping_pass": {
-      "median": 186.752,
-      "p95": 188.32
+      "median": 186.75199999999998,
+      "p95": 188.32000000000002
     }
   },
   "heap_allocations": 327,
@@ -94,7 +94,7 @@
   "provenance": {
     "baseline": "bench/baselines/nvidia-geforce-rtx-2070-super-dx12/shadows.json",
     "commit": "77ad577bc6ee8478f0dcd50f11ff06a043da5944",
-    "gpu_frame_p95_over_median": 1.009832049256955,
+    "gpu_frame_p95_over_median": 1.0098320492569548,
     "harness_version": 6,
     "source": "baseline-commit",
     "source_hash": "a866bd8318e5e2adf76f94c4b522acd99398a5c2"
@@ -102,7 +102,7 @@
   "scene": "shadows",
   "shadow_ray_microseconds": {
     "median": 1108.576,
-    "p95": 1127.84
+    "p95": 1127.8400000000001
   },
   "triangles_drawn": 2210,
   "uploaded_bytes": 240,

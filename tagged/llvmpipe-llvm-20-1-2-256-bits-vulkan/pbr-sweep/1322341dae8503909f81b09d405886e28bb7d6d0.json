@@ -50,15 +50,15 @@
     },
     "culling_phase_two": {
       "median": 363.718,
-      "p95": 402.816
+      "p95": 402.81600000000003
     },
     "depth_prepass": {
       "median": 5669.477,
       "p95": 6422.119
     },
     "depth_pyramid_pass": {
-      "median": 1705.737,
-      "p95": 2019.068
+      "median": 1705.7369999999999,
+      "p95": 2019.0680000000002
     },
     "dynamic_tlas_build": {
       "median": 0.0,
@@ -101,7 +101,7 @@
   },
   "scene": "pbr-sweep",
   "shadow_ray_microseconds": {
-    "median": 51439.622,
+    "median": 51439.621999999996,
     "p95": 61639.78799999999
   },
   "tags": [

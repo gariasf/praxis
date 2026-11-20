@@ -19,7 +19,7 @@
   },
   "cpu_frame_microseconds": {
     "median": 38038.15,
-    "p95": 40438.891
+    "p95": 40438.890999999996
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
@@ -58,7 +58,7 @@
     },
     "depth_pyramid_pass": {
       "median": 1678.601,
-      "p95": 2142.164
+      "p95": 2142.1639999999998
     },
     "dynamic_tlas_build": {
       "median": 0.0,
@@ -70,15 +70,15 @@
     },
     "lit_pass": {
       "median": 14809.962,
-      "p95": 15291.425
+      "p95": 15291.425000000001
     },
     "phase_two_depth_pass": {
       "median": 142.688,
       "p95": 174.64800000000002
     },
     "shadow_mask_pass": {
-      "median": 11515.765,
-      "p95": 13786.772
+      "median": 11515.765000000001,
+      "p95": 13786.771999999999
     },
     "tonemapping_pass": {
       "median": 5122.777,

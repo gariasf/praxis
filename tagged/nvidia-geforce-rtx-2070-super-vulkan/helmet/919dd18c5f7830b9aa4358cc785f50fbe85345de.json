@@ -20,13 +20,13 @@
     "uploaded_bytes": 416
   },
   "cpu_frame_microseconds": {
-    "median": 362.7999999999999,
+    "median": 362.79999999999995,
     "p95": 545.3
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.2,
-    "p95": 0.4
+    "median": 0.19999999999999998,
+    "p95": 0.39999999999999997
   },
   "gate_microseconds": {
     "median": 865.056,
@@ -72,7 +72,7 @@
     },
     "lit_pass": {
       "median": 481.28,
-      "p95": 502.7519999999999
+      "p95": 502.75199999999995
     },
     "phase_two_depth_pass": {
       "median": 2.4320000000000004,

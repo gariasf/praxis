@@ -33,7 +33,7 @@
   "gpu_memory_bytes": 516623171,
   "gpu_pass_microseconds": {
     "bend_pass": {
-      "median": 27.208,
+      "median": 27.208000000000002,
       "p95": 31.75
     },
     "blas_refit": {

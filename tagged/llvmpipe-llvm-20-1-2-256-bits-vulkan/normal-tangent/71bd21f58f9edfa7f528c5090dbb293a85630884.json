@@ -18,7 +18,7 @@
     "uploaded_bytes": 384
   },
   "cpu_frame_microseconds": {
-    "median": 231472.849,
+    "median": 231472.84900000002,
     "p95": 240627.709
   },
   "draw_calls": 4,
@@ -50,14 +50,14 @@
     },
     "culling_phase_two": {
       "median": 370.418,
-      "p95": 422.7759999999999
+      "p95": 422.77599999999995
     },
     "depth_prepass": {
       "median": 4203.837,
       "p95": 4588.1630000000005
     },
     "depth_pyramid_pass": {
-      "median": 1970.962,
+      "median": 1970.9620000000002,
       "p95": 2543.4500000000003
     },
     "dynamic_tlas_build": {
@@ -78,7 +78,7 @@
     },
     "shadow_mask_pass": {
       "median": 43207.362,
-      "p95": 49026.878
+      "p95": 49026.878000000004
     },
     "tonemapping_pass": {
       "median": 5124.721,

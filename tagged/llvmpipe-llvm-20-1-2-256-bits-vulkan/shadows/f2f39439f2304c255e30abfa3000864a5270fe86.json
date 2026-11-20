@@ -19,7 +19,7 @@
   },
   "cpu_frame_microseconds": {
     "median": 57149.89,
-    "p95": 63754.95
+    "p95": 63754.950000000004
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
@@ -32,7 +32,7 @@
   },
   "gpu_frame_microseconds": {
     "median": 56993.15,
-    "p95": 63679.482
+    "p95": 63679.481999999996
   },
   "gpu_memory_bytes": 395034196,
   "gpu_pass_microseconds": {
@@ -77,7 +77,7 @@
       "p95": 161.977
     },
     "shadow_mask_pass": {
-      "median": 30870.225,
+      "median": 30870.225000000002,
       "p95": 37372.918999999994
     },
     "tonemapping_pass": {

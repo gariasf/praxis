@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 2008.8,
+    "median": 2008.8000000000002,
     "p95": 2847.4
   },
   "gate_microseconds": {
@@ -57,7 +57,7 @@
       "p95": 1122.8480000000002
     },
     "depth_pyramid_pass": {
-      "median": 203.008,
+      "median": 203.00799999999998,
       "p95": 208.896
     },
     "dynamic_tlas_build": {
@@ -70,7 +70,7 @@
     },
     "lit_pass": {
       "median": 3433.504,
-      "p95": 3577.856
+      "p95": 3577.8559999999998
     },
     "phase_two_depth_pass": {
       "median": 7.744000000000001,
@@ -81,7 +81,7 @@
       "p95": 2253.2479999999996
     },
     "tonemapping_pass": {
-      "median": 212.992,
+      "median": 212.99200000000002,
       "p95": 222.912
     }
   },
@@ -101,7 +101,7 @@
   },
   "scene": "town",
   "shadow_ray_microseconds": {
-    "median": 1477.055999999999,
+    "median": 1477.0559999999987,
     "p95": 2344.1280000000006
   },
   "triangles_drawn": 5552214,

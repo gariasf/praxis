@@ -50,7 +50,7 @@
     },
     "depth_prepass": {
       "median": 94.041,
-      "p95": 95.791
+      "p95": 95.79100000000001
     },
     "depth_pyramid_pass": {
       "median": 191.0,
@@ -70,7 +70,7 @@
     },
     "phase_two_depth_pass": {
       "median": 12.0,
-      "p95": 12.334
+      "p95": 12.334000000000001
     },
     "shadow_mask_pass": {
       "median": 1117.0,

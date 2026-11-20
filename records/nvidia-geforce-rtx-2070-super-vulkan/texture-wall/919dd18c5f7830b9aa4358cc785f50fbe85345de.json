@@ -25,7 +25,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.2,
+    "median": 0.19999999999999998,
     "p95": 0.3
   },
   "gate_microseconds": {
@@ -52,7 +52,7 @@
     },
     "culling_phase_two": {
       "median": 17.887999999999998,
-      "p95": 18.496
+      "p95": 18.496000000000002
     },
     "depth_prepass": {
       "median": 50.624,
@@ -71,7 +71,7 @@
       "p95": 6.08
     },
     "lit_pass": {
-      "median": 199.36,
+      "median": 199.35999999999999,
       "p95": 206.848
     },
     "phase_two_depth_pass": {
@@ -79,12 +79,12 @@
       "p95": 3.36
     },
     "shadow_mask_pass": {
-      "median": 503.7120000000001,
+      "median": 503.71200000000005,
       "p95": 509.248
     },
     "tonemapping_pass": {
       "median": 186.208,
-      "p95": 187.68
+      "p95": 187.67999999999998
     }
   },
   "heap_allocations": 357,

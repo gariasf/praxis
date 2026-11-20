@@ -66,7 +66,7 @@
     },
     "froxel_pass": {
       "median": 346.39700000000005,
-      "p95": 421.917
+      "p95": 421.91700000000003
     },
     "lit_pass": {
       "median": 170251.486,
@@ -101,8 +101,8 @@
   },
   "scene": "normal-tangent",
   "shadow_ray_microseconds": {
-    "median": 32416.38099999999,
-    "p95": 43664.408
+    "median": 32416.380999999994,
+    "p95": 43664.407999999996
   },
   "tags": [
     "640x360 over 256 frames, not CI's configuration"

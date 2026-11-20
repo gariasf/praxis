@@ -24,7 +24,7 @@
   "draw_calls": 2,
   "gpu_frame_microseconds": {
     "median": 436.166,
-    "p95": 443.833
+    "p95": 443.83299999999997
   },
   "gpu_memory_bytes": 377745199,
   "gpu_pass_microseconds": {
@@ -50,7 +50,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/uv-grid.json",
     "commit": "93355f150544f6f0437c3239cf90b217e9ff8541",
-    "gpu_frame_p95_over_median": 1.017578169779396,
+    "gpu_frame_p95_over_median": 1.0175781697793957,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "d30c4480cf849c95e40dd09972a0a34a1c26f676"

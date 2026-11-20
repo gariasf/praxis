@@ -37,23 +37,23 @@
       "p95": 695.0790000000001
     },
     "culling_phase_two": {
-      "median": 213.813,
+      "median": 213.81300000000002,
       "p95": 243.097
     },
     "depth_prepass": {
-      "median": 1344.485,
+      "median": 1344.4850000000001,
       "p95": 1633.435
     },
     "depth_pyramid_pass": {
       "median": 922.082,
-      "p95": 1291.37
+      "p95": 1291.3700000000001
     },
     "dynamic_tlas_build": {
       "median": 1999.518,
       "p95": 2124.309
     },
     "froxel_pass": {
-      "median": 253.383,
+      "median": 253.38299999999998,
       "p95": 376.509
     },
     "lit_pass": {

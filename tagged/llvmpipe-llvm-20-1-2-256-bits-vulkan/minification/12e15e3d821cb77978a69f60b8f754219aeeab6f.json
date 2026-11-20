@@ -58,14 +58,14 @@
     },
     "depth_pyramid_pass": {
       "median": 1221.031,
-      "p95": 1672.543
+      "p95": 1672.5430000000001
     },
     "dynamic_tlas_build": {
       "median": 0.0,
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 190.157,
+      "median": 190.15699999999998,
       "p95": 295.92699999999996
     },
     "lit_pass": {
@@ -74,15 +74,15 @@
     },
     "phase_two_depth_pass": {
       "median": 86.03,
-      "p95": 108.684
+      "p95": 108.68400000000001
     },
     "shadow_mask_pass": {
-      "median": 11324.655,
+      "median": 11324.654999999999,
       "p95": 13383.903
     },
     "tonemapping_pass": {
       "median": 3222.612,
-      "p95": 3752.341
+      "p95": 3752.3410000000003
     }
   },
   "heap_allocations": 334,

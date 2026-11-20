@@ -18,7 +18,7 @@
     "uploaded_bytes": 1024
   },
   "cpu_frame_microseconds": {
-    "median": 93626.714,
+    "median": 93626.71399999999,
     "p95": 107293.342
   },
   "draw_calls": 4,
@@ -42,7 +42,7 @@
     },
     "depth_pyramid_pass": {
       "median": 1648.2669999999998,
-      "p95": 2059.528
+      "p95": 2059.5280000000002
     },
     "froxel_pass": {
       "median": 346.529,

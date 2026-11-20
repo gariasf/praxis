@@ -18,7 +18,7 @@
     "uploaded_bytes": 240
   },
   "cpu_frame_microseconds": {
-    "median": 56940.514,
+    "median": 56940.513999999996,
     "p95": 62857.399
   },
   "draw_calls": 4,
@@ -65,7 +65,7 @@
       "p95": 302.396
     },
     "lit_pass": {
-      "median": 15747.933,
+      "median": 15747.932999999999,
       "p95": 16427.682999999997
     },
     "phase_two_depth_pass": {
@@ -73,7 +73,7 @@
       "p95": 144.68
     },
     "shadow_mask_pass": {
-      "median": 31176.67,
+      "median": 31176.670000000002,
       "p95": 36999.778
     },
     "tonemapping_pass": {

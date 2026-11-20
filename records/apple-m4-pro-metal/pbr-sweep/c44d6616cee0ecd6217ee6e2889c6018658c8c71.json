@@ -29,7 +29,7 @@
   "gpu_memory_bytes": 252291828,
   "gpu_pass_microseconds": {
     "culling_pass": {
-      "median": 25.917,
+      "median": 25.916999999999998,
       "p95": 26.541
     },
     "main_pass": {

@@ -38,7 +38,7 @@
       "p95": 32.583000000000006
     },
     "culling_phase_two": {
-      "median": 18.792,
+      "median": 18.791999999999998,
       "p95": 21.75
     },
     "depth_prepass": {
@@ -133,7 +133,7 @@
   },
   "scene": "orrery",
   "shadow_ray_microseconds": {
-    "median": 1954.5,
+    "median": 1954.5000000000002,
     "p95": 2072.0
   },
   "triangles_drawn": 11040,

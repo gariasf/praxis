@@ -18,7 +18,7 @@
     "uploaded_bytes": 288
   },
   "cpu_frame_microseconds": {
-    "median": 2039.167,
+    "median": 2039.1670000000001,
     "p95": 2654.5420000000004
   },
   "draw_calls": 3,
@@ -29,11 +29,11 @@
   "gpu_memory_bytes": 377661367,
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 57.791,
+      "median": 57.791000000000004,
       "p95": 58.666
     },
     "culling_phase_two": {
-      "median": 60.541,
+      "median": 60.541000000000004,
       "p95": 61.45799999999999
     },
     "depth_prepass": {
@@ -45,7 +45,7 @@
       "p95": 791.333
     },
     "lit_pass": {
-      "median": 918.542,
+      "median": 918.5419999999999,
       "p95": 934.5
     }
   },

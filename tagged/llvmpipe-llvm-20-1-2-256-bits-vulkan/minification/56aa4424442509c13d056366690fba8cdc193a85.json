@@ -24,7 +24,7 @@
   "draw_calls": 4,
   "gpu_frame_microseconds": {
     "median": 402086.576,
-    "p95": 404875.372
+    "p95": 404875.37200000003
   },
   "gpu_memory_bytes": 326032128,
   "gpu_pass_microseconds": {
@@ -38,7 +38,7 @@
     },
     "depth_prepass": {
       "median": 895.59,
-      "p95": 996.95
+      "p95": 996.9499999999999
     },
     "depth_pyramid_pass": {
       "median": 1682.155,

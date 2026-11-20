@@ -20,7 +20,7 @@
     "uploaded_bytes": 1416
   },
   "cpu_frame_microseconds": {
-    "median": 360.292,
+    "median": 360.29200000000003,
     "p95": 396.875
   },
   "draw_calls": 4,
@@ -103,7 +103,7 @@
   },
   "scene": "orrery",
   "shadow_ray_microseconds": {
-    "median": 1866.626,
+    "median": 1866.6260000000002,
     "p95": 1952.083
   },
   "triangles_drawn": 11040,

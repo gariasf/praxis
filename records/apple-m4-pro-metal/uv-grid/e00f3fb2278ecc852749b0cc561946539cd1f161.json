@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "gpu_frame_microseconds": {
-    "median": 1054.292,
+    "median": 1054.2920000000001,
     "p95": 1064.25
   },
   "gpu_memory_bytes": 421855387,
@@ -49,7 +49,7 @@
       "p95": 7.209
     },
     "lit_pass": {
-      "median": 385.542,
+      "median": 385.54200000000003,
       "p95": 394.875
     },
     "tonemapping_pass": {
@@ -66,7 +66,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/uv-grid.json",
     "commit": "2b12b7765fd6a3aab443e569a90d28fd5c89f796",
-    "gpu_frame_p95_over_median": 1.0094452011397224,
+    "gpu_frame_p95_over_median": 1.0094452011397221,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "e00f3fb2278ecc852749b0cc561946539cd1f161"

@@ -33,7 +33,7 @@
   "gpu_memory_bytes": 424845500,
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 36.459,
+      "median": 36.458999999999996,
       "p95": 37.917
     },
     "culling_phase_two": {

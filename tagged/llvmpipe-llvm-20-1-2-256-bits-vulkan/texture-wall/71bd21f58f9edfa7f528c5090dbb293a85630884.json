@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.3809999999999999,
+    "median": 0.38099999999999995,
     "p95": 0.541
   },
   "gate_microseconds": {
@@ -45,19 +45,19 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 947.464,
+      "median": 947.4639999999999,
       "p95": 3249.5699999999997
     },
     "culling_phase_two": {
       "median": 391.597,
-      "p95": 467.16
+      "p95": 467.15999999999997
     },
     "depth_prepass": {
-      "median": 1806.659,
-      "p95": 2039.27
+      "median": 1806.6589999999999,
+      "p95": 2039.2700000000002
     },
     "depth_pyramid_pass": {
-      "median": 2247.423,
+      "median": 2247.4230000000002,
       "p95": 2785.856
     },
     "dynamic_tlas_build": {
@@ -102,7 +102,7 @@
   "scene": "texture-wall",
   "shadow_ray_microseconds": {
     "median": 9540.422999999995,
-    "p95": 12823.725
+    "p95": 12823.724999999999
   },
   "tags": [
     "640x360 over 256 frames, not CI's configuration"

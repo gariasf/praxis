@@ -23,8 +23,8 @@
   },
   "draw_calls": 4,
   "gpu_frame_microseconds": {
-    "median": 1252.917,
-    "p95": 1263.333
+    "median": 1252.9170000000001,
+    "p95": 1263.3329999999999
   },
   "gpu_memory_bytes": 406827143,
   "gpu_pass_microseconds": {
@@ -37,7 +37,7 @@
       "p95": 20.833
     },
     "depth_prepass": {
-      "median": 93.208,
+      "median": 93.20800000000001,
       "p95": 95.917
     },
     "depth_pyramid_pass": {
@@ -62,7 +62,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/far-coplanar.json",
     "commit": "7ee4ed6f6a03ae3839a0c525056fc8c82596159b",
-    "gpu_frame_p95_over_median": 1.00831339985011,
+    "gpu_frame_p95_over_median": 1.0083133998501095,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "11e8f86cd364b4a4603ca9619234db5c40be3105"

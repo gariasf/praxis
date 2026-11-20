@@ -27,7 +27,7 @@
     "p95": 355.79200000000003
   },
   "gate_microseconds": {
-    "median": 1309.917,
+    "median": 1309.9170000000001,
     "p95": 1348.541
   },
   "gpu_frame_microseconds": {
@@ -50,7 +50,7 @@
     },
     "culling_phase_two": {
       "median": 22.041,
-      "p95": 23.583
+      "p95": 23.583000000000002
     },
     "depth_prepass": {
       "median": 384.0,
@@ -69,7 +69,7 @@
       "p95": 13.166
     },
     "lit_pass": {
-      "median": 1857.167,
+      "median": 1857.1670000000001,
       "p95": 1928.667
     },
     "phase_two_depth_pass": {

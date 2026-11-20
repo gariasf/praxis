@@ -18,7 +18,7 @@
     "uploaded_bytes": 384
   },
   "cpu_frame_microseconds": {
-    "median": 91455.657,
+    "median": 91455.65699999999,
     "p95": 103872.127
   },
   "draw_calls": 4,
@@ -31,7 +31,7 @@
     "p95": 32385.162
   },
   "gpu_frame_microseconds": {
-    "median": 91393.151,
+    "median": 91393.15100000001,
     "p95": 103778.02
   },
   "gpu_memory_bytes": 402409696,
@@ -94,7 +94,7 @@
   "provenance": {
     "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/pbr-sweep.json",
     "commit": "7442717a2799c3bdcf07236ebe2454034ba43a68",
-    "gpu_frame_p95_over_median": 1.1355120035198263,
+    "gpu_frame_p95_over_median": 1.135512003519826,
     "harness_version": 7,
     "source": "baseline-commit",
     "source_hash": "71bd21f58f9edfa7f528c5090dbb293a85630884"

@@ -24,7 +24,7 @@
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
     "median": 348.292,
-    "p95": 384.833
+    "p95": 384.83299999999997
   },
   "gate_microseconds": {
     "median": 1294.458,
@@ -38,7 +38,7 @@
   "gpu_pass_microseconds": {
     "bend_pass": {
       "median": 27.5,
-      "p95": 30.583
+      "p95": 30.583000000000002
     },
     "blas_refit": {
       "median": 0.0,
@@ -102,7 +102,7 @@
   "scene": "crowd",
   "shadow_ray_microseconds": {
     "median": 1042.7089999999998,
-    "p95": 1160.417
+    "p95": 1160.4170000000001
   },
   "triangles_drawn": 512002,
   "uploaded_bytes": 322192,

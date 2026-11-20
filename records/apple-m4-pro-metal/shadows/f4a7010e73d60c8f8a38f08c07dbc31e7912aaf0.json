@@ -42,7 +42,7 @@
   },
   "froxel_lights_overflowed": 0,
   "gate_microseconds": {
-    "maximum": 1528.708,
+    "maximum": 1528.7079999999999,
     "median": 850.4590000000001,
     "p95": 855.833,
     "p99": 860.25
@@ -55,7 +55,7 @@
       "p99": 34.125
     },
     "culling_phase_two": {
-      "maximum": 27.167,
+      "maximum": 27.166999999999998,
       "median": 18.959,
       "p95": 19.708,
       "p99": 20.166
@@ -81,8 +81,8 @@
     "lit_pass": {
       "maximum": 1122.708,
       "median": 466.084,
-      "p95": 467.667,
-      "p99": 468.917
+      "p95": 467.66700000000003,
+      "p99": 468.91700000000003
     }
   },
   "gpu_frame_microseconds": {
@@ -121,10 +121,10 @@
       "p99": 34.792
     },
     "culling_phase_two": {
-      "maximum": 27.417,
+      "maximum": 27.416999999999998,
       "median": 20.041,
       "p95": 22.792,
-      "p99": 24.583
+      "p99": 24.583000000000002
     },
     "depth_prepass": {
       "maximum": 504.417,
@@ -201,7 +201,7 @@
   "scene": "shadows",
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {
-    "maximum": 3729.792,
+    "maximum": 3729.7920000000004,
     "median": 2950.124999999999,
     "p95": 2962.291,
     "p99": 3472.0420000000004

@@ -28,7 +28,7 @@
   },
   "gate_microseconds": {
     "median": 1729.6,
-    "p95": 2326.336
+    "p95": 2326.3360000000002
   },
   "gpu_frame_microseconds": {
     "median": 2998.976,
@@ -37,7 +37,7 @@
   "gpu_memory_bytes": 679878949,
   "gpu_pass_microseconds": {
     "bend_pass": {
-      "median": 39.2,
+      "median": 39.199999999999996,
       "p95": 40.128
     },
     "blas_refit": {
@@ -66,7 +66,7 @@
     },
     "froxel_pass": {
       "median": 8.192,
-      "p95": 9.248
+      "p95": 9.248000000000001
     },
     "lit_pass": {
       "median": 1063.4240000000002,

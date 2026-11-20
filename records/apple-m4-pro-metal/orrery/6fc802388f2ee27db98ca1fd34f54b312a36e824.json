@@ -18,7 +18,7 @@
     "uploaded_bytes": 928
   },
   "cpu_frame_microseconds": {
-    "median": 95.792,
+    "median": 95.79199999999999,
     "p95": 137.25
   },
   "draw_calls": 3,

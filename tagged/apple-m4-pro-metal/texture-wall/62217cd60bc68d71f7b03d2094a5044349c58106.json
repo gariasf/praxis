@@ -24,7 +24,7 @@
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
     "median": 0.08299999999999999,
-    "p95": 0.209
+    "p95": 0.20900000000000002
   },
   "gpu_frame_microseconds": {
     "median": 15350.584,

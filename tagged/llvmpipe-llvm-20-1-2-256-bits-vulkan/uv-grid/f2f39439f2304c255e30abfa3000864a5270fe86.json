@@ -57,7 +57,7 @@
       "p95": 807.732
     },
     "depth_pyramid_pass": {
-      "median": 1590.89,
+      "median": 1590.8899999999999,
       "p95": 1782.722
     },
     "dynamic_tlas_build": {
@@ -69,7 +69,7 @@
       "p95": 390.439
     },
     "lit_pass": {
-      "median": 57719.427,
+      "median": 57719.426999999996,
       "p95": 60685.299
     },
     "phase_two_depth_pass": {
@@ -77,7 +77,7 @@
       "p95": 165.35899999999998
     },
     "shadow_mask_pass": {
-      "median": 13106.531,
+      "median": 13106.530999999999,
       "p95": 14325.945
     },
     "tonemapping_pass": {

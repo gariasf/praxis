@@ -18,13 +18,13 @@
     "uploaded_bytes": 384
   },
   "cpu_frame_microseconds": {
-    "median": 31191.562,
+    "median": 31191.561999999998,
     "p95": 33412.338
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
     "median": 0.31999999999999995,
-    "p95": 0.45
+    "p95": 0.44999999999999996
   },
   "gate_microseconds": {
     "median": 15929.303999999998,
@@ -50,7 +50,7 @@
     },
     "culling_phase_two": {
       "median": 347.70899999999995,
-      "p95": 403.804
+      "p95": 403.80400000000003
     },
     "depth_prepass": {
       "median": 1009.013,
@@ -58,7 +58,7 @@
     },
     "depth_pyramid_pass": {
       "median": 1557.408,
-      "p95": 1971.471
+      "p95": 1971.4709999999998
     },
     "dynamic_tlas_build": {
       "median": 0.0,
@@ -66,7 +66,7 @@
     },
     "froxel_pass": {
       "median": 310.068,
-      "p95": 400.177
+      "p95": 400.17699999999996
     },
     "lit_pass": {
       "median": 13194.127,
@@ -101,7 +101,7 @@
   },
   "scene": "far-coplanar",
   "shadow_ray_microseconds": {
-    "median": 10117.737,
+    "median": 10117.737000000001,
     "p95": 12350.119999999995
   },
   "tags": [

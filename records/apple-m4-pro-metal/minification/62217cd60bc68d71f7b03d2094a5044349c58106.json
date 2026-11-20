@@ -38,7 +38,7 @@
     },
     "culling_phase_one": {
       "median": 22.584,
-      "p95": 23.708
+      "p95": 23.708000000000002
     },
     "culling_phase_two": {
       "median": 17.167,

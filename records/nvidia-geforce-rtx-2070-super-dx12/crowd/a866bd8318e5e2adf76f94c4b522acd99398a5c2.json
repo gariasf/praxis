@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 917.1,
+    "median": 917.1000000000001,
     "p95": 1042.1
   },
   "gate_microseconds": {
@@ -65,7 +65,7 @@
       "p95": 161.792
     },
     "froxel_pass": {
-      "median": 10.88,
+      "median": 10.879999999999999,
       "p95": 12.48
     },
     "lit_pass": {
@@ -73,8 +73,8 @@
       "p95": 452.096
     },
     "phase_two_depth_pass": {
-      "median": 0.416,
-      "p95": 1.376
+      "median": 0.41600000000000004,
+      "p95": 1.3760000000000001
     },
     "shadow_mask_pass": {
       "median": 297.28000000000003,

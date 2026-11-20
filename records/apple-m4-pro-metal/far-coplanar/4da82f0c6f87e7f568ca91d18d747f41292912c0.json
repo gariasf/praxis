@@ -35,7 +35,7 @@
   "gate_pass_microseconds": {
     "culling_phase_one": {
       "median": 26.25,
-      "p95": 27.167
+      "p95": 27.166999999999998
     },
     "culling_phase_two": {
       "median": 20.084,
@@ -78,7 +78,7 @@
     },
     "culling_phase_two": {
       "median": 20.875,
-      "p95": 21.458
+      "p95": 21.458000000000002
     },
     "depth_prepass": {
       "median": 164.291,

@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.042,
+    "median": 0.041999999999999996,
     "p95": 0.125
   },
   "gpu_frame_microseconds": {
@@ -33,8 +33,8 @@
   "gpu_memory_bytes": 424742055,
   "gpu_pass_microseconds": {
     "culling_phase_one": {
-      "median": 22.542,
-      "p95": 23.708
+      "median": 22.541999999999998,
+      "p95": 23.708000000000002
     },
     "culling_phase_two": {
       "median": 17.833000000000002,

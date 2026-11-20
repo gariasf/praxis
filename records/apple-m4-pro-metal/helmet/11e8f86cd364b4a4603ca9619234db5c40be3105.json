@@ -18,12 +18,12 @@
     "uploaded_bytes": 368
   },
   "cpu_frame_microseconds": {
-    "median": 103.666,
+    "median": 103.66600000000001,
     "p95": 150.625
   },
   "draw_calls": 4,
   "gpu_frame_microseconds": {
-    "median": 1573.792,
+    "median": 1573.7920000000001,
     "p95": 1589.583
   },
   "gpu_memory_bytes": 427466425,
@@ -50,7 +50,7 @@
     },
     "tonemapping_pass": {
       "median": 927.708,
-      "p95": 935.583
+      "p95": 935.5830000000001
     }
   },
   "heap_allocations": 249,
@@ -62,7 +62,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/helmet.json",
     "commit": "7ee4ed6f6a03ae3839a0c525056fc8c82596159b",
-    "gpu_frame_p95_over_median": 1.010033727455725,
+    "gpu_frame_p95_over_median": 1.0100337274557247,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "11e8f86cd364b4a4603ca9619234db5c40be3105"

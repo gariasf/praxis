@@ -28,7 +28,7 @@
   },
   "gate_microseconds": {
     "median": 61500.456000000006,
-    "p95": 64894.124
+    "p95": 64894.123999999996
   },
   "gpu_frame_microseconds": {
     "median": 80294.352,
@@ -102,7 +102,7 @@
   "scene": "uv-grid",
   "shadow_ray_microseconds": {
     "median": 13194.414000000004,
-    "p95": 15982.820000000009
+    "p95": 15982.820000000007
   },
   "tags": [
     "640x360 over 256 frames, not CI's configuration"

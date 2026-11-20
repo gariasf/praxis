@@ -30,7 +30,7 @@
   "gpu_pass_microseconds": {
     "culling_phase_one": {
       "median": 30.166,
-      "p95": 31.042
+      "p95": 31.041999999999998
     },
     "culling_phase_two": {
       "median": 16.833,

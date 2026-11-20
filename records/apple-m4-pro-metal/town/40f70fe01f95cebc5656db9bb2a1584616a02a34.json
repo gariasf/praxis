@@ -52,7 +52,7 @@
     },
     "culling_phase_two": {
       "median": 175.5,
-      "p95": 190.91600000000005
+      "p95": 190.91600000000003
     },
     "depth_prepass": {
       "median": 2124.375,
@@ -104,7 +104,7 @@
   "scene": "town",
   "shadow_ray_microseconds": {
     "median": 10973.500999999998,
-    "p95": 11587.834
+    "p95": 11587.833999999999
   },
   "triangles_drawn": 5552214,
   "uploaded_bytes": 2049344,

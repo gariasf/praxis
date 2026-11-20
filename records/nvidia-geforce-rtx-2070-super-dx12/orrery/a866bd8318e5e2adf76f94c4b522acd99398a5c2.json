@@ -18,7 +18,7 @@
     "uploaded_bytes": 1344
   },
   "cpu_frame_microseconds": {
-    "median": 961.6,
+    "median": 961.5999999999999,
     "p95": 1088.6
   },
   "draw_calls": 4,
@@ -27,7 +27,7 @@
     "p95": 637.0999999999999
   },
   "gate_microseconds": {
-    "median": 409.92,
+    "median": 409.91999999999996,
     "p95": 423.936
   },
   "gpu_frame_microseconds": {
@@ -57,7 +57,7 @@
       "p95": 18.976
     },
     "depth_pyramid_pass": {
-      "median": 159.83999999999995,
+      "median": 159.83999999999997,
       "p95": 161.792
     },
     "dynamic_tlas_build": {
@@ -74,7 +74,7 @@
     },
     "phase_two_depth_pass": {
       "median": 0.448,
-      "p95": 1.376
+      "p95": 1.3760000000000001
     },
     "shadow_mask_pass": {
       "median": 141.536,

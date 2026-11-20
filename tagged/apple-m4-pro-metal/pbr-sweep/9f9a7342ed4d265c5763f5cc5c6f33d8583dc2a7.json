@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.042,
+    "median": 0.041999999999999996,
     "p95": 0.16699999999999998
   },
   "gpu_frame_microseconds": {
@@ -57,7 +57,7 @@
       "p95": 7.292
     },
     "lit_pass": {
-      "median": 9331.833,
+      "median": 9331.832999999999,
       "p95": 10923.875
     },
     "tonemapping_pass": {

@@ -19,7 +19,7 @@
   },
   "cpu_frame_microseconds": {
     "median": 887.6669999999999,
-    "p95": 1028.042
+    "p95": 1028.0420000000001
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
@@ -28,7 +28,7 @@
   },
   "gate_microseconds": {
     "median": 1326.083,
-    "p95": 1960.375
+    "p95": 1960.3749999999998
   },
   "gpu_frame_microseconds": {
     "median": 2989.458,
@@ -101,8 +101,8 @@
   },
   "scene": "crowd",
   "shadow_ray_microseconds": {
-    "median": 1334.5840000000003,
-    "p95": 1912.75
+    "median": 1334.5840000000005,
+    "p95": 1912.7500000000002
   },
   "tags": [
     "machine not quiet"

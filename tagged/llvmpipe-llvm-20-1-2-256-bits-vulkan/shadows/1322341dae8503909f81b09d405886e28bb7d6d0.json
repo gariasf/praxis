@@ -27,8 +27,8 @@
     "p95": 0.901
   },
   "gate_microseconds": {
-    "median": 20058.436,
-    "p95": 20816.881
+    "median": 20058.435999999998,
+    "p95": 20816.880999999998
   },
   "gpu_frame_microseconds": {
     "median": 60537.873,
@@ -46,10 +46,10 @@
     },
     "culling_phase_one": {
       "median": 814.9150000000001,
-      "p95": 1032.513
+      "p95": 1032.5130000000001
     },
     "culling_phase_two": {
-      "median": 362.886,
+      "median": 362.88599999999997,
       "p95": 416.226
     },
     "depth_prepass": {
@@ -57,7 +57,7 @@
       "p95": 2682.33
     },
     "depth_pyramid_pass": {
-      "median": 1706.612,
+      "median": 1706.6119999999999,
       "p95": 1995.231
     },
     "dynamic_tlas_build": {

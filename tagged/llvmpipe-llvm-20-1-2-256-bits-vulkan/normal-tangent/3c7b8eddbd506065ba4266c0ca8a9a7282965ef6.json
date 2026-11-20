@@ -28,7 +28,7 @@
   },
   "gpu_frame_microseconds": {
     "median": 212216.817,
-    "p95": 222669.505
+    "p95": 222669.50499999998
   },
   "gpu_memory_bytes": 415187788,
   "gpu_pass_microseconds": {
@@ -86,7 +86,7 @@
   "provenance": {
     "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/normal-tangent.json",
     "commit": "20595353d67720185481328aa23517142d87daa4",
-    "gpu_frame_p95_over_median": 1.0492547581655605,
+    "gpu_frame_p95_over_median": 1.0492547581655602,
     "harness_version": 4,
     "source": "baseline-commit",
     "source_hash": "3c7b8eddbd506065ba4266c0ca8a9a7282965ef6"

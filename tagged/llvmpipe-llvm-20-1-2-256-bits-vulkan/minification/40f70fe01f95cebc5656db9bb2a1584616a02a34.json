@@ -18,7 +18,7 @@
     "uploaded_bytes": 240
   },
   "cpu_frame_microseconds": {
-    "median": 239723.26,
+    "median": 239723.25999999998,
     "p95": 243879.042
   },
   "draw_calls": 4,
@@ -28,7 +28,7 @@
   },
   "gate_microseconds": {
     "median": 225610.438,
-    "p95": 229277.779
+    "p95": 229277.77899999998
   },
   "gpu_frame_microseconds": {
     "median": 239683.177,
@@ -65,7 +65,7 @@
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 207.516,
+      "median": 207.51600000000002,
       "p95": 314.90700000000004
     },
     "lit_pass": {
@@ -102,7 +102,7 @@
   "scene": "minification",
   "shadow_ray_microseconds": {
     "median": 10667.18299999999,
-    "p95": 15580.204000000029
+    "p95": 15580.204000000027
   },
   "tags": [
     "640x360 over 256 frames, not CI's configuration"

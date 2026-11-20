@@ -36,9 +36,9 @@
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
     "maximum": 7.9,
-    "median": 0.2,
-    "p95": 0.4,
-    "p99": 0.4
+    "median": 0.19999999999999998,
+    "p95": 0.39999999999999997,
+    "p99": 0.39999999999999997
   },
   "froxel_lights_overflowed": 0,
   "gate_microseconds": {
@@ -49,7 +49,7 @@
   },
   "gate_pass_microseconds": {
     "culling_phase_one": {
-      "maximum": 44.224,
+      "maximum": 44.224000000000004,
       "median": 40.896,
       "p95": 41.087999999999994,
       "p99": 42.112
@@ -64,7 +64,7 @@
       "maximum": 66.176,
       "median": 45.056,
       "p95": 53.312,
-      "p99": 63.776
+      "p99": 63.775999999999996
     },
     "depth_pyramid_pass": {
       "maximum": 163.84,
@@ -73,15 +73,15 @@
       "p99": 162.84799999999998
     },
     "froxel_pass": {
-      "maximum": 13.312,
+      "maximum": 13.312000000000001,
       "median": 9.664,
       "p95": 10.271999999999998,
       "p99": 12.224
     },
     "lit_pass": {
       "maximum": 869.3439999999999,
-      "median": 409.6,
-      "p95": 422.432,
+      "median": 409.59999999999997,
+      "p95": 422.43199999999996,
       "p99": 431.808
     }
   },
@@ -123,13 +123,13 @@
     "culling_phase_two": {
       "maximum": 37.088,
       "median": 34.816,
-      "p95": 36.096,
+      "p95": 36.096000000000004,
       "p99": 36.448
     },
     "depth_prepass": {
       "maximum": 431.328,
       "median": 91.072,
-      "p95": 109.632,
+      "p95": 109.63199999999999,
       "p99": 130.464
     },
     "depth_pyramid_pass": {
@@ -159,7 +159,7 @@
     "phase_two_depth_pass": {
       "maximum": 1.568,
       "median": 0.448,
-      "p95": 1.376,
+      "p95": 1.3760000000000001,
       "p99": 1.44
     },
     "shadow_mask_pass": {
@@ -183,7 +183,7 @@
   "lit_pass_wait_microseconds": {
     "maximum": 10.24,
     "median": 8.48,
-    "p95": 9.504,
+    "p95": 9.504000000000001,
     "p99": 9.76
   },
   "measured_frames": 1800,
@@ -202,9 +202,9 @@
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {
     "maximum": 1376.8639999999996,
-    "median": 906.624,
-    "p95": 934.944,
-    "p99": 968.64
+    "median": 906.6239999999999,
+    "p95": 934.9440000000001,
+    "p99": 968.6400000000001
   },
   "static_instances_left_out": 0,
   "triangles_drawn": 2,

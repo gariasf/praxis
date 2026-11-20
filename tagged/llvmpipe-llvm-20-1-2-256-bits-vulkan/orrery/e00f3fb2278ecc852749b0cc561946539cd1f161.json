@@ -23,14 +23,14 @@
   },
   "draw_calls": 4,
   "gpu_frame_microseconds": {
-    "median": 90929.505,
+    "median": 90929.50499999999,
     "p95": 103305.076
   },
   "gpu_memory_bytes": 329193280,
   "gpu_pass_microseconds": {
     "culling_phase_one": {
       "median": 636.375,
-      "p95": 1041.275
+      "p95": 1041.2749999999999
     },
     "culling_phase_two": {
       "median": 327.79499999999996,
@@ -41,7 +41,7 @@
       "p95": 2988.5710000000004
     },
     "depth_pyramid_pass": {
-      "median": 1798.908,
+      "median": 1798.9080000000001,
       "p95": 3390.977
     },
     "froxel_pass": {
@@ -66,7 +66,7 @@
   "provenance": {
     "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/orrery.json",
     "commit": "2b12b7765fd6a3aab443e569a90d28fd5c89f796",
-    "gpu_frame_p95_over_median": 1.1361007189030667,
+    "gpu_frame_p95_over_median": 1.136100718903067,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "e00f3fb2278ecc852749b0cc561946539cd1f161"

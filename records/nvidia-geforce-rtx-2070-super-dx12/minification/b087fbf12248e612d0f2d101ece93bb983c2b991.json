@@ -25,8 +25,8 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.2,
-    "p95": 0.4
+    "median": 0.19999999999999998,
+    "p95": 0.39999999999999997
   },
   "gate_microseconds": {
     "median": 720.896,
@@ -34,7 +34,7 @@
   },
   "gate_pass_microseconds": {
     "culling_phase_one": {
-      "median": 39.648,
+      "median": 39.647999999999996,
       "p95": 40.96
     },
     "culling_phase_two": {
@@ -50,17 +50,17 @@
       "p95": 161.792
     },
     "froxel_pass": {
-      "median": 9.504,
+      "median": 9.504000000000001,
       "p95": 10.24
     },
     "lit_pass": {
       "median": 405.92,
-      "p95": 409.696
+      "p95": 409.69599999999997
     }
   },
   "gpu_frame_microseconds": {
-    "median": 1819.84,
-    "p95": 1832.448
+    "median": 1819.8400000000001,
+    "p95": 1832.4479999999999
   },
   "gpu_memory_bytes": 767823131,
   "gpu_pass_microseconds": {
@@ -102,7 +102,7 @@
     },
     "phase_two_depth_pass": {
       "median": 0.448,
-      "p95": 1.376
+      "p95": 1.3760000000000001
     },
     "shadow_mask_pass": {
       "median": 851.552,
@@ -126,14 +126,14 @@
   "provenance": {
     "baseline": "bench/baselines/nvidia-geforce-rtx-2070-super-dx12/minification.json",
     "commit": "109311850d0cabb82f55ef36c193faad6861ad6f",
-    "gpu_frame_p95_over_median": 1.0069280815895905,
+    "gpu_frame_p95_over_median": 1.0069280815895902,
     "harness_version": 10,
     "source": "baseline-rerecorded",
     "source_hash": "b087fbf12248e612d0f2d101ece93bb983c2b991"
   },
   "scene": "minification",
   "shadow_ray_microseconds": {
-    "median": 903.008,
+    "median": 903.0079999999999,
     "p95": 918.08
   },
   "triangles_drawn": 2,

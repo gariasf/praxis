@@ -24,7 +24,7 @@
   "draw_calls": 4,
   "gpu_frame_microseconds": {
     "median": 94790.745,
-    "p95": 100030.635
+    "p95": 100030.63500000001
   },
   "gpu_memory_bytes": 334113796,
   "gpu_pass_microseconds": {
@@ -41,7 +41,7 @@
       "p95": 1886.813
     },
     "depth_pyramid_pass": {
-      "median": 1002.32,
+      "median": 1002.3199999999999,
       "p95": 1456.579
     },
     "lit_pass": {
@@ -62,7 +62,7 @@
   "provenance": {
     "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/normal-tangent.json",
     "commit": "32e4877892980bdbdea668b7972bd7d3a7868cf5",
-    "gpu_frame_p95_over_median": 1.0552784979166479,
+    "gpu_frame_p95_over_median": 1.055278497916648,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "d73cbff10412e784e68f2d8d91227b97a4e862f3"

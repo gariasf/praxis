@@ -21,12 +21,12 @@
   },
   "cpu_frame_microseconds": {
     "median": 1539.8,
-    "p95": 1985.1
+    "p95": 1985.1000000000001
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.2,
-    "p95": 0.4
+    "median": 0.19999999999999998,
+    "p95": 0.39999999999999997
   },
   "gate_microseconds": {
     "median": 558.9119999999999,
@@ -46,7 +46,7 @@
       "p95": 28.64
     },
     "depth_pyramid_pass": {
-      "median": 184.192,
+      "median": 184.19199999999998,
       "p95": 186.016
     },
     "froxel_pass": {
@@ -98,7 +98,7 @@
     },
     "lit_pass": {
       "median": 196.672,
-      "p95": 198.656
+      "p95": 198.65599999999998
     },
     "phase_two_depth_pass": {
       "median": 0.448,
@@ -106,11 +106,11 @@
     },
     "shadow_mask_pass": {
       "median": 378.432,
-      "p95": 380.64
+      "p95": 380.64000000000004
     },
     "tonemapping_pass": {
       "median": 190.208,
-      "p95": 190.496
+      "p95": 190.49599999999998
     }
   },
   "heap_allocations": 353,

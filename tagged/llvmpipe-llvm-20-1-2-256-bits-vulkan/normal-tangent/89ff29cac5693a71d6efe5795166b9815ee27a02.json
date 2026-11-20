@@ -18,7 +18,7 @@
     "uploaded_bytes": 384
   },
   "cpu_frame_microseconds": {
-    "median": 206494.719,
+    "median": 206494.71899999998,
     "p95": 214393.527
   },
   "draw_calls": 4,
@@ -49,7 +49,7 @@
       "p95": 502.122
     },
     "lit_pass": {
-      "median": 194522.099,
+      "median": 194522.09900000002,
       "p95": 202749.432
     },
     "tonemapping_pass": {

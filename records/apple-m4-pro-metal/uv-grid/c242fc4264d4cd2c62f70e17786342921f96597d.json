@@ -69,7 +69,7 @@
       "p95": 12.417
     },
     "shadow_mask_pass": {
-      "median": 1175.292,
+      "median": 1175.2920000000001,
       "p95": 1180.792
     },
     "tonemapping_pass": {

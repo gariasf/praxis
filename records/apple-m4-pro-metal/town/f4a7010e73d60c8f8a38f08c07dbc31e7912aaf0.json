@@ -42,15 +42,15 @@
   },
   "froxel_lights_overflowed": 0,
   "gate_microseconds": {
-    "maximum": 9622.042,
+    "maximum": 9622.042000000001,
     "median": 8622.209,
     "p95": 8888.333,
     "p99": 9161.542
   },
   "gate_pass_microseconds": {
     "culling_phase_one": {
-      "maximum": 1869.041,
-      "median": 1152.542,
+      "maximum": 1869.0410000000002,
+      "median": 1152.5420000000001,
       "p95": 1192.0839999999998,
       "p99": 1208.125
     },
@@ -158,7 +158,7 @@
     },
     "phase_two_depth_pass": {
       "maximum": 494.834,
-      "median": 55.709,
+      "median": 55.708999999999996,
       "p95": 107.791,
       "p99": 120.5
     },
@@ -169,7 +169,7 @@
       "p99": 12773.458
     },
     "tonemapping_pass": {
-      "maximum": 957.416,
+      "maximum": 957.4159999999999,
       "median": 322.666,
       "p95": 369.75,
       "p99": 371.166

@@ -34,7 +34,7 @@
     },
     "culling_phase_two": {
       "median": 17.75,
-      "p95": 18.833
+      "p95": 18.833000000000002
     },
     "depth_prepass": {
       "median": 93.75,
@@ -46,7 +46,7 @@
     },
     "lit_pass": {
       "median": 392.042,
-      "p95": 403.167
+      "p95": 403.16700000000003
     }
   },
   "heap_allocations": 232,

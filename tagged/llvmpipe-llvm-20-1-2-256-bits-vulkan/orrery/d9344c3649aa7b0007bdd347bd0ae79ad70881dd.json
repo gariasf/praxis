@@ -4,13 +4,13 @@
   "backend": "vulkan",
   "committed_unix_seconds": 1792447508,
   "cpu_frame_microseconds": {
-    "median": 43637.889,
-    "p95": 49837.984
+    "median": 43637.888999999996,
+    "p95": 49837.984000000004
   },
   "draw_calls": 5,
   "gpu_main_pass_microseconds": {
     "median": 43527.314,
-    "p95": 49673.501
+    "p95": 49673.501000000004
   },
   "gpu_memory_bytes": 107201188,
   "heap_allocations": 68,

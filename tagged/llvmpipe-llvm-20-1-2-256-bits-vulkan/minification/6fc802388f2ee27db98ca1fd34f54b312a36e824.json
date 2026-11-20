@@ -19,7 +19,7 @@
   },
   "cpu_frame_microseconds": {
     "median": 403882.042,
-    "p95": 407464.579
+    "p95": 407464.57899999997
   },
   "draw_calls": 3,
   "gpu_frame_microseconds": {
@@ -41,8 +41,8 @@
       "p95": 981.549
     },
     "depth_pyramid_pass": {
-      "median": 1701.725,
-      "p95": 1962.082
+      "median": 1701.7250000000001,
+      "p95": 1962.0819999999999
     },
     "lit_pass": {
       "median": 399826.395,

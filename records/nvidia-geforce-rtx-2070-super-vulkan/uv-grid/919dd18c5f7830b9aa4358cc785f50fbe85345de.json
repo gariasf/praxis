@@ -21,11 +21,11 @@
   },
   "cpu_frame_microseconds": {
     "median": 354.6,
-    "p95": 408.9
+    "p95": 408.90000000000003
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.2,
+    "median": 0.19999999999999998,
     "p95": 0.3
   },
   "gate_microseconds": {
@@ -84,7 +84,7 @@
     },
     "tonemapping_pass": {
       "median": 196.608,
-      "p95": 198.496
+      "p95": 198.49599999999998
     }
   },
   "heap_allocations": 351,

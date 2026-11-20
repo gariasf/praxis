@@ -24,7 +24,7 @@
   "draw_calls": 2,
   "gpu_frame_microseconds": {
     "median": 14274.609,
-    "p95": 14709.772
+    "p95": 14709.771999999999
   },
   "gpu_memory_bytes": 244916068,
   "gpu_pass_microseconds": {
@@ -37,7 +37,7 @@
       "p95": 1131.857
     },
     "lit_pass": {
-      "median": 12570.005,
+      "median": 12570.005000000001,
       "p95": 12916.341
     }
   },
@@ -50,7 +50,7 @@
   "provenance": {
     "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/far-coplanar.json",
     "commit": "c77647ff51e09cb9effeddb527ecd91f9d7eb477",
-    "gpu_frame_p95_over_median": 1.0304851082085682,
+    "gpu_frame_p95_over_median": 1.030485108208568,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "6381a5327490cf9c3e6af839369a64f2c0f30c18"

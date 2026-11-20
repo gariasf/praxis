@@ -3,7 +3,7 @@
   "backend": "metal",
   "committed_unix_seconds": 1791981243,
   "cpu_frame_microseconds": {
-    "median": 23.667,
+    "median": 23.666999999999998,
     "p95": 45.375
   },
   "draw_calls": 1,

@@ -27,7 +27,7 @@
     "p95": 1109.542
   },
   "gate_microseconds": {
-    "median": 9820.708,
+    "median": 9820.707999999999,
     "p95": 10483.292
   },
   "gpu_frame_microseconds": {
@@ -53,7 +53,7 @@
       "p95": 936.25
     },
     "depth_prepass": {
-      "median": 1756.333,
+      "median": 1756.3329999999999,
       "p95": 1814.583
     },
     "depth_pyramid_pass": {
@@ -70,7 +70,7 @@
     },
     "lit_pass": {
       "median": 8714.417,
-      "p95": 9186.083
+      "p95": 9186.082999999999
     },
     "phase_two_depth_pass": {
       "median": 48.917,
@@ -102,7 +102,7 @@
   "scene": "town",
   "shadow_ray_microseconds": {
     "median": 3227.9590000000007,
-    "p95": 3984.707
+    "p95": 3984.7070000000003
   },
   "triangles_drawn": 5552214,
   "uploaded_bytes": 2049344,

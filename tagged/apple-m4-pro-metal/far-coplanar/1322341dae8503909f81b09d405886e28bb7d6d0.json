@@ -48,10 +48,10 @@
     },
     "culling_phase_one": {
       "median": 24.0,
-      "p95": 24.833
+      "p95": 24.833000000000002
     },
     "culling_phase_two": {
-      "median": 21.208,
+      "median": 21.208000000000002,
       "p95": 21.875
     },
     "depth_prepass": {
@@ -80,7 +80,7 @@
     },
     "shadow_mask_pass": {
       "median": 1425.792,
-      "p95": 1436.958
+      "p95": 1436.9579999999999
     },
     "tonemapping_pass": {
       "median": 321.292,

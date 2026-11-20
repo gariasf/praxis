@@ -39,7 +39,7 @@
   "gpu_memory_bytes": 664077519,
   "gpu_pass_microseconds": {
     "bend_pass": {
-      "median": 29.583,
+      "median": 29.583000000000002,
       "p95": 31.124999999999996
     },
     "blas_refit": {
@@ -79,7 +79,7 @@
       "p95": 12.667
     },
     "shadow_mask_pass": {
-      "median": 1865.458,
+      "median": 1865.4579999999999,
       "p95": 1899.0
     },
     "tonemapping_pass": {

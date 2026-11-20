@@ -101,7 +101,7 @@
   },
   "scene": "uv-grid",
   "shadow_ray_microseconds": {
-    "median": 1344.4990000000005,
+    "median": 1344.4990000000003,
     "p95": 1354.417
   },
   "triangles_drawn": 2,

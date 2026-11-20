@@ -38,10 +38,10 @@
     },
     "culling_phase_one": {
       "median": 364.209,
-      "p95": 487.504
+      "p95": 487.50399999999996
     },
     "culling_phase_two": {
-      "median": 185.769,
+      "median": 185.76899999999998,
       "p95": 215.174
     },
     "depth_prepass": {
@@ -50,7 +50,7 @@
     },
     "depth_pyramid_pass": {
       "median": 835.6890000000001,
-      "p95": 999.355
+      "p95": 999.3549999999999
     },
     "dynamic_tlas_build": {
       "median": 0.0,

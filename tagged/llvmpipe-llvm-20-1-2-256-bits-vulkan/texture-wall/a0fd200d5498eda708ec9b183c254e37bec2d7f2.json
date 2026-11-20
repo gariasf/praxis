@@ -18,7 +18,7 @@
     "uploaded_bytes": 192
   },
   "cpu_frame_microseconds": {
-    "median": 50028.55,
+    "median": 50028.549999999996,
     "p95": 53054.689
   },
   "draw_calls": 4,
@@ -49,8 +49,8 @@
       "p95": 3385.379
     },
     "culling_phase_two": {
-      "median": 371.855,
-      "p95": 438.903
+      "median": 371.85499999999996,
+      "p95": 438.90299999999996
     },
     "depth_prepass": {
       "median": 964.235,
@@ -65,7 +65,7 @@
       "p95": 0.0
     },
     "froxel_pass": {
-      "median": 221.885,
+      "median": 221.88500000000002,
       "p95": 266.377
     },
     "lit_pass": {

@@ -60,7 +60,7 @@
   },
   "gpu_frame_microseconds": {
     "median": 19981.5,
-    "p95": 20558.417
+    "p95": 20558.416999999998
   },
   "gpu_memory_bytes": 764009624,
   "gpu_pass_microseconds": {
@@ -86,7 +86,7 @@
     },
     "depth_pyramid_pass": {
       "median": 214.25,
-      "p95": 219.91600000000005
+      "p95": 219.91600000000003
     },
     "dynamic_tlas_build": {
       "median": 0.0,
@@ -98,7 +98,7 @@
     },
     "lit_pass": {
       "median": 3779.458,
-      "p95": 3935.125000000001
+      "p95": 3935.1250000000005
     },
     "phase_two_depth_pass": {
       "median": 56.791,
@@ -133,7 +133,7 @@
   },
   "scene": "town",
   "shadow_ray_microseconds": {
-    "median": 10779.165999999996,
+    "median": 10779.165999999997,
     "p95": 11695.75
   },
   "triangles_drawn": 5552214,

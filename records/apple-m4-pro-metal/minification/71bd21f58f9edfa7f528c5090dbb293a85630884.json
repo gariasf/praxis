@@ -20,7 +20,7 @@
     "uploaded_bytes": 240
   },
   "cpu_frame_microseconds": {
-    "median": 1012.917,
+    "median": 1012.9169999999999,
     "p95": 1219.959
   },
   "draw_calls": 4,
@@ -48,7 +48,7 @@
     },
     "culling_phase_one": {
       "median": 26.708,
-      "p95": 28.542
+      "p95": 28.541999999999998
     },
     "culling_phase_two": {
       "median": 19.875,

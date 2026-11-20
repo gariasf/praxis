@@ -18,8 +18,8 @@
     "uploaded_bytes": 309392
   },
   "cpu_frame_microseconds": {
-    "median": 238563.488,
-    "p95": 244804.42
+    "median": 238563.48799999998,
+    "p95": 244804.41999999998
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
@@ -34,7 +34,7 @@
   "gpu_pass_microseconds": {
     "bend_pass": {
       "median": 3508.747,
-      "p95": 3911.47
+      "p95": 3911.4700000000003
     },
     "blas_refit": {
       "median": 0.0,
@@ -45,7 +45,7 @@
       "p95": 7547.514
     },
     "culling_phase_two": {
-      "median": 1097.303,
+      "median": 1097.3029999999999,
       "p95": 1137.449
     },
     "depth_prepass": {

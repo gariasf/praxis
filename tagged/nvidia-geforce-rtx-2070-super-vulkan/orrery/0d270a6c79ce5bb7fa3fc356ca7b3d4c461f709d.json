@@ -54,14 +54,14 @@
     },
     "depth_prepass": {
       "median": 155.072,
-      "p95": 176.128
+      "p95": 176.12800000000001
     },
     "depth_pyramid_pass": {
-      "median": 209.408,
+      "median": 209.40800000000002,
       "p95": 214.464
     },
     "dynamic_tlas_build": {
-      "median": 51.648,
+      "median": 51.647999999999996,
       "p95": 53.248000000000005
     },
     "froxel_pass": {

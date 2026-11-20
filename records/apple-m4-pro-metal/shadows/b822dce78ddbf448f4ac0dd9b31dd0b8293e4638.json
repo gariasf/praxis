@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "gpu_frame_microseconds": {
-    "median": 1128.708,
+    "median": 1128.7079999999999,
     "p95": 1171.25
   },
   "gpu_memory_bytes": 406729623,
@@ -46,7 +46,7 @@
     },
     "lit_pass": {
       "median": 375.541,
-      "p95": 381.542
+      "p95": 381.54200000000003
     },
     "tonemapping_pass": {
       "median": 678.459,
@@ -62,7 +62,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/shadows.json",
     "commit": "c4454af258dbcd8426150e7efcf41ae07998ea45",
-    "gpu_frame_p95_over_median": 1.0376908819641573,
+    "gpu_frame_p95_over_median": 1.0376908819641575,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "b822dce78ddbf448f4ac0dd9b31dd0b8293e4638"

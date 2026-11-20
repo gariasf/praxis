@@ -19,11 +19,11 @@
   },
   "cpu_frame_microseconds": {
     "median": 243614.657,
-    "p95": 252299.988
+    "p95": 252299.98799999998
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 226143.531,
+    "median": 226143.53100000002,
     "p95": 234469.912
   },
   "gate_microseconds": {
@@ -37,7 +37,7 @@
   "gpu_memory_bytes": 395607124,
   "gpu_pass_microseconds": {
     "bend_pass": {
-      "median": 3611.184,
+      "median": 3611.1839999999997,
       "p95": 4017.7040000000006
     },
     "blas_refit": {
@@ -62,19 +62,19 @@
     },
     "dynamic_tlas_build": {
       "median": 16003.234000000002,
-      "p95": 18897.17
+      "p95": 18897.170000000002
     },
     "froxel_pass": {
       "median": 176.53,
       "p95": 221.934
     },
     "lit_pass": {
-      "median": 126534.215,
+      "median": 126534.21500000001,
       "p95": 131900.62699999998
     },
     "phase_two_depth_pass": {
       "median": 136.131,
-      "p95": 168.378
+      "p95": 168.37800000000001
     },
     "shadow_mask_pass": {
       "median": 24406.209000000003,

@@ -23,7 +23,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 0.042,
+    "median": 0.041999999999999996,
     "p95": 0.334
   },
   "gate_microseconds": {
@@ -77,8 +77,8 @@
       "p95": 12.5
     },
     "shadow_mask_pass": {
-      "median": 989.5,
-      "p95": 993.125
+      "median": 989.4999999999999,
+      "p95": 993.1250000000001
     },
     "tonemapping_pass": {
       "median": 636.417,
@@ -101,7 +101,7 @@
   },
   "scene": "far-coplanar",
   "shadow_ray_microseconds": {
-    "median": 1047.667,
+    "median": 1047.6670000000001,
     "p95": 1061.3329999999996
   },
   "triangles_drawn": 4,

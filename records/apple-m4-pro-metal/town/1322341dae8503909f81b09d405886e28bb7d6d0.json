@@ -25,7 +25,7 @@
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
-    "median": 1110.333,
+    "median": 1110.3329999999999,
     "p95": 1206.0410000000002
   },
   "gate_microseconds": {
@@ -34,7 +34,7 @@
   },
   "gpu_frame_microseconds": {
     "median": 18554.666,
-    "p95": 19482.917
+    "p95": 19482.916999999998
   },
   "gpu_memory_bytes": 764009620,
   "gpu_pass_microseconds": {
@@ -47,7 +47,7 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 1143.833,
+      "median": 1143.8329999999999,
       "p95": 1185.291
     },
     "culling_phase_two": {
@@ -84,7 +84,7 @@
     },
     "tonemapping_pass": {
       "median": 321.16700000000003,
-      "p95": 377.792
+      "p95": 377.79200000000003
     }
   },
   "heap_allocations": 10501,
@@ -96,7 +96,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/town.json",
     "commit": "ffd08bf6c3a5186153b8127c1161c750d1861c1d",
-    "gpu_frame_p95_over_median": 1.0500279013375935,
+    "gpu_frame_p95_over_median": 1.0500279013375933,
     "harness_version": 9,
     "source": "baseline-commit",
     "source_hash": "1322341dae8503909f81b09d405886e28bb7d6d0"
@@ -104,7 +104,7 @@
   "scene": "town",
   "shadow_ray_microseconds": {
     "median": 9440.375000000002,
-    "p95": 10424.959000000004
+    "p95": 10424.959000000003
   },
   "triangles_drawn": 5552214,
   "uploaded_bytes": 2049376,

@@ -30,7 +30,7 @@
   "gpu_pass_microseconds": {
     "culling_phase_one": {
       "median": 331.24100000000004,
-      "p95": 429.528
+      "p95": 429.52799999999996
     },
     "culling_phase_two": {
       "median": 210.888,
@@ -54,7 +54,7 @@
     },
     "tonemapping_pass": {
       "median": 3168.06,
-      "p95": 3948.266
+      "p95": 3948.2659999999996
     }
   },
   "heap_allocations": 269,

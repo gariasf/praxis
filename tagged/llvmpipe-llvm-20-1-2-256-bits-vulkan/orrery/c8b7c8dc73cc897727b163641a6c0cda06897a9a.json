@@ -19,7 +19,7 @@
   },
   "cpu_frame_microseconds": {
     "median": 96775.616,
-    "p95": 108539.563
+    "p95": 108539.56300000001
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
@@ -102,7 +102,7 @@
   "scene": "orrery",
   "shadow_ray_microseconds": {
     "median": 22770.55900000001,
-    "p95": 31196.743
+    "p95": 31196.743000000002
   },
   "tags": [
     "640x360 over 256 frames, not CI's configuration"

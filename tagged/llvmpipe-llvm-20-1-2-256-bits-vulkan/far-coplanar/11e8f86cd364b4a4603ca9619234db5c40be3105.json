@@ -18,7 +18,7 @@
     "uploaded_bytes": 368
   },
   "cpu_frame_microseconds": {
-    "median": 21611.634,
+    "median": 21611.634000000002,
     "p95": 22269.373
   },
   "draw_calls": 4,
@@ -37,7 +37,7 @@
       "p95": 343.913
     },
     "depth_prepass": {
-      "median": 1082.458,
+      "median": 1082.4579999999999,
       "p95": 1153.93
     },
     "depth_pyramid_pass": {

@@ -45,7 +45,7 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 41.459,
+      "median": 41.458999999999996,
       "p95": 42.375
     },
     "culling_phase_two": {
@@ -69,8 +69,8 @@
       "p95": 7.5
     },
     "lit_pass": {
-      "median": 476.208,
-      "p95": 480.042
+      "median": 476.20799999999997,
+      "p95": 480.04200000000003
     },
     "phase_two_depth_pass": {
       "median": 12.208,

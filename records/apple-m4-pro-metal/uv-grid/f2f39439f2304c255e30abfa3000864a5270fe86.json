@@ -45,7 +45,7 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 22.333,
+      "median": 22.333000000000002,
       "p95": 23.541
     },
     "culling_phase_two": {
@@ -74,7 +74,7 @@
     },
     "phase_two_depth_pass": {
       "median": 12.083,
-      "p95": 12.416
+      "p95": 12.415999999999999
     },
     "shadow_mask_pass": {
       "median": 1174.792,

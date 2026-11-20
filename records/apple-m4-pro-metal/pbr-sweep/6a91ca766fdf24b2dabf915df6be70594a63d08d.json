@@ -48,11 +48,11 @@
     "maximum": 6.959,
     "median": 0.08299999999999999,
     "p95": 0.126,
-    "p99": 0.209
+    "p99": 0.20900000000000002
   },
   "froxel_lights_overflowed": 0,
   "gate_microseconds": {
-    "maximum": 1687.167,
+    "maximum": 1687.1670000000001,
     "median": 781.7090000000001,
     "p95": 796.1669999999999,
     "p99": 799.667
@@ -67,13 +67,13 @@
     "culling_phase_two": {
       "maximum": 24.0,
       "median": 19.333,
-      "p95": 19.958,
+      "p95": 19.958000000000002,
       "p99": 20.25
     },
     "depth_prepass": {
-      "maximum": 505.667,
+      "maximum": 505.66700000000003,
       "median": 95.917,
-      "p95": 98.209,
+      "p95": 98.20899999999999,
       "p99": 99.5
     },
     "depth_pyramid_pass": {
@@ -98,7 +98,7 @@
   "gpu_frame_microseconds": {
     "maximum": 4862.084,
     "median": 3864.125,
-    "p95": 3978.042,
+    "p95": 3978.0420000000004,
     "p99": 4063.583
   },
   "gpu_memory_bytes": 737662670,
@@ -146,7 +146,7 @@
       "maximum": 324.75,
       "median": 204.041,
       "p95": 205.125,
-      "p99": 207.04100000000005
+      "p99": 207.04100000000003
     },
     "dynamic_tlas_build": {
       "maximum": 0.0,
@@ -162,12 +162,12 @@
     },
     "lit_pass": {
       "maximum": 1310.042,
-      "median": 472.458,
+      "median": 472.45799999999997,
       "p95": 491.875,
       "p99": 495.792
     },
     "phase_two_depth_pass": {
-      "maximum": 388.708,
+      "maximum": 388.70799999999997,
       "median": 12.041,
       "p95": 12.417,
       "p99": 12.75
@@ -179,7 +179,7 @@
       "p99": 2727.0
     },
     "tonemapping_pass": {
-      "maximum": 1093.542,
+      "maximum": 1093.5420000000001,
       "median": 319.459,
       "p95": 319.959,
       "p99": 320.167
@@ -205,7 +205,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/pbr-sweep.json",
     "commit": "4756db50499448cd7e89d83516160a0c25507557",
-    "gpu_frame_p95_over_median": 1.0294806715621259,
+    "gpu_frame_p95_over_median": 1.029480671562126,
     "harness_version": 11,
     "source": "baseline-rerecorded",
     "source_hash": "6a91ca766fdf24b2dabf915df6be70594a63d08d"

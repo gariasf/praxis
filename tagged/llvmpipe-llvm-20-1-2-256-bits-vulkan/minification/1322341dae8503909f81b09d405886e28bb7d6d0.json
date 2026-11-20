@@ -18,7 +18,7 @@
     "uploaded_bytes": 272
   },
   "cpu_frame_microseconds": {
-    "median": 405712.752,
+    "median": 405712.75200000004,
     "p95": 408444.297
   },
   "draw_calls": 4,
@@ -73,7 +73,7 @@
       "p95": 383937.481
     },
     "phase_two_depth_pass": {
-      "median": 127.132,
+      "median": 127.13199999999999,
       "p95": 152.91
     },
     "shadow_mask_pass": {
@@ -101,7 +101,7 @@
   },
   "scene": "minification",
   "shadow_ray_microseconds": {
-    "median": 13222.804999999991,
+    "median": 13222.804999999993,
     "p95": 16243.69000000006
   },
   "tags": [

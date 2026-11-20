@@ -48,7 +48,7 @@
     },
     "culling_phase_one": {
       "median": 28.334,
-      "p95": 29.917
+      "p95": 29.916999999999998
     },
     "culling_phase_two": {
       "median": 19.875,
@@ -104,7 +104,7 @@
   "scene": "minification",
   "shadow_ray_microseconds": {
     "median": 1772.583,
-    "p95": 2046.75
+    "p95": 2046.7500000000002
   },
   "tags": [
     "machine not quiet"

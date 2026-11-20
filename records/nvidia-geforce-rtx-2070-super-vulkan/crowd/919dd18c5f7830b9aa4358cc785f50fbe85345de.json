@@ -39,7 +39,7 @@
   "gpu_memory_bytes": 768350705,
   "gpu_pass_microseconds": {
     "bend_pass": {
-      "median": 39.2,
+      "median": 39.199999999999996,
       "p95": 40.896
     },
     "blas_refit": {
@@ -56,7 +56,7 @@
     },
     "depth_prepass": {
       "median": 179.904,
-      "p95": 189.632
+      "p95": 189.63199999999998
     },
     "depth_pyramid_pass": {
       "median": 139.296,
@@ -103,8 +103,8 @@
   },
   "scene": "crowd",
   "shadow_ray_microseconds": {
-    "median": 940.128,
-    "p95": 961.024
+    "median": 940.1279999999999,
+    "p95": 961.0240000000001
   },
   "triangles_drawn": 512002,
   "uploaded_bytes": 309424,

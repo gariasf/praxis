@@ -45,7 +45,7 @@
       "p95": 0.0
     },
     "culling_phase_one": {
-      "median": 117554.63,
+      "median": 117554.62999999999,
       "p95": 118654.625
     },
     "culling_phase_two": {
@@ -57,7 +57,7 @@
       "p95": 52239.403
     },
     "depth_pyramid_pass": {
-      "median": 1744.035,
+      "median": 1744.0349999999999,
       "p95": 2355.618
     },
     "dynamic_tlas_build": {
@@ -65,7 +65,7 @@
       "p95": 67739.492
     },
     "froxel_pass": {
-      "median": 24619.134,
+      "median": 24619.134000000002,
       "p95": 25549.808
     },
     "lit_pass": {

@@ -54,7 +54,7 @@
     },
     "depth_prepass": {
       "median": 1097.617,
-      "p95": 1191.602
+      "p95": 1191.6019999999999
     },
     "depth_pyramid_pass": {
       "median": 1602.804,

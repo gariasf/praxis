@@ -53,7 +53,7 @@
   "froxel_lights_overflowed": 0,
   "gate_microseconds": {
     "maximum": 1581.625,
-    "median": 1287.792,
+    "median": 1287.7920000000001,
     "p95": 1334.917,
     "p99": 1356.959
   },
@@ -98,8 +98,8 @@
   "gpu_frame_microseconds": {
     "maximum": 4164.625,
     "median": 3765.875,
-    "p95": 3801.958,
-    "p99": 4003.292
+    "p95": 3801.9579999999996,
+    "p99": 4003.2920000000004
   },
   "gpu_memory_bytes": 738350579,
   "gpu_memory_bytes_by_kind": {
@@ -131,8 +131,8 @@
       "p99": 99.292
     },
     "culling_phase_two": {
-      "maximum": 29.917,
-      "median": 21.333,
+      "maximum": 29.916999999999998,
+      "median": 21.333000000000002,
       "p95": 22.083,
       "p99": 24.208
     },
@@ -143,7 +143,7 @@
       "p99": 395.083
     },
     "depth_pyramid_pass": {
-      "maximum": 492.792,
+      "maximum": 492.79200000000003,
       "median": 210.5,
       "p95": 214.042,
       "p99": 216.292
@@ -155,7 +155,7 @@
       "p99": 0.0
     },
     "froxel_pass": {
-      "maximum": 19.917,
+      "maximum": 19.916999999999998,
       "median": 8.625,
       "p95": 11.041,
       "p99": 12.667
@@ -174,7 +174,7 @@
     },
     "shadow_mask_pass": {
       "maximum": 2326.625,
-      "median": 1949.583,
+      "median": 1949.5829999999999,
       "p95": 1971.5840000000003,
       "p99": 1981.792
     },
@@ -205,7 +205,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/crowd.json",
     "commit": "6ebb45fb7ee3354342c88368ba2ae5dcc40a9d36",
-    "gpu_frame_p95_over_median": 1.0095815713479603,
+    "gpu_frame_p95_over_median": 1.0095815713479601,
     "harness_version": 11,
     "source": "baseline-rerecorded",
     "source_hash": "d62d8fc33ce4f5c743d178913f6214f558a4b4ac"

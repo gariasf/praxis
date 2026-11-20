@@ -41,25 +41,25 @@
   "cpu_frame_hitches": 6,
   "cpu_frame_microseconds": {
     "maximum": 5148.792,
-    "median": 1407.083,
+    "median": 1407.0829999999999,
     "p95": 1667.375,
-    "p99": 1841.833
+    "p99": 1841.8329999999999
   },
   "cpu_time_microseconds": {
     "any_with_component": {
       "maximum": 8.708,
-      "median": 0.042,
+      "median": 0.041999999999999996,
       "p95": 0.5,
       "p99": 0.7490000000000001
     },
     "clear_just_pressed": {
       "maximum": 0.75,
-      "median": 0.042,
+      "median": 0.041999999999999996,
       "p95": 0.25,
       "p99": 0.5
     },
     "dynamic_tlas": {
-      "maximum": 1811.208,
+      "maximum": 1811.2079999999999,
       "median": 619.7489999999999,
       "p95": 692.2080000000001,
       "p99": 751.334
@@ -78,7 +78,7 @@
     },
     "fly_camera": {
       "maximum": 8.959,
-      "median": 0.042,
+      "median": 0.041999999999999996,
       "p95": 0.375,
       "p99": 0.6659999999999999
     },
@@ -96,12 +96,12 @@
     },
     "record_previous_curvatures": {
       "maximum": 6.666,
-      "median": 0.042,
+      "median": 0.041999999999999996,
       "p95": 0.334,
       "p99": 0.625
     },
     "record_previous_world_transforms": {
-      "maximum": 167.08399999999995,
+      "maximum": 167.08399999999997,
       "median": 51.167,
       "p95": 86.792,
       "p99": 98.209
@@ -114,7 +114,7 @@
     },
     "resource_exists": {
       "maximum": 0.7080000000000001,
-      "median": 0.042,
+      "median": 0.041999999999999996,
       "p95": 0.16699999999999998,
       "p99": 0.33299999999999996
     },
@@ -144,7 +144,7 @@
     },
     "sway": {
       "maximum": 1.666,
-      "median": 0.042,
+      "median": 0.041999999999999996,
       "p95": 0.5,
       "p99": 0.792
     },
@@ -158,12 +158,12 @@
   "culling_per_slot_microseconds": {
     "maximum": 599.501,
     "median": 423.041,
-    "p95": 435.958,
+    "p95": 435.95799999999997,
     "p99": 455.125
   },
   "draw_calls": 8,
   "dynamic_tlas_cpu_microseconds": {
-    "maximum": 1907.5,
+    "maximum": 1907.4999999999998,
     "median": 641.0,
     "p95": 732.2080000000001,
     "p99": 800.3750000000001
@@ -178,7 +178,7 @@
   "gate_pass_microseconds": {
     "culling_phase_one_slots": {
       "maximum": 751.667,
-      "median": 499.833,
+      "median": 499.83299999999997,
       "p95": 517.25,
       "p99": 705.708
     },
@@ -207,7 +207,7 @@
       "p99": 1329.9589999999998
     },
     "depth_pyramid_pass": {
-      "maximum": 368.833,
+      "maximum": 368.83299999999997,
       "median": 205.542,
       "p95": 212.625,
       "p99": 219.458
@@ -268,7 +268,7 @@
       "p99": 770.416
     },
     "culling_phase_two_slots": {
-      "maximum": 364.792,
+      "maximum": 364.79200000000003,
       "median": 192.125,
       "p95": 198.375,
       "p99": 211.208
@@ -277,7 +277,7 @@
       "maximum": 174.625,
       "median": 9.0,
       "p95": 20.041,
-      "p99": 22.167
+      "p99": 22.166999999999998
     },
     "depth_prepass": {
       "maximum": 2596.25,
@@ -318,7 +318,7 @@
     "shadow_mask_pass": {
       "maximum": 12964.25,
       "median": 12356.709,
-      "p95": 12758.916,
+      "p95": 12758.916000000001,
       "p99": 12874.333
     },
     "tonemapping_pass": {
@@ -350,7 +350,7 @@
     "baseline": "bench/baselines/apple-m4-pro/town.json",
     "commit": "c47a441df7e8b63ad90137a2fef9795bee5d6dfe",
     "gpu_frame_p95_over_median": 1.0133427966987074,
-    "gpu_frame_p95_over_neighbours": 1.0084168598342569,
+    "gpu_frame_p95_over_neighbours": 1.0084168598342567,
     "harness_version": 12,
     "source": "baseline-rerecorded",
     "source_hash": "6acef7f38a46dbc3c3cbd4cbd0271d84e531a7bc"
@@ -360,7 +360,7 @@
   "shadow_mask_lights_overflowed": 0,
   "shadow_ray_microseconds": {
     "maximum": 12726.333,
-    "median": 11680.709000000004,
+    "median": 11680.709000000003,
     "p95": 12109.374,
     "p99": 12226.125999999998
   },

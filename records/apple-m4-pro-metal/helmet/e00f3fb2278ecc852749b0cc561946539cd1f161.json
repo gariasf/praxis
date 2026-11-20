@@ -34,7 +34,7 @@
     },
     "culling_phase_two": {
       "median": 18.375,
-      "p95": 21.292
+      "p95": 21.291999999999998
     },
     "depth_prepass": {
       "median": 154.458,
@@ -54,7 +54,7 @@
     },
     "tonemapping_pass": {
       "median": 929.042,
-      "p95": 937.834
+      "p95": 937.8340000000001
     }
   },
   "heap_allocations": 269,

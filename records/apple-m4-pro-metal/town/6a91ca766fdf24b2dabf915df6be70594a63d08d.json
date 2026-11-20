@@ -61,7 +61,7 @@
     "culling_phase_one": {
       "maximum": 2077.0,
       "median": 1134.208,
-      "p95": 1173.083,
+      "p95": 1173.0829999999999,
       "p99": 1185.417
     },
     "culling_phase_two": {
@@ -72,7 +72,7 @@
     },
     "depth_prepass": {
       "maximum": 2614.541,
-      "median": 1730.792,
+      "median": 1730.7920000000001,
       "p95": 1789.583,
       "p99": 1798.625
     },
@@ -98,7 +98,7 @@
   "gpu_frame_microseconds": {
     "maximum": 21421.417,
     "median": 20000.041,
-    "p95": 20249.917,
+    "p95": 20249.916999999998,
     "p99": 20980.417
   },
   "gpu_memory_bytes": 838285126,
@@ -162,8 +162,8 @@
     },
     "lit_pass": {
       "maximum": 4834.5419999999995,
-      "median": 3794.584,
-      "p95": 3928.041999999999,
+      "median": 3794.5840000000003,
+      "p95": 3928.0419999999995,
       "p99": 4179.7919999999995
     },
     "phase_two_depth_pass": {
@@ -175,7 +175,7 @@
     "shadow_mask_pass": {
       "maximum": 13408.666,
       "median": 11977.667,
-      "p95": 12432.958,
+      "p95": 12432.957999999999,
       "p99": 12924.167
     },
     "tonemapping_pass": {
@@ -205,7 +205,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/town.json",
     "commit": "4756db50499448cd7e89d83516160a0c25507557",
-    "gpu_frame_p95_over_median": 1.0124937743877624,
+    "gpu_frame_p95_over_median": 1.0124937743877622,
     "harness_version": 11,
     "source": "baseline-rerecorded",
     "source_hash": "6a91ca766fdf24b2dabf915df6be70594a63d08d"

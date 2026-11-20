@@ -23,7 +23,7 @@
   },
   "draw_calls": 2,
   "gpu_frame_microseconds": {
-    "median": 462.917,
+    "median": 462.91700000000003,
     "p95": 477.25
   },
   "gpu_memory_bytes": 296528740,
@@ -50,7 +50,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/pbr-sweep.json",
     "commit": "c77647ff51e09cb9effeddb527ecd91f9d7eb477",
-    "gpu_frame_p95_over_median": 1.0309623539424995,
+    "gpu_frame_p95_over_median": 1.0309623539424992,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "6381a5327490cf9c3e6af839369a64f2c0f30c18"

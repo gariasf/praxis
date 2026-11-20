@@ -30,7 +30,7 @@
   "gpu_pass_microseconds": {
     "culling_pass": {
       "median": 27.542,
-      "p95": 28.542
+      "p95": 28.541999999999998
     },
     "depth_prepass": {
       "median": 94.75,
@@ -38,7 +38,7 @@
     },
     "lit_pass": {
       "median": 408.792,
-      "p95": 418.958
+      "p95": 418.95799999999997
     }
   },
   "heap_allocations": 138,

@@ -18,8 +18,8 @@
     "uploaded_bytes": 1969344
   },
   "cpu_frame_microseconds": {
-    "median": 436330.883,
-    "p95": 450483.269
+    "median": 436330.88300000003,
+    "p95": 450483.26900000003
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
@@ -73,12 +73,12 @@
       "p95": 114641.035
     },
     "phase_two_depth_pass": {
-      "median": 254.873,
+      "median": 254.87300000000002,
       "p95": 330.764
     },
     "shadow_mask_pass": {
       "median": 117634.279,
-      "p95": 130533.805
+      "p95": 130533.80500000001
     },
     "tonemapping_pass": {
       "median": 5158.895,

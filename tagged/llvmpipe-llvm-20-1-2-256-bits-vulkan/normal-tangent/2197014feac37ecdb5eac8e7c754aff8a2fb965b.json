@@ -27,7 +27,7 @@
     "p95": 0.622
   },
   "gpu_frame_microseconds": {
-    "median": 212858.172,
+    "median": 212858.17200000002,
     "p95": 222014.361
   },
   "gpu_memory_bytes": 415187900,
@@ -53,7 +53,7 @@
       "p95": 3021.7360000000003
     },
     "depth_pyramid_pass": {
-      "median": 1584.496,
+      "median": 1584.4959999999999,
       "p95": 2032.734
     },
     "dynamic_tlas_build": {
@@ -90,7 +90,7 @@
   "provenance": {
     "baseline": "bench/baselines/llvmpipe-llvm-20-1-2-256-bits/normal-tangent.json",
     "commit": "71918ac5199bbefe24205444a55a21bc7dd9b7b2",
-    "gpu_frame_p95_over_median": 1.043015445044788,
+    "gpu_frame_p95_over_median": 1.0430154450447877,
     "harness_version": 4,
     "source": "baseline-commit",
     "source_hash": "2197014feac37ecdb5eac8e7c754aff8a2fb965b"

@@ -29,9 +29,9 @@
   },
   "cpu_frame_microseconds": {
     "maximum": 2544.0,
-    "median": 1738.6,
+    "median": 1738.6000000000001,
     "p95": 1812.5,
-    "p99": 1919.3
+    "p99": 1919.3000000000002
   },
   "draw_calls": 4,
   "dynamic_tlas_cpu_microseconds": {
@@ -49,7 +49,7 @@
   },
   "gate_pass_microseconds": {
     "culling_phase_one": {
-      "maximum": 110.144,
+      "maximum": 110.14399999999999,
       "median": 107.36,
       "p95": 108.544,
       "p99": 108.544
@@ -74,7 +74,7 @@
     },
     "froxel_pass": {
       "maximum": 14.336,
-      "median": 10.912,
+      "median": 10.911999999999999,
       "p95": 12.288,
       "p99": 12.928
     },
@@ -87,9 +87,9 @@
   },
   "gpu_frame_microseconds": {
     "maximum": 2447.552,
-    "median": 1976.832,
-    "p95": 1997.344,
-    "p99": 2012.896
+    "median": 1976.8319999999999,
+    "p95": 1997.3439999999998,
+    "p99": 2012.8960000000002
   },
   "gpu_memory_bytes": 768361091,
   "gpu_memory_bytes_by_kind": {
@@ -146,20 +146,20 @@
     },
     "froxel_pass": {
       "maximum": 14.336,
-      "median": 10.912,
+      "median": 10.911999999999999,
       "p95": 12.288,
       "p99": 13.28
     },
     "lit_pass": {
       "maximum": 913.408,
       "median": 468.992,
-      "p95": 482.304,
+      "p95": 482.30400000000003,
       "p99": 488.864
     },
     "phase_two_depth_pass": {
       "maximum": 1.504,
       "median": 0.448,
-      "p95": 1.376,
+      "p95": 1.3760000000000001,
       "p99": 1.472
     },
     "shadow_mask_pass": {
@@ -183,7 +183,7 @@
   "lit_pass_wait_microseconds": {
     "maximum": 10.24,
     "median": 8.32,
-    "p95": 9.504,
+    "p95": 9.504000000000001,
     "p99": 9.728000000000002
   },
   "measured_frames": 1800,

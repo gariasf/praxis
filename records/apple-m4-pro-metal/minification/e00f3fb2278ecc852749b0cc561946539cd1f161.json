@@ -23,14 +23,14 @@
   },
   "draw_calls": 4,
   "gpu_frame_microseconds": {
-    "median": 1162.083,
+    "median": 1162.0829999999999,
     "p95": 1172.833
   },
   "gpu_memory_bytes": 416525179,
   "gpu_pass_microseconds": {
     "culling_phase_one": {
       "median": 21.041,
-      "p95": 22.208
+      "p95": 22.208000000000002
     },
     "culling_phase_two": {
       "median": 17.041,
@@ -50,7 +50,7 @@
     },
     "lit_pass": {
       "median": 439.5,
-      "p95": 444.417
+      "p95": 444.41700000000003
     },
     "tonemapping_pass": {
       "median": 750.4169999999999,
@@ -66,7 +66,7 @@
   "provenance": {
     "baseline": "bench/baselines/apple-m4-pro/minification.json",
     "commit": "2b12b7765fd6a3aab443e569a90d28fd5c89f796",
-    "gpu_frame_p95_over_median": 1.0092506301185027,
+    "gpu_frame_p95_over_median": 1.009250630118503,
     "harness_version": 3,
     "source": "baseline-commit",
     "source_hash": "e00f3fb2278ecc852749b0cc561946539cd1f161"

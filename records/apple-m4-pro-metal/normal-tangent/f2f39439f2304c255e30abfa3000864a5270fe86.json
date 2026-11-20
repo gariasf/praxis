@@ -53,7 +53,7 @@
       "p95": 17.875
     },
     "depth_prepass": {
-      "median": 94.834,
+      "median": 94.83399999999999,
       "p95": 95.333
     },
     "depth_pyramid_pass": {
@@ -102,7 +102,7 @@
   "scene": "normal-tangent",
   "shadow_ray_microseconds": {
     "median": 1392.4159999999997,
-    "p95": 1402.083
+    "p95": 1402.0829999999999
   },
   "triangles_drawn": 7774,
   "uploaded_bytes": 384,

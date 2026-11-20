@@ -28,7 +28,7 @@
   },
   "gate_microseconds": {
     "median": 392171.132,
-    "p95": 395726.329
+    "p95": 395726.32899999997
   },
   "gpu_frame_microseconds": {
     "median": 413322.301,
@@ -77,8 +77,8 @@
       "p95": 171.853
     },
     "shadow_mask_pass": {
-      "median": 13290.745,
-      "p95": 15029.905
+      "median": 13290.744999999999,
+      "p95": 15029.904999999999
     },
     "tonemapping_pass": {
       "median": 5093.165,

@@ -3,7 +3,7 @@
   "backend": "vulkan",
   "committed_unix_seconds": 1791886389,
   "cpu_frame_microseconds": {
-    "median": 14686.102,
+    "median": 14686.101999999999,
     "p95": 16217.410000000002
   },
   "draw_calls": 10,

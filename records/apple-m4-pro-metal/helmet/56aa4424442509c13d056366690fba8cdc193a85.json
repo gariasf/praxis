@@ -54,7 +54,7 @@
     },
     "tonemapping_pass": {
       "median": 9740.041,
-      "p95": 9951.542
+      "p95": 9951.542000000001
     }
   },
   "heap_allocations": 282,

@@ -102,7 +102,7 @@
     },
     "phase_two_depth_pass": {
       "median": 56.5,
-      "p95": 107.541
+      "p95": 107.54100000000001
     },
     "shadow_mask_pass": {
       "median": 12002.584,
@@ -133,8 +133,8 @@
   },
   "scene": "town",
   "shadow_ray_microseconds": {
-    "median": 10840.917,
-    "p95": 11512.208
+    "median": 10840.917000000001,
+    "p95": 11512.207999999999
   },
   "triangles_drawn": 5552306,
   "uploaded_bytes": 2049376,
