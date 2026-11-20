@@ -551,7 +551,7 @@ pub(crate) struct DecodedReader<'a> {
     cache: &'a CookedCache,
     claimed: &'a Mutex<HashSet<AssetId>>,
     /// Whether a Texture read from the Cooked cache is its Resident tail
-    /// alone, as the IO pool decodes it, rather than its whole chain.
+    /// alone, as the IO pool decodes a Chunk's, rather than its whole chain.
     reads_resident_tails: bool,
 }
 
@@ -2212,9 +2212,10 @@ mod tests {
     }
 
     /// A Far proxy read for a camera decodes its atlas down to the mip its
-    /// distance needs, and no further than its Resident tail: a 2,048² BC7
+    /// distance needs, never coarser than its Resident tail: a 2,048² BC7
     /// atlas, tail from mip 3, sampled at one texel per pixel at a metre,
-    /// needs mip 1 from 2.5 m and its tail from 100 m, or unread for none.
+    /// needs mip 1 from 2.5 m and its tail from 100 m, and read for no
+    /// camera it is its tail.
     #[test]
     fn a_far_proxy_read_for_a_camera_decodes_its_atlas_down_to_the_mip_its_distance_needs() {
         use crate::cooked::{CookedPrimitive, CookedVertex, chunk_origin, level_bytes};
