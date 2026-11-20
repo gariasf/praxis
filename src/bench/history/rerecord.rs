@@ -13,7 +13,9 @@ use anyhow::Context;
 
 use super::remote_tip;
 use crate::bench::provenance::git;
-use crate::bench::{Finding, Measurements, adapter_key, baseline_directory, counters_moved};
+use crate::bench::{
+    Counters, Finding, Measurements, adapter_key, baseline_directory, counters_moved,
+};
 
 /// The Series files' directory on the `bench-history` branch.
 const SERIES: &str = "series";
@@ -58,7 +60,8 @@ pub fn rerecord_counters(
         counters: current.counters,
         counter_frames: current.counter_frames.clone(),
         gpu_memory_bytes_by_kind: current.gpu_memory_bytes_by_kind.clone(),
-        aliasing: current.aliasing,
+        // A run that skipped `Aliasing` leaves the Baseline's.
+        aliasing: current.aliasing.or(baseline.aliasing),
         ..baseline.clone()
     };
     Ok(CounterRerecord::Rerecorded {
@@ -134,16 +137,22 @@ struct SeriesCounters {
 }
 
 impl SeriesCounters {
-    /// Whether the row counted what `baseline` holds: its counter frames'
-    /// counters, and its measured frames' where the row measured as many. A
-    /// counter the row did not count reads as the same.
+    /// Whether the row counted what `baseline` holds, as a recording judges
+    /// it: its counter frames' counters, and its measured frames' where the
+    /// row measured as many and the Baseline's did not stream, the counters
+    /// no comparison judges aside. A counter the row did not count reads as
+    /// the same.
     fn counted(&self, baseline: &Measurements) -> bool {
+        let judged = |(counter, _): &(&str, u64)| !Counters::UNJUDGED.contains(counter);
         let counter_frames = baseline.counter_frames.counters.named();
-        let counter_frames_match = counter_frames.into_iter().all(|(counter, value)| {
-            (self.fields.get(counter)).is_none_or(|counted| counted.as_u64() == Some(value))
-        });
-        let measured_match = self.measured_frames != baseline.measured_frames
-            || (baseline.counters.named().into_iter()).all(|(counter, value)| {
+        let counter_frames_match =
+            (counter_frames.into_iter().filter(judged)).all(|(counter, value)| {
+                (self.fields.get(counter)).is_none_or(|counted| counted.as_u64() == Some(value))
+            });
+        let measured_compared =
+            self.measured_frames == baseline.measured_frames && !baseline.counters.streamed();
+        let measured_match = !measured_compared
+            || (baseline.counters.named().into_iter().filter(judged)).all(|(counter, value)| {
                 (self.measured_counters.get(counter)).is_none_or(|&counted| counted == value)
             });
         counter_frames_match && measured_match
@@ -168,59 +177,70 @@ fn moved_between<'rows>(
 /// Baseline there, writes the Baselines whose counters moved, and returns a
 /// Markdown list of what it did, a scene an item, with the commits each
 /// re-recorded Baseline's counters moved between on this machine's Series
-/// (`bench-history`); a scene whose counters held has none.
+/// (`bench-history`); a scene whose counters held has none. A scene it
+/// cannot judge is reported, its Baseline untouched, and the others go on.
 pub fn rerecord_baselines(repository: &Path, results: &[Measurements]) -> anyhow::Result<String> {
-    let tip = remote_tip(repository)?;
+    let tip = remote_tip(repository).unwrap_or_else(|error| {
+        tracing::warn!(error = format!("{error:#}"), "bench-history unreachable");
+        None
+    });
     let mut report = String::new();
     for current in results {
-        let scene = &current.scene;
-        let relative_path =
-            baseline_directory(&current.adapter, &current.backend).join(format!("{scene}.json"));
-        let path = repository.join(&relative_path);
-        if !path.exists() {
-            writeln!(
-                report,
-                "- `{scene}`: no Baseline at `{}`",
-                relative_path.display()
-            )?;
-            continue;
-        }
-        let json = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
-        let baseline = Measurements::from_baseline_json(&json)
-            .with_context(|| format!("reading {}", path.display()))?;
-        let moved_list = |moved: &[Finding]| {
-            (moved.iter())
-                .map(|finding| format!("`{}` {}", finding.metric, finding.detail))
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
-        match rerecord_counters(current, &baseline)? {
-            CounterRerecord::Unchanged => {}
-            CounterRerecord::Refused { moved, reason } => writeln!(
-                report,
-                "- `{scene}`: not re-recorded, as {reason}; a person re-records it whole. \
-                 Moved: {}",
-                moved_list(&moved)
-            )?,
-            CounterRerecord::Rerecorded {
-                baseline: rerecorded,
-                moved,
-            } => {
-                std::fs::write(&path, serde_json::to_string_pretty(&rerecorded)? + "\n")
-                    .with_context(|| format!("writing {}", path.display()))?;
-                writeln!(report, "- `{scene}`: re-recorded {}.", moved_list(&moved))?;
-                let commits = moved_commits(
-                    repository,
-                    tip.as_deref(),
-                    current,
-                    &baseline,
-                    &relative_path,
-                )?;
-                report.push_str(&commits.unwrap_or_default());
-            }
+        match rerecord_scene(repository, tip.as_deref(), current) {
+            Ok(item) => report.push_str(&item),
+            Err(error) => writeln!(report, "- `{}`: not judged: {error:#}", current.scene)?,
         }
     }
     Ok(report)
+}
+
+/// `rerecord_baselines` of one run, `current`: its report item, its Baseline
+/// written only once it is judged.
+fn rerecord_scene(
+    repository: &Path,
+    tip: Option<&str>,
+    current: &Measurements,
+) -> anyhow::Result<String> {
+    let scene = &current.scene;
+    let relative_path =
+        baseline_directory(&current.adapter, &current.backend).join(format!("{scene}.json"));
+    let path = repository.join(&relative_path);
+    if !path.exists() {
+        return Ok(format!(
+            "- `{scene}`: no Baseline at `{}`\n",
+            relative_path.display()
+        ));
+    }
+    let json = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+    let baseline = Measurements::from_baseline_json(&json)
+        .with_context(|| format!("reading {}", path.display()))?;
+    let moved_list = |moved: &[Finding]| {
+        (moved.iter())
+            .map(|finding| format!("`{}` {}", finding.metric, finding.detail))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    Ok(match rerecord_counters(current, &baseline)? {
+        CounterRerecord::Unchanged => String::new(),
+        CounterRerecord::Refused { moved, reason } => format!(
+            "- `{scene}`: not re-recorded, as {reason}; a person re-records it whole. \
+             Moved: {}\n",
+            moved_list(&moved)
+        ),
+        CounterRerecord::Rerecorded {
+            baseline: rerecorded,
+            moved,
+        } => {
+            std::fs::write(&path, serde_json::to_string_pretty(&rerecorded)? + "\n")
+                .with_context(|| format!("writing {}", path.display()))?;
+            let mut item = format!("- `{scene}`: re-recorded {}.\n", moved_list(&moved));
+            match moved_commits(repository, tip, current, &baseline, &relative_path) {
+                Ok(commits) => item.push_str(&commits.unwrap_or_default()),
+                Err(error) => writeln!(item, "  The commits between are unknown: {error:#}")?,
+            }
+            item
+        }
+    })
 }
 
 /// A commit's first 8 characters, as reports name it.
@@ -312,11 +332,12 @@ fn moved_commits(
     )
     .with_context(|| format!("listing {range}"))?;
     let commits: Vec<&str> = log.lines().collect();
-    let mut lines = format!(
-        "  {sentence}. The commits between ({}):
-",
+    let mut lines = String::new();
+    writeln!(
+        lines,
+        "  {sentence}. The commits between ({}):",
         commits.len()
-    );
+    )?;
     for commit in commits.iter().take(LISTED_COMMITS) {
         writeln!(lines, "  - {commit}")?;
     }
@@ -488,5 +509,48 @@ mod tests {
             .measured_counters
             .insert("draw_calls".to_owned(), 9);
         assert!(!measured_moved.counted(&baseline));
+    }
+
+    #[test]
+    fn a_row_differing_only_where_comparisons_do_not_judge_counted_the_baseline() {
+        let baseline = with_draw_calls(baseline(), 4);
+        let mut unjudged = row("a", 4);
+        for counter in Counters::UNJUDGED {
+            unjudged.fields.insert(counter.to_owned(), 9.into());
+            unjudged.measured_counters.insert(counter.to_owned(), 9);
+        }
+        assert!(unjudged.counted(&baseline));
+    }
+
+    #[test]
+    fn a_streamed_baselines_measured_counters_judge_no_row() {
+        let mut streamed = with_draw_calls(baseline(), 4);
+        streamed.counters.chunks_loaded = 3;
+        let mut measured_moved = row("a", 4);
+        measured_moved
+            .measured_counters
+            .insert("draw_calls".to_owned(), 9);
+        assert!(measured_moved.counted(&streamed));
+    }
+
+    #[test]
+    fn a_run_that_skipped_aliasing_keeps_the_baselines() {
+        let mut baseline = run("a", 12);
+        baseline.aliasing = Some(crate::bench::Aliasing {
+            aliasing_rmse: 5,
+            aliasing_p99: 7,
+        });
+        let current = Measurements {
+            aliasing: None,
+            ..with_draw_calls(run("b", 12), 9)
+        };
+        let Ok(CounterRerecord::Rerecorded {
+            baseline: rerecorded,
+            ..
+        }) = rerecord_counters(&current, &baseline)
+        else {
+            panic!("the Baseline is re-recorded");
+        };
+        assert_eq!(rerecorded.aliasing, baseline.aliasing);
     }
 }

@@ -387,6 +387,9 @@ impl Counters {
         self.chunks_loaded + self.chunks_unloaded + self.bytes_read > 0
     }
 
+    /// The counters a comparison reports but does not judge.
+    const UNJUDGED: [&'static str; 2] = ["late_mips", "tlas_build_allocations"];
+
     /// The counters of refusals, each the most of any frame: one refusal on
     /// any frame is a defect, whatever the IO pool's timing.
     const REFUSALS: [&'static str; 8] = [
@@ -1322,9 +1325,7 @@ fn counter_findings(
     for ((metric, current), (_, baseline)) in
         counters.named().into_iter().zip(baseline_counters.named())
     {
-        if counter_fails(current, baseline)
-            && !matches!(metric, "late_mips" | "tlas_build_allocations")
-        {
+        if counter_fails(current, baseline) && !Counters::UNJUDGED.contains(&metric) {
             findings.push(Finding {
                 metric,
                 verdict: Verdict::Fail,
