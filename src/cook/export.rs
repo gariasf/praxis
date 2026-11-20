@@ -26,7 +26,8 @@ use crate::environment::Environment;
 use crate::render::CrowdForm;
 use crate::state::Simulation;
 use crate::stats::FrameRecorder;
-use crate::streaming::LoadedChunks;
+use crate::streaming::chunks::load_cooked_chunk;
+use crate::streaming::{FarGround, LoadedChunk, LoadedChunks, distance_metres};
 use crate::time::FixedTime;
 use crate::transform::{PreviousWorldTransform, WorldTransform};
 
@@ -40,6 +41,9 @@ pub const SCENE_FORMAT_VERSION: u32 = 1;
 /// Renderables use. The World runs as a capture runs it, through the fixed
 /// schedule, and the manifest sources in `assets` are read for their
 /// names; nothing is cooked into the Cooked cache and no GPU is used.
+/// A scene with a Far field writes, of its Chunks, those within its View
+/// distance of the camera at `frame`, each whole, where praxis draws Far
+/// proxies past the Load radius, and its ground past the View distance.
 /// `crowd` is refused: its figures' shapes exist only on the GPU.
 pub fn export_scene(
     scene: ReferenceScene,
@@ -53,13 +57,23 @@ pub fn export_scene(
     );
     let frame = frame.unwrap_or(crate::capture::FRAME_COUNT - 1);
     let catalog = Catalog::new(scene, assets)?;
-    let (placements, lights) = scene.static_content();
+    let has_far_field = scene.view_distance_metres() > scene.load_radius_metres();
+    let (placements, lights) = if has_far_field {
+        Default::default()
+    } else {
+        scene.static_content()
+    };
     let chunks: Vec<_> = chunk::split(placements, lights)
         .into_iter()
         .map(|(coordinates, chunk)| (scene.chunk_id(coordinates), chunk))
         .collect();
     let mut recorder = AssetRecorder::new(chunks.iter().map(|(id, chunk)| (*id, chunk)));
-    let mut simulation = Simulation::new(
+    let construct = if has_far_field {
+        Simulation::spawned
+    } else {
+        Simulation::new
+    };
+    let mut simulation = construct(
         scene,
         glam::DVec3::ZERO,
         CrowdForm::default(),
@@ -71,6 +85,11 @@ pub fn export_scene(
         let camera = scene.camera_at(drawn, glam::DVec3::ZERO);
         simulation.world.insert_resource(camera);
         simulation.simulate(scene.frame_delta());
+    }
+    if has_far_field {
+        let camera = simulation.world.resource::<Camera>().position;
+        let chunks = chunks_in_view(scene, camera, &mut recorder)?;
+        simulation.world.insert_resource(chunks);
     }
     std::fs::create_dir_all(directory)
         .with_context(|| format!("creating {}", directory.display()))?;
@@ -123,9 +142,12 @@ pub fn export_scene(
         Option<&MaterialRef>,
     )>();
     let world = &*world;
-    let chunks = world
+    let loaded_chunks = world
         .get_resource::<LoadedChunks>()
         .map_or(&[][..], |chunks| &chunks.0);
+    let far_ground =
+        (world.get_resource::<FarGround>()).and_then(|far_ground| far_ground.0.as_ref());
+    let chunks: Vec<&LoadedChunk> = loaded_chunks.iter().chain(far_ground).collect();
     let entity_point_lights = point_light_query
         .iter(world)
         .map(|(current, previous, light)| {
@@ -215,6 +237,29 @@ pub fn export_scene(
         "scene exported"
     );
     Ok(())
+}
+
+/// The Chunks of `scene` within its View distance of `camera`, each
+/// generated alone and loaded through `loader`.
+fn chunks_in_view(
+    scene: ReferenceScene,
+    camera: glam::DVec3,
+    loader: &mut AssetRecorder,
+) -> anyhow::Result<LoadedChunks> {
+    let mut chunks = Vec::new();
+    for coordinates in scene.chunk_coordinates() {
+        if distance_metres(camera, coordinates) > scene.view_distance_metres() {
+            continue;
+        }
+        let (placements, lights) = (scene.chunk_content(coordinates))
+            .with_context(|| format!("{}'s generator makes no Chunk alone", scene.name()))?;
+        let Some(chunk) = chunk::split(placements, lights).remove(&coordinates) else {
+            continue;
+        };
+        let id = scene.chunk_id(coordinates);
+        chunks.push(load_cooked_chunk(loader, id, coordinates, &chunk)?);
+    }
+    Ok(LoadedChunks(chunks))
 }
 
 /// `scene.json`. A `file` is relative to the directory that holds it, or
@@ -989,10 +1034,72 @@ mod tests {
         }
     }
 
-    /// Every Reference scene but crowd, `world`, whose 1,600 Chunks and
-    /// 8 GB of Textures no reference renderer takes whole, and town, which
-    /// its own test exports: each Renderable's Mesh and Material, and each
-    /// file they name.
+    /// world at its first Golden's frame: the 2,198,407 Placements of the
+    /// 225 Chunks within the 2 km View distance of its camera, as its whole
+    /// static content counts them, besides its 10,000 birds and the ground
+    /// past the View distance, and each name and file they use.
+    #[test]
+    fn world_exports_the_chunks_within_the_view_distance() {
+        #[derive(serde::Deserialize)]
+        struct Renderable {
+            translation: [f64; 3],
+            scale: [f32; 3],
+            mesh: String,
+        }
+        #[derive(serde::Deserialize)]
+        struct Exported {
+            camera: Value,
+            meshes: Value,
+            materials: Value,
+            renderables: Vec<Renderable>,
+        }
+        let directory = scratch("world");
+        export_scene(ReferenceScene::World, Some(59), &assets(), &directory).unwrap();
+        let file = std::fs::File::open(directory.join("scene.json")).unwrap();
+        let exported: Exported = serde_json::from_reader(std::io::BufReader::new(file)).unwrap();
+        let camera =
+            glam::DVec3::from_array(floats(&exported.camera["position"]).try_into().unwrap());
+        let expected_camera = ReferenceScene::World.camera_at(59, glam::DVec3::ZERO);
+        assert_near(
+            &camera.to_array(),
+            &expected_camera.position.to_array(),
+            1e-9,
+            "camera",
+        );
+        let (mut birds, mut far_ground) = (0, 0);
+        let mut chunks = std::collections::BTreeSet::new();
+        for renderable in &exported.renderables {
+            assert!(exported.meshes.get(&renderable.mesh).is_some());
+            if renderable.mesh == "bird" {
+                birds += 1;
+            } else if renderable.mesh == "ground" && renderable.scale[0] > 1_000.0 {
+                far_ground += 1;
+            } else {
+                chunks.insert(crate::cooked::chunk_holding(renderable.translation.into()));
+            }
+        }
+        assert_eq!((birds, far_ground), (10_000, 1));
+        assert_eq!(exported.renderables.len(), 2_198_407 + 10_000 + 1);
+        assert_eq!(chunks.len(), 225);
+        for coordinates in chunks {
+            let distance_metres = distance_metres(camera, coordinates);
+            assert!(
+                distance_metres <= 2_000.0,
+                "{coordinates:?} at {distance_metres} m"
+            );
+        }
+        let names = serde_json::json!({
+            "meshes": exported.meshes,
+            "materials": exported.materials,
+            "renderables": [],
+        });
+        check_references(&directory, &names);
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    /// Every Reference scene but crowd, `world`, which its own test exports
+    /// within its View distance, and town, which its own test exports: each
+    /// Renderable's Mesh and Material, and each file they name.
     #[test]
     fn every_reference_scene_but_crowd_exports_whole() {
         let helmet_fetched = Path::new(env!("CARGO_MANIFEST_DIR"))
