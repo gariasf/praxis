@@ -815,6 +815,16 @@ mod tests {
     #[cfg(feature = "cook")]
     const FAR_FIELD_SIZE: (u32, u32) = (320, 180);
 
+    /// The lock a test holds while it holds States of `world`: each takes
+    /// 3 GB on lavapipe, and CI's runner has 16 GB.
+    #[cfg(feature = "cook")]
+    fn one_world_test_at_a_time() -> std::sync::MutexGuard<'static, ()> {
+        static WORLD_STATES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        WORLD_STATES
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     /// A State of `world` moved by `shift`, and a target to read its frames
     /// back from.
     #[cfg(feature = "cook")]
@@ -908,6 +918,7 @@ mod tests {
         let Some(context) = crate::assets::pools::tests::gpu_context() else {
             return;
         };
+        let _world_states = one_world_test_at_a_time();
         let scene = ReferenceScene::World;
         let switches = RenderSwitches {
             shadow_rays: false,
@@ -966,6 +977,137 @@ mod tests {
         );
     }
 
+    /// With the sun 34° up in the south, `world`'s camera hangs 250 m over
+    /// the border of two Chunks of its settlement, a metre into the northern
+    /// one, in two States: one of a Load radius of 0 m, where the southern
+    /// Chunk draws its Far proxy, and one of 32 m, where both draw their
+    /// Placements. In all but a pixel in 250, the northern Chunk's
+    /// Placements take the shadows the Far proxy casts across the street as
+    /// they take the Chunk's, and the frame's other half, where the Far
+    /// proxy is shadowed as its Chunk is, differs in under a third of its
+    /// pixels. A metre into the southern Chunk the two swap in the first
+    /// State, over frames that neither settle nor run a Tick: every static
+    /// TLAS build bound brings its changes within ten frames, and on the
+    /// frame that binds the swap's the northern half, now the Far proxy's,
+    /// is as bright as its Chunk's within a twentieth, where an unshadowed
+    /// one is a tenth brighter. Settled, it differs from its Chunk as the
+    /// southern one did.
+    #[cfg(feature = "cook")]
+    #[test]
+    fn a_far_proxy_casts_and_takes_its_chunks_shadows_and_a_swap_is_traced_within_ten_frames() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let _world_states = one_world_test_at_a_time();
+        let scene = ReferenceScene::World;
+        let switches = RenderSwitches {
+            wait_for_static_tlas: true,
+            ..RenderSwitches::default()
+        };
+        let chunk_edge_metres = crate::cooked::CHUNK_EDGE_METRES;
+        let over_roofs = scene.camera_at(599, glam::DVec3::ZERO).position;
+        let [column, row] =
+            [over_roofs.x, over_roofs.z].map(|metres| (metres / chunk_edge_metres).floor() as i32);
+        let (north, south) = ([column, row], [column, row + 1]);
+        let over_the_border = |metres_south: f64| {
+            let middle_x = (f64::from(north[0]) + 0.5) * chunk_edge_metres;
+            let border_z = f64::from(south[1]) * chunk_edge_metres;
+            let position = glam::dvec3(middle_x, 250.0, border_z + metres_south);
+            crate::camera::Camera::looking_at(position, position + glam::dvec3(0.0, -250.0, -1.0))
+        };
+        let low_sun = glam::vec3(0.2, -0.7, -1.0).normalize();
+        let with_load_radius = |metres: f64| {
+            let (mut state, target) = world_state(&context, glam::DVec3::ZERO, switches);
+            state.streaming.set_load_radius(metres);
+            let world = &mut state.simulation.world;
+            let mut suns =
+                world.query_filtered::<&mut Transform, With<crate::components::DirectionalLight>>();
+            suns.single_mut(world).expect("one sun").rotation =
+                glam::Quat::from_rotation_arc(glam::Vec3::NEG_Z, low_sun);
+            (state, target)
+        };
+        let (mut swapping, swapping_target) = with_load_radius(0.0);
+        let (mut loaded, loaded_target) = with_load_radius(32.0);
+        // A static TLAS build is bound the frame after the one that settles.
+        let traced_frame = |state: &mut State, target: &wgpu::Texture, metres_south: f64| {
+            draw_from(&context, state, target, over_the_border(metres_south), true);
+            draw_from(&context, state, target, over_the_border(metres_south), true)
+        };
+        let (width, height) = FAR_FIELD_SIZE;
+        let street_rows = 4;
+        let halves = [
+            0..height / 2 - street_rows,
+            height / 2 + street_rows..height,
+        ];
+        let half_pixels = (width * halves[0].len() as u32) as usize;
+        let assert_shadowed_alike = |with_far_proxy: &[u8], with_chunk: &[u8], far_proxy_half| {
+            let differing = halves.clone().map(|rows| {
+                let row_bytes = 4 * width as usize;
+                let bytes = rows.start as usize * row_bytes..rows.end as usize * row_bytes;
+                crate::capture::compare_images(&with_chunk[bytes.clone()], &with_far_proxy[bytes])
+                    .differing_pixels
+            });
+            let placements_differing = differing[1 - far_proxy_half];
+            assert!(
+                placements_differing * 250 < half_pixels,
+                "the Far proxy shadows the Placements unlike its Chunk in {placements_differing} of {half_pixels} pixels"
+            );
+            let far_proxy_differing = differing[far_proxy_half];
+            assert!(
+                far_proxy_differing * 3 < half_pixels,
+                "the Far proxy differs from its Chunk in {far_proxy_differing} of {half_pixels} pixels"
+            );
+        };
+
+        let with_far_proxy = traced_frame(&mut swapping, &swapping_target, -1.0);
+        assert_eq!(drawn_as(&swapping, north), "its Placements");
+        assert_eq!(drawn_as(&swapping, south), "its Far proxy");
+        let with_chunk = traced_frame(&mut loaded, &loaded_target, -1.0);
+        assert_eq!(drawn_as(&loaded, north), "its Placements");
+        assert_eq!(drawn_as(&loaded, south), "its Placements");
+        assert_shadowed_alike(&with_far_proxy, &with_chunk, 1);
+
+        let view = swapping_target.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut frames_until_traced = Vec::new();
+        let (mut swapped, mut swap_traced) = (false, None);
+        for _ in 0..20_000 {
+            swapping
+                .simulation
+                .world
+                .insert_resource(over_the_border(1.0));
+            swapping.update(Duration::ZERO);
+            swapping.render(&view);
+            let bound_after = swapping.frame_stats().frames_until_traced;
+            frames_until_traced.extend(bound_after);
+            if swapped && bound_after.is_some() {
+                swap_traced = crate::capture::read_back(&context, &swapping_target).ok();
+                break;
+            }
+            swapped = drawn_as(&swapping, south) == "its Placements";
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(drawn_as(&swapping, north), "its Far proxy");
+        let swap_traced = swap_traced.expect("the swap's build is bound and its frame reads back");
+        assert!(
+            frames_until_traced.iter().all(|&frames| frames <= 10),
+            "{frames_until_traced:?} frames"
+        );
+        let with_chunk = traced_frame(&mut loaded, &loaded_target, 1.0);
+        assert_eq!(drawn_as(&loaded, north), "its Placements");
+        let northern_brightness = |image: &[u8]| {
+            let bytes = &image[..4 * (width * halves[0].end) as usize];
+            bytes.iter().map(|&byte| u64::from(byte)).sum::<u64>()
+        };
+        let [far_proxy_brightness, chunk_brightness] =
+            [&swap_traced, &with_chunk].map(|image| northern_brightness(image));
+        assert!(
+            far_proxy_brightness.abs_diff(chunk_brightness) * 20 < chunk_brightness,
+            "the Far proxy's half sums to {far_proxy_brightness}, its Chunk's to {chunk_brightness}"
+        );
+        let with_far_proxy = traced_frame(&mut swapping, &swapping_target, 1.0);
+        assert_shadowed_alike(&with_far_proxy, &with_chunk, 0);
+    }
+
     /// `world`'s Far field and the ground past it, seen from its camera's
     /// frame 59, draw the same image with the world at the origin and moved
     /// by its own half size along both axes, whole Anchor cells: no World
@@ -976,6 +1118,7 @@ mod tests {
         let Some(context) = crate::assets::pools::tests::gpu_context() else {
             return;
         };
+        let _world_states = one_world_test_at_a_time();
         let scene = ReferenceScene::World;
         let switches = RenderSwitches {
             wait_for_static_tlas: true,

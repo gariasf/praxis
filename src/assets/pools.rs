@@ -111,7 +111,8 @@ pub enum MeshUse {
     /// Drawn and traced, a Mesh the GPU bends whose BLAS is updated each
     /// frame from its bent shape: built to allow updates, never compacted.
     Refitted,
-    /// Drawn alone, as it was cooked: a Far proxy's load, which builds no BLAS.
+    /// Drawn and traced: a Far proxy's load, whose baked Material takes an
+    /// entry of the Material table's count for Far proxies.
     FarProxy,
 }
 
@@ -124,7 +125,7 @@ impl MeshUse {
     /// Whether rays trace it, so it needs a BLAS and the index stream the
     /// BLAS is built from.
     fn traced(self) -> bool {
-        !matches!(self, MeshUse::Drawn | MeshUse::FarProxy)
+        self != MeshUse::Drawn
     }
 
     /// Whether Renderables share one entry per Asset ID: a bent Mesh is its
@@ -640,6 +641,7 @@ impl MeshPool {
                 .map(|primitive| primitive.thin_radius_metres.filter(|&radius| radius > 0.0))
                 .reduce(|widest, radius| Some(widest?.max(radius?)))
                 .flatten(),
+            far_proxy: mesh_use == MeshUse::FarProxy,
         };
         let index = handle.index as usize;
         if index == self.allocations.len() {
@@ -866,6 +868,14 @@ impl MeshPool {
         self.allocations[handle.index as usize]
             .as_ref()?
             .thin_radius_metres
+    }
+
+    /// Whether `handle`'s Mesh was loaded as a Far proxy's.
+    pub fn is_far_proxy(&self, handle: MeshHandle) -> bool {
+        (self
+            .get(handle)
+            .and(self.allocations[handle.index as usize].as_ref()))
+        .is_some_and(|allocation| allocation.far_proxy)
     }
 
     /// The Handle of the Mesh loaded at `index` of the Mesh table, which an
@@ -1180,6 +1190,7 @@ struct MeshAllocation {
     blas_compacted: bool,
     /// Its widest Primitive's radius, where every Primitive of its LOD 0 is thin.
     thin_radius_metres: Option<f32>,
+    far_proxy: bool,
 }
 
 /// The indices of a pool's table, each with the generation its Handles

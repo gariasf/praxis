@@ -49,8 +49,9 @@ pub struct FrameStats {
     /// finishing; zero when it submitted none.
     pub static_tlas_build_time: Duration,
     /// In a frame that binds a newly built static TLAS, the frames since the
-    /// earliest static Instance change it brings: how long a newly loaded
-    /// Chunk's Instances waited to be traced.
+    /// earliest static Instance change it brings that starts a build, as
+    /// any but a Far proxy's does: how long a newly loaded Chunk's Instances
+    /// waited to be traced.
     pub frames_until_traced: Option<u32>,
     /// Moving Instances the dynamic TLAS had no room for, so they cast no
     /// shadow.
