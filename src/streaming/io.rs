@@ -26,8 +26,8 @@ use crate::streaming::{
 
 const IO_THREADS: usize = 4;
 
-/// The IO threads that may read Far proxies at once: all but one, so a
-/// Chunk's read or a Texture's mips never wait for a Far proxy's decode.
+/// The IO threads that may read Far proxies at once: all but one, so one
+/// thread is always free for a Chunk's read or a Texture's mips.
 const FAR_PROXY_READERS: usize = IO_THREADS - 1;
 
 /// The Asset IDs the IO pool need not decode: those loaded, and those
@@ -177,9 +177,9 @@ struct QueuedRequests {
     requests: BTreeMap<(Lane, u64), IoRequest>,
     pushed: u64,
     /// The Chunk reads taken and not yet finished.
-    chunk_reads: usize,
+    chunk_reads_taken: usize,
     /// The Far proxy reads taken and not yet finished.
-    far_proxy_reads: usize,
+    far_proxy_reads_taken: usize,
     closed: bool,
 }
 
@@ -190,13 +190,13 @@ impl QueuedRequests {
         let entry = self.requests.first_entry()?;
         let (lane, _) = *entry.key();
         match lane {
-            Lane::Chunk => self.chunk_reads += 1,
+            Lane::Chunk => self.chunk_reads_taken += 1,
             Lane::Mips => {}
             Lane::FarProxy => {
-                if self.chunk_reads > 0 || self.far_proxy_reads >= FAR_PROXY_READERS {
+                if self.chunk_reads_taken > 0 || self.far_proxy_reads_taken >= FAR_PROXY_READERS {
                     return None;
                 }
-                self.far_proxy_reads += 1;
+                self.far_proxy_reads_taken += 1;
             }
         }
         Some(entry.remove())
@@ -217,8 +217,9 @@ impl RequestQueue {
         Ok(())
     }
 
-    /// Takes the first request it may, waiting for one: None once closed. A
-    /// Far proxy's read taken is `finished` once read.
+    /// Takes the first request it may, waiting for one: None once closed.
+    /// Each request it gives is `finished` once read, or no Far proxy read
+    /// is taken again.
     fn pop(&self) -> Option<IoRequest> {
         let mut queued = self.queued.lock().unwrap_or_else(PoisonError::into_inner);
         loop {
@@ -228,7 +229,10 @@ impl RequestQueue {
             if let Some(request) = queued.take() {
                 return Some(request);
             }
-            queued = (self.arrived.wait(queued)).unwrap_or_else(PoisonError::into_inner);
+            queued = self
+                .arrived
+                .wait(queued)
+                .unwrap_or_else(PoisonError::into_inner);
         }
     }
 
@@ -243,9 +247,9 @@ impl RequestQueue {
     fn finished(&self, lane: Lane) {
         let mut queued = self.queued.lock().unwrap_or_else(PoisonError::into_inner);
         match lane {
-            Lane::Chunk => queued.chunk_reads -= 1,
+            Lane::Chunk => queued.chunk_reads_taken -= 1,
             Lane::Mips => return,
-            Lane::FarProxy => queued.far_proxy_reads -= 1,
+            Lane::FarProxy => queued.far_proxy_reads_taken -= 1,
         }
         self.arrived.notify_all();
     }
@@ -465,12 +469,12 @@ fn decode_chunk(
             for primitive in &mesh.primitives {
                 if let Some(material) = primitive.material {
                     materials.push(material);
-                    keep_densest(
-                        &mut densest_uses,
-                        material,
-                        primitive.texel_density,
-                        mesh.bounds,
-                    );
+                    let texel_density = primitive.texel_density;
+                    let densest_use = DensestUse {
+                        texel_density,
+                        bounds: mesh.bounds,
+                    };
+                    keep_densest(&mut densest_uses, material, densest_use);
                 }
             }
             assets.meshes.insert(mesh_id, mesh);
@@ -482,9 +486,9 @@ fn decode_chunk(
             let material = CookedMaterial::from_blob(&read(material_id)?)
                 .with_context(|| format!("reading Material {material_id}"))?;
             textures.extend(material.textures.iter().flatten());
-            if let Some(&(texel_density, bounds)) = densest_uses.get(&material_id) {
+            if let Some(&densest_use) = densest_uses.get(&material_id) {
                 for &texture in material.textures.iter().flatten() {
-                    keep_densest(&mut densest_uses, texture, texel_density, bounds);
+                    keep_densest(&mut densest_uses, texture, densest_use);
                 }
             }
             assets.materials.insert(material_id, material);
@@ -495,7 +499,13 @@ fn decode_chunk(
         if claim(texture_id) {
             let blob = read(texture_id)?;
             let texture = match (far_proxy_camera, densest_uses.get(&texture_id)) {
-                (Some(camera), Some(&(texel_density, bounds))) => {
+                (
+                    Some(camera),
+                    Some(&DensestUse {
+                        texel_density,
+                        bounds,
+                    }),
+                ) => {
                     let transform = far_proxy_transform(coordinates);
                     CookedTexture::down_to_from_blob(&blob, |side| {
                         placement_finest_mip_needed(camera, &transform, bounds, texel_density, side)
@@ -519,17 +529,23 @@ fn decode_chunk(
     })
 }
 
-/// Keeps, as `asset`'s in `densest_uses`, the densest of the texel densities
-/// it is sampled at, with the bounds of the Mesh sampling it so.
-fn keep_densest(
-    densest_uses: &mut HashMap<AssetId, (f32, [[f32; 3]; 2])>,
-    asset: AssetId,
+/// A Material's or a Texture's use at the densest texel density a Mesh's
+/// Primitive samples it at, with that Mesh's bounds.
+#[derive(Clone, Copy)]
+struct DensestUse {
     texel_density: f32,
     bounds: [[f32; 3]; 2],
+}
+
+/// Keeps `candidate` as `asset`'s in `densest_uses` where it is denser.
+fn keep_densest(
+    densest_uses: &mut HashMap<AssetId, DensestUse>,
+    asset: AssetId,
+    candidate: DensestUse,
 ) {
-    let densest = densest_uses.entry(asset).or_insert((texel_density, bounds));
-    if texel_density > densest.0 {
-        *densest = (texel_density, bounds);
+    let densest = densest_uses.entry(asset).or_insert(candidate);
+    if candidate.texel_density > densest.texel_density {
+        *densest = candidate;
     }
 }
 
@@ -1892,7 +1908,8 @@ mod tests {
 
         let (chunks, _) = row.frame(MIDDLE, false, &[]);
         let queued = std::mem::take(&mut row.requests.queued.lock().unwrap().requests);
-        let requested: Vec<(Load, [i32; 2])> = (queued.into_values())
+        let requested: Vec<(Load, [i32; 2])> = queued
+            .into_values()
             .map(|request| match request {
                 IoRequest::Chunk(load, coordinates, _, camera) => {
                     assert_eq!(camera.is_some(), load == Load::FarProxy);
@@ -2214,8 +2231,8 @@ mod tests {
     /// A Far proxy read for a camera decodes its atlas down to the mip its
     /// distance needs, never coarser than its Resident tail: a 2,048² BC7
     /// atlas, tail from mip 3, sampled at one texel per pixel at a metre,
-    /// needs mip 1 from 2.5 m and its tail from 100 m, and read for no
-    /// camera it is its tail.
+    /// needs mip 1 at 2.5 m and its tail at 100 m, and read for no camera
+    /// it is its tail.
     #[test]
     fn a_far_proxy_read_for_a_camera_decodes_its_atlas_down_to_the_mip_its_distance_needs() {
         use crate::cooked::{CookedPrimitive, CookedVertex, chunk_origin, level_bytes};

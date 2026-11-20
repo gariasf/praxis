@@ -152,7 +152,7 @@ impl MipPriority {
             }
             for texture_use in uses.iter() {
                 let distance_from = |position: DVec3| {
-                    (position.distance(texture_use.centre) - texture_use.radius).max(0.0)
+                    distance_to_sphere(position, texture_use.centre, texture_use.radius)
                 };
                 let distance = distance_from(camera);
                 let closing = camera_before.map_or(0.0, |before| distance_from(before) - distance);
@@ -331,11 +331,17 @@ pub(crate) fn placement_finest_mip_needed(
     side: u32,
 ) -> u32 {
     let (centre, radius, smallest_scale) = placement_sphere(transform, bounds);
-    let distance = (camera.distance(centre) - radius).max(0.0);
+    let distance = distance_to_sphere(camera, centre, radius);
     finest_mip_needed(
         texels_per_metre(texel_density, side, smallest_scale),
         distance,
     )
+}
+
+/// The distance from `position` to the sphere of `radius` around `centre`,
+/// 0 within it.
+fn distance_to_sphere(position: DVec3, centre: DVec3, radius: f64) -> f64 {
+    (position.distance(centre) - radius).max(0.0)
 }
 
 /// The texels per metre of a surface, at mip 0, of a Texture `side` texels
