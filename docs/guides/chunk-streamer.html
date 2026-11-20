@@ -312,13 +312,11 @@ io.receive_all()?;</code></pre>
   <p>Around that pass, <code>ChunkStreaming::update</code> takes the camera's <code>teleported</code> and clears it, so a jump is an arrival for one frame alone, though one that <code>render_frames</code> placed on a frame it ran undrawn stays set until streaming next runs, and times a Fast travel's hold with the wall clock, from the jump to the frame the streamer stops holding:</p>
 <pre class="code"><code>let teleported = std::mem::take(&amp;mut world.resource_mut::&lt;Camera&gt;().teleported);
 if teleported {
-    self.fast_travel_started = Some(Instant::now());
+    self.fast_travel.jumped(Instant::now());
 }
 let streamed = self.stream(world, renderer, settle, teleported);
 …
-if !streamed.holding {
-    streamed.fast_travel_hold = self.fast_travel_started.take().map(|jump| jump.elapsed());
-}</code></pre>
+self.fast_travel.time(Instant::now(), &amp;mut streamed);</code></pre>
   <p class="code-source"><code>ChunkStreaming::update</code>. The State copies <code>holding</code> and <code>fast_travel_hold</code> into the frame's Frame stats; a jump whose Chunks are all loaded already reports its hold on its own frame.</p>
   <p>A load the streamer drops, as the camera left its hold radius before it finished, gives back the pool users it counted. An unloaded Chunk leaves <code>LoadedChunks</code> and gives back its users too: one per Mesh and per Material its Placements name. An entry left with no user stays loaded until a load the pools refuse for want of room frees it, least recently used first, and a Material only once no loaded Mesh names it. Every loaded Chunk is then marked held or not from the streamer's held list:</p>
 <pre class="code"><code>for chunk in chunks.iter_mut() {

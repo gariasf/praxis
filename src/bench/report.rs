@@ -234,7 +234,7 @@ pub fn report(
             "\n| Streamed, measured frames | Value |\n\
              |---|---:|\n",
         );
-        let hold = current.fast_travel_hold;
+        let (hold, fill) = (current.fast_travel_hold, current.far_field_fill);
         let rows = [
             ("Late Chunks", Some(streamed.late_chunks as f64), 0),
             (
@@ -252,6 +252,12 @@ pub fn report(
             (
                 "Fast-travel hold, frames",
                 hold.map(|hold| f64::from(hold.frames)),
+                0,
+            ),
+            ("Far-field fill, ms", fill.map(|fill| fill.milliseconds), 1),
+            (
+                "Far-field fill, frames",
+                fill.map(|fill| f64::from(fill.frames)),
                 0,
             ),
             (
@@ -321,7 +327,7 @@ impl std::fmt::Display for Traversal {
         )?;
         writeln!(formatter, "| Traversal | Value |\n|---|---:|")?;
         let (cpu, gpu) = (self.cpu_frame_microseconds, self.gpu_frame_microseconds);
-        let hold = self.fast_travel_hold;
+        let (hold, fill) = (self.fast_travel_hold, self.far_field_fill);
         let rows = [
             ("CPU frame p99, µs", cpu.p99, 1),
             ("CPU frame maximum, µs", cpu.maximum, 1),
@@ -358,6 +364,12 @@ impl std::fmt::Display for Traversal {
                 hold.map(|hold| f64::from(hold.frames)),
                 0,
             ),
+            ("Far-field fill, ms", fill.map(|fill| fill.milliseconds), 1),
+            (
+                "Far-field fill, frames",
+                fill.map(|fill| f64::from(fill.frames)),
+                0,
+            ),
         ];
         for (name, value, decimals) in rows {
             let value = value.map_or("—".to_owned(), |value| grouped(value, decimals));
@@ -390,7 +402,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::bench::{Aliasing, CounterFrames, Counters, FastTravelHold, Spread};
+    use crate::bench::{Aliasing, CounterFrames, Counters, FastTravelSpan, Spread};
     use crate::stats::GpuMemoryBudgets;
 
     const COUNTERS: Counters = Counters {
@@ -486,6 +498,7 @@ mod tests {
                 counters,
             },
             fast_travel_hold: None,
+            far_field_fill: None,
             frames_until_traced: None,
             blas_compaction_microseconds: None,
             aliasing: None,
@@ -636,9 +649,13 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
         streamed.counters.late_mips = 1234;
         streamed.counters.late_far_proxies = 2;
         streamed.counter_frames.counters.heap_allocations = 310;
-        streamed.fast_travel_hold = Some(FastTravelHold {
+        streamed.fast_travel_hold = Some(FastTravelSpan {
             milliseconds: 412.34,
             frames: 25,
+        });
+        streamed.far_field_fill = Some(FastTravelSpan {
+            milliseconds: 1_234.56,
+            frames: 74,
         });
         streamed.frames_until_traced = Some(3);
         streamed.blas_compaction_microseconds = Some(tailed(850.0, 1900.0, 2400.0, 3100.0));
@@ -654,6 +671,8 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
             "Chunks loaded",
             "Fast-travel hold, ms",
             "Fast-travel hold, frames",
+            "Far-field fill, ms",
+            "Far-field fill, frames",
             "Frames until traced, most",
             "BLAS compaction, most µs",
         ];
@@ -670,6 +689,8 @@ The Budget column bounds the median and p99; the CPU and GPU frames' maximum ans
                 "| Chunks loaded | 120 |",
                 "| Fast-travel hold, ms | 412.3 |",
                 "| Fast-travel hold, frames | 25 |",
+                "| Far-field fill, ms | 1,234.6 |",
+                "| Far-field fill, frames | 74 |",
                 "| Frames until traced, most | 3 |",
                 "| BLAS compaction, most µs | 3,100.0 |",
             ]

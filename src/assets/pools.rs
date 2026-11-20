@@ -18,6 +18,16 @@ use crate::{
 /// 0's indices, `world`'s with its densest far field's Far proxies.
 const ARENA_PER_MILLE: [u64; 5] = [658, 130, 11, 133, 68];
 
+/// The bytes of each Arena's element, in the order of `PoolCapacities`'
+/// Arenas.
+pub(crate) const ARENA_ELEMENT_BYTES: [u64; 5] = [
+    size_of::<CookedVertex>() as u64,
+    size_of::<u32>() as u64,
+    size_of::<MeshletData>() as u64,
+    size_of::<u32>() as u64,
+    size_of::<u32>() as u64,
+];
+
 /// A Mesh's bytes in the geometry Arenas: the mean of `town`'s Meshes when
 /// it had 19.
 const GEOMETRY_BYTES_PER_MESH: u64 = 5124;
@@ -204,7 +214,13 @@ impl MeshPool {
         let arena = |label, usage, element_bytes, capacity_bytes| {
             Arena::new(device, memory, label, usage, element_bytes, capacity_bytes)
         };
-        let u32_bytes = size_of::<u32>() as u64;
+        let [
+            vertex_bytes,
+            index_bytes,
+            meshlet_bytes,
+            meshlet_vertex_bytes,
+            meshlet_triangle_bytes,
+        ] = ARENA_ELEMENT_BYTES;
         Self {
             device: device.clone(),
             meshes: LoadedMeshes::default(),
@@ -226,7 +242,7 @@ impl MeshPool {
             vertex_arena: arena(
                 "Vertex Arena",
                 wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::BLAS_INPUT,
-                size_of::<CookedVertex>() as u64,
+                vertex_bytes,
                 capacities.vertex_arena_bytes,
             ),
             // The cooked index stream, which no pass draws from: BLAS builds
@@ -234,25 +250,25 @@ impl MeshPool {
             index_arena: arena(
                 "Index Arena",
                 wgpu::BufferUsages::BLAS_INPUT,
-                u32_bytes,
+                index_bytes,
                 capacities.index_arena_bytes,
             ),
             meshlet_arena: arena(
                 "Meshlet Arena",
                 wgpu::BufferUsages::STORAGE,
-                size_of::<MeshletData>() as u64,
+                meshlet_bytes,
                 capacities.meshlet_arena_bytes,
             ),
             meshlet_vertex_arena: arena(
                 "Meshlet Vertex Arena",
                 wgpu::BufferUsages::STORAGE,
-                u32_bytes,
+                meshlet_vertex_bytes,
                 capacities.meshlet_vertex_arena_bytes,
             ),
             meshlet_triangle_arena: arena(
                 "Meshlet Triangle Arena",
                 wgpu::BufferUsages::STORAGE,
-                u32_bytes,
+                meshlet_triangle_bytes,
                 capacities.meshlet_triangle_arena_bytes,
             ),
             mesh_table: memory.create_buffer(
@@ -468,27 +484,9 @@ impl MeshPool {
             mesh.coarser_lods.len() < MESH_MAX_LODS,
             "a LOD chain of at most {MESH_MAX_LODS} LODs"
         );
-        let meshlets = || {
-            drawn_lods(mesh, mesh_use)
-                .flat_map(|(_, _, primitives)| primitives)
-                .flat_map(|primitive| &primitive.meshlets)
-        };
-        let meshlet_count = meshlets().count();
-        let meshlet_vertex_count = meshlets().map(|meshlet| meshlet.vertices.len()).sum();
-        let triangle_count = meshlets().map(|meshlet| meshlet.triangles.len()).sum();
-        // Only a BLAS build reads the index stream.
-        let index_stream: &[u32] = if mesh_use.traced() {
-            &mesh.indices
-        } else {
-            &[]
-        };
-        let counts = [
-            mesh.vertices.len(),
-            index_stream.len(),
-            meshlet_count,
-            meshlet_vertex_count,
-            triangle_count,
-        ];
+        let counts = arena_elements(mesh, mesh_use);
+        let [_, _, meshlet_count, meshlet_vertex_count, triangle_count] = counts;
+        let index_stream = &mesh.indices[..counts[1]];
         if self.meshes.full(self.mesh_capacity) {
             return Err(MeshRefusal::TableFull {
                 capacity: self.mesh_capacity,
@@ -1259,6 +1257,29 @@ impl Generations {
     pub(crate) fn frees(&self) -> u64 {
         self.frees
     }
+}
+
+/// The elements `mesh`, loaded for `mesh_use`, takes in each Arena, in the
+/// order of `PoolCapacities`' Arenas.
+pub(crate) fn arena_elements(mesh: &CookedMesh, mesh_use: MeshUse) -> [usize; 5] {
+    let meshlets = || {
+        drawn_lods(mesh, mesh_use)
+            .flat_map(|(_, _, primitives)| primitives)
+            .flat_map(|primitive| &primitive.meshlets)
+    };
+    // Only a BLAS build reads the index stream.
+    let indices = if mesh_use.traced() {
+        mesh.indices.len()
+    } else {
+        0
+    };
+    [
+        mesh.vertices.len(),
+        indices,
+        meshlets().count(),
+        meshlets().map(|meshlet| meshlet.vertices.len()).sum(),
+        meshlets().map(|meshlet| meshlet.triangles.len()).sum(),
+    ]
 }
 
 /// The LODs of `mesh` whose Meshlets a load for `mesh_use` keeps, as

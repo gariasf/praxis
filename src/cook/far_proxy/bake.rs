@@ -318,6 +318,12 @@ pub(in crate::cook) struct Transfer {
 }
 
 impl Transfer {
+    /// The atlas's side, in texels.
+    #[cfg(test)]
+    pub(in crate::cook) fn atlas_side_texels(&self) -> u32 {
+        self.atlas.side_texels
+    }
+
     /// The atlas's albedo and metallic-roughness images; `materials` are
     /// `self.materials`' in order.
     pub(in crate::cook) fn bake(&self, materials: &[SourceMaterial]) -> [LoadedImage; 2] {

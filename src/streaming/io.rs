@@ -477,6 +477,51 @@ pub(crate) struct StreamedFrame {
     pub holding: bool,
     /// On the frame a Fast travel's hold ends, its time from the jump.
     pub fast_travel_hold: Option<Duration>,
+    /// Whether the Far proxies' streamer, in a scene with a Far field, still
+    /// waits for a Far proxy within the View distance since the camera last
+    /// arrived.
+    pub far_proxies_holding: Option<bool>,
+    /// Whether a Fast travel's hold has ended and its Far field's fill not.
+    pub far_field_filling: bool,
+    /// On the frame a Fast travel's Far field's fill ends, its time from the
+    /// end of its hold.
+    pub far_field_fill: Option<Duration>,
+}
+
+/// Times a Fast travel: its hold, from the jump until every Chunk within the
+/// Load radius has loaded, then, in a scene with a Far field, its fill, from
+/// the hold's end until every Far proxy within the View distance is
+/// Resident.
+#[derive(Default)]
+struct FastTravelClock {
+    jumped: Option<Instant>,
+    hold_ended: Option<Instant>,
+}
+
+impl FastTravelClock {
+    /// Starts timing a Fast travel that jumped at `now`.
+    fn jumped(&mut self, now: Instant) {
+        self.jumped = Some(now);
+        self.hold_ended = None;
+    }
+
+    /// Ends `streamed`'s frame at `now`: reports the hold on the frame that
+    /// ends it and the fill on the frame that ends that, and whether the
+    /// frame fills.
+    fn time(&mut self, now: Instant, streamed: &mut StreamedFrame) {
+        if !streamed.holding
+            && let Some(jumped) = self.jumped.take()
+        {
+            streamed.fast_travel_hold = Some(now - jumped);
+            self.hold_ended = streamed.far_proxies_holding.map(|_| now);
+        }
+        if streamed.far_proxies_holding == Some(false)
+            && let Some(hold_ended) = self.hold_ended.take()
+        {
+            streamed.far_field_fill = Some(now - hold_ended);
+        }
+        streamed.far_field_filling = self.hold_ended.is_some();
+    }
 }
 
 /// A scene's Far proxies streamed around the camera, by a Chunk streamer
@@ -520,8 +565,7 @@ pub(crate) struct ChunkStreaming {
     /// places more loads alone.
     instances_placed_per_frame: usize,
     mips: MipPriority,
-    /// When the Fast travel whose hold has not ended jumped.
-    fast_travel_started: Option<Instant>,
+    fast_travel: FastTravelClock,
 }
 
 /// The Instances a frame's streamed Chunk loads place, as prepare and the
@@ -576,7 +620,7 @@ impl ChunkStreaming {
             load_bytes_per_frame,
             instances_placed_per_frame: INSTANCES_PLACED_PER_FRAME,
             mips: MipPriority::default(),
-            fast_travel_started: None,
+            fast_travel: FastTravelClock::default(),
         })
     }
 
@@ -674,7 +718,7 @@ impl ChunkStreaming {
     /// upload then waits for; a load that fails then fails the frame. Ends the frame's
     /// frees to make room, which it reports with the pools' refusals since
     /// the frame before, and clears the camera's `teleported`, timing the
-    /// hold of the Fast travel it marks.
+    /// hold and the Far field's fill of the Fast travel it marks.
     pub(crate) fn update(
         &mut self,
         world: &mut World,
@@ -683,7 +727,7 @@ impl ChunkStreaming {
     ) -> anyhow::Result<StreamedFrame> {
         let teleported = std::mem::take(&mut world.resource_mut::<Camera>().teleported);
         if teleported {
-            self.fast_travel_started = Some(Instant::now());
+            self.fast_travel.jumped(Instant::now());
         }
         let streamed = self.stream(world, renderer, settle, teleported);
         let frees =
@@ -692,9 +736,7 @@ impl ChunkStreaming {
         streamed.pool_entries_freed = frees as u32;
         streamed.meshes_refused = renderer.mesh_pool.take_refusals();
         streamed.materials_refused = renderer.material_pool.take_refusals();
-        if !streamed.holding {
-            streamed.fast_travel_hold = self.fast_travel_started.take().map(|jump| jump.elapsed());
-        }
+        self.fast_travel.time(Instant::now(), &mut streamed);
         Ok(streamed)
     }
 
@@ -730,7 +772,7 @@ impl ChunkStreaming {
                 load_bytes_per_frame,
                 instances_placed_per_frame,
                 mips,
-                fast_travel_started: _,
+                fast_travel: _,
             } = self;
             let mut frame_io = FrameIo {
                 cook_chunk,
@@ -779,6 +821,7 @@ impl ChunkStreaming {
                 frame_io.serve_far_proxies(&mut far_proxies.awaiting_placement);
                 let frame = (far_proxies.streamer).update(camera, teleported, &mut frame_io);
                 streamed.late_far_proxies += frame.late_chunks;
+                streamed.far_proxies_holding = Some(frame.holding);
                 settled &= frame.settled;
                 let (finished, pools) = (&mut *frame_io.finished, &mut *frame_io.pools);
                 let mut resident = world.resource_mut::<ResidentFarProxies>();
@@ -1591,31 +1634,62 @@ mod tests {
     /// within the Load radius, then the five Far proxies within the View
     /// distance, nearest first; the hold ends with no Far proxy read; a jump
     /// three Chunks east releases the two past the View distance's edge.
-    #[test]
-    fn far_proxies_are_requested_after_the_chunks_and_released_an_edge_past_the_view_distance() {
-        let (mut io, requests, finished_sender) = io_pool();
-        let cache = CookedCache::new(std::env::temp_dir());
-        let claimed = Mutex::new(HashSet::new());
-        let row = || (-3..=3).map(|x| [x, 0]);
-        let mut streamer = ChunkStreamer::new(row(), 256.0);
-        let mut far_proxies = ChunkStreamer::new(row(), 512.0);
-        let mut decoded = DecodedAssets::default();
-        let (mut awaiting_placement, mut far_proxies_awaiting) = (Vec::new(), Vec::new());
-        let mut frame = |camera: DVec3, teleported: bool, reads: &[(Load, [i32; 2])]| {
+    /// A row of seven Chunks, [-3, 0] to [3, 0], streamed with a Load radius
+    /// of 256 m and a View distance of 512 m, four loads a frame, through an
+    /// IO pool without threads into `NoPools`.
+    struct RowOfSeven {
+        io: IoPool,
+        requests: mpsc::Receiver<IoRequest>,
+        finished_sender: mpsc::Sender<Finished>,
+        cache: CookedCache,
+        claimed: Mutex<HashSet<AssetId>>,
+        streamer: ChunkStreamer,
+        far_proxies: ChunkStreamer,
+        decoded: DecodedAssets,
+        awaiting_placement: Vec<LoadedChunk>,
+        far_proxies_awaiting: Vec<LoadedChunk>,
+    }
+
+    impl RowOfSeven {
+        fn new() -> Self {
+            let (io, requests, finished_sender) = io_pool();
+            let row = || (-3..=3).map(|x| [x, 0]);
+            Self {
+                io,
+                requests,
+                finished_sender,
+                cache: CookedCache::new(std::env::temp_dir()),
+                claimed: Mutex::new(HashSet::new()),
+                streamer: ChunkStreamer::new(row(), 256.0),
+                far_proxies: ChunkStreamer::new(row(), 512.0),
+                decoded: DecodedAssets::default(),
+                awaiting_placement: Vec::new(),
+                far_proxies_awaiting: Vec::new(),
+            }
+        }
+
+        /// A frame for the camera at `camera` once `reads` came back: the
+        /// Chunks' streamer's, then the Far proxies'.
+        fn frame(
+            &mut self,
+            camera: DVec3,
+            teleported: bool,
+            reads: &[(Load, [i32; 2])],
+        ) -> (ChunkFrame, ChunkFrame) {
             for &(load, coordinates) in reads {
-                finished_sender.send(read(load, coordinates)).unwrap();
+                self.finished_sender.send(read(load, coordinates)).unwrap();
             }
             let mut frame_io = FrameIo {
                 cook_chunk: &mut None,
-                io: &mut io,
+                io: &mut self.io,
                 load: Load::Chunk,
                 scene: ReferenceScene::World,
                 shift: DVec3::ZERO,
                 camera,
-                cache: &cache,
-                claimed: &claimed,
-                decoded: &mut decoded,
-                awaiting_placement: &mut awaiting_placement,
+                cache: &self.cache,
+                claimed: &self.claimed,
+                decoded: &mut self.decoded,
+                awaiting_placement: &mut self.awaiting_placement,
                 finished: &mut BTreeMap::new(),
                 pools: &mut NoPools {
                     refused: None,
@@ -1633,20 +1707,25 @@ mod tests {
                 waiting: HashSet::new(),
                 loads_ended: false,
             };
-            let chunks = streamer.update(camera, teleported, &mut frame_io).clone();
-            frame_io.serve_far_proxies(&mut far_proxies_awaiting);
-            let far = far_proxies
-                .update(camera, teleported, &mut frame_io)
-                .clone();
-            (chunks, far)
-        };
+            let chunks = self.streamer.update(camera, teleported, &mut frame_io);
+            let chunks = chunks.clone();
+            frame_io.serve_far_proxies(&mut self.far_proxies_awaiting);
+            let far = self.far_proxies.update(camera, teleported, &mut frame_io);
+            (chunks, far.clone())
+        }
+    }
+
+    #[test]
+    fn far_proxies_are_requested_after_the_chunks_and_released_an_edge_past_the_view_distance() {
+        let mut row = RowOfSeven::new();
         let near = [[0, 0], [-1, 0], [1, 0]];
         let chunk_reads = near.map(|chunk| (Load::Chunk, chunk));
         let within_view = [[0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0]];
         let far_proxy_reads = within_view.map(|chunk| (Load::FarProxy, chunk));
 
-        let (chunks, _) = frame(MIDDLE, false, &[]);
-        let requested: Vec<(Load, [i32; 2])> = requests
+        let (chunks, _) = row.frame(MIDDLE, false, &[]);
+        let requested: Vec<(Load, [i32; 2])> = row
+            .requests
             .try_iter()
             .map(|request| match request {
                 IoRequest::Chunk(load, coordinates, _) => (load, coordinates),
@@ -1656,21 +1735,84 @@ mod tests {
         assert_eq!(requested, [&chunk_reads[..], &far_proxy_reads[..]].concat());
         assert!(chunks.holding);
 
-        let (chunks, far) = frame(MIDDLE, false, &chunk_reads);
+        let (chunks, far) = row.frame(MIDDLE, false, &chunk_reads);
         assert_eq!(chunks.loaded, near);
         assert!(!chunks.holding && chunks.settled);
         assert!(far.loaded.is_empty() && !far.settled);
 
-        let (_, far) = frame(MIDDLE, false, &far_proxy_reads);
+        let (_, far) = row.frame(MIDDLE, false, &far_proxy_reads);
         assert_eq!(far.loaded, [[0, 0], [-1, 0], [1, 0], [-2, 0]]);
-        let (_, far) = frame(MIDDLE, false, &[]);
+        let (_, far) = row.frame(MIDDLE, false, &[]);
         assert_eq!(far.loaded, [[2, 0]]);
         assert!(far.settled);
 
         let three_east = MIDDLE + DVec3::X * 768.0;
-        let (_, far) = frame(three_east, true, &[]);
+        let (_, far) = row.frame(three_east, true, &[]);
         assert_eq!(far.unloaded, [[-2, 0], [-1, 0]]);
         assert_eq!(far.held, [[0, 0]]);
+    }
+
+    /// `RowOfSeven` settles over [0, 0], then jumps three Chunks east, where
+    /// [2, 0] and [3, 0] are within the Load radius and [3, 0]'s Far proxy
+    /// alone is not Resident. The hold ends on the frame both Chunks load;
+    /// the fill, timed from that frame's end, on the frame [3, 0]'s Far
+    /// proxy loads, two frames later. Before the jump the far field fills
+    /// untimed, as no Fast travel came first.
+    #[test]
+    fn the_far_fields_fill_is_timed_from_the_holds_end_to_the_last_far_proxy_within_the_view_distance()
+     {
+        let mut row = RowOfSeven::new();
+        let mut clock = FastTravelClock::default();
+        let start = Instant::now();
+        let mut frame = |frame_number: u64, camera, teleported, reads: &[(Load, [i32; 2])]| {
+            if teleported {
+                clock.jumped(start + Duration::from_millis(frame_number * 10));
+            }
+            let (chunks, far) = row.frame(camera, teleported, reads);
+            let mut streamed = StreamedFrame {
+                holding: chunks.holding,
+                far_proxies_holding: Some(far.holding),
+                ..StreamedFrame::default()
+            };
+            clock.time(
+                start + Duration::from_millis(frame_number * 10 + 5),
+                &mut streamed,
+            );
+            (far, streamed)
+        };
+        let settling = [
+            (Load::Chunk, [0, 0]),
+            (Load::Chunk, [-1, 0]),
+            (Load::Chunk, [1, 0]),
+            (Load::FarProxy, [0, 0]),
+            (Load::FarProxy, [-1, 0]),
+            (Load::FarProxy, [1, 0]),
+            (Load::FarProxy, [-2, 0]),
+            (Load::FarProxy, [2, 0]),
+        ];
+        for (number, reads) in [&[][..], &settling, &[], &[]].into_iter().enumerate() {
+            let (_, streamed) = frame(number as u64, MIDDLE, false, reads);
+            let timed = (streamed.fast_travel_hold, streamed.far_field_fill);
+            assert_eq!(timed, (None, None));
+            assert!(!streamed.far_field_filling);
+        }
+
+        let three_east = MIDDLE + DVec3::X * 768.0;
+        let (_, jump) = frame(4, three_east, true, &[]);
+        assert!(jump.holding && jump.fast_travel_hold.is_none());
+        let chunk_reads = [(Load::Chunk, [2, 0]), (Load::Chunk, [3, 0])];
+        let (_, hold_ends) = frame(5, three_east, false, &chunk_reads);
+        assert!(!hold_ends.holding);
+        assert_eq!(hold_ends.fast_travel_hold, Some(Duration::from_millis(15)));
+        assert!(hold_ends.far_field_filling && hold_ends.far_field_fill.is_none());
+        let (_, filling) = frame(6, three_east, false, &[]);
+        assert!(filling.far_field_filling && filling.far_field_fill.is_none());
+        let (far, fill_ends) = frame(7, three_east, false, &[(Load::FarProxy, [3, 0])]);
+        assert_eq!(far.loaded, [[3, 0]]);
+        assert!(!fill_ends.far_field_filling);
+        assert_eq!(fill_ends.far_field_fill, Some(Duration::from_millis(20)));
+        let (_, after) = frame(8, three_east, false, &[]);
+        assert_eq!((after.fast_travel_hold, after.far_field_fill), (None, None));
     }
 
     /// A Chunk waits only on the Chunk reads in flight when its own came back:
