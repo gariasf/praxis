@@ -13,7 +13,12 @@
 # does a Baseline re-recorded since the night before. A
 # commit a bisect pinned that no re-recorded Baseline covers opens one
 # `needs-triage` issue per scene through `gh`, which must be installed and
-# logged in (`gh auth login`); the Verdict records it. It runs in a
+# logged in (`gh auth login`); the Verdict records it. On the RTX 2070
+# SUPER a night that benched then runs the Goldens test and re-records the
+# counters of the Baselines its runs moved (`praxis history rerecord`), their
+# timings kept, in a pull request it opens through `gh`; the Goldens that
+# differ, never re-recorded here, and the Baselines it could not re-record go
+# in it, or in a `needs-triage` issue. It runs in a
 # clone of its own, which it moves to `main` each night, and appends what
 # it did to target/sweep/sweep.log there. On the Mac the clone sits outside
 # ~/Documents, ~/Desktop and ~/Downloads, which macOS keeps from a launchd
@@ -194,6 +199,147 @@ QUERY
       (cd "$tree" && ./praxis fetch && ./praxis cook) >/dev/null
   }
 
+  # What the Goldens test makes of main here, as Markdown for the owner;
+  # nothing when every image matches. A Golden that differs or is missing is
+  # never re-recorded here. The test's own checks, culling and the Froxel
+  # lists against their brute-force captures, are defects, not Goldens, and
+  # listed apart. It requires the Goldens, so it cannot skip, and its log is
+  # target/sweep/goldens.log; the test's GPU load would meet the owner's
+  # return, so input since the start skips it.
+  goldens_report() {
+    local log=target/sweep/goldens.log failures differences equivalences
+    local equivalence='^[a-z0-9-]*-(unculled|brute-force)(-frame-[0-9]+)?: '
+    if input_since_start; then
+      printf '%s\n' "The Goldens test did not run: input arrived before it."
+      return
+    fi
+    rm -rf target/tmp/golden-differences
+    PRAXIS_REQUIRE_GOLDENS=1 cargo test --quiet --test goldens reference_scenes_match_their_goldens \
+      >"$log" 2>&1 && return
+    failures=$(sed -n 's/; difference image .*//; s/; capture .*//; /^[a-z0-9-]*: [0-9]* pixels differ/p; /^[a-z0-9-]*: no Golden at/p' "$log")
+    if [ -z "$failures" ]; then
+      printf '%s\n' "The Goldens test failed without comparing an image; its output is in the sweep clone's \`target/sweep/goldens.log\`."
+      return
+    fi
+    differences=$(grep -Ev "$equivalence" <<<"$failures")
+    equivalences=$(grep -E "$equivalence" <<<"$failures")
+    if [ -n "$differences" ]; then
+      printf '%s\n\n%s\n\n%s\n\n' \
+        "The Goldens test at $(git rev-parse --short HEAD) differs from these Goldens, which the sweep does not re-record; the difference images are in the sweep clone's \`target/tmp/golden-differences\`:" \
+        "$(sed 's/^/- /' <<<"$differences")" \
+        "Recommended: re-record those whose Metal Golden moved in the same commits, and ticket the rest."
+    fi
+    if [ -n "$equivalences" ]; then
+      printf '%s\n\n%s\n\n' \
+        "Its checks that culling and the Froxel lists change no pixel failed, which no Golden answers; each is a defect to ticket:" \
+        "$(sed 's/^/- /' <<<"$equivalences")"
+    fi
+  }
+
+  # Puts what `praxis history rerecord` did, its report $1, and the Goldens
+  # test's, $2, before a person. Re-recorded Baselines go in a pull request
+  # from one branch per Baseline directory, rebuilt on main and its body
+  # replaced each night, so one stays open however many nights it waits; a
+  # Baseline it re-recorded whose scene the night did not reach is carried
+  # into the new commit. A night that re-judged every scene of that pull
+  # request, $3 being 1, and re-recorded none closes it, as main's Baselines
+  # then hold what main counts. Without a re-recorded Baseline, a report or
+  # Goldens that differ go to a `needs-triage` issue, one per adapter and
+  # backend, commented on each night. The commit is made with `commit-tree`,
+  # as `bench-history`'s are.
+  propose() {
+    local report=$1 images=$2 judged=$3 adapter backend directory branch title tree commit body number
+    local open=0 pull_request_files="" file reached=1 carried=""
+    # The run's adapter and backend, as its results name them, and their
+    # Baseline directory, which must stay `praxis::bench::baseline_directory`'s.
+    adapter=$(sed -n 's/^  "adapter": "\(.*\)",$/\1/p' "$results"/*.json | head -1)
+    backend=$(sed -n 's/^  "backend": "\(.*\)",$/\1/p' "$results"/*.json | head -1)
+    directory=$(tr '[:upper:]' '[:lower:]' <<<"$adapter" | sed -E 's/[^a-z0-9]+/-/g; s/^-//; s/-$//')
+    case "$backend" in vulkan | metal) ;; *) directory="$directory-$backend" ;; esac
+    branch="sweep/$directory"
+    if [ "$(gh pr view "$branch" --json state --jq .state 2>/dev/null)" = OPEN ]; then
+      open=1
+      pull_request_files=$(gh pr view "$branch" --json files --jq '.files[].path') || return 0
+      # A Baseline and its scene's result share a file name.
+      for file in $pull_request_files; do
+        [ -e "$results/$(basename "$file")" ] || reached=0
+      done
+    fi
+    if [ -z "$(git status --porcelain -- "bench/baselines/$directory")" ]; then
+      if [ "$open" = 1 ] && [ "$judged" = 1 ] && [ "$reached" = 1 ]; then
+        gh pr close "$branch" --comment "The sweep's runs of $(git rev-parse --short HEAD) count what main's Baselines hold, so this re-record is no longer needed." >/dev/null &&
+          log "closed the pull request of $branch"
+      fi
+      [ -n "$report$images" ] || return 0
+      title="The sweep on $adapter through $backend needs a person"
+      body="The sweep's runs of $(git rev-parse --short HEAD) here re-recorded no Baseline."$'\n\n'"$report"$'\n\n'"$images"
+      number=$(gh issue list --state open --search "in:title \"$title\"" --json number,title \
+        --jq "map(select(.title == \"$title\"))[0].number // empty") || return 0
+      if [ -n "$number" ]; then
+        gh issue comment "$number" --body "$body" >/dev/null && log "reported on #$number"
+      else
+        gh issue create --title "$title" --label needs-triage --body "$body" >/dev/null &&
+          log "reported on a new issue"
+      fi
+      return 0
+    fi
+    title="Re-record $directory's counter Baselines"
+    if [ "$open" = 1 ] && [ "$reached" = 0 ]; then
+      git fetch --quiet origin "$branch" || return 0
+      for file in $pull_request_files; do
+        [ -e "$results/$(basename "$file")" ] && continue
+        git show "FETCH_HEAD:$file" >"$file" &&
+          carried="$carried"$'\n'"- \`$(basename "$file" .json)\`: carried from an earlier night's re-record, as this night did not reach it."
+      done
+      report="$report$carried"
+    fi
+    git add -- "bench/baselines/$directory"
+    tree=$(git write-tree)
+    commit=$(git commit-tree "$tree" -p HEAD -m "$title" -m "The sweep's runs of $(git rev-parse --short HEAD) counted otherwise; the Baselines keep their timings.")
+    git reset --quiet -- bench/baselines
+    [ -n "$commit" ] && git push --quiet --force origin "$commit:refs/heads/$branch" || {
+      log "pushing $branch failed"
+      return 0
+    }
+    body=$(mktemp)
+    cat >"$body" <<BODY
+Ticket: n/a (the sweep keeps this machine's counter Baselines current)
+
+## What
+
+The sweep benched \`main\` at \`$(git rev-parse --short HEAD)\` on $adapter through $backend, and its runs counted otherwise than these Baselines. A re-recorded Baseline takes the run's counters, \`Aliasing\` and GPU memory by kind, and keeps its timings and Harness version, which a person chooses, so its Series starts no line. A Baseline whose timings no longer compare with the run is left for a person to re-record whole.
+
+$report
+
+## Verification
+
+\`praxis history rerecord\` judged each run against its Baseline as \`praxis compare --recording\` does; the runs are on \`bench-history\`.
+
+Review: none, as the sweep opened this: 0 found, 0 fixed, 0 declined, 0 deferred.
+
+Sources checked: None
+
+## Metrics
+
+The counters above; no timing moves.
+
+## Images
+
+n/a
+
+## Decide
+
+${images:-None}
+BODY
+    if [ "$(gh pr view "$branch" --json state --jq .state 2>/dev/null)" = OPEN ]; then
+      gh pr edit "$branch" --body-file "$body" >/dev/null && log "updated the pull request of $branch"
+    else
+      gh pr create --base main --head "$branch" --title "$title" --body-file "$body" >/dev/null &&
+        log "opened a pull request from $branch"
+    fi
+    rm -f "$body"
+  }
+
   benching_start_seconds=$SECONDS
   # Not mapfile: launchd's bash 3.2 lacks it [ref:gnu-bash-news-4.0-mapfile].
   night="$PWD/target/sweep/bisect-$(date '+%Y%m%dT%H%M%S')"
@@ -255,9 +401,31 @@ QUERY
     may_start "$scene" || break
     "$praxis" bench "$results" --no-publish "$scene" || log "bench of $scene failed"
   done
+  benched=0
   if compgen -G "$results/*.json" >/dev/null; then
     "$praxis" publish "$results" || fail "praxis publish $results"
+    benched=1
   fi
   log "done in $((SECONDS - benching_start_seconds))s of benching and ${preparation_seconds}s of preparing"
+
+  # On Windows, the RTX 2070 SUPER, whose Baselines and Goldens no session
+  # re-records after each change, the night's runs of main re-record the
+  # counters of its Baselines that they counted otherwise, in a pull request
+  # it opens, and the Goldens the captures differ from go to the owner.
+  case "$OSTYPE" in msys* | cygwin*) ;; *) exit 0 ;; esac
+  [ "$benched" = 1 ] || exit 0
+  images=$(goldens_report)
+  [ -z "$images" ] || log "Goldens: ${images//$'\n'/ }"
+  # Whether every run was judged against its Baseline.
+  judged=1
+  report=$("$praxis" history rerecord "$results") || {
+    log "praxis history rerecord failed"
+    judged=0
+  }
+  grep -q ': not judged: ' <<<"$report" && judged=0
+  [ -z "$report" ] || log "counters: ${report//$'\n'/ }"
+  propose "$report" "$images" "$judged"
+  # Whatever was re-recorded is in the pull request; the clone stays main.
+  git checkout -- bench/baselines
   exit 0
 }

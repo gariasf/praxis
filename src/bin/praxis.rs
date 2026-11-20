@@ -102,6 +102,9 @@ enum Command {
         night: String,
     },
     Regressions,
+    RerecordCounters {
+        results: String,
+    },
     Compare {
         results: String,
         mode: CompareMode,
@@ -177,6 +180,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         Command::Bisect { night } => bisect(&night),
         Command::PublishNight { night } => publish_night(&night),
         Command::Regressions => regressions(),
+        Command::RerecordCounters { results } => rerecord_counters(&results),
         Command::Compare { results, mode } => compare(&results, mode),
         Command::Report { results } => report(&results),
         Command::Traverse => traverse(),
@@ -382,6 +386,11 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
                 night: night.clone(),
             }
         }
+        [command, subcommand, results] if command == "history" && subcommand == "rerecord" => {
+            Command::RerecordCounters {
+                results: results.clone(),
+            }
+        }
         [command, results] if command == "compare" => Command::Compare {
             results: results.clone(),
             mode: CompareMode::Local,
@@ -419,7 +428,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             anyhow::bail!(
                 "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `preflight`, {cook_commands}`bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish [--lod <n>] | --experiment <name>] [<scene>...]`, \
-             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history publish-night <night directory>`, `history regressions`, `compare <bench directory> [--ci | --recording]`, `report <bench directory>`, or `traverse`; {crowd_form_clause} \
+             `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history publish-night <night directory>`, `history regressions`, `history rerecord <bench directory>`, `compare <bench directory> [--ci | --recording]`, `report <bench directory>`, or `traverse`; {crowd_form_clause} \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
                 ReferenceScene::ALL.map(ReferenceScene::name)
             )
@@ -723,6 +732,19 @@ fn regressions() -> anyhow::Result<()> {
     )? {
         writeln!(stdout, "{scene} {commit} #{issue}")?;
     }
+    Ok(())
+}
+
+/// Re-records the counters of each Baseline that a `<scene>.json` in
+/// `results`, runs of `main`, counted otherwise, its timings kept, and prints
+/// what it did as a Markdown list.
+fn rerecord_counters(results: &str) -> anyhow::Result<()> {
+    let results = result_paths(results)?
+        .iter()
+        .map(|path| read_json(path))
+        .collect::<anyhow::Result<Vec<Measurements>>>()?;
+    let report = praxis::bench::rerecord_baselines(Path::new("."), &results)?;
+    write!(std::io::stdout(), "{report}")?;
     Ok(())
 }
 
@@ -1227,6 +1249,12 @@ mod tests {
             panic!("history publish-night parsed as another command");
         };
         assert_eq!(night, "night");
+        let Command::RerecordCounters { results } =
+            parse(&["history", "rerecord", "results"]).unwrap()
+        else {
+            panic!("history rerecord parsed as another command");
+        };
+        assert_eq!(results, "results");
         assert!(matches!(
             parse(&["history", "regressions"]).unwrap(),
             Command::Regressions

@@ -5,7 +5,7 @@ mod report;
 pub use history::{
     GitHubIssues, IssueTracker, NextRun, Publication, ReleaseBuild, Suspect, bisect,
     check_experiment_name, file_regressions, import_baselines, next_run, publish,
-    publish_experiment, publish_night, suspects, unrecorded_scenes,
+    publish_experiment, publish_night, rerecord_baselines, suspects, unrecorded_scenes,
 };
 pub use provenance::{BenchStart, Checkout, Provenance};
 pub use report::report;
@@ -386,6 +386,9 @@ impl Counters {
     pub(super) fn streamed(&self) -> bool {
         self.chunks_loaded + self.chunks_unloaded + self.bytes_read > 0
     }
+
+    /// The counters a comparison reports but does not judge.
+    const UNJUDGED: [&'static str; 2] = ["late_mips", "tlas_build_allocations"];
 
     /// The counters of refusals, each the most of any frame: one refusal on
     /// any frame is a defect, whatever the IO pool's timing.
@@ -1163,9 +1166,7 @@ pub fn compare(
     for ((metric, current), (_, baseline)) in
         counters.named().into_iter().zip(baseline_counters.named())
     {
-        if counter_fails(current, baseline)
-            && !matches!(metric, "late_mips" | "tlas_build_allocations")
-        {
+        if counter_fails(current, baseline) && !Counters::UNJUDGED.contains(&metric) {
             findings.push(Finding {
                 metric,
                 verdict: Verdict::Fail,
@@ -1339,6 +1340,26 @@ pub fn compare(
             finding.detail = format!("{}; {load_averages}", finding.detail);
         }
     }
+    Ok(findings)
+}
+
+/// Every counter and `Aliasing` metric of `current` that a recording would
+/// fail against `baseline`, which must have run its scene in its profile at
+/// its size: `compare` in `CompareMode::Recording` against no Budget.
+fn counters_moved(current: &Measurements, baseline: &Measurements) -> anyhow::Result<Vec<Finding>> {
+    const NO_BUDGET: Budgets = Budgets {
+        cpu_frame_microseconds: f64::INFINITY,
+        gpu_frame_microseconds: f64::INFINITY,
+        gate_microseconds: f64::INFINITY,
+        dynamic_tlas_cpu_microseconds: f64::INFINITY,
+        dynamic_tlas_gpu_microseconds: f64::INFINITY,
+        culling_per_slot_microseconds: f64::INFINITY,
+        maximum_frame_microseconds: f64::INFINITY,
+        gpu_memory_bytes: u64::MAX,
+        gpu_memory_bytes_by_kind: GpuMemoryBudgets::each(u64::MAX),
+    };
+    let mut findings = compare(current, baseline, &NO_BUDGET, CompareMode::Recording)?;
+    findings.retain(|finding| finding.verdict == Verdict::Fail);
     Ok(findings)
 }
 
