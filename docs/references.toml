@@ -1961,6 +1961,36 @@ quote = '''pub async fn run<T>(&self, future: impl Future<Output = T>) -> T {
         let mut runner = Runner::new(self);'''
 checked = 2026-11-20
 
+["futures-lite-2.6.1-block-on-caches-a-parker"]
+url = "https://github.com/smol-rs/futures-lite/blob/v2.6.1/src/future.rs#L70-L73"
+section = "futures-lite 2.6.1, future.rs, block_on, which bevy_tasks 0.18.1 re-exports as its block_on without the async-io feature: one parker per thread, kept for the thread's lifetime"
+quote = '''thread_local! {
+        // Cached parker and waker for efficiency.
+        static CACHE: RefCell<(Parker, Waker)> = RefCell::new(parker_and_waker());
+    }'''
+checked = 2026-11-21
+
+["parking-2.2.1-park-locks-and-waits"]
+url = "https://github.com/smol-rs/parking/blob/v2.2.1/src/lib.rs#L355-L377"
+section = "parking 2.2.1, lib.rs, Inner::park: a park that finds no notification locks the parker's std Mutex and waits on its std Condvar"
+quote = '''let mut m = self.lock.lock().unwrap(); [...] m = self.cvar.wait(m).unwrap();'''
+checked = 2026-11-21
+
+["std-1.96.0-pthread-mutex-boxed-on-first-use"]
+url = "https://github.com/rust-lang/rust/blob/1.96.0/library/std/src/sys/sync/mutex/pthread.rs#L19-L28"
+section = "Rust 1.96.0 std, sys/sync/mutex/pthread.rs, Mutex::get, the Mutex mutex/mod.rs selects on Unix targets without futexes, macOS among them"
+quote = '''fn get(&self) -> Pin<&pal::Mutex> { [...] self.pal.get_or_init(|| {
+            let mut pal = Box::pin(pal::Mutex::new());'''
+checked = 2026-11-21
+
+["std-1.96.0-pthread-condvar-boxed-on-first-use"]
+url = "https://github.com/rust-lang/rust/blob/1.96.0/library/std/src/sys/sync/condvar/pthread.rs#L22-L29"
+section = "Rust 1.96.0 std, sys/sync/condvar/pthread.rs, Condvar::get, the Condvar condvar/mod.rs selects on Unix targets without futexes, macOS among them"
+quote = '''fn get(&self) -> Pin<&pal::Condvar> {
+        self.cvar.get_or_init(|| {
+            let mut cvar = Box::pin(pal::Condvar::new());'''
+checked = 2026-11-21
+
 ["async-executor-1.14.0-global-queue"]
 url = "https://github.com/smol-rs/async-executor/blob/v1.14.0/src/lib.rs#L357-L364"
 section = "async-executor 1.14.0, lib.rs, Executor::schedule, which every spawned task's Runnable goes through; State::new (L675-L677) makes the queue ConcurrentQueue::unbounded(); bevy_tasks 0.18.1's Scope::spawn (task_pool.rs L646-L650) spawns on the pool's Executor, a wrapper of this one (executor.rs L19)"
