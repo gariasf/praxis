@@ -10273,7 +10273,7 @@ checked = 2026-11-21
 
 ["werle-2017-wildlands-terrain"]
 url = "https://666uille.files.wordpress.com/2017/03/gdc2017_ghostreconwildlands_terrainandtechnologytools-onlinevideos1.pdf#page=35"
-section = "Werlé and Martinez (Ubisoft), 'Ghost Recon Wildlands: Terrain Tools and Technology', GDC 2017, slides with speaker notes; PDF pages 19, 34, 35, 38, 58, 64"
+section = "Werlé and Martinez (Ubisoft), 'Ghost Recon Wildlands: Terrain and Technology Tools' (title per the file name), GDC 2017, slides with speaker notes, a copy on a personal WordPress host (not GDC Vault); PDF pages 19, 34, 35, 38, 58, 64"
 quote = '''the pixel ratio can go up to 10 texels per cm and 1 triangle every 2 cm. [...] It will be used as an albedo map when rendering the distant patches. [...] Everything is then cut into tiles, and compressed into a quadtree. This simple structure was very convenient for LOD generations, and patch culling. Each node of the quadtree has a small payload that can be streamed in or out by the loading thread depending on the culling result and the distance to the camera. [...] Each material also embed a displacement map. Tesselation based displacement helped us to get the « next gen » look that we were looking for while developing the prototype. Since we had very promising results we were willing to invest a lot of GPU time in it. [...] Since our terrain renderer use tesselation and displays a lot of tiny triangles'''
 cost = '''I wanted to end this part of the talk by giving some performance stats on xbox one. Those are averages and are heavily view depend but we can say that everything fits in less that 8ms on the GPU side most of the time.'''
 checked = 2026-11-21
@@ -10286,13 +10286,13 @@ checked = 2026-11-21
 
 ["etienne-2023-call-of-duty-terrain-geometry"]
 url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=5"
-section = "Etienne (High Moon Studios / Activision), 'Large Scale Terrain Rendering' (cited by others as 'Large Scale Terrain Rendering in Call of Duty'), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, slides with notes; slides 4, 5, 28, 63"
+section = "Etienne (High Moon Studios / Activision), 'Large-Scale Terrain Rendering in Call of Duty' (the course index's title; the slides read 'Large Scale Terrain Rendering'), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, slides with notes; slides 4, 5, 28, 63"
 quote = '''At each node, we store vertex & index buffers that must be loaded before the node can be rendered. [...] At the lowest level, the terrain patches use procedural vertices with all vertices placed on a regular grid. At the branches, we run our meshes through a mesh simplifier. [...] The mesh simplifier outputs 2 floats per vertex, an X & Y. The Z is reconstructed by sampling the height map. [...] Vertices are interpolated towards their low-resolution counter part, as the camera moves away from the mesh. [...] When the camera is sufficiently far away from the mesh, and all vertices have collapsed to the lower resolution mesh, we switch to the lower resolution mesh. [...] During the opaque pass, terrain is deferred rendered using a full screen quad. [...] That would create cracks in the ground and artists would often have to place meshes to hide them'''
 checked = 2026-11-21
 
 ["etienne-2023-call-of-duty-holes-displacement"]
 url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=44"
-section = "Etienne (High Moon Studios / Activision), 'Large Scale Terrain Rendering' (cited by others as 'Large Scale Terrain Rendering in Call of Duty'), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, slides with notes; slides 6, 44, 59, 67"
+section = "Etienne (High Moon Studios / Activision), 'Large-Scale Terrain Rendering in Call of Duty' (the course index's title; the slides read 'Large Scale Terrain Rendering'), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, slides with notes; slides 6, 44, 59, 67"
 quote = '''It is also used to make holes in the ground for caves, or to place buildings instead of terrain. [...] The cutout texture map is very memory efficient. It requires only 1 bit per vertex. [...] On platforms that have GPU Tessellation & Displacement enabled, we also use virtual texturing to store displacements. [...] Note that displacements don’t affect collision, which means they cannot be too big, otherwise this will start causing noticeable issues. [...] Parallax mapping isn’t supported by our terrain technology though, but we see no reason why not.'''
 cost = '''it takes about 1ms to uncompress a 68x68 page on PS4'''
 checked = 2026-11-21
@@ -10698,8 +10698,8 @@ cost = '''On the notebook system, the medium preset at about 4.1ms (2.8ms [...] 
 checked = 2026-11-21
 
 ["gollent-2014-witcher-3-terrain-shadows-clipmap"]
-url = "http://web.archive.org/web/20200503045604/http://twvideo01.ubm-us.net/o1/vault/GDC2014/Presentations/Gollent_Marcin_Landscape_Creation_and.pdf#page=39"
-section = "Gollent, 'Landscape Creation and Rendering in REDengine 3', GDC 2014, slides 'Terrain shadows clipmap', 'Terrain shadows algorithm' and 'Terrain – memory footprint' (PDF pp. 39, 40 and 42). Wayback snapshot (the GDC Vault host refused the fetch with 403)."
+url = "https://media.gdcvault.com/GDC2014/Presentations/Gollent_Marcin_Landscape_Creation_and.pdf#page=39"
+section = "Gollent, 'Landscape Creation and Rendering in REDengine 3', GDC 2014, slides 'Terrain shadows clipmap', 'Terrain shadows algorithm' and 'Terrain – memory footprint' (PDF pp. 39, 40 and 42); the GDC Vault media host's copy, the same text as a Wayback snapshot of the older Vault host (http://web.archive.org/web/20200503045604/http://twvideo01.ubm-us.net/o1/vault/GDC2014/Presentations/Gollent_Marcin_Landscape_Creation_and.pdf)."
 quote = '''● Store maximum height that’s in shadow ● Update when streaming clipmap or changing time of day ● Has to be tightly coupled with clipmap computations to avoid shadows shimmering ● Allow a few huge meshes to cast terrain shadows [...] 1. Lay down terrain depth - sun perspective 2. Render to the slices of shadows clipmap [...] o For i=0 to n // n=13 works just fine [...] o Store the last z component value in the terrain shadow map'''
 cost = '''5 clipmap levels, 1024x1024 window size [...] • shadow map = 10 MB +10 for meshes casting terrain shadows'''
 checked = 2026-11-21
@@ -10738,7 +10738,7 @@ checked = 2026-11-21
 
 ["wildlands-2017-materials-per-pixel"]
 url = "https://666uille.files.wordpress.com/2017/03/gdc2017_ghostreconwildlands_terrainandtechnologytools-onlinevideos1.pdf#page=39"
-section = "Guillaume Werlé and Benoit Martinez, 'Ghost Recon Wildlands: Terrain and Technology Tools' (title per the file name), GDC 2017, speaker notes on PDF pages 39, 40, 44, 45, 51"
+section = "Guillaume Werlé and Benoit Martinez, 'Ghost Recon Wildlands: Terrain and Technology Tools' (title per the file name), GDC 2017, a copy on a personal WordPress host (not GDC Vault), speaker notes on PDF pages 39, 40, 44, 45, 51"
 quote = '''Most of the terrain renderers that I’ve seen use 4 materials at the same time [...] at the end of the production we had total of 143 unique materials on the terrain. [...] We cached the 32 nearest materials around the player in a texture array. [...] An indirection table is then used to convert from the global splatting index to the local cache index. [...] We do this again 3x with bilinear interpolation to have nice transitions between all the materials. [...] To avoid stretching we used biplanar projection for the slopes. [...] Now approximatly 80% of the terrain fetch 4 materials instead of 12.'''
 checked = 2026-11-21
 
@@ -10794,7 +10794,7 @@ checked = 2026-11-21
 
 ["cod-2023-ompv"]
 url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=7"
-section = "Stephane Etienne (High Moon Studios), 'Large-Scale Terrain Rendering in Call of Duty' (title per the course index, saved as sources/advances-s2023-index.txt), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, slides and notes on PDF pages 2, 7, 8, 9, 11. This is the talk at the brief's URL; 'Boots on the Ground' is a different talk (JT Hooker, GDC 2021) that these notes cite and that was not opened"
+section = "Stephane Etienne (High Moon Studios), 'Large-Scale Terrain Rendering in Call of Duty' (title per the course index, saved as sources/advances-s2023-index.txt), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, slides and notes on PDF pages 2, 7, 8, 9, 11. This is the talk at the brief's URL; 'Boots on the Ground' is a different talk (JT Hooker, GDC 2021) that these notes cite, quoted under its own entry (hooker-2021-call-of-duty-mesh-lod)"
 quote = '''In his GDC 2021 presentation called “Boots on the Ground”, JT presented the super terrain technology at the time of Call of Duty Cold War. [...] We only supported 32 terrain layers [...] there was nothing to prevent all 32 layers from being used to shade a single pixel [...] OMPV uses an index map, here shown in red, that holds a single byte per pixel and a color map [...] Up to 256 layers [...] the shader code gathers index & colors at the 4 surrounding vertices [...] instead of sampling the same material 4 times, we will be sampling that material only once [...] We then blend all layers using the reveal maps that artists authored [...] we distort UVs using a global 256x256 distortion map'''
 checked = 2026-11-21
 
@@ -11058,7 +11058,7 @@ checked = 2026-11-21
 
 ["flax-docs-terrain-collision-holes"]
 url = "https://docs.flaxengine.com/manual/terrain/collision.html"
-section = "Flax Engine manual, Terrain: Collision and Holes pages (FlaxDocs commit 401d5cf, manual/terrain/collision.md and holes.md); documentation only"
+section = "Flax Engine manual, Terrain: Collision page and Holes page (https://docs.flaxengine.com/manual/terrain/holes.html), FlaxDocs commit 401d5cf, manual/terrain/collision.md and holes.md; documentation only"
 quote = '''Terrain uses heightfield collider per terain patch. You can specify the Collision LOD that can be used to reduce collision quality but improve simulation performance due to lower resolution of the heightfield. [...] Holes mask is stored in the terrain patch heightmap texture as invalid normals. [...] Terrain collision cooking samples the heightmap and produces holes in the collider shape to keep visual and physical appearance in pair.'''
 checked = 2026-11-21
 ["galin-2019-terrain-modeling-review"]
