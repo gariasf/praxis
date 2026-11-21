@@ -116,16 +116,17 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
   <div class="eyebrow">Praxis &middot; concept &middot; <code>src/capture/mod.rs</code></div>
   <h1>Waiting on the GPU</h1>
-  <p class="definition">With two frames in flight, the main thread, which alone records, submits, polls and presents (ADR 0016), waits for the GPU in three places: for a swapchain texture, in the window; for the oldest frame in flight, in <code>render_frames</code>; and inside a frame wherever a GPU write must finish before the CPU or a later submission reads it. A queue orders when its command buffers start, not when they finish, so each such wait is explicit, and how the thread waits changes what its clock does next.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 0d19cffc (2026-11-09), with <code>praxis traverse</code> as this change leaves it. A concept the pages lean on; a change to how the main thread waits for the GPU, or to what a submission orders, rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="staging.html#turn">Staging</a>, <a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>, <a href="blas-refit.html#order">The BLAS refit</a>, <a href="dynamic-tlas.html#build">The dynamic TLAS</a>, <a href="shadow-mask.html">The shadow mask pass</a>.</p>
+  <p class="definition">With two frames in flight, the main thread, which alone records, submits, polls and presents (ADR 0016), waits for the GPU in three places: for a swapchain texture, in the window; for the oldest frame in flight, in <code>render_frames</code>; and inside a frame wherever a GPU write must finish before the CPU or a later submission reads it and the frame cannot put the read off. A queue orders when its command buffers start, not when they finish, so each such wait is explicit, and how the thread waits changes what its clock does next.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 8a170f5b (2026-11-21). A concept the pages lean on; a change to how the main thread waits for the GPU, or to what a submission orders, rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="staging.html#turn">Staging</a>, <a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>, <a href="blas-refit.html#order">The BLAS refit</a>, <a href="dynamic-tlas.html#build">The dynamic TLAS</a>, <a href="shadow-mask.html">The shadow mask pass</a>, <a href="chunk-streamer.html#engine">The Chunk streamer</a>, <a href="bench.html#run">The bench</a>, <a href="frame-stats.html#ring">Frame stats</a>.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">In the frame</h2>
     <dl>
       <dt>Frames in flight</dt><dd><code>FRAMES_IN_FLIGHT</code>, 2: "Frames submitted but not finished on the GPU when the next one starts, at most: the window's swapchain latency and capture's queue. Per-frame staging and the GPU stats readback are sized by it." The window asks the surface for the same, as <code>desired_maximum_frame_latency</code>.</dd>
-      <dt>The oldest frame</dt><dd><code>render_frames</code>, which the bench, <code>praxis capture</code> and the Goldens render through, waits for it as its <code>FrameWait</code> says: <code>Block</code>, asleep until the GPU signals, or <code>Spin</code>, polling on its core. <code>bench::run</code> picks <code>Spin</code> on a hardware adapter and <code>Block</code> on a <code>DeviceType::Cpu</code>; capture and the Goldens pass <code>Block</code>. The window never goes through it: it waits in <code>get_current_texture</code>.</dd>
-      <dt>Inside a frame, on the CPU</dt><dd><code>compact_blases</code> waits for the BLAS builds, then for the compaction copies, in a frame that loads Meshes; <code>FrameStaging::write</code> waits when every staging slot is still in flight; <code>BlasRefit::submit</code> waits for the refits where Metal makes no shared event (<code>waits_on_cpu</code>).</dd>
+      <dt>The oldest frame</dt><dd><code>render_frames</code>, which the bench, <code>praxis capture</code> and the Goldens render through, waits for it as its <code>FrameWait</code> says: <code>Block</code>, asleep until the GPU signals, or <code>Spin</code>, polling on its core. <code>bench::run</code> and <code>praxis traverse</code> pick <code>Spin</code> on a hardware adapter and <code>Block</code> on a <code>DeviceType::Cpu</code>; capture and the Goldens pass <code>Block</code>. The window never goes through it: it waits in <code>get_current_texture</code>.</dd>
+      <dt>Inside a frame, on the CPU</dt><dd><code>compact_blases</code> waits for the BLAS builds, then for the compaction copies, in an upload whose loads include a BLAS that is not deferred: a spawn's, or a <span class="concept" data-term="Settled frame" data-tip="A frame rendered only after every load it requested is Resident and placed, so streaming cannot change what it shows. Captures and Goldens render them, and the bench its frames up to the end of the counter frames; a window never waits for one.">Settled frame</span>'s; <code>FrameStaging::write</code> waits when every staging slot is still in flight; <code>BlasRefit::submit</code> waits for the refits where Metal makes no shared event (<code>waits_on_cpu</code>).</dd>
+      <dt>Inside a frame, polled</dt><dd>A streamed load's BLASes are deferred: each frame that does not settle opens its Chunk streaming with <code>poll_blases</code>, which waits for nothing, and the load's Instances are placed in the first frame that finds every Mesh it names <code>blas_ready</code>.</dd>
       <dt>Inside a frame, on the GPU</dt><dd>The dynamic TLAS's build is submitted in a command buffer ahead of the frame's; the crowd's refits signal a shared event their submission completes, and the build's command buffer waits for it.</dd>
-      <dt>Frame stats</dt><dd>The <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, the GPU frame total, ADR 0019's gate, draw calls, Instances and triangles drawn, bytes uploaded, GPU memory and heap allocations, among others. (Shortened.)">CPU frame</span> runs from <code>FrameRecorder::begin</code>, which <code>State::update</code> and <code>update_settled</code> call after the wait for the oldest frame, to <code>FrameRecorder::end</code>, after the frame's submit, so it counts the in-frame waits and not that one. <code>heap_allocations</code> counts the frame's allocations between the same two points, and the bench fails any increase.</dd>
+      <dt>Frame stats</dt><dd>The <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, the GPU frame total, ADR 0019's gate, draw calls, Instances and triangles drawn, bytes uploaded, GPU memory and heap allocations, among others. (Shortened.)">CPU frame</span> runs from <code>FrameRecorder::begin</code>, which <code>State::update</code> and <code>update_settled</code> call after the wait for the oldest frame, to <code>FrameRecorder::end</code>, after the frame's submit, so it counts the in-frame waits and not that one; the compaction waits are its stage <code>blas_compaction</code>. <code>heap_allocations</code> counts the frame's allocations between the same two points, and the bench fails any increase.</dd>
       <dt>Files</dt><dd><code>src/capture/mod.rs</code>, <code>src/render/staging.rs</code>, <code>src/render/readback.rs</code>, <code>src/render/blas_refit.rs</code>, <code>src/assets/pools.rs</code></dd>
     </dl>
   </aside>
@@ -182,9 +183,9 @@ const SLOT_COUNT: u64 = COMPLETION_LAG + MAP_LAG + 2;</code></pre>
 <section class="part prose" id="order">
   <div class="part-mark">2 &middot; <code>Queue::submit</code> &middot; <code>device.poll</code></div>
   <h2>A queue is an order, not a timeline</h2>
-  <p class="key-idea">The GPU starts each command buffer after the ones ahead of it in the queue have started, not finished. Work that reads what earlier work writes waits only where something tells the GPU so: a barrier the application records, or, on Metal, hazard tracking of a resource the work binds directly. Where neither reaches, the CPU has to wait, or order the pair itself.</p>
+  <p class="key-idea">The GPU starts each command buffer after the ones ahead of it in the queue have started, not finished. Work that reads what earlier work writes waits only where something tells the GPU so: a barrier the application records, or, on Metal, hazard tracking of a resource the work binds directly. Where neither reaches, the CPU has to wait, put the read off until it has seen the write finish, or order the pair itself.</p>
   <p>The CPU records GPU work into command buffers and submits them to a queue. The queue keeps them in the order they were submitted, and that order is its whole promise. Apple's documentation says it in two places: a command queue "maintains an ordered list of command buffers", and of committing one, "The GPU starts the command buffer after it starts any command buffers that are ahead of it in the same command queue." Starts, not finishes. Its overview of resource synchronization opens with "By design, GPUs can run multiple commands in parallel", and wgpu's Metal backend says it as plainly in a doc comment: "Metal allows independent command buffers in a queue to overlap on the GPU".</p>
-  <p>In wgpu, a command buffer is what <code>CommandEncoder::finish</code> returns, and <code>Queue::submit</code> sends a batch of them as one submission. wgpu-core adds command buffers of its own: one of resource transitions ahead of each of yours, and one of copies that need no encoder, such as those of <code>Queue::write_buffer</code> and of a BLAS's compaction, which it keeps as its pending writes and puts ahead of them all in the next submission. The CPU learns that work has finished only by asking: <code>device.poll</code> with <code>PollType::wait_indefinitely</code> blocks the calling thread until the most recent submission has finished, and with a submission index, until that submission has.</p>
+  <p>In wgpu, a command buffer is what <code>CommandEncoder::finish</code> returns, and <code>Queue::submit</code> sends a batch of them as one submission. wgpu-core adds command buffers of its own: one of resource transitions ahead of each of yours, and one of copies that need no encoder, such as those of <code>Queue::write_buffer</code> and of a BLAS's compaction, which it keeps as its pending writes and puts ahead of them all in the next submission. The CPU learns that work has finished only by asking: <code>device.poll</code> with <code>PollType::wait_indefinitely</code> blocks the calling thread until the most recent submission has finished, and with a submission index, until that submission has; with <code>PollType::Poll</code> it waits for nothing and retires whatever has finished. <code>Queue::on_submitted_work_done</code> hangs a callback on the most recent submission, which the first submission or poll that finds that submission finished runs.</p>
   <h3>Read after write</h3>
   <p>When one piece of GPU work writes memory that a later piece reads, the reader has to wait until the writer is done, or it may read old or half-written data. Vulkan and Direct3D 12 leave that to the application, which records a barrier between the two. Metal can handle it for you: for the resources it tracks, and that the work binds directly, it holds back work that reads what earlier work is still writing. Either way, something has to know that the second piece reads what the first one writes.</p>
   <div class="table-wrap">
@@ -192,29 +193,30 @@ const SLOT_COUNT: u64 = COMPLETION_LAG + MAP_LAG + 2;</code></pre>
     <thead><tr><th></th><th>Vulkan</th><th>Direct3D 12</th><th>Metal</th></tr></thead>
     <tbody>
       <tr><td>Who orders a read after a write</td><td>The application, with a pipeline barrier</td><td>The application, with a resource barrier</td><td>Metal itself, for tracked resources the work binds directly; the application for anything else, with a barrier, a fence between passes or an event between command buffers</td></tr>
-      <tr><td>At an acceleration-structure barrier, in wgpu 30.0.1</td><td>wgpu-core asks for a barrier; wgpu-hal records a pipeline barrier</td><td>wgpu-core asks for a barrier; wgpu-hal records a UAV barrier</td><td>wgpu-core asks for a barrier; wgpu-hal's function is empty</td></tr>
+      <tr><td>At an acceleration-structure barrier, in wgpu 30.0.2</td><td>wgpu-core asks for a barrier; wgpu-hal records a pipeline barrier</td><td>wgpu-core asks for a barrier; wgpu-hal records a UAV barrier</td><td>wgpu-core asks for a barrier; wgpu-hal's function is empty</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">From Apple's Resource synchronization and wgpu-hal 30.0.1's acceleration-structure barrier in its Vulkan, Direct3D 12 and Metal command recorders.</p>
-  <p>Metal's tracking has an edge, and Praxis's two CPU waits for acceleration structures sit on it. A TLAS is built from its BLASes, so its build has to come after whatever writes them. On Metal, wgpu-hal builds every TLAS from a buffer of entries that name their BLASes by resource ID, the indirect instance layout; the build's descriptor names the buffer, not the BLASes, so Metal's tracking never learns that the build reads them. wgpu-core does know, and asks the backend for a barrier at that point; on Metal the function it calls records nothing. So nothing orders a TLAS build after a BLAS's compaction copy, or after its refit, beyond whatever the GPU happens to do (<a href="metal-quirks.html#hazards">Metal quirks</a>). The pair can be ordered three ways:</p>
+  <p class="note">From Apple's Resource synchronization and wgpu-hal's acceleration-structure barrier in its Vulkan, Direct3D 12 and Metal command recorders, read at 30.0.1, the version the sources below cite; 30.0.2 changes no file of wgpu-hal's but the Metal surface's.</p>
+  <p>Metal's tracking has an edge, and Praxis's CPU waits for acceleration structures sit on it. A TLAS is built from its BLASes, so its build has to come after whatever writes them. On Metal, wgpu-hal builds every TLAS from a buffer of entries that name their BLASes by resource ID, the indirect instance layout; the build's descriptor names the buffer, not the BLASes, so Metal's tracking never learns that the build reads them. wgpu-core does know, and asks the backend for a barrier at that point; on Metal the function it calls records nothing. So nothing orders a TLAS build after a BLAS's refit beyond whatever the GPU happens to do (<a href="metal-quirks.html#hazards">Metal quirks</a>). After a compaction copy the gap is wider: as <code>compact_blases</code>' doc comment puts it, wgpu-core 30.0.2 records no barrier after <code>compact_blas</code>'s copy on any backend. The pair can be ordered four ways:</p>
   <div class="table-wrap">
   <table class="facts compact">
-    <thead><tr><th>Route</th><th>Who waits</th><th>In wgpu 30.0.1</th><th>The catch</th></tr></thead>
+    <thead><tr><th>Route</th><th>Who waits</th><th>In wgpu 30.0.2</th><th>The catch</th></tr></thead>
     <tbody>
-      <tr><td>A CPU wait after the last write</td><td>The main thread, which records and submits each frame</td><td>Works on every backend: <code>compact_blases</code> at load</td><td>The thread does nothing until the GPU has finished the submission it waits for</td></tr>
-      <tr><td>A fence between the acceleration-structure passes</td><td>The GPU</td><td>Not in a release: wgpu's fix is an open draft</td><td>Needs a wgpu release with it, and a version bump is the owner's call</td></tr>
+      <tr><td>A CPU wait after the last write</td><td>The main thread, which records and submits each frame</td><td>Works on every backend: <code>compact_blases</code>, for a spawn's and a Settled frame's loads</td><td>The thread does nothing until the GPU has finished the submission it waits for</td></tr>
+      <tr><td>A later poll that sees the write finished, before anything takes the BLAS</td><td>Nobody; the load does, frames long</td><td>Works on every backend: a streamed load's deferred BLASes</td><td>The load's Instances reach the TLAS, and the screen, only frames after the load</td></tr>
+      <tr><td>A fence between the acceleration-structure passes</td><td>The GPU</td><td>Not in a release: the upstream report is open</td><td>Needs a wgpu release with it, and a version bump is the owner's call</td></tr>
       <tr><td>An event: signal after the write, wait before the build, through wgpu-hal</td><td>The GPU</td><td>Available through <code>Queue::as_hal</code>: the crowd's refits</td><td>Staging is queue-wide, and by default the wait gates nothing that shares no tracked resource with it</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">Three ways to order a write to a BLAS before the TLAS build that reads it, on Metal with wgpu 30.0.1. Metal's own barrier between passes, added in its 26 releases, is a fourth that wgpu-hal does not record.</p>
+  <p class="note">Four ways to order a write to a BLAS before the TLAS build that reads it, with wgpu 30.0.2. Metal's own barrier between passes, added in its 26 releases, is a fifth that wgpu-hal does not record.</p>
 </section>
 
 <section class="part prose" id="places">
   <div class="part-mark">3 &middot; <code>render_frames</code> &middot; <code>FrameWait</code> &middot; <code>compact_blases</code></div>
   <h2>Where the main thread waits</h2>
-  <p class="key-idea">Four waits are explicit in the code: the oldest frame in flight, every frame; a staging slot, only when the CPU has lapped the GPU; the compaction copies, in a frame that loads Meshes; and the refits, only where Metal makes no shared event. The window has a fifth, the swapchain's, that wgpu owns.</p>
+  <p class="key-idea">Four waits are explicit in the code: the oldest frame in flight, every frame; a staging slot, only when the CPU has lapped the GPU; the builds and compaction copies of BLASes that are not deferred, in a spawn's or a Settled frame's upload; and the refits, only where Metal makes no shared event. The window has a fifth, the swapchain's, that wgpu owns. A streamed load's BLASes get no wait: the frames' polls see them through, and the load is placed once they are done.</p>
   <p>The bench, <code>praxis capture</code> and the Goldens render through <code>render_frames</code>, which keeps a queue of submission indices and, when two are in flight, waits for the oldest before it updates the next frame:</p>
 <pre class="code"><code>if in_flight.len() == FRAMES_IN_FLIGHT {
     let oldest = in_flight.pop_front();
@@ -233,6 +235,7 @@ const SLOT_COUNT: u64 = COMPLETION_LAG + MAP_LAG + 2;</code></pre>
         }
     }
 }</code></pre>
+  <p class="code-source"><code>src/capture/mod.rs</code>, <code>render_frames</code>.</p>
 <pre class="code"><code>/// How `render_frames` waits for the oldest frame in flight.
 #[derive(Clone, Copy)]
 pub(crate) enum FrameWait {
@@ -247,7 +250,7 @@ pub(crate) enum FrameWait {
     /// spins, on a hardware adapter.
     Spin,
 }</code></pre>
-  <p class="code-source"><code>src/capture/mod.rs</code>, <code>render_frames</code> and <code>FrameWait</code>. With <code>Block</code>, the poll's timeout is none: on Metal, wgpu-hal's fence wait is a condition variable that the command buffer's completion handler signals, so the thread sleeps until the frame is done and its core is free for other work, or to go idle. With <code>Spin</code>, each poll returns at once with <code>PollError::Timeout</code> until the frame is done, and the loop polls again with <code>spin_loop</code> between: the thread never leaves its core. Neither changes what the GPU does.</p>
+  <p class="code-source"><code>src/capture/mod.rs</code>, <code>FrameWait</code>. With <code>Block</code>, the poll's timeout is none: on Metal, wgpu-hal's fence wait is a condition variable that the command buffer's completion handler signals, so the thread sleeps until the frame is done and its core is free for other work, or to go idle. With <code>Spin</code>, each poll returns at once with <code>PollError::Timeout</code> until the frame is done, and the loop polls again with <code>spin_loop</code> between: the thread never leaves its core. Neither changes what the GPU does.</p>
 <pre class="code"><code>/// How a bench waits for the oldest frame in flight on `context`'s adapter:
 /// a software rasterizer's threads would share the CPU with the spin.
 fn frame_wait(context: &amp;GpuContext) -&gt; FrameWait {
@@ -258,13 +261,65 @@ fn frame_wait(context: &amp;GpuContext) -&gt; FrameWait {
 }</code></pre>
   <p class="code-source"><code>src/bench/mod.rs</code>, <code>frame_wait</code>, which <code>render_run</code> and <code>traverse</code> call. Capture and the Goldens pass <code>FrameWait::Block</code>. The window never goes through <code>render_frames</code>: it waits in the surface's <code>get_current_texture</code> for a swapchain texture to come free (<code>src/lib.rs</code>), and skips the frame when the surface reports a timeout.</p>
   <h3>Inside a frame</h3>
-  <p><b>The compaction copies, at load.</b> <code>compact_blases</code> waits twice, on every backend: once for the BLAS builds, so that each BLAS can say its compacted size, and once for the copies into the compacted BLASes, which wgpu-core keeps in its pending writes until something submits:</p>
-<pre class="code"><code>// The copies wait in the queue's pending writes until a submit.
-queue.submit(std::iter::empty());
-if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
-    tracing::error!(%error, "waiting for BLAS compaction failed");
+  <p><b>The compaction copies, when the frame must show them.</b> A BLAS is compacted in steps: once its build is submitted, its compaction is prepared; once the GPU has built it, wgpu says its compacted size and the copy into the compacted BLAS goes into wgpu-core's pending writes; and once the GPU has finished that copy, a TLAS may take the BLAS (<a href="blas.html#compaction">The BLAS</a>). The upload submits the frame's loads and then takes every BLAS awaiting compaction as far as the GPU has got:</p>
+<pre class="code"><code>// Loads staged since the last frame land before its copies and
+// draws, and their BLASes are compacted before the static TLAS
+// takes them: a deferred one's Instances are placed once it is.
+recorder.counters.uploaded_bytes += self.load_staging.submit(&amp;self.queue);
+let compacting = Instant::now();
+let compaction_time = if self.mesh_pool.compact_blases(&amp;self.queue) {
+    recorder.stage(BLAS_COMPACTION, compacting)
+} else {
+    std::time::Duration::ZERO
+};</code></pre>
+  <p class="code-source"><code>src/render/renderer.rs</code>, <code>Renderer::upload</code>, ahead of the static TLAS's update.</p>
+<pre class="code"><code>let waits = (self.awaiting_compaction.iter()).any(|awaiting| !awaiting.deferred);
+self.advance_compaction(queue);
+if !waits {
+    return false;
+}
+// One wait ends the builds, the next the compacted copies.
+for _ in 0..2 {
+    if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
+        tracing::error!(%error, "waiting for BLAS builds and compaction failed");
+    }
+    self.advance_compaction(queue);
 }</code></pre>
-  <p class="code-source"><code>src/assets/pools.rs</code>, the end of <code>compact_blases</code>. The empty submit is what makes the poll useful: a poll waits only for work already submitted, so it sends the pending writes as a submission of their own, and the poll then waits for it. The wait is there because no barrier orders a TLAS build after the copies on Metal, and a static TLAS build that takes the new BLASes can be submitted in the same frame: a worker records it, and a frame that waits for that worker, as a capture's does, submits it right after the upload (<a href="blas.html#compaction">The BLAS</a>, <a href="static-tlas.html#rebuild">The static TLAS</a>). It runs only in frames that load Meshes: the first, and any frame whose streamed Chunks bring Meshes not loaded yet, which record the wait as their CPU stage <code>blas_compaction</code>.</p>
+  <p class="code-source"><code>src/assets/pools.rs</code>, <code>MeshPool::compact_blases</code>. When any BLAS awaiting is not deferred, it waits twice, on every backend: the first poll blocks until the builds are done, so the next step compacts each BLAS; the second until the copies are. The copies reach the GPU only with a submission, so each step that compacts ends by sending the pending writes on their own:</p>
+<pre class="code"><code>if let Some(finished) = finishing {
+    self.charge_blases();
+    // The copies wait in the queue's pending writes until a submit.
+    queue.submit(std::iter::empty());
+    queue.on_submitted_work_done(move || finished.store(true, Ordering::Release));
+}</code></pre>
+  <p class="code-source"><code>src/assets/pools.rs</code>, the end of <code>MeshPool::advance_compaction</code>. A poll waits only for work already submitted, so the empty submit is what gives the second poll something to wait for; the callback sets the flag that <code>blas_ready</code> reads. The BLASes that wait are a spawn's, loaded before the first frame, and those a Settled frame loads, whose <code>wait_for_blases</code> takes even deferred ones off their deferral: captures, the Goldens and the bench's frames up to the end of its counter frames. They wait because the frame must show what it loaded: a capture's static TLAS update waits for its worker, so the build that takes the new BLASes is submitted in the same upload, right after the wait (<a href="static-tlas.html#rebuild">The static TLAS</a>). Such a frame records the wait as its CPU stage <code>blas_compaction</code>.</p>
+  <p><b>The compaction copies, when the frame need not show them.</b> A streamed load that does not settle, which is every one a window makes, has its BLASes deferred. <code>compact_blases</code> then takes each a step and returns at once, and each frame that does not settle opens its streaming with a poll that waits for nothing, so the callbacks of finished work run:</p>
+<pre class="code"><code>/// Whether the GPU has finished building and compacting the BLAS of
+/// `handle`'s Mesh, or it has none.
+pub fn blas_ready(&amp;self, handle: MeshHandle) -&gt; bool {
+    self.awaiting_compaction.iter().all(|awaiting| {
+        awaiting.handle != handle
+            || matches!(&amp;awaiting.stage, CompactionStage::Finishing(finished)
+                if finished.load(Ordering::Acquire))
+    })
+}
+
+/// Polls the device while a BLAS awaits the GPU, so `blas_ready` sees
+/// what it has finished since.
+pub fn poll_blases(&amp;self) {
+    if !self.awaiting_compaction.is_empty()
+        &amp;&amp; let Err(error) = self.device.poll(wgpu::PollType::Poll)
+    {
+        tracing::error!(%error, "polling for BLAS builds and compaction failed");
+    }
+}</code></pre>
+  <p class="code-source"><code>src/assets/pools.rs</code>. The Chunk streamer places a load's Instances in the first frame that finds every Mesh it names ready, and the Chunk counts as loaded from that frame (<a href="chunk-streamer.html#engine">The Chunk streamer</a>). Nothing waits; the load does, for as many frames as the GPU takes to get through the build's submission and the copies'. The static TLAS takes only what was placed, and says so in debug builds:</p>
+<pre class="code"><code>let handle = mesh_pool.handle_at(instance.mesh)?;
+debug_assert!(
+    mesh_pool.blas_ready(handle),
+    "a static Instance placed before its Mesh's BLAS is ready"
+);</code></pre>
+  <p class="code-source"><code>src/render/acceleration_structures.rs</code>, <code>StaticTlas::entry_changes</code>.</p>
   <p><b>A staging slot, when the CPU has lapped the GPU.</b> Each frame writes its uploads into the next staging slot. If that slot is not mapped again yet, the GPU is still copying from it, two frames on, and the thread waits for every submission so far:</p>
 <pre class="code"><code>if !slot.is_mapped.load(Ordering::Acquire) {
     // Every slot is in flight: wait for the GPU to finish this one.
@@ -306,7 +361,8 @@ if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
   <p>The bench holds <code>heap_allocations</code>, the main thread's allocations between a frame's begin and its end, to its <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baseline</span> and fails on any increase, as a counter that is the same on every run. For that to hold, nothing a frame allocates may depend on when the GPU finished the frames before it. wgpu's own bookkeeping is where it could: a map waits on the latest pending submission that uses the buffer, every submission ends by maintaining the device, which retires finished submissions and maps the buffers that waited on them, and each maintenance that finds buffers ready to map allocates the list of their callbacks. Per-frame staging requests each slot's map two writes after it was filled, when it is the next to be filled:</p>
 <pre class="code"><code>/// Staging memory for the per-frame uploads, reused every frame, where
 /// `Queue::write_buffer` creates a fresh staging buffer on every call. Its
-/// slots grow on demand, never past the most one frame uploads. Each frame
+/// slots grow on demand, or to their largest at once through
+/// `grow_to_largest`, never past the most one frame uploads. Each frame
 /// fills the next slot in turn, copies it into its targets, and requests the
 /// map of the slot it fills next, last filled `FRAMES_IN_FLIGHT` writes
 /// before. The fixed turn keeps the frame's heap allocations the same on
@@ -317,7 +373,7 @@ if let Err(error) = self.device.poll(wgpu::PollType::wait_indefinitely()) {
 /// submission maps it, whatever the GPU's timing
 /// [ref:wgpu-30-handle-mapping].
 pub struct FrameStaging {</code></pre>
-  <p class="code-source"><code>src/render/staging.rs</code>. The GPU stats readback does the same with <code>MAP_LAG</code> (section 1): a slot's map is requested two frames after the frame that copied its timestamps, by which time <code>render_frames</code> has waited for that frame, so the requesting frame's first submission maps it. Each frame then requests exactly one map, which its own submission completes, and the allocation lands in the same frame on every run. The ring grew by one slot for it, to seven.</p>
+  <p class="code-source"><code>src/render/staging.rs</code>. The GPU stats readback does the same with <code>MAP_LAG</code> (section 1): a slot's map is requested two frames after the frame that copied its timestamps, by which time <code>render_frames</code> has waited for that frame, so the requesting frame's first submission maps it. Each frame then requests exactly one map, which its own submission completes, and the allocation lands in the same frame on every run. The ring holds a slot more for it: seven.</p>
   <p>The dynamic TLAS's encoder is the third. A new command encoder reuses the encoder the GPU finished with last, and the state Metal keeps per encoder grows to the largest pipeline and bindings it recorded and never shrinks. The Renderer creates the build's encoder before the frame's, in <code>DynamicTlas::prepare_encoder</code>, so that the two swap roles every frame and each has recorded the frame's passes, and grown, within its first two frames; created in the other order, the passes would reuse the build's encoder in a frame the GPU's timing picks, and grow it there (<a href="dynamic-tlas.html#build">The dynamic TLAS</a>).</p>
   <p>The swap needs both of a frame's encoders back in the pool, the build's first, before the next frame takes either. A submission retires whatever it finds finished, so if the main thread is held between the build's submit and the passes', as when the CPU runs other threads, the GPU finishes the build and the passes' own submission retires it. The build's encoder then waits in the pool alone. In a frame that starts with the frame before finished but not yet retired, the build takes that encoder again and the passes take an older one that has never recorded them, whose state grows in that frame: nine or ten more allocations on the M4 Pro, measured by holding the main thread there. So the upload retires the finished frames before the frame takes any encoder, and both come back in the order they were submitted:</p>
 <pre class="code"><code>// wgpu reuses the encoder retired last, so retire before taking any.
@@ -353,8 +409,11 @@ if let Err(error) = self.device.poll(wgpu::PollType::Poll) {
   <table class="facts compact">
     <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
     <tbody>
-      <tr><td><code>a_frames_allocations_do_not_depend_on_when_the_gpu_finished</code></td><td><code>src/capture/mod.rs</code></td><td>the orrery allocates as often with the GPU's work retired by a poll between frames as with it left finished for the frame's own submissions to retire, and as with it left finished while each frame but two after the warm-up pauses before its last submission, so that submission retires the frame's dynamic TLAS build</td></tr>
+      <tr><td><code>a_frames_allocations_do_not_depend_on_when_the_gpu_finished</code></td><td><code>src/capture/mod.rs</code></td><td>the orrery allocates as often, less the dynamic TLAS build's own allocations, with the GPU's work retired by a poll between frames as with it left finished for the frame's own submissions to retire, and as with it left finished while each frame but two after the warm-up pauses before its last submission, so that submission retires the frame's dynamic TLAS build</td></tr>
       <tr><td><code>a_tlas_built_after_compaction_holds_its_blas_while_other_devices_load_the_gpu</code></td><td><code>src/assets/pools.rs</code></td><td>eight threads, each with its own device, load and trace a triangle 25 times; the wait for the copies holds under load</td></tr>
+      <tr><td><code>a_tlas_built_once_a_deferred_blas_is_ready_holds_it_while_other_devices_load_the_gpu</code></td><td><code>src/assets/pools.rs</code></td><td>the same eight threads with the BLAS deferred: <code>compact_blases</code> waits for none, a later submission is made at every step of the polling, as a frame's would be, and a TLAS built once <code>blas_ready</code> says so still holds the compacted BLAS</td></tr>
+      <tr><td><code>a_streamed_chunk_is_placed_once_its_blas_is_ready_and_shadowed_within_ten_frames</code></td><td><code>src/state.rs</code></td><td><code>shadows</code>' Chunk, streamed into frames that do not settle: no frame from its load on has a <code>blas_compaction</code> stage, it is placed in a later frame than the one that loads it, and it casts its shadow within ten frames of that</td></tr>
+      <tr><td><code>a_load_is_placed_once_its_blases_are_ready_and_dropped_if_its_chunk_left_meanwhile</code></td><td><code>src/streaming/io.rs</code></td><td>the streamer's side without a GPU: a load waits for its BLASes, and one whose Chunk the camera left meanwhile is not placed</td></tr>
       <tr><td><code>refitted_blases_cast_the_shadows_rebuilt_ones_cast</code></td><td><code>tests/crowd.rs</code></td><td>the dynamic TLAS's build follows the refits, through the shared event or the CPU wait</td></tr>
       <tr><td><code>a_frame_spans_its_passes_earliest_start_and_latest_end</code></td><td><code>src/render/readback.rs</code></td><td>the GPU frame counts overlapping passes once</td></tr>
       <tr><td><code>the_lit_pass_waits_from_the_latest_end_before_it</code></td><td><code>src/render/readback.rs</code></td><td>the lit pass's wait is measured from the passes it waits on</td></tr>
@@ -368,42 +427,61 @@ if let Err(error) = self.device.poll(wgpu::PollType::Poll) {
 <section class="part prose" id="cost">
   <div class="part-mark">7 &middot; <code>bench/baselines</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">On the M4 Pro every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> is GPU-bound, so the main thread waits for the oldest frame in every frame. On the RTX 2070 SUPER one scene on DX12, <code>orrery</code>, is CPU-bound, and there the GPU waits instead.</p>
+  <p class="key-idea">On every hardware adapter every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span> is GPU-bound, so the main thread waits for the oldest frame in every frame. The nearest to even are three scenes on the RTX 2070 SUPER's DX12, <code>orrery</code>, <code>world</code> and <code>crowd</code>, whose CPU frames come within 6% of their GPU frames.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n">CPU frame, µs</th><th class="n">GPU frame, µs</th><th>The longer</th></tr></thead>
     <tbody>
-      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">5,541.0</td><td class="n">20,008.0</td><td>GPU</td></tr>
-      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">202.3</td><td class="n">2,285.9</td><td>GPU</td></tr>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">821.4</td><td class="n">3,768.1</td><td>GPU</td></tr>
-      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">198.5</td><td class="n">6,619.2</td><td>GPU</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">197.5</td><td class="n">3,900.4</td><td>GPU</td></tr>
-      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">379.8</td><td class="n">2,918.3</td><td>GPU</td></tr>
-      <tr><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">7,577.8</td><td class="n">9,686.6</td><td>GPU</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">315.5</td><td class="n">1,226.1</td><td>GPU</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,434.2</td><td class="n">2,235.6</td><td>GPU</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">338.2</td><td class="n">2,740.9</td><td>GPU</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">330.7</td><td class="n">1,718.9</td><td>GPU</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">757.6</td><td class="n">1,435.8</td><td>GPU</td></tr>
-      <tr><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">7,931.3</td><td class="n">9,281.7</td><td>GPU</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">540.8</td><td class="n">1,098.8</td><td>GPU</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,738.6</td><td class="n">1,976.8</td><td>GPU</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">535.6</td><td class="n">2,727.7</td><td>GPU</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">529.1</td><td class="n">1,617.7</td><td>GPU</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,163.1</td><td class="n">1,107.5</td><td>CPU</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">707.2</td><td class="n">3,380.0</td><td>GPU</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">232.4</td><td class="n">2,638.6</td><td>GPU</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">219.8</td><td class="n">6,733.5</td><td>GPU</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">224.7</td><td class="n">3,009.4</td><td>GPU</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">211.2</td><td class="n">3,723.8</td><td>GPU</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">400.3</td><td class="n">2,966.7</td><td>GPU</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">214.1</td><td class="n">3,950.0</td><td>GPU</td></tr>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">229.2</td><td class="n">4,164.4</td><td>GPU</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">211.8</td><td class="n">2,308.7</td><td>GPU</td></tr>
+      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,407.1</td><td class="n">19,123.8</td><td>GPU</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">211.3</td><td class="n">2,938.2</td><td>GPU</td></tr>
+      <tr><td><code>world</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,621.0</td><td class="n">6,033.7</td><td>GPU</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,403.9</td><td class="n">1,979.8</td><td>GPU</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">393.0</td><td class="n">1,656.8</td><td>GPU</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">376.7</td><td class="n">2,825.4</td><td>GPU</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">357.0</td><td class="n">1,915.9</td><td>GPU</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">360.1</td><td class="n">1,744.3</td><td>GPU</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">790.3</td><td class="n">1,465.8</td><td>GPU</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">355.7</td><td class="n">1,737.2</td><td>GPU</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">356.7</td><td class="n">2,494.8</td><td>GPU</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">357.5</td><td class="n">1,265.7</td><td>GPU</td></tr>
+      <tr><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">2,690.6</td><td class="n">8,261.7</td><td>GPU</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">359.2</td><td class="n">1,766.8</td><td>GPU</td></tr>
+      <tr><td><code>world</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">2,961.6</td><td class="n">3,767.5</td><td>GPU</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,690.9</td><td class="n">1,788.2</td><td>GPU</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">595.2</td><td class="n">1,558.5</td><td>GPU</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">564.5</td><td class="n">2,717.3</td><td>GPU</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">562.4</td><td class="n">1,836.3</td><td>GPU</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">555.4</td><td class="n">1,633.0</td><td>GPU</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,075.8</td><td class="n">1,120.3</td><td>GPU</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">555.4</td><td class="n">1,623.0</td><td>GPU</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">566.5</td><td class="n">2,367.2</td><td>GPU</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">554.5</td><td class="n">1,129.8</td><td>GPU</td></tr>
+      <tr><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">2,888.5</td><td class="n">8,074.2</td><td>GPU</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">551.9</td><td class="n">1,701.9</td><td>GPU</td></tr>
+      <tr><td><code>world</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">3,256.1</td><td class="n">3,393.7</td><td>GPU</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">Medians from <code>bench/baselines/&lt;adapter&gt;/&lt;scene&gt;.json</code> at the commit above, at 2560&times;1440 with 4x MSAA. Every row was recorded spin-waiting, since the bench spins on any hardware adapter and each of these Baselines postdates that change; CI's lavapipe Baselines, not shown, block. The CPU frame leaves out the wait for the oldest frame, so the two columns do not add up to a frame's period: where the GPU is the longer, the main thread spends the difference waiting.</p>
+  <p class="note">Medians from <code>bench/baselines/&lt;adapter&gt;/&lt;scene&gt;.json</code> at the commit above, at 2560&times;1440 with 4x MSAA; rows compare only within one adapter. Every row was recorded spin-waiting, since the bench spins on any hardware adapter and the earliest of these Baselines was recorded on 2026-11-16, after it began to; CI's lavapipe Baselines, not shown, block. The CPU frame leaves out the wait for the oldest frame, so the two columns do not add up to a frame's period: where the GPU is the longer, the main thread spends the difference waiting. In these runs the Settled frames end inside the warm-up, so no measured frame holds a compaction wait.</p>
 </section>
 
 <section class="part prose" id="why">
   <div class="part-mark">8 &middot; ADR 0016</div>
   <h2>Why this way</h2>
-  <p><b>The bench spins; the window blocks.</b> The owner chose it over three others. CPU lines from a run with one frame in flight read close to spin-waiting's, but the clock's ramp after each wait stays in them, the frame runs while the GPU is idle, which is not how the engine runs, and each scene would run a third time. Spinning everywhere would read the window's CPU frame as the bench's, against Apple's advice, holding a P-core and spending the thermal headroom a GPU-bound frame needs. No change would keep the CPU lines reading the slowed clock whenever <code>town</code> is GPU-bound, over both of their ceilings, for a cost the frame does not pay. The chosen option costs no extra run and burns a P-core for the bench's few minutes only; it leaves the bench differing from the window in how it waits.</p>
-  <p><b>One thread submits, presents and polls.</b> ADR 0016 keeps map and work-done callbacks at a known point of the frame, and wgpu-hal's Metal acquire sends a main-thread-only message on the calling thread, so a render thread would need a hand-off of the surface texture. One submitting thread is also what makes the event route safe: no worker can take a staged signal or wait between the refits' submission and the build's.</p>
+  <p><b>The bench spins; the window blocks.</b> The owner chose it over three others. CPU lines from a run with one frame in flight read close to spin-waiting's, but the clock's ramp after each wait stays in them, the frame runs while the GPU is idle, which is not how the engine runs, and each scene would run a third time. Spinning everywhere would read the window's CPU frame as the bench's, against Apple's advice, holding a P-core and spending the thermal headroom a GPU-bound frame needs. No change would leave the CPU lines reading the slowed clock in every GPU-bound frame, which on the M4 Pro is every frame of every Reference scene (section 7), for a cost the frame does not pay. The chosen option costs no extra run and burns a P-core for the bench's few minutes only; it leaves the bench differing from the window in how it waits.</p>
+  <p><b>One thread submits, presents and polls.</b> ADR 0016 keeps map and work-done callbacks at a known point of the frame, and wgpu-hal's Metal acquire sends a main-thread-only message on the calling thread, so a render thread would need a hand-off of the surface texture. One submitting thread is also what makes the event route safe: no worker can take a staged signal or wait between the refits' submission and the build's. The deferred BLASes lean on the same rule: their flags are set by work-done callbacks, which run only in the main thread's polls and submissions.</p>
   <p><b>Two frames in flight.</b> wgpu's documentation recommends 2 as the balance between latency and throughput, and ADR 0016 keeps it there; ADR 0013's Input latency budget of two frames leaves no room for more. Every per-frame ring is sized by the constant, so changing it changes staging's slots and the readback's ring with it.</p>
-  <p><b>A CPU wait at load, the GPU's order each frame.</b> A wait suits work that happens once: the compaction copies cost it about a third of a millisecond at load, in three timed runs of their day, and no bench measures a load frame. Work in every frame could not pay that way, so the crowd's refits took the event route on the GPU, with the CPU wait as the fallback where no shared event can be made.</p>
+  <p><b>A streamed load is placed late rather than waited for.</b> Waiting for every load's BLASes on the CPU was most of what a loading frame cost: on the probe in <code>docs/performance.md</code>, "A streamed load is placed once its BLASes are ready", over nine tenths of the fixed cost a loading frame added was its <code>blas_compaction</code> stage, and deferred, no frame has one. The price is frames, not time: a load reaches the screen once its BLASes are ready, never before, so nothing is drawn that rays cannot trace. A Settled frame keeps the wait, since it must show every load it requested; deferred there, captures and Goldens would depend on how many frames the GPU took.</p>
+  <p><b>The GPU's order each frame for the refits.</b> The refits come in every frame of the refit form, and the same frame's shadow rays trace what they write, so they can neither wait frames as a load does nor stall the thread in every frame as a load's wait would; the event route orders them on the GPU instead, with the CPU wait as the fallback where no shared event can be made.</p>
 </section>
 
 <section class="part prose" id="limits">
@@ -411,7 +489,9 @@ if let Err(error) = self.device.poll(wgpu::PollType::Poll) {
   <h2>Limits</h2>
   <p><b>One machine measured.</b> The clock's fall behind a blocking wait was measured on one M4 Pro; other Apple GPUs, other operating system releases and other vendors' machines may do otherwise, and the rule the scheduler follows is not published.</p>
   <p><b>A remainder.</b> The one blocking run that kept a fast clock still cost about a millisecond that the clock does not explain.</p>
-  <p><b>A CPU wait in every frame that loads Meshes.</b> Meshes stream in with the Chunks that name them, so each frame that loads one stalls on the GPU twice, and the wait can go only when a wgpu release orders a TLAS build after compaction copies on every backend.</p>
+  <p><b>A CPU wait in every Settled frame that loads Meshes.</b> Captures, the Goldens and the bench's counter frames stall on the GPU twice in each frame that loads a Mesh, and the wait can go only when a wgpu release orders a TLAS build after compaction copies on every backend.</p>
+  <p><b>A streamed load waits frames.</b> Its Instances are drawn only once placed, and the Chunk counts as loaded only from the frame that places it: on the probe in <code>docs/performance.md</code>, 4 frames after the frame that loads them for most loads and 3 for about a quarter, where 2 is the least the code allows.</p>
+  <p><b>Ready rests on completion order.</b> On Metal, wgpu-hal sets its fence to a submission's value when that submission's last command buffer completes, and wgpu-core takes every submission up to that value as finished. A deferred BLAS's flag is therefore right only if the queue's command buffers complete in the order committed, which Apple's documentation, quoted in section 2, promises of their start, not their end. The eight-device test of deferred BLASes makes a later submission at every step of the polling, so a flag set early would trace the wrong BLAS there.</p>
   <p><b>The event route is delicate.</b> wgpu-hal's event staging is queue-wide: whichever submission comes next takes a staged signal or wait, and wgpu-core can submit on its own, as when it flushes pending writes to map a buffer. <code>metal::Order</code> relies on nothing submitting in between, which only one submitting thread can promise.</p>
   <p><b>Seen, not reproduced, on the RTX 2070 SUPER.</b> Under load, its Vulkan runs showed lone frames of five more allocations, then one, and once forty, which the encoder pool fits; only the M4 Pro was held between the two submits and measured, and the forty is not explained.</p>
   <p><b>A software adapter blocks.</b> lavapipe's rasterizer runs on the CPU, where a spinning main thread would take a core from it, so CI's CPU lines read the clock as a blocking thread's.</p>
@@ -429,22 +509,25 @@ if let Err(error) = self.device.poll(wgpu::PollType::Poll) {
     <dt><a href="https://developer.apple.com/documentation/metal/mtlhazardtrackingmode/default">Apple, MTLHazardTrackingMode.default</a></dt><dd>resources made from the device are tracked by default; <code>metal-hazard-tracking-default</code></dd>
     <dt><a href="https://developer.apple.com/documentation/metal/mtlindirectaccelerationstructureinstancedescriptor">Apple, MTLIndirectAccelerationStructureInstanceDescriptor</a></dt><dd>a TLAS entry that names its BLAS by resource ID; <code>metal-indirect-instance-descriptor</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L582-L592">wgpu-hal 30.0.1, metal/command.rs</a></dt><dd>the empty barriers on Metal; <code>wgpu-30-metal-barriers-empty</code></dd>
-    <dt><a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu, Metal BLAS to TLAS builds need synchronisation</a></dt><dd>the open upstream report, with the fence fix in draft; <code>wgpu-issue-9215</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/issues/9215">gfx-rs/wgpu, Metal BLAS to TLAS builds need synchronisation</a></dt><dd>the open upstream report; <code>wgpu-issue-9215</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L551-L556">wgpu-hal 30.0.1, metal/mod.rs, add_wait_event</a></dt><dd>event staging is queue-wide; <code>wgpu-30-metal-event-staging</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L1287-L1304">wgpu-core 30.0.1, device/queue.rs, flush_writes_for_buffer</a></dt><dd>mapping a buffer with pending writes submits them; <code>wgpu-30-core-flush-submit</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L236-L250">wgpu-core 30.0.1, device/life.rs, map</a></dt><dd>a map waits on the latest pending submission that uses the buffer; <code>wgpu-30-map-after-submission</code>, <code>wgpu-core-30-map-after-last-submission</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L1536-L1541">wgpu-core 30.0.1, device/queue.rs, submit</a></dt><dd>every submission ends by maintaining the device, which maps the buffers ready to map; <code>wgpu-30-submit-maintains</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L793-L798">wgpu-core 30.0.1, device/resource.rs, poll</a></dt><dd>a poll maintains the device as a submission does, and <code>PollType::Poll</code> waits for nothing; <code>wgpu-30-poll-retires</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L396-L413">wgpu-core 30.0.1, device/life.rs, handle_mapping</a></dt><dd>each maintenance that finds buffers ready to map allocates; <code>wgpu-30-handle-mapping</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/allocator.rs#L32-L51">wgpu-core 30.0.1, command/allocator.rs</a></dt><dd>a new encoder takes the free encoder released last; <code>wgpu-30-command-encoder-pool</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L432-L441">wgpu-hal 30.0.1, metal/command.rs, CommandState::reset</a></dt><dd>an encoder's state is cleared for reuse, keeping what it allocated; <code>wgpu-hal-30-metal-command-state</code></dd>
-    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/surface.rs#L947-L948">wgpu-types 30.0.1, desired_maximum_frame_latency</a></dt><dd>2 as the balance between latency and throughput</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-core/src/device/life.rs#L372-L387">wgpu-core 30.0.2, device/life.rs, add_work_done_closure</a></dt><dd>a work-done callback hangs on the most recent active submission</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-hal/src/metal/mod.rs#L737-L742">wgpu-hal 30.0.2, metal/mod.rs, Queue::submit</a></dt><dd>a submission's last command buffer sets the fence to its value as it completes</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/surface.rs#L947-L948">wgpu-types 30.0.1, desired_maximum_frame_latency</a></dt><dd>2 as the balance between latency and throughput; <code>wgpu-types-30-frame-latency-two</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2017-L2051">wgpu-hal 30.0.1, metal/device.rs, the fence's wait</a></dt><dd>a blocking poll sleeps on a condition variable the completion handler notifies</dd>
     <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0016-the-main-thread-runs-the-frame.md">ADR 0016</a></dt><dd>one thread records, submits, polls and presents; two frames in flight</dd>
-    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/performance.md">docs/performance.md, Measurements behind the code</a></dt><dd>the nine runs behind section 4, and the queued-frame and compaction measurements</dd>
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/performance.md">docs/performance.md, Measurements behind the code</a></dt><dd>the nine runs behind section 4, the deferred BLASes' probe, and the queued-frame measurements</dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The wait for the compaction copies came from a test that flaked at load, a TLAS built right after a compaction copy missing its BLAS in a few of eighty iterations while other devices loaded the GPU; the eight-device test is its regression test. The crowd's refit, the same pair in every frame, took the event route on the GPU with the CPU wait as its fallback. The bench began spin-waiting when <code>town</code>'s CPU stages read 20 to 40% slower once the GPU became the longer half of its frame, and the measurement found the clock. The late maps and the encoder swap came together, on 2026-11-01, when a frame's heap allocations were made independent of the GPU's timing; the retirement at the frame's start followed on 2026-11-08, when the allocation test still failed now and then on the RTX 2070 SUPER under load and a pause between the build's submit and the passes' reproduced it on the M4 Pro.</p>
-  <footer class="sources">Written from <code>src/capture/mod.rs</code>, <code>src/bench/mod.rs</code>, <code>src/lib.rs</code>, <code>src/render/mod.rs</code>, <code>src/render/staging.rs</code>, <code>src/render/readback.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/blas_refit.rs</code>, <code>src/assets/pools.rs</code>, <code>src/stats/mod.rs</code>, <code>src/state.rs</code>, <code>src/render/renderer.rs</code>, the tests named above, ADR 0016, <code>docs/performance.md</code> and the sources above, all at <code>main</code> 88941ee2 as this change leaves it.</footer>
+  <p class="note">The wait for the compaction copies came from a test that flaked at load, a TLAS built right after a compaction copy missing its BLAS in a few of eighty iterations while other devices loaded the GPU; the eight-device test is its regression test. The crowd's refit, the same pair in every frame, took the event route on the GPU with the CPU wait as its fallback. The bench began spin-waiting when <code>town</code>'s CPU stages read 20 to 40% slower once the GPU became the longer half of its frame, and the measurement found the clock. The late maps and the encoder swap came together, on 2026-11-01, when a frame's heap allocations were made independent of the GPU's timing; the retirement at the frame's start followed on 2026-11-08, when the allocation test still failed now and then on the RTX 2070 SUPER under load and a pause between the build's submit and the passes' reproduced it on the M4 Pro. On 2026-11-15 a streamed load stopped waiting for its BLASes: the compaction became a step each frame takes as far as the GPU has got, and the load is placed once its BLASes are ready, leaving the wait to a spawn's and a Settled frame's loads.</p>
+  <footer class="sources">Written from <code>src/capture/mod.rs</code>, <code>src/bench/mod.rs</code>, <code>src/lib.rs</code>, <code>src/render/mod.rs</code>, <code>src/render/staging.rs</code>, <code>src/render/readback.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/blas_refit.rs</code>, <code>src/assets/pools.rs</code>, <code>src/streaming/io.rs</code>, <code>src/stats/mod.rs</code>, <code>src/state.rs</code>, <code>src/render/renderer.rs</code>, the tests named above, ADR 0016, <code>docs/performance.md</code>, the Baselines and the sources above, all at <code>main</code> 8a170f5b.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="static-tlas.html">Previous: The static TLAS</a><a href="index.html">All field guides</a><a href="prepare.html">Next: Prepare</a></nav>

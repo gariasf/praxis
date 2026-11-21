@@ -117,13 +117,13 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; concept &middot; <code>src/render/instance.rs</code></div>
   <h1>Camera-relative placement</h1>
   <p class="definition">World positions are f64, and the GPU never holds one in f32: each position reaches it as an <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.">Anchor</span>, the integer coordinates of its 64 m grid cell, plus an f32 offset from the cell's corner, and every shader composes the position relative to the camera, so f32 only ever holds magnitudes near the camera (ADR 0014).</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 7b8009ee (2026-11-05). A concept the pages lean on; a change to how positions reach the GPU rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="prepare.html">Prepare</a>, <a href="instance-buffer.html#anchor">The Instance buffer</a>, <a href="static-tlas.html#anchor">The static TLAS</a>, <a href="dynamic-tlas.html">The dynamic TLAS</a>, <a href="shadow-mask.html#ray">The shadow mask pass</a>, <a href="culling-pass.html#frustum">The culling pass</a>, <a href="froxel-pass.html">The Froxel pass</a>, <a href="lit-pass.html">The lit pass</a>.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 8a170f5b (2026-11-21). A concept the pages lean on; a change to how positions reach the GPU rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="prepare.html">Prepare</a>, <a href="instance-buffer.html#anchor">The Instance buffer</a>, <a href="static-tlas.html#anchor">The static TLAS</a>, <a href="dynamic-tlas.html">The dynamic TLAS</a>, <a href="shadow-mask.html#ray">The shadow mask pass</a>, <a href="culling-pass.html#bounds">The culling pass</a>, <a href="depth-prepass.html#widening">The depth pre-pass</a>, <a href="froxel-pass.html">The Froxel pass</a>, <a href="lit-pass.html">The lit pass</a>, <a href="cook-mesh.html">Mesh cooking</a>, <a href="cook-chunk.html">Chunk cooking</a>, <a href="cook-far-proxy.html">Far proxy cooking</a>.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">In the frame</h2>
     <dl>
       <dt>The grid</dt><dd>Cells of <code>ANCHOR_CELL_SIZE</code>, 64 m. <code>anchor_and_offset</code> in <code>src/render/instance.rs</code> splits an f64 World position into its cell and its f32 offset; every shader module declares the cell size from the Rust constant.</dd>
-      <dt>Who carries one</dt><dd>Each <span class="concept" data-term="Instance" data-tip="One Renderable's or Placement's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one, or in its Chunk's range of slots while the Chunk is loaded.">Instance</span>, as <code>InstanceData</code>'s <code>anchor</code> and <code>offset</code> (128 bytes an Instance); the camera, as <code>CameraUniform</code>'s <code>anchor</code>, <code>offset</code> and <code>tlas_anchor</code> (144 bytes); each point light, as <code>LightData</code>'s <code>anchor</code> and <code>offset</code> (48 bytes a light). Prepare writes all three from <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>.</dd>
-      <dt>Who composes</dt><dd><code>camera_relative_position</code> in <code>common.wgsl</code>: the vertex shader's <code>vertex_output</code> for every vertex, the culling pass's <code>clip_space_bounds</code> for each Mesh's bounds centre, <code>point_light_position</code> for the Froxel pass, the lit pass, the light count pass and the shadow mask pass, and <code>shadowed</code> once more, to move a point into the frame both TLAS share. On the CPU, <code>anchored_transform</code> places each entry of either TLAS from the same Anchor.</dd>
+      <dt>Who carries one</dt><dd>Each <span class="concept" data-term="Instance" data-tip="One Renderable's or Placement's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one, or in its Chunk's range of slots while the Chunk is loaded.">Instance</span>, as <code>InstanceData</code>'s <code>anchor</code> and <code>offset</code> (128 bytes an Instance); the camera, as <code>CameraUniform</code>'s <code>anchor</code>, <code>offset</code> and <code>tlas_anchor</code> (144 bytes); each point light, as <code>LightData</code>'s <code>anchor</code> and <code>offset</code> (48 bytes a light). Prepare writes all three into <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>, a Renderable's Instance and a Placement's alike, and the Renderer adds the static TLAS's Anchor to the camera's.</dd>
+      <dt>Who composes</dt><dd><code>camera_relative_position</code> in <code>common.wgsl</code>: the vertex shader's <code>vertex_output</code> for every vertex; <code>vs_thin</code> for a small Instance's bounds centre; the culling pass's <code>bounds_centre</code> for each Instance's, which its box tests, its LOD selection and its coverage read; <code>point_light_position</code> for the Froxel pass, the lit pass, the light count pass and the shadow mask pass; and <code>shadowed</code> once more, to move a point into the frame both TLAS share. On the CPU, <code>place</code> sets each entry of either TLAS from that frame's Anchor.</dd>
       <dt>Frame stats</dt><dd>Nothing of its own: the structs that carry Anchors are counted in <code>uploaded_bytes</code> as the frame writes them.</dd>
       <dt>Files</dt><dd><code>src/render/instance.rs</code>, <code>src/render/uniforms.rs</code>, <code>src/render/shaders/common.wgsl</code></dd>
     </dl>
@@ -169,23 +169,25 @@ frame.camera = CameraUniform {
     offset,
     ..CameraUniform::default()
 };</code></pre>
-<pre class="code"><code>let transform = current.drawn(previous, blend_weight);
-let rotation_scale = transform.0.matrix3.as_mat3();
-let (anchor, offset) = anchor_and_offset(transform.translation());
-frame.write_instance(
-    slot,
+<pre class="code"><code>/// The Instance that draws `mesh` at `transform`, with `material` over its
+/// Primitives' Materials if given, anchored (ADR 0014).
+fn instance(
+    transform: &amp;glam::DAffine3,
+    mesh: MeshHandle,
+    material: Option&lt;MaterialHandle&gt;,
+) -&gt; InstanceData {
+    let rotation_scale = transform.matrix3.as_mat3();
+    let (anchor, offset) = anchor_and_offset(transform.translation);
     InstanceData {
         rotation_scale: padded_columns(rotation_scale),
         normal_matrix: padded_columns(rotation_scale.inverse().transpose()),
         anchor,
-        material_id: material_ref
-            .map_or(NO_MATERIAL, |material_ref| material_ref.0.index()),
+        material_id: material.map_or(NO_MATERIAL, MaterialHandle::index),
         offset,
-        mesh: mesh_ref.0.0,
-    },
-    previous.is_some(),
-);</code></pre>
-  <p class="code-source"><code>src/render/prepare.rs</code>, the camera and an Instance. <code>view_proj</code> is the projection times the view's rotation alone: the camera sits at the origin of the frame the shaders work in, so the matrix holds no translation.</p>
+        mesh: mesh.index,
+    }
+}</code></pre>
+  <p class="code-source"><code>src/render/prepare.rs</code>, the camera and <code>instance</code>, which builds every Instance that draws: a Renderable's, from its World transform blended for the frame, and each Placement's of a loaded Chunk, a Far proxy or the far ground, from its f64 transform. <code>view_proj</code> is the projection times the view's rotation alone: the camera sits at the origin of the frame the shaders work in, so the matrix holds no translation.</p>
   <p>The structs the GPU reads carry the two halves side by side. An Instance's Anchor and offset do not change as the camera moves, so camera motion dirties no Instance (ADR 0003):</p>
 <pre class="code"><code>pub struct InstanceData {
     pub rotation_scale: [[f32; 4]; 3],
@@ -205,10 +207,13 @@ frame.write_instance(
     /// What the lit pass scales luminance by (`Camera::exposure`).
     pub exposure: f32,
     pub offset: [f32; 3],
-    pub _pad_offset: u32,
-    /// The Anchor whose corner is the origin of the static TLAS's frame
-    /// (ADR 0020), where shadow rays start: the Renderer sets it, from the
-    /// camera's Anchor in the first Frame data.
+    /// The LOD error, in metres, the culling pass allows a LOD it draws a
+    /// metre from the camera: the LOD threshold's pixels at their size
+    /// there, which the Renderer sets from its target's height.
+    pub lod_error_per_metre: f32,
+    /// The Anchor whose corner is the origin of the bound static TLAS's
+    /// frame (ADR 0020), where shadow rays start: the Renderer sets it from
+    /// the static TLAS (`StaticTlas::anchor`).
     pub tlas_anchor: [i32; 3],
     /// Entries the dynamic TLAS holds: with none, shadow rays skip it.
     pub dynamic_tlas_entries: u32,
@@ -216,11 +221,13 @@ frame.write_instance(
     /// TLAS's entries, its lowest corner then its highest: shadow rays that
     /// miss it skip the dynamic TLAS (`DynamicTlas::fill`).
     pub dynamic_tlas_bounds_min: [f32; 3],
+    /// What a pixel spans a metre from the camera, in metres, which the
+    /// Renderer sets from its target's height.
     pub pixel_size_per_metre: f32,
     pub dynamic_tlas_bounds_max: [f32; 3],
     pub _pad_dynamic_tlas_bounds_max: u32,
 }</code></pre>
-  <p class="code-source"><code>src/render/uniforms.rs</code>. The derive lines are left out. <code>src/render/shader_tests.rs</code> compares each struct, field by field, with its WGSL twin.</p>
+  <p class="code-source"><code>src/render/uniforms.rs</code>. The derive lines are left out. <code>lod_error_per_metre</code> and <code>pixel_size_per_metre</code> take the fourth word after a <code>vec3</code>, as <code>exposure</code> does; they are scales, not positions, which the shaders multiply by a camera-relative distance. <code>src/render/shader_tests.rs</code> compares each struct, field by field, with its WGSL twin.</p>
   <h3>The bar, and why 64 m</h3>
   <p>ADR 0014 sets the bar the split must meet: within 100 km of the origin, a point 0.3 m from the camera lands within 0.25 px at 1440p and a 45&deg; vertical field of view, which is 0.043 mm, of its exact camera-relative position; simulated positions resolve to 0.1 mm, and saves round-trip positions bit-exactly. The ADR measured the composition's worst cases separately, in every evaluation order the compiler may choose and with the f32 rotation of a vertex 128 m from its pivot, and they sum to 0.041 mm on a 64 m grid; on a 128 m grid they sum to 0.045 mm and fail. The cell size is the largest that passes.</p>
 </section>
@@ -244,7 +251,7 @@ fn camera_relative_position(
     return anchor_position + (offset - camera_offset) + local_position;
 }</code></pre>
   <p class="code-source"><code>src/render/shaders/common.wgsl</code>, a shared part every module that reads the frame assembles. <code>ANCHOR_CELL_SIZE</code> is declared into each module from the Rust constant when it is assembled.</p>
-  <p>The cell difference is a small integer where it matters: an Instance in view is within a few cells of the camera, so the product with 64 m is exact in f32 too. The offsets' difference is at most 64 m and rounds at 2<sup>&minus;18</sup> m. The compiler may reorder or fuse the three additions, and the oracle in section 5 sums every order it may choose.</p>
+  <p>The cell difference is an integer, exact in f32 under 2<sup>24</sup> cells, and the product with 64 m, a power of two, is exact too. The offsets' difference is at most 64 m and rounds at 2<sup>&minus;18</sup> m. The compiler may reorder or fuse the three additions, and the oracle in section 5 sums every order it may choose.</p>
   <p>The vertex shader composes each vertex this way, with the vertex's cooked position rotated and scaled by its Instance as the local term; <code>view_proj</code> then projects the result with no translation to apply:</p>
 <pre class="code"><code>let position = camera_relative_position(
     instance.anchor,
@@ -255,36 +262,55 @@ fn camera_relative_position(
 );
 out.clip_position = camera.view_proj * vec4&lt;f32&gt;(position, 1.0);</code></pre>
   <p class="code-source"><code>vertex_output</code> in <code>src/render/shaders/main.wgsl</code>, which every main pass vertex entry point calls. The fragment stages read the same position, as <code>camera_relative_position</code> in their inputs, for the view direction, the Froxel's depth and the point lights' distances.</p>
-  <p>The culling pass composes each Instance's bounds centre the same way before it tests the box against the frustum, so the test and the draw agree on where an Instance is:</p>
-<pre class="code"><code>let centre = camera_relative_position(
-    instance.anchor,
-    instance.offset,
-    camera.anchor,
-    camera.offset,
-    instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
-);</code></pre>
-  <p class="code-source"><code>clip_space_bounds</code> in <code>src/render/shaders/culling.wgsl</code> (<a href="culling-pass.html#frustum">The culling pass</a>).</p>
+  <p>What widens a vertex after that works on the composed position alone. <code>vs_thin</code>, the vertex stage of Thin Primitives and small Instances, moves a Thin Primitive's vertex out from its tube's centre line, the radius behind it in the same camera-relative frame, and takes a pixel's size there from the centre's clip w; for a small Instance it composes the Mesh bounds' centre as above and scales each vertex across the view about it (<a href="depth-prepass.html#widening">The depth pre-pass</a>). No Anchor enters after the composition: the widening's arithmetic, like the vertex's, is on magnitudes near the camera.</p>
+  <p>The culling pass composes each Instance's bounds centre the same way, so its tests and the draw agree on where an Instance is:</p>
+<pre class="code"><code>// The centre of an Instance's Mesh bounds, relative to the camera.
+fn bounds_centre(instance: InstanceData, bounds_min: vec3&lt;f32&gt;, bounds_max: vec3&lt;f32&gt;) -&gt; vec3&lt;f32&gt; {
+    return camera_relative_position(
+        instance.anchor,
+        instance.offset,
+        camera.anchor,
+        camera.offset,
+        instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
+    );
+}</code></pre>
+  <p class="code-source"><code>src/render/shaders/culling.wgsl</code>. <code>clip_space_bounds</code> projects it for the frustum and occlusion tests (<a href="culling-pass.html#bounds">The culling pass</a>), <code>instance_lod</code> takes its length, less the sphere about the bounds, as the distance LOD selection reads (<a href="culling-pass.html#lod">LOD selection</a>), and <code>instance_coverage</code> hands it to <code>small_instance_coverage</code>.</p>
 </section>
 
 <section class="part prose" id="tlas">
-  <div class="part-mark">3 &middot; <code>anchored_transform</code> &middot; <code>tlas_anchor</code></div>
+  <div class="part-mark">3 &middot; <code>place</code> &middot; <code>REANCHOR_CELLS</code> &middot; <code>tlas_anchor</code></div>
   <h2>The frame both TLAS share</h2>
-  <p class="key-idea">A TLAS entry's transform is twelve f32, so an acceleration structure owns an f32 frame of its own. Its origin is the corner of the camera's Anchor in the first Frame data, and it stays there for the scene; a ray is moved into that frame by the same composition, with the camera in the Instance's place and the TLAS's Anchor in the camera's.</p>
-  <p><code>StaticTlas::update</code> takes its Anchor from the first Frame data it sees and keeps it (<a href="static-tlas.html#anchor">The static TLAS</a>). Each entry's translation is composed from that corner in f64 and rounded once:</p>
-<pre class="code"><code>/// `instance`'s transform as rows of the 3×4 matrix a TLAS Instance holds,
-/// its translation from `anchor`'s corner composed in f64, so only the f32
-/// result rounds (ADR 0014).
-fn anchored_transform(instance: &amp;InstanceData, anchor: [i32; 3]) -&gt; [f32; 12] {
-    let [x_axis, y_axis, z_axis] = instance.rotation_scale;
-    let row = |axis: usize| {
-        let cells = i64::from(instance.anchor[axis]) - i64::from(anchor[axis]);
-        let translation = cells as f64 * ANCHOR_CELL_SIZE + f64::from(instance.offset[axis]);
-        [x_axis[axis], y_axis[axis], z_axis[axis], translation as f32]
-    };
-    bytemuck::cast([0, 1, 2].map(row))
+  <p class="key-idea">A TLAS entry's transform is twelve f32, so an acceleration structure owns an f32 frame of its own. Its origin is the corner of an Anchor: the camera's when the first static Instance took an entry, which every build keeps until the camera's Anchor strays more than a Chunk's edge from it along an axis, when a build moves the frame to the camera's. A ray is moved into that frame by the same composition, with the camera in the Instance's place and the TLAS's Anchor in the camera's.</p>
+  <p>The static TLAS is two TLASes, each holding its own Anchor and the position of each entry's Instance, so whichever takes a change composes the translation in its own frame (<a href="static-tlas.html#anchor">The static TLAS</a>). Each translation is composed from the Anchor's corner in f64 and rounded once:</p>
+<pre class="code"><code>/// Sets `transform`'s translation to `position` from `anchor`'s corner,
+/// composed in f64, so only the f32 result rounds (ADR 0014).
+fn place(transform: &amp;mut [f32; 12], position: InstancePosition, anchor: [i32; 3]) {
+    for axis in 0..3 {
+        let cells = i64::from(position.anchor[axis]) - i64::from(anchor[axis]);
+        let translation = cells as f64 * ANCHOR_CELL_SIZE + f64::from(position.offset[axis]);
+        transform[axis * 4 + 3] = translation as f32;
+    }
 }</code></pre>
-  <p class="code-source"><code>src/render/acceleration_structures.rs</code>. The dynamic TLAS's <code>fill</code> takes the static TLAS's Anchor as its <code>anchor</code> argument, so both structures place their Instances in one frame and a ray composed once can be traced against both (<a href="dynamic-tlas.html">The dynamic TLAS</a>).</p>
-  <p>The Renderer's upload hands the shaders that Anchor as the camera uniform's <code>tlas_anchor</code>. The shadow mask pass knows each point only relative to the camera, so <code>shadowed</code> moves it into the TLAS's frame with the one function of section 2, its arguments cast differently:</p>
+  <p class="code-source"><code>src/render/acceleration_structures.rs</code>. <code>anchored_transform</code> gives an Instance's rows with their translation set by <code>place</code>. The dynamic TLAS's <code>fill</code> takes the static TLAS's Anchor as its <code>anchor</code> argument, so both structures place their Instances in one frame and a ray composed once can be traced against both (<a href="dynamic-tlas.html">The dynamic TLAS</a>).</p>
+  <p>A build moves the frame only when the camera has strayed from it:</p>
+<pre class="code"><code>/// Anchor cells, along any axis, between the camera's Anchor and the bound
+/// static TLAS's past which a build re-anchors it, and runs though no static
+/// Instance changed: a Chunk's edge. Within it, the camera adds less than
+/// 320 m to what a shadow ray composes in the TLAS's frame, and less than
+/// 4.9 mm to its offset.
+const REANCHOR_CELLS: i32 = (CHUNK_EDGE_METRES / ANCHOR_CELL_SIZE) as i32;</code></pre>
+<pre class="code"><code>let camera_strayed = (0..3).any(|axis| {
+    (i64::from(camera_anchor[axis]) - i64::from(self.bound.anchor[axis])).abs()
+        &gt; i64::from(REANCHOR_CELLS)
+});
+let records_build = built_from.is_some() || waited || camera_strayed;
+let build_anchor = if camera_strayed {
+    camera_anchor
+} else {
+    self.bound.anchor
+};</code></pre>
+  <p class="code-source"><code>StaticTlas::start</code>, <code>src/render/acceleration_structures.rs</code>. <code>CHUNK_EDGE_METRES</code> is 256 m, so <code>REANCHOR_CELLS</code> is 4. The worker that builds at a moved Anchor composes every entry anew (<code>place_every_entry</code>), and the build is bound from the frame after its submit. Until a static Instance takes an entry, both TLASes follow the camera's Anchor with no build.</p>
+  <p>Each frame the Renderer reads the bound TLAS's Anchor after the static TLAS's update, which may just have swapped in a TLAS at a new one, fills the dynamic TLAS from it and hands it to the shaders as the camera uniform's <code>tlas_anchor</code>. The shadow mask pass knows each point only relative to the camera, so <code>shadowed</code> moves it into the TLAS's frame with the one function of section 2, its arguments cast differently:</p>
 <pre class="code"><code>// The camera stands where an Instance does in this composition, and the
 // TLAS's frame, with no offset from its Anchor, where the camera does.
 let tlas_position = camera_relative_position(
@@ -294,8 +320,8 @@ let tlas_position = camera_relative_position(
     vec3&lt;f32&gt;(0.0),
     position
 );</code></pre>
-  <p class="code-source"><code>shadowed</code> in <code>src/render/shaders/shadow_mask.wgsl</code> (<a href="shadow-mask.html#ray">The shadow mask pass</a>). The ray's origin is then <code>tlas_position</code> moved off the surface.</p>
-  <p>Within the frame, an f32 coordinate steps by 2<sup>&lfloor;log<sub>2</sub> d&rfloor; &minus; 23</sup> m at distance d from the origin: at most 0.122 mm below 2,048 m and 0.244 mm from there to 4,095 m. The Reference scenes stay within about 2 km of their load Anchor, so an entry's translation rounds by at most half of 0.244 mm, where the same entry placed by its raw World position 100 km out would step by 7.8 mm. The frame is never re-anchored in this milestone (section 8).</p>
+  <p class="code-source"><code>shadowed</code> in <code>src/render/shaders/shadow_mask.wgsl</code> (<a href="shadow-mask.html#ray">The shadow mask pass</a>). The ray's origin is then <code>tlas_position</code> moved off the surface, by at least <code>SHADOW_RAY_OFFSET_SCALE</code>, 2<sup>&minus;16</sup>, of the larger coordinate of <code>tlas_position</code> and <code>position</code>; the camera's distance from the frame's origin adds less than 4.9 mm to it.</p>
+  <p>Within the frame, an f32 coordinate steps by 2<sup>&lfloor;log<sub>2</sub> d&rfloor; &minus; 23</sup> m at distance d from the origin. Once a build that moved the frame is bound, the camera is within 320 m of its origin along each axis (ADR 0014), so a point within 192 m of the camera along each axis lies under 512 m out, where a coordinate steps by at most 2<sup>&minus;15</sup> m, 0.031 mm; the same entry placed by its raw World position 100 km out would step by 7.8 mm. An entry farther from the origin steps more (section 8).</p>
 </section>
 
 <section class="part prose" id="lights">
@@ -341,10 +367,11 @@ fn point_light_position(
     <tbody>
       <tr><td><code>camera_relative_position_meets_the_precision_bar_within_100_km</code></td><td><code>shader_function_tests.rs</code></td><td>a point 0.3 m from a camera anywhere within 100 km lands within 0.043 mm of its f64 position: the GPU runs one evaluation order and the CPU sums every other the compiler may choose; the same points composed from f32 World positions miss the bar</td></tr>
       <tr><td><code>point_light_position_meets_the_precision_bar_within_100_km</code></td><td><code>shader_function_tests.rs</code></td><td>the same bar for a point light, whose range and intensity hold values no position holds, so a field read in place of another moves the light</td></tr>
-      <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td>each Reference scene captured shifted with its camera by <code>FAR_SHIFT</code>, 1,563 whole cells along x and z, 100,032 m, matches its Golden at the origin, so no World position reaches the GPU in f32</td></tr>
+      <tr><td><code>reference_scenes_match_their_goldens</code></td><td><code>tests/goldens.rs</code></td><td>each Reference scene with a Golden, captured shifted with its camera by <code>FAR_SHIFT</code>, 1,563 whole cells along x and z, 100,032 m, matches its Golden at the origin, so no World position reaches the GPU in f32</td></tr>
       <tr><td><code>the_static_tlas_holds_each_static_instance_tagged_with_its_slot_from_the_load_anchor</code></td><td><code>acceleration_structures.rs</code></td><td>with the load Anchor 100 km out, where an Instance's World position would round in f32 and its offset does not, each static Instance's entry is tagged with its slot and holds its rows from the Anchor's corner, and a ray hits it where its transform puts it</td></tr>
+      <tr><td><code>a_build_keeps_its_anchor_and_a_camera_past_a_chunks_edge_starts_one_that_re_anchors_it</code></td><td><code>acceleration_structures.rs</code></td><td>with the Anchor 100 km out, a camera <code>REANCHOR_CELLS</code> from it along every axis starts no build of its own, and a build there keeps the Anchor; one cell farther along an axis starts a build with no change that moves the frame to the camera's Anchor and places every entry from it, where a ray hits it; the TLAS bound before catches up in its own frame, then builds in the camera's</td></tr>
       <tr><td><code>every_light_is_drawn_directional_lights_first_point_lights_anchored</code></td><td><code>prepare.rs</code></td><td>a point light 100 km out reaches Frame data as its Anchor and offset</td></tr>
-      <tr><td><code>shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none</code></td><td><code>renderer.rs</code></td><td>after the first frame anchors the static TLAS, the camera is given from the next Anchor cell over, the same place in other numbers, and the image does not change: both TLAS keep the first frame's Anchor</td></tr>
+      <tr><td><code>shadows_fall_from_both_tlas_and_shadow_rays_off_draw_none</code></td><td><code>renderer.rs</code></td><td>after the first frame anchors the static TLAS, the camera is given from the next Anchor cell over, the same place in other numbers, and the image does not change: within <code>REANCHOR_CELLS</code>, both TLAS keep the first frame's Anchor and trace in one frame</td></tr>
     </tbody>
   </table>
   </div>
@@ -365,7 +392,7 @@ fn point_light_position(
     </tbody>
   </table>
   </div>
-  <p>What a frame uploads, from the <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>' <code>uploaded_bytes</code>, in bytes a frame. A still scene uploads the camera, the light uniform and its lights; a scene with Moving Instances adds their Instances and their dynamic TLAS entries, 72 bytes each on Metal and 64 on Vulkan and DX12:</p>
+  <p>What a frame uploads, from the <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12. A commit re-records one when it changes a timing the Baseline held or its Harness version; a commit that changes only its counters does not, and starts no line on its Series.">Baselines</span>' <code>uploaded_bytes</code>, in bytes a frame. A still scene uploads the camera, the light uniform and its lights; a scene with Moving Instances adds their Instances and their dynamic TLAS entries, 72 bytes each on Metal and 64 on Vulkan and DX12:</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n">Bytes a frame</th><th>Of what</th></tr></thead>
@@ -389,14 +416,15 @@ fn point_light_position(
   <p><b>An integer cell plus an f32 position in the ECS.</b> It meets the bar, but every system, script and save would handle two-part positions and move entities between cells. Praxis keeps the split at the GPU's boundary alone: the ECS, Lua and saves see one f64 (ADR 0014).</p>
   <p><b>f64 rotation and scale.</b> They buy nothing, since the GPU applies rotation in f32 regardless; a <code>Transform</code> keeps them in f32 and stays 64 bytes (ADR 0014).</p>
   <p><b>f64 on the GPU.</b> Metal has no f64 shaders, and its default fast math may reorder the arithmetic that two-float emulation depends on, so neither a double nor an emulated one is an option on the reference machine (ADR 0014; <a href="metal-quirks.html">Metal quirks</a>).</p>
+  <p><b>A TLAS frame fixed at load, or moved at every build.</b> A frame that never moves puts a camera that travels from it ever farther from the origin rays start from, where coordinates and the ray's offset grow with the distance; one moved to the camera at every build makes the frame rays trace depend on which frame last built. A build moves it only past a Chunk's edge, so a shadow ray composes and lifts its origin 10 km from where it started as at the origin (ADR 0014; <a href="static-tlas.html#anchor">The static TLAS</a>).</p>
 </section>
 
 <section class="part prose" id="limits">
   <div class="part-mark">8</div>
   <h2>Limits</h2>
   <p><b>Offsets round within a cell.</b> An offset is an f32 under 64 m, so a position moved by less than a cell rounds differently from where it was; the Golden shift is whole cells for that reason, and the oracle bounds the rounding rather than removes it.</p>
-  <p><b>The TLAS frame is never re-anchored.</b> Both TLAS keep the camera's Anchor from the first Frame data for the scene's life. A scene that travels far from it steps more: 0.244 mm per coordinate from 2,048 m out, doubling at each power of two. The Reference scenes stay within about 2 km.</p>
-  <p><b>Rotation in f32.</b> A vertex's position relative to its pivot arrives rotated and rounded, so the error of rotating a vertex far from its pivot lies outside the composition; cooked Meshes stay within 128 m of their pivot, the distance ADR 0014 measured.</p>
+  <p><b>The TLAS frame lags the camera.</b> Between the frame whose camera strays past <code>REANCHOR_CELLS</code> and the frame its build is bound, rays still trace the frame before, where the camera may stand farther than 320 m from the origin. An entry far from the origin steps more: 0.122 mm per coordinate from 1,024 m out, 0.244 mm from 2,048 m, doubling at each power of two; Far proxies are drawn out to the View distance, 2 km at target scale. Every build is of every entry, so moving the frame costs a whole build.</p>
+  <p><b>Rotation in f32.</b> A vertex's position relative to its pivot arrives rotated and rounded, so the error of rotating a vertex far from its pivot lies outside the composition; the cooker refuses a Mesh with a vertex past <code>MAX_PIVOT_DISTANCE_METRES</code>, 128 m, from its pivot, the distance ADR 0014 measured. A Far proxy's Mesh is exempt: it holds its whole Chunk within a Chunk's edge of the Chunk's centre and is placed unrotated (ADR 0014).</p>
   <p><b>Subsystems that compute in f32.</b> Physics, audio and particles convert at their boundary into a local frame they own, as the acceleration structures do; the physics engine is not yet chosen.</p>
   <p><b>One Game world at a time.</b> A World position carries no Game world id.</p>
 </section>
@@ -412,8 +440,8 @@ fn point_light_position(
     <dt><a href="https://docs.rs/glam/0.32.1/glam/f64/struct.DVec3.html">glam, DVec3</a></dt><dd>the f64 vector a Transform's translation is</dd>
   </dl>
   <h3>History</h3>
-  <p class="note">f64 World positions and the Anchor split landed in the first milestone, with the 100 km oracle and the Goldens' shifted captures. The static TLAS brought the shared f32 frame anchored at load and gave the camera uniform its <code>tlas_anchor</code>; the dynamic TLAS took the same Anchor, and the shadow rays moved with their composition from the lit pass into the shadow mask pass. The culling pass composes each Instance's bounds centre the same way, which ADR 0014 records in its amendment of 2026-11-04.</p>
-  <footer class="sources">Written from <code>src/render/instance.rs</code>, <code>src/render/uniforms.rs</code>, <code>src/render/prepare.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/shaders/common.wgsl</code>, <code>main.wgsl</code>, <code>culling.wgsl</code>, <code>shadow_mask.wgsl</code>, the tests named above, the Baselines, ADR 0014 and the sources above, all at <code>main</code> 7b8009ee.</footer>
+  <p class="note">f64 World positions and the Anchor split landed in the first milestone, with the 100 km oracle and the Goldens' shifted captures. The static TLAS brought the shared f32 frame, anchored at load, and gave the camera uniform its <code>tlas_anchor</code>; the dynamic TLAS took the same Anchor, and the shadow rays moved with their composition from the lit pass into the shadow mask pass. The culling pass composes each Instance's bounds centre the same way, which ADR 0014 records in its amendment of 2026-11-04. The frame then learnt to follow the camera, moved by a build once the camera strays a Chunk's edge (ADR 0014, amended 2026-11-08), and the bounds centre came to serve LOD selection and small Instances, whose vertex stage, shared with Thin Primitives, widens what the composition places.</p>
+  <footer class="sources">Written from <code>src/render/instance.rs</code>, <code>src/render/uniforms.rs</code>, <code>src/render/prepare.rs</code>, <code>src/render/acceleration_structures.rs</code>, <code>src/render/renderer.rs</code>, <code>src/cook/mesh.rs</code>, <code>src/render/shaders/common.wgsl</code>, <code>main.wgsl</code>, <code>culling.wgsl</code>, <code>shadow_mask.wgsl</code>, the tests named above, the Baselines, ADR 0014 and the sources above, all at <code>main</code> 8a170f5b.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="instance-buffer.html">Previous: The Instance buffer</a><a href="index.html">All field guides</a><a href="dynamic-tlas.html">Next: The dynamic TLAS</a></nav>
