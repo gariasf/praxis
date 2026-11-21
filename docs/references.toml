@@ -428,7 +428,7 @@ checked = 2026-10-26
 url = "https://developer.apple.com/documentation/metal/mtlindirectaccelerationstructureinstancedescriptor"
 section = "Apple Metal documentation, MTLIndirectAccelerationStructureInstanceDescriptor, memberwise initializer: a 48-byte MTLPackedFloat4x3, four UInt32 and an 8-byte MTLResourceID, 72 bytes"
 quote = '''init(transformationMatrix: MTLPackedFloat4x3, options: MTLAccelerationStructureInstanceOptions, mask: UInt32, intersectionFunctionTableOffset: UInt32, userID: UInt32, accelerationStructureID: MTLResourceID)'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["msl-4.1-sin-fast-accuracy"]
 url = "https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=372"
@@ -446,7 +446,7 @@ checked = 2026-10-26
 url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=9"
 section = "Metal Feature Set Tables (2026-05-21), Render targets, p. 9, columns Apple2 to Apple10"
 quote = '''Maximum sample count in render passes with MSAA 4 4 4 4 4 4 4 4 8'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["metal-feature-set-tables-mesh-ray-tracing"]
 url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6"
@@ -470,7 +470,7 @@ checked = 2026-10-26
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L336-L341"
 section = "wgpu-core 30.0.1, command/ray_tracing.rs, TLAS descriptors in build_acceleration_structures"
 quote = '''log::warn!("build_acceleration_structures called with PreferUpdate, but only rebuild is implemented"); [...] mode: hal::AccelerationStructureBuildMode::Build,'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["wgpu-30-tlas-blas-build-order"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L515-L534"
@@ -482,13 +482,13 @@ checked = 2026-10-26
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L235-L252"
 section = "wgpu-core 30.0.1, command/ray_tracing.rs: each filled TLAS entry converted to the backend's record by wgpu-hal and staged"
 quote = '''instance_buffer_staging_source.extend(state.device.raw().tlas_instance_to_bytes('''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["wgpu-30-tlas-instance-fields"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/blas.rs#L56-L67"
 section = "wgpu 30.0.1, api/blas.rs, struct TlasInstance"
 quote = '''/// Affine transform matrix 3x4 (rows x columns, row major order). pub transform: [f32; 12], [...] /// This must only use the lower 24 bits, if any bits are outside that range (byte 4 does not equal 0) the TlasInstance becomes [...] pub custom_data: u32, /// Mask for the instance used inside the shader to filter instances. /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`. pub mask: u8,'''
-checked = 2026-11-16
+checked = 2026-11-21
 
 ["wgpu-30-blas-sizes"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/ray_tracing.rs#L11-L24"
@@ -542,19 +542,19 @@ checked = 2026-10-26
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1608-L1649"
 section = "wgpu-hal 30.0.1, metal/command.rs, draw_indexed_indirect and draw_mesh_tasks_indirect: one native call per draw"
 quote = '''for _ in 0..draw_count {'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["wgpu-30-metal-count-draws-empty"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1651-L1670"
 section = "wgpu-hal 30.0.1, metal/command.rs, draw_indirect_count and draw_indexed_indirect_count, both empty"
 quote = '''unsafe fn draw_indirect_count( [...] _max_count: u32, ) { //TODO } unsafe fn draw_indexed_indirect_count( [...] _max_count: u32, ) { //TODO }'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["wgpu-30-metal-memoryless"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L561-L564"
 section = "wgpu-hal 30.0.1, metal/device.rs, create_texture storage mode for TRANSIENT_ATTACHMENT textures"
 quote = '''let mtl_storage_mode = if desc.usage.contains(wgt::TextureUses::TRANSIENT) && self.shared.private_caps.supports_memoryless_storage { MTLStorageMode::Memoryless'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["wgpu-30-metal-preserve-invariance"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L275-L278"
@@ -586,19 +586,19 @@ checked = 2026-11-11
 url = "https://www.iryoku.com/smaa/downloads/SMAA-Enhanced-Subpixel-Morphological-Antialiasing.pdf#page=7"
 section = "Jimenez et al. 2012, SMAA, §4.3 Subpixel rendering, Figure 10, p. 7"
 quote = '''Figure 10: A difficult case for no AA, MLAA [JME11] and SMAA 1x: a white grid over a black background at mid-distance (top), prevents the reconstruction of accurate coverage'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["nanite-taa-lod"]
 url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=67"
 section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Seamless LOD, speaker notes, p. 67"
 quote = '''But if we only draw clusters that are less than 1 pixel of error they are imperceptibly different and temporal antialiasing smoothes out any change.'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["nanite-two-pass-occlusion"]
 url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=19"
 section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Two pass occlusion culling, p. 19"
 quote = '''Draw what was visible in the previous frame [...] Build HZB [...] Draw what is visible now but wasn't in the last frame [...] Only falls apart under extreme visibility changes'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["ue-nanite-unsupported"]
 url = "https://web.archive.org/web/20251221042229/https://dev.epicgames.com/documentation/en-us/unreal-engine/nanite-virtualized-geometry-in-unreal-engine"
@@ -634,7 +634,7 @@ checked = 2026-10-26
 url = "https://www.cs.princeton.edu/courses/archive/spring01/cs598b/papers/greene93.pdf#page=3"
 section = "Greene, Kass and Miller 1993, Hierarchical Z-Buffer Visibility (doi:10.1145/166117.166147), §3.2 Image-space Z pyramid, p. 3 of the course copy"
 quote = '''combine four Z values at each level into one Z value at the next coarser level by choosing the farthest Z from the observer [...] we find the finest-level sample of the pyramid whose corresponding image region covers the screen-space bounding box of the polygon.'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["haar-aaltonen-two-phase"]
 url = "https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf#page=52"
@@ -658,7 +658,7 @@ checked = 2026-10-26
 url = "https://developer.apple.com/documentation/metal/mtlhazardtrackingmode/default"
 section = "Apple Metal documentation, MTLHazardTrackingMode.default, Discussion"
 quote = '''The default tracking mode for a type that inherits MTLResource is MTLHazardTrackingMode.tracked because individual resources benefit from automatic hazard tracking.'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["wgpu-30-metal-event-staging"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L551-L556"
@@ -676,13 +676,13 @@ checked = 2026-10-26
 url = "https://github.com/gpuweb/gpuweb/blob/688f043ecf3294687d54fe68b79e0cd527eafb4b/spec/index.bs#L16576-L16597"
 section = "WebGPU specification source, Rasterization, standard sample patterns"
 quote = '''The standard sample patterns are as follows, with positions in framebuffer coordinates relative to the top-left corner of the pixel, such that the pixel ranges from (0, 0) to (1, 1): [...] 4: Sample 0: (0.375, 0.125) Sample 1: (0.875, 0.375) Sample 2: (0.125, 0.625) Sample 3: (0.625, 0.875) [...] Implementations must use the standard sample pattern for the given multisample.count when performing rasterization.'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["webgpu-alpha-to-coverage-sample-mask"]
 url = "https://github.com/gpuweb/gpuweb/blob/10be35c70d7bfc37e0557f2d0e38ec42742aba63/spec/index.bs#L8792-L8794"
 section = "WebGPU specification source, Render Pipeline Creation, validating GPURenderPipelineDescriptor"
 quote = '''If the sample_mask builtin is a shader stage output of descriptor.fragment: descriptor.multisample.alphaToCoverageEnabled is false.'''
-checked = 2026-11-15
+checked = 2026-11-21
 
 ["hillis-steele-partial-sums"]
 url = "https://doi.org/10.1145/7902.7903"
@@ -968,7 +968,7 @@ checked = 2026-10-26
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/queue.rs#L994-L1013"
 section = "wgpu-core 30.0.1, Queue::write_texture (L853): a new StagingBuffer on each call, on both the aligned and the row-by-row path"
 quote = '''let staging_buffer = if stage_bytes_per_row == bytes_per_row { [...] let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?; [...] } else { [...] let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["wgpu-30-staging-belt-chunk-size"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/util/belt.rs#L56-L57"
@@ -976,7 +976,7 @@ section = "wgpu 30.0.1, StagingBelt::new and write_buffer (L132-L133)"
 quote = '''The `chunk_size` is the unit of internal buffer allocation; writes will be
 /// sub-allocated within each chunk. [...] If the `size` is greater than the size of any free internal buffer, a new buffer
 /// will be allocated for it.'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["wgpu-types-30-transient-saves-memory"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/adapter.rs#L212-L214"
@@ -984,7 +984,7 @@ section = "wgpu-types 30.0.1, AdapterInfo::transient_saves_memory"
 quote = '''/// Whether adding [`TextureUsages::TRANSIENT_ATTACHMENT`] to a texture will decrease memory usage.
 /// This is None on web, which means it is unknown from the adapter.
 pub transient_saves_memory: Option<bool>,'''
-checked = 2026-10-26
+checked = 2026-11-21
 
 ["wgpu-hal-30-metal-use-resource"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1145-L1147"
@@ -1520,7 +1520,7 @@ quote = '''/// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
 /// Allows for the creation of ray-tracing queries within shaders.
 [...]
 const EXPERIMENTAL_RAY_QUERY = 1 << 32;'''
-checked = 2026-10-27
+checked = 2026-11-21
 
 ["wgpu-types-30-experimental-features-unsafe"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/tokens.rs#L29-L37"
@@ -1600,7 +1600,7 @@ url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource
 section = "wgpu-core 30.0.1, Device::create_buffer"
 quote = '''if desc.usage.contains(wgt::BufferUsages::INDIRECT) {
     self.require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;'''
-checked = 2026-10-27
+checked = 2026-11-21
 
 ["wgpu-types-30-downlevel-default-all"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/limits.rs#L1063-L1071"
@@ -1791,7 +1791,7 @@ section = "wgpu-hal 30.0.1, Device::generate_allocator_report default (overridde
 quote = '''fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
     None
 }'''
-checked = 2026-10-27
+checked = 2026-11-21
 
 ["mesa-25.2.8-lvp-max-storage-buffers"]
 url = "https://gitlab.freedesktop.org/mesa/mesa/-/blob/mesa-25.2.8/src/gallium/frontends/lavapipe/lvp_device.c#L905"
@@ -1883,7 +1883,7 @@ checked = 2026-10-27
 url = "https://developer.apple.com/documentation/appkit/nsview"
 section = "Apple AppKit documentation, NSView, declaration"
 quote = '''@MainActor class NSView'''
-checked = 2026-10-27
+checked = 2026-11-21
 
 ["d3d12-feature-level-12-2"]
 url = "https://github.com/microsoft/DirectX-Specs/blob/f2917db873d4ea81e1de3b6dd6321570391d3cdf/d3d/D3D12_FeatureLevel12_2.md#L39-L72"
@@ -1903,7 +1903,7 @@ section = "wgpu-hal 30.0.1, metal/surface.rs, Surface::acquire_texture's macOS o
 quote = '''#[cfg(target_os = "macos")] { [...] if let Some(window) = hosting_window(Retained::into_super(render_layer.clone())) { [...] let occlusion_state: usize = unsafe { objc2::msg_send![&*window, occlusionState] }; [...]
 /// Walks up from `start` to the `NSWindow` hosting this layer: the first ancestor
 /// layer with a delegate is the backing `NSView`, and we return its `window`. [...] if let Some(delegate) = layer.delegate() { return unsafe { objc2::msg_send![&*delegate, window] }; }'''
-checked = 2026-10-27
+checked = 2026-11-21
 
 ["bevy-tasks-0.18.1-default-threads"]
 url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_tasks/src/task_pool.rs#L165-L167"
@@ -1911,7 +1911,7 @@ section = "bevy_tasks 0.18.1, task_pool.rs, TaskPool::new_internal, which TaskPo
 quote = '''let num_threads = builder
             .num_threads
             .unwrap_or_else(crate::available_parallelism);'''
-checked = 2026-10-27
+checked = 2026-11-21
 
 ["bevy-ecs-0.18.1-executor-default"]
 url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_ecs/src/schedule/executor/mod.rs#L45-L66"
@@ -1923,7 +1923,7 @@ checked = 2026-10-27
 url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_ecs/src/query/par_iter.rs#L86-L104"
 section = "bevy_ecs 0.18.1, query/par_iter.rs, QueryParIter::for_each_init: a serial fold without multi_threaded, compute pool batches with it"
 quote = '''#[cfg(any(target_arch = "wasm32", not(feature = "multi_threaded")))] [...] .fold(init, func); [...] #[cfg(all(not(target_arch = "wasm32"), feature = "multi_threaded"))] { let thread_count = bevy_tasks::ComputeTaskPool::get().thread_num();'''
-checked = 2026-10-27
+checked = 2026-11-21
 
 ["bevy-tasks-0.18.1-multi-threaded-pool"]
 url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_tasks/src/lib.rs#L103-L115"
@@ -1999,7 +1999,7 @@ quote = '''move |runnable| {
             debug_assert!(result.is_ok()); // Since we use unbounded queue, push will never fail.
             state.notify();
         }'''
-checked = 2026-11-13
+checked = 2026-11-21
 
 ["concurrent-queue-2.5.0-push-allocates-block"]
 url = "https://github.com/smol-rs/concurrent-queue/blob/v2.5.0/src/unbounded.rs#L192-L196"
@@ -2009,7 +2009,7 @@ quote = '''// If we're going to have to install the next block, allocate it in a
             if offset + 1 == BLOCK_CAP && next_block.is_none() {
                 next_block = Some(Box::new(Block::<T>::new()));
             }'''
-checked = 2026-11-13
+checked = 2026-11-21
 
 ["wgpu-core-30-map-after-last-submission"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/life.rs#L163-L164"
@@ -2093,7 +2093,7 @@ checked = 2026-11-15
 url = "https://developer.apple.com/documentation/metal/mtldevice/currentallocatedsize"
 section = "Apple Metal documentation, MTLDevice.currentAllocatedSize, abstract (macOS 10.13 and later)"
 quote = '''The total amount of memory, in bytes, the GPU device is using for all of its resources.'''
-checked = 2026-11-04
+checked = 2026-11-21
 
 ["wgpu-29-metal-store-action-resolve"]
 url = "https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/metal/conv.rs#L312-L319"
@@ -2715,7 +2715,7 @@ checked = 2026-10-27
 url = "https://mrelusive.com/publications/papers/Software-Virtual-Textures.pdf#page=10"
 section = "van Waveren, Software Virtual Textures, id Software, 2012-02-25, §3.2 Texture Filtering, p. 10"
 quote = '''As such, a 4-texel border is typically used around each physical page. In other words, if a page is 128 x 128 texels then the payload is 120 x 120 texels surrounded by a 4-texel border [...] and allows for reasonable quality anisotropic filtering with a maximum anisotropy up to 8.'''
-checked = 2026-10-27
+checked = 2026-11-21
 
 ["vanwaveren-2012-svt-feedback-latency"]
 url = "https://mrelusive.com/publications/papers/Software-Virtual-Textures.pdf#page=14"
@@ -2769,7 +2769,7 @@ checked = 2026-10-27
 url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=67"
 section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide Seamless LOD, speaker notes, p. 67"
 quote = '''Do we need to smooth the transitions with geomorphing or cross fading? That would be expensive at render time or require significant additional data or both.'''
-checked = 2026-10-27
+checked = 2026-11-21
 
 ["nanite-streaming-unit"]
 url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=123"
@@ -3270,13 +3270,13 @@ checked = 2026-10-27
 url = "https://web.archive.org/web/20261015152713/https://dev.epicgames.com/documentation/en-us/unreal-engine/texture-streaming-metrics-in-unreal-engine"
 section = "Unreal Engine 5.8 documentation, Texture Streaming Metrics, STAT STREAMING table, Hidden Mips row; Performance (4.15 improvements), Reducing The Number Of Textures Taken By the Texture Streamer"
 quote = '''Hidden Mips The wanted memory currently taken by non-visible texture mips. This does not include forced mips. To prevent seeing low resolution textures the first time a texture is shown, the streamer prestreams textures in advance, althought usually with one less mip than required [...] Textures that are used by non-visible and hidden components are streamed with one fewer mips, as a prefetch.'''
-checked = 2026-11-20
+checked = 2026-11-21
 
 ["ue-5.6-world-partition-hlod"]
 url = "https://web.archive.org/web/20250825185139/https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition---hierarchical-level-of-detail-in-unreal-engine"
 section = "Unreal Engine 5.6 documentation, World Partition - Hierarchical Level of Detail, overview and HLOD Layer settings"
 quote = '''This technique is used to visualize unloaded World Partition grid cells [...] Cell Size Sets the cell size of the runtime grid created to contain the HLOD Actors in this layer. [...] Loading Range Sets the distance at which the runtime grid streams its cells.'''
-checked = 2026-10-27
+checked = 2026-11-21
 
 ["ue-5.7-nanite-streaming"]
 url = "https://web.archive.org/web/20251221042229/https://dev.epicgames.com/documentation/en-us/unreal-engine/nanite-virtualized-geometry-in-unreal-engine"
@@ -3395,7 +3395,7 @@ section = "wgpu-core 30.0.1, command/ray_tracing.rs, the TLAS build's loop over 
 quote = '''            instance_count += 1;
 
             dependencies.push(blas.clone());'''
-checked = 2026-10-28
+checked = 2026-11-21
 
 ["wgpu-hal-30-metal-tlas-instance-bytes"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2123-L2159"
@@ -3428,7 +3428,7 @@ quote = '''                AsAction::UseTlas(tlas) => {
 [...]
                     for blas in dependencies.deref() {
                         let blas_build_index = *blas.built_index.read();'''
-checked = 2026-10-28
+checked = 2026-11-21
 
 ["wgpu-30-submit-tlas-dependencies"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L570-L577"
@@ -3458,7 +3458,7 @@ checked = 2026-10-28
 url = "https://github.com/gfx-rs/wgpu/pull/9835"
 section = "gfx-rs/wgpu pull request 9835, Deduplicate TLAS build dependencies by unique BLAS (merged into trunk 2026-07-17, after v30.0.0; not in v30.0.1 or v30.0.2)"
 quote = '''A built TLAS recorded one dependency entry per instance, making Queue::submit's acceleration-structure validation and residency tracking O(instance count). Collapse to unique BLASes via a FastHashSet<TrackerIndex> so it is O(unique BLASes) instead.'''
-checked = 2026-11-15
+checked = 2026-11-21
 
 ["lauritzen-2010-edge-detection"]
 url = "https://www.intel.com/content/dam/develop/external/us/en/documents/lauritzen-deferred-shading-siggraph-2010-181241.pdf"
@@ -4027,7 +4027,7 @@ url = "https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_co
 section = "Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances in Real-Time Rendering, RedLynx Topics, p. 39, Two-Phase Occlusion Culling, p. 51, Benchmark, p. 53, and Benchmark Results, p. 54"
 quote = '''RedLynx Topics • Virtual Texturing in GPU-Driven Rendering • Virtual Deferred Texturing • MSAA Trick • Two-Phase Occlusion Culling [...] Depth pyramid generated from HTILE min/max buffer [...] O(1) occlusion test (gather4) [...] Benchmark • “Torture” unit test scene – 250,000 separate moving objects – 1 GB of mesh data (10k+ meshes) – 8k2 texture cache atlas • DirectX 11 code path'''
 cost = '''Benchmark Results Xbox One, 1080p GPU time: 1st phase: 2nd phase Object culling + LOD: 0.28 ms: 0.26 ms Cluster culling: 0.09 ms: 0.04 ms Draw (G-buffer): 1.60 ms: < 0.01 ms Pyramid generation: 0.06 ms Total: 2.3 ms'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["wihlidal-2016-depth-tile-reduction"]
 url = "https://web.archive.org/web/20220505215621/https://frostbite-wp-prd.s3.amazonaws.com/wp-content/uploads/2016/03/29204330/GDC_2016_Compute.pdf#page=66"
@@ -4061,7 +4061,7 @@ checked = 2026-10-30
 url = "https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/"
 section = "Juha Sjoholm (NVIDIA), Best Practices for Using NVIDIA RTX Ray Tracing (Updated), NVIDIA Technical Blog, 25 July 2022, Acceleration structures: Organizing geometries into BLASes; Hit shading: General tips, Inline ray tracing"
 quote = '''Consider merging BLASes when instance world-space AABBs overlap significantly. When world-space AABBs of instances overlap, each ray going through that region must process separately all the overlapping BLAS instances to find potential intersections. Traversing through one merged BLAS would be more efficient. [...] Terminate rays on the first hit when possible. When resolving the correct closest hit is not required (as for shadow rays), flagging rays with RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH or gl_RayFlagsTerminateOnFirstHitEXT is a simple and efficient optimization. [...] Monitor the register consumption of the query objects. After initialization, the query objects must hold state for the ray traversal when the shader is executing code that may continue the traversal. This consumes registers and complex user code may limit occupancy sooner than usual. [...] Variables initialized before using the query object and used after that may consume additional registers.'''
-checked = 2026-10-30
+checked = 2026-11-21
 
 ["amd-rdna-guide-ray-tracing"]
 url = "https://gpuopen.com/learn/rdna-performance-guide/"
@@ -4085,7 +4085,7 @@ checked = 2026-10-30
 url = "https://developer.apple.com/videos/play/wwdc2022/10105/"
 section = "Apple, Maximize your Metal ray tracing performance, WWDC22 session 10105, transcript, acceleration structure optimization (merging instances)"
 quote = '''Focusing on the instance acceleration structure, there is an overhead for each instance that your rays hit. There is a cost for transforming the ray and then switching from the instance to the primitive acceleration structure. This occurs more often with overlapping instances. To reduce the instance count, you can generate a single primitive acceleration structure that contains both the boxes and the sphere. [...] This primitive acceleration structure will take less time to build than separate acceleration structures and will be faster to intersect.'''
-checked = 2026-10-30
+checked = 2026-11-21
 
 ["apple-wwdc23-10128-static-dynamic-split"]
 url = "https://developer.apple.com/videos/play/wwdc2023/10128/"
@@ -4097,7 +4097,7 @@ checked = 2026-10-30
 url = "https://gpuopen.com/learn/improving-rt-perf-with-rra/"
 section = "AMD GPUOpen, Improving raytracing performance with the Radeon Raytracing Analyzer (RRA), Split terrain into chunks; Avoid instance overlap"
 quote = '''Instances whose bounding boxes occupy lots of empty space, or have significant overlap with other instances’ bounding boxes can hurt traversal performance. A common example of that issue is to make a game’s terrain one big BLAS, with a bounding box overlapping everything in the scene. [...] notice how the castle and the two nearest houses are much darker (indicating lower traversal cost) when the terrain is split up into chunks. [...] Avoid instance overlap At its core, this example is the same as the last one: try to avoid instance overlap. [...] By changing the angel BLAS to contain only one angel and instancing it twice, the angel’s bounding volumes no longer intersect with the wall’s. [...] splitting a BLAS into multiple BLASes often results in overlapping instances'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["boksansky-2019-distance-light-culling"]
 url = "https://www.realtimerendering.com/raytracinggems/unofficial_RayTracingGems_v1.9.pdf#page=203"
@@ -4534,32 +4534,32 @@ checked = 2026-11-05
 url = "https://advances.realtimerendering.com/s2024/content/EA-GIBS2/Apers_Advances-s2024_Shipping-Dynamic-GI.pdf#page=33"
 section = "Apers (Frostbite, EA), Shipping Dynamic Global Illumination (GIBS), SIGGRAPH 2024 Advances, PDF p. 33, notes"
 quote = '''The async queue may be used for tracing when the frame allows for overlap with a geometry stage. We always overlap our BLAS and TLAS building in async with our gbuffer laydown, after which we can spawn surfels and trace them immediately.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["apers-2024-gibs-rebraiding"]
 url = "https://advances.realtimerendering.com/s2024/content/EA-GIBS2/Apers_Advances-s2024_Shipping-Dynamic-GI.pdf#page=30"
 section = "Apers (Frostbite, EA), Shipping Dynamic Global Illumination (GIBS), SIGGRAPH 2024 Advances, PDF p. 30, notes; savings on p. 55 (Skate, Xbox Series X, 1440p, p. 53)"
 quote = '''Some platforms allow us to precompute the Bottom Level Acceleration Structure offline, we observe a 15% improvement to ray traversal when using this for static geometry. Similarly, rebraiding can be used to improve ray traversal further, we compute a set of heuristics for each mesh offline, and based on a adjustable threshold we allow additional, or fewer instances of those meshes to be rebraided. Doing this selectively adds another 5% improvement on top.'''
 cost = '''Offline BLAS and selective rebraiding shave off 0.35ms together. (p. 55; Skate flythrough on XBSX at 1440p, p. 53)'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["apple-wwdc23-10128-multi-level-instancing"]
 url = "https://developer.apple.com/videos/play/wwdc2023/10128/"
 section = "Apple, Your guide to Metal ray tracing, WWDC23 session 10128, transcript, multi-level instancing"
 quote = '''You can take advantage of this structure using the new multi-level instancing feature. With multi-level instancing, an instance acceleration structure can contain not just primitive acceleration structures, but also other instance acceleration structures.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["benthin-2017-partial-rebraiding"]
 url = "https://www.sci.utah.edu/~wald/Publications/2017/rebraiding/rebraiding.pdf#page=1"
 section = "Benthin, Woop, Wald and Afra (Intel), Improved Two-Level BVHs using Partial Re-Braiding, HPG 2017, p. 1, Figure 1 caption and Abstract"
 quote = '''While being nearly as fast to build as traditional two-level BVHs, using our partially merged two-level BVH leads to lower spatial overlap, which in the shown models results in 1.2 × −2.1× higher rendering performance. [...] our new top-level BVH build approach selectively re-braids (opens and merges) object BVHs during the build process to reduce overlap and improve SAH quality.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["benthin-2023-micro-poly-hlod-rt"]
 url = "https://momentsingraphics.de/Media/HPG2023/benthin2023-real_time_ray_tracing_of_micro_poly_geometry_with_hlod-paper.pdf#page=1"
 section = "Benthin and Peters (Intel), Real-Time Ray Tracing of Micro-Poly Geometry with Hierarchical Level of Detail, Computer Graphics Forum 42(8), HPG 2023, doi:10.1111/cgf.14868, author's version, Figure 1 caption and abstract (p. 1), Introduction (pp. 1-2)"
 quote = '''For each frame a LOD subset of clusters (∼ 16 − 40 M triangles) are decompressed, converted and fused together into a BVH suitable for hardware-accelerated ray tracing. [...] Since the LOD mechanism in Nanite makes major changes to the mesh topology, the BLAS would need to be rebuilt completely each frame, which simply takes too much time. [...] Because of that, our current implementation is specific to Intel hardware but with sufficiently low-level access to hardware BVH layouts, the same methods could work on any other GPU (Sec. 7).'''
-checked = 2026-11-05
+checked = 2026-11-21
 cost = '''rendered with a diffuse path tracer at 1920 × 1080 with > 20 fps (1 spp, denoising included). [...] With a per-frame overhead of just 5.7 − 9 ms, our approach is suitable for real-time applications. [...] Intel Arc A770'''
 
 ["benthin-2024-hploc-tlas"]
@@ -4567,75 +4567,75 @@ url = "https://gpuopen.com/download/publications/HPLOC.pdf#page=12"
 section = "Benthin, Meister, Barczak, Mehalwal, Tsakok and Kensler (AMD), H-PLOC, Proc. ACM Comput. Graph. Interact. Tech. 7(3), HPG 2024, p. 12, Section 4.1 and Fig. 4 (hardware: Section 4, p. 9)"
 quote = '''An instance, in our case, requires 128 bytes (storing world-to-object transform and its inverse). Figure 4 shows H-PLOC and LBVH build times with an increasing number of randomly sized and placed instances. [...] In terms of absolute build times, H-PLOC builds a BVH4 over half a million instances in 1.1 ms and requires just 2.2 ms for a million instances.'''
 cost = '''H-PLOC builds a BVH4 over half a million instances in 1.1 ms and requires just 2.2 ms for a million instances [...] 2.21 ms vs 1.96 ms for a lower quality LBVH (AMD Radeon 7900 XT, HIP, ROCm 5.7.3)'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["deligiannis-2019-bfv-as-culling"]
 url = "https://developer.download.nvidia.com/video/gputechconf/gtc/2019/presentation/s91023-it-just-works-ray-traced-reflections-in-battlefield-v.pdf#page=63"
 section = "Deligiannis and Schmid (EA DICE), It Just Works: Ray-Traced Reflections in Battlefield V, GTC 2019, PDF p. 63, Culling - Results (first pass on p. 57: Rotterdam, 20200 TLAS instances, 5000 BLAS rebuilds, GPU rebuild 64 ms)"
 quote = '''4 deg culling [...] 5000 -> 400 BLAS rebuilds each frame [...] 20000 -> 2800 TLAS instances [...] TLAS + BLAS build (GPU): 64 ms -> 14.5 ms [...] Cons [...] Occasional popping [...] Missing objects'''
 cost = '''TLAS + BLAS build (GPU): 64 ms -> 14.5 ms (20000 -> 2800 TLAS instances, 5000 -> 400 BLAS rebuilds; GPU not stated)'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["deligiannis-2019-bfv-as-staggered-cost"]
 url = "https://developer.download.nvidia.com/video/gputechconf/gtc/2019/presentation/s91023-it-just-works-ray-traced-reflections-in-battlefield-v.pdf#page=65"
 section = "Deligiannis and Schmid (EA DICE), Battlefield V, GTC 2019, PDF p. 65 (slide 78), results"
 quote = '''TLAS + BLAS build (GPU): 14.5 ms -> 1.15 ms [...] RayGen (GPU): 0.71 ms -> 0.81 ms (staggered refit + flags)'''
 cost = '''TLAS + BLAS build (GPU): 14.5 ms -> 1.15 ms [...] RayGen (GPU): 0.71 ms -> 0.81 ms (staggered refit + flags); GPU not stated'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["dxr-2026-clusters-support"]
 url = "https://github.com/microsoft/DirectX-Specs/blob/2808d2103364aa2d0140f77c16cb705a6a597edf/d3d/Raytracing2.md#L112-L153"
 section = "DirectX Raytracing (DXR) Functional Spec, Part 2 (preview), Intro and Clustered geometry, lines 112-153"
 quote = '''This set of features can work well on any hardware with existing raytracing support given a driver update. [...] If some older devices don't get support it will likely be a resourcing tradeoff the hardware vendor needed to make. [...] Example scenarios include new geometry being streamed in from disk, high numbers of animated objects, level-of-detail systems, or dynamic tessellation. [...] An application might use this for seamless streaming or level of detail systems, where CLAS of different geometric densities are dynamically combined into a single BLAS.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["dxr-2026-ptlas-overview"]
 url = "https://github.com/microsoft/DirectX-Specs/blob/2808d2103364aa2d0140f77c16cb705a6a597edf/d3d/Raytracing2.md#L390-L418"
 section = "DirectX Raytracing (DXR) Functional Spec, Part 2 (preview), Partitioned Top Level Acceleration Structures; Partitioned TLAS overview, lines 390-418"
 quote = '''The design of the Top Level Acceleration Structure API requires the entire data structure to be rebuilt even if only a small number of instances are modified. [...] Instances can be assigned an explicit bounding box, allowing their BLAS pointer to be replaced without the cost of a rebuild. This particularly facilitates LOD techniques, where objects of which the conservative common bounds are known are swapped out against each other. - Partitions may be assigned a translation vector that can be updated efficiently while otherwise retaining the contents of the partition. This is particularly useful for applications that periodically re-center the scene around the origin to avoid floating point precision issues. [...] Spatial overlap between partition bounds will have a negative effect on trace performance on most implementations, similar to instance overlap in existing TLAS. Generally small partitions (100-1000 instances) should offer the majority of build speed improvements with the smallest trace performance impact.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["dxr-2026-ptlas-partition-translation"]
 url = "https://github.com/microsoft/DirectX-Specs/blob/2808d2103364aa2d0140f77c16cb705a6a597edf/d3d/Raytracing2.md#L447-L455"
 section = "DirectX Raytracing 2 spec (D3D12_RAYTRACING_TIER_2_0, in preview), Partition translation (spec text CC-BY-4.0); design properties at L407-L416"
 quote = '''In order to assist titles with large worlds that require more precision than 32-bit floating point numbers can provide, the Partitioned TLAS supports the efficient translation of partitions. [...] The expected use of this feature is for the application to store instance transforms relative to the partitions they are assigned to. Then, the partition translation is added to the stored transform to arrive at the desired world position for each instance. [...] When the user wishes to re-center the world space coordinates of all objects, the position translations can be updated efficiently without triggering a rebuild of the entire Partitioned TLAS. Use of the Partition Translation requires additional memory for storing the un-translated version of instance transforms and must be enabled with a flag when constructing the Partitioned TLAS.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["ize-2007-async-bvh-swap"]
 url = "https://www.sci.utah.edu/~thiago/papers/async_bvh_build.pdf#page=3"
 section = "Ize, Wald and Parker, Asynchronous BVH Construction for Ray Tracing Dynamic Scenes on Parallel Multi-Core Architectures, EGPGV 2007, p. 3, Section 3.1 and Figure 1"
 quote = '''Instead, by building the BVH from the last finished frame’s vertex positions, the vertex and BVH buffers can be switched quickly with two pointer swaps, and the builder, application, and render threads can immediately continue. Furthermore, since it will likely take several frames before the new BVH is available anyways, that BVH will already be outdated by the time it is finished'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["leblanc-conte-2025-acs-bvh-stats"]
 url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=126"
 section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, slide Performance: Statistics (p. 126, printed 129), slide and speaker notes"
 quote = '''Typical urban scene • 2k+ BLAS • 30K+ instances • 300 MB BLAS Data • 20 MB TLAS Data [...] On the BVH side, during runtime, we have around 2 thousand BLASes loaded and around 30 thousand TLAS instances. Taking up 320 megabytes total in memory. [...] Those numbers were taking on an Xbox Series X.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["leblanc-conte-2025-acs-far-cubemap"]
 url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=72"
 section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, slide Per-pixel indirect specular: Sky approximation and missing objects (p. 72, printed 71), speaker notes"
 quote = '''We can see missing far geometries not contained in our BVH. To get back some of those missing data, we replaced the sky texture approximation by a dynamic fallback cubemap containing the terrain, sky, clouds and far entities. [...] This cubemap is 128x128 and update one face per frame.'''
-checked = 2026-11-15
+checked = 2026-11-21
 
 ["leblanc-conte-2025-acs-rt-scene"]
 url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=28"
 section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances in Real-Time Rendering, slides Ray tracing scene description (p. 28) and How it's built (p. 34), speaker notes"
 quote = '''As mentionned previously, our scene description used for ray tracing is a coarse representation of the rasterized version. We use low LODs as much as possible without incurring visible artefacts. There is no vertex animation support, so no skinning (no character) or moving vegetation. We cull as much as possible small geometries such as small vegetations and clutter. [...] Each frame, we update our BVH representation. We add and remove instances depending on the streaming around the camera. [...] Finally, we cull all instances from the point of view of the camera. We start at a fixed distance and remove instances having a smaller solid angle than a threshold. Since we have a lot of instances, we time slice the culling to make it faster. [...] We rebuilt every frame the TLAS in the async queue'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["leblanc-conte-2025-acs-tlas-async"]
 url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin%27s%20Creed%20Shadows.pdf#page=34"
 section = "Leblanc and Conte (Ubisoft Montreal), Ray tracing the world of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, PDF p. 34, Ray tracing scene description: How it's built, slide and notes"
 quote = '''Each frame, we update our BVH representation. We add and remove instances depending on the streaming around the camera. We update the transform matrix of moving objects. [...] Finally, we cull all instances from the point of view of the camera. We start at a fixed distance and remove instances having a smaller solid angle than a threshold. Since we have a lot of instances, we time slice the culling to make it faster. It takes less than a second to complete the full scene. [...] We rebuilt every frame the TLAS in the async queue'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["lloyd-2020-stochastic-lod-dxr"]
 url = "https://developer.nvidia.com/blog/implementing-stochastic-lod-with-microsoft-dxr/"
 section = "Lloyd, Klehm and Stich (NVIDIA), Implementing Stochastic Levels of Detail with Microsoft DirectX Raytracing, NVIDIA Technical Blog, 15 June 2020, Discrete LOD; Stochastic LOD transitions; Limitations; Results"
 quote = '''Any secondary ray starting from a primary hit must “see” the same LODs for objects as the primary ray (or rasterizer) did. Failure to guarantee this means that secondary rays might miss intersections or find spurious hits due to the mismatch in scene representations between the primary and secondary rays (Figure 3). This in turn can lead to visual artifacts like light leaks, objects disappearing in reflections, or incorrectly shadowed areas. [...] We include both LODs in the TLAS, but we need a way to choose which of the two LODs to intersect for each pixel. [...] We use this instance mask feature to stochastically select between two adjacent LODs. [...] One limitation is that the instance and ray masks only consist of 8 bits, which means that we only get eight levels for stochastic LOD transitions [...] Our implementation of stochastic LOD also doubles the number of instances in the TLAS, which slightly increases TLAS build time.'''
-checked = 2026-11-05
+checked = 2026-11-21
 cost = '''Figure 5 shows the render timings that we obtained on an NVIDIA GeForce RTX 2080Ti with 64×60 instances and eight LODs. [...] up to 2.2x for the top view where almost all the objects are rendered at a low LOD. [...] We saw an average LOD selection time of 0.018 ms and TLAS build time of 0.22 ms. [...] At a maximum of about 10%, however, this cost is limited. When the transition interval is 0 [...] you still have two instances per object in the TLAS instead of one. This accounts for only a 1.6% increase in render time.'''
 
 ["tabellion-lamorlette-2004-ray-origin-offset"]
@@ -4648,19 +4648,19 @@ checked = 2026-11-16
 url = "https://meistdan.github.io/publications/bvh_star/paper.pdf#page=11"
 section = "Meister, Ogaki, Benthin, Doyle, Guthe and Bittner, A Survey on Bounding Volume Hierarchies for Ray Tracing, Computer Graphics Forum 40(2), Eurographics 2021 STAR, p. 11, 5.3.3 Two-level Hierarchy"
 quote = '''Wald et al. [WBS03] proposed a two-level hierarchy where a separate bottom-level BVH is first built for each object in the scene, and then a single top-level BVH is built over all objects. [...] The efficiency of the two-level hierarchy heavily depends on the quality of the top-level BVH. Largely overlapping objects (in world space), which are common in real-world scenarios, can quickly reduce the culling efficiency of the top-level BVH, as a ray intersecting the overlapping region will need to sequentially intersect all overlapping objects. For reducing the overlap, Benthin et al. [BWWA17] proposed to apply partial re-braiding.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["metal-feature-set-tables-instancing-levels"]
 url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=9"
 section = "Metal Feature Set Tables (2026-05-21), GPU implementation limits, ray-tracing levels row (p. 9), note 12 (p. 10); M4-series is Apple9 (p. 2)"
 quote = '''GPU family 1 Apple2 Apple3 Apple4 Apple5 Apple6 Apple7 Apple8 Apple9 Apple10 [...] Largest number of levels a ray-tracing intersection query can traverse in an acceleration structure 12: Not available: Not available: Not available: Not available: 16: 16: 16: 16: 16 [...] 12. The value includes one level for the primitive acceleration structure, which leaves the remaining levels for instance acceleration structures. [...] M4-series: Metal 3 & 4: Apple9'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["microsoft-2026-clas-ptlas-preview"]
 url = "https://devblogs.microsoft.com/directx/clas-ptlas-preview/"
 section = "Microsoft DirectX Developer Blog, DXR Clustered Geometry and Partitioned TLAS preview (Agility SDK 1.722-preview), 28 October 2026, motivation; Partitioned TLAS; Availability and prerequisites; samples"
 quote = '''One benefit of more efficient builds is it can become practical to raytrace the same full-detail geometry used for rasterization, rather than simplified proxies, so ray-traced shadows and reflections match the visible scene. [...] These features don’t require new hardware capabilities beyond existing raytracing support. [...] Supported hardware: All RTX GPUs [...] Supported hardware: AMD Radeon™ RX 9000 series GPUs [...] Supported hardware: Intel® Arc™ B-Series Graphics Intel® Core™ Ultra processor family (200V series, Series 3) [...] Qualcomm is working closely with Microsoft to enable these features on Snapdragon X2 platforms, with driver support targeted for availability in Q1/Q2 2027. [...] UPDATE_INSTANCE changes only the referenced BLAS address and hit-group-table contribution, for example when swapping LODs. [...] TLAS needs a full rebuild each frame and takes 2.88ms, while PTLAS with localized writes (4702 in this case) only takes 0.79ms.  PTLAS trace time is a bit slower here, but here the tradeoff is worth it.'''
-checked = 2026-11-14
+checked = 2026-11-21
 cost = '''In the pair of images below running on an AMD RX 9070 [...] Per-frame GPU AS preparation/build: 788 ms: 3.11 ms: ~254x less time; Per-frame GPU raytracing: 72.6 ms: 9.27 ms: ~7.8x less time [...] DO NOT ASSUME GAMES WILL SEE THIS MAGNITUDE OF WINS, THIS IS JUST A TEST PLAYGROUND'''
 
 ["microsoft-2026-ptlas-preview-domino"]
@@ -4668,70 +4668,70 @@ url = "https://devblogs.microsoft.com/directx/clas-ptlas-preview/"
 section = "Amar Patel (Microsoft), [PREVIEW] Raytracing: Clustered Geometry, Partitioned TLAS, Indirect Acceleration Structure Builds, DirectX Developer Blog, 28 October 2026, D3D12 Partitioned TLAS domino sample (sample: D3D12RaytracingPartitionedTLAS in microsoft/DirectX-Graphics-Samples, MIT; its Vulkan original nvpro-samples/vk_partitioned_tlas, Apache-2.0; 170000 dominoes on 1.2 million static objects per its README)"
 quote = '''At scene wide scope, updating a top-level acceleration structure (TLAS) can be costly for large worlds even if only a few instances changed. Partitioned TLAS focuses update costs on changed scene regions while retaining acceleration-structure data elsewhere. [...] TLAS needs a full rebuild each frame and takes 2.88ms, while PTLAS with localized writes (4702 in this case) only takes 0.79ms. PTLAS trace time is a bit slower here, but here the tradeoff is worth it.'''
 cost = '''TLAS needs a full rebuild each frame and takes 2.88ms, while PTLAS with localized writes (4702 in this case) only takes 0.79ms (GPU not stated)'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["microsoft-dxr-build-flags"]
 url = "https://github.com/microsoft/DirectX-Specs/blob/2808d2103364aa2d0140f77c16cb705a6a597edf/d3d/Raytracing.md#L4211-L4214"
 section = "DirectX Raytracing functional spec, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS, ALLOW_UPDATE, PREFER_FAST_TRACE, PREFER_FAST_BUILD"
 quote = '''This option may result in increased memory consumption, build times and lower raytracing performance. Future updates, however, should be faster than building the equivalent acceleration structure from scratch. [...] Construct a high quality acceleration structure that maximizes raytracing performance at the expense of additional build time. A rough rule of thumb is the implementation should take about 2-3 times the build time than default in order to get better tracing performance. [...] Construct a lower quality acceleration structure, trading raytracing performance for build speed. A rough rule of thumb is the implementation should take about 1/2 to 1/3 the build time than default at a sacrifice in tracing performance.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["netzel-costa-2022-rtow-build-vs-instances"]
 url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-RayTracingOpenWorlds-NetzelCosta.pptx"
 section = "Netzel and Costa (Epic Games), Ray Tracing Open Worlds in Unreal Engine 5, SIGGRAPH 2022 Advances, slide 34 Tracing with Far Field, table and speaker notes"
 quote = '''1.5M instances (not using Far Field) 100K instances (using Far Field) 3.47 ms 2.63 ms 100K instances (Near Field only) 2.43 ms Build -> Trace -> 13 ms 2 ms 2 ms [...] Here we can see a performance comparison between brute force representation using 1.5 million instances compared to using near field only which is significantly faster but only covers 150m radius around the player and finally using near field and far field, which adds some overhead but is still much faster than the brute force approach while providing similar coverage.'''
 cost = '''Build: 13 ms (1.5M instances), 2 ms (100K, near field only), 2 ms (100K, near and far field); Trace: 3.47 ms, 2.43 ms, 2.63 ms; The Matrix Awakens, platform of this table not stated'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["netzel-costa-2022-rtow-far-field-tlas"]
 url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-RayTracingOpenWorlds-NetzelCosta.pptx"
 section = "Netzel and Costa (Epic Games), Ray Tracing Open Worlds in Unreal Engine 5, SIGGRAPH 2022 Advances, slide 33, How to setup TLAS to trace against each field separately?, speaker notes"
 quote = '''However a better solution is to simply build each representation in a separate TLAS. And depending on the ray type, select the appropriate TLAS to trace against. [...] And since each TLAS is built separately this completely avoid the traversal overhead of overlapping instances. This also gives us the option to rebuild the Far Field TLAS at a lower rate, potentially even just build it once during loading.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["netzel-costa-2022-rtow-gpu-instance-buffer"]
 url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-RayTracingOpenWorlds-NetzelCosta.pptx"
 section = "Netzel and Costa (Epic Games), Ray Tracing Open Worlds in Unreal Engine 5, SIGGRAPH 2022 Advances, slides 41-42, TLAS, speaker notes"
 quote = '''As the player moves around different instances are culled, and transforms for objects like cars can change every frame, so we also need to rebuild the TLAS every frame. This means that we need to fill a buffer with instance descriptors from scratch. This is typically done on CPU, and since we have to gather data for 100 thousands instances from multiple sources and copy it to a GPU buffer every frame, it can end up taking a significant amount of time. [...] In order to avoid part of this CPU cost, what we do now is build the instance buffer using a compute shader.'''
 cost = '''GPU Cost Build Instance Buffer - 0.02ms (100K instances; platform not stated)'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["netzel-costa-2022-rtow-tlas-async"]
 url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-RayTracingOpenWorlds-NetzelCosta.pptx"
 section = "Netzel and Costa (Epic Games), Ray Tracing Open Worlds in Unreal Engine 5, SIGGRAPH 2022 Advances, slide 43, TLAS, bullets and speaker notes"
 quote = '''Building a top level acceleration structure with a large number of instances can take a significant amount of time, in our case it takes around 2 ms to build the TLAS. However we are able to kick off the TLAS rebuild quite early in the frame and use async compute to overlap the build with other work. This reduced the actual impact on overall frame time to around 0.3ms.'''
 cost = '''GPU Cost Build Instance Buffer - 0.02ms Rebuild TLAS - 2 ms On async queue - 0.3 ms (about 100K instances, The Matrix Awakens; platform not stated)'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["nvidia-2022-rtx-best-practices-as-builds"]
 url = "https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/"
 section = "Juha Sjoholm (NVIDIA), Best Practices for Using NVIDIA RTX Ray Tracing (Updated), NVIDIA Technical Blog, 25 July 2022, Acceleration structures: General tips; Build preference flags; Dynamic BLASes"
 quote = '''Consider async compute for AS building. Especially in hybrid rendering, where G-buffer or shadow maps are rasterized, it’s potentially beneficial to execute AS building on async compute. [...] Cull instances for TLAS. Typically, including the entire scene in the TLAS is not optimal. Instead, cull instances depending on the situation. [...] For TLAS, consider the PREFER_FAST_TRACE flag and perform only rebuilds. Often, this results in best overall performance. The rationale is that making the TLAS as high quality as possible regardless of the movement occurring in the scene is important and doesn’t cost too much. [...] Distribute rebuilds over frames. Because rebuilds are considerably slower than updates, many rebuilds on a single frame can lead to stuttering. To avoid this, it’s good practice to distribute the rebuilds over frames.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["nvidia-2022-rtx-best-practices-lod-culling"]
 url = "https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/"
 section = "Juha Sjoholm (NVIDIA), Best Practices for Using NVIDIA RTX Ray Tracing (Updated), NVIDIA Technical Blog, 25 July 2022, Acceleration structures: General tips"
 quote = '''Cull instances for TLAS. Typically, including the entire scene in the TLAS is not optimal. Instead, cull instances depending on the situation. [...] You can also consider instance size when culling so that smaller instances are culled at a shorter distance. Use appropriate Level of Detail (LOD) for instances. Like in rasterization, using the most detailed geometry LOD for everything is typically suboptimal. LODs used for far-away objects can be simpler. In hybrid rendering, using the same LOD for rasterization and ray tracing can be considered. It’s an efficient way to avoid self-intersection artifacts such as surface shadowing itself. Also consider using lower-detail LODs in ray tracing, especially to reduce the updating cost of dynamic BLASes. If the LODs between rasterization and ray tracing don’t match, enabling back face culling is often needed in ray tracing to prevent the self-intersections.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["ue-5.8-lumen-far-field-and-fallback"]
 url = "https://web.archive.org/web/20261015100109/https://dev.epicgames.com/documentation/en-us/unreal-engine/lumen-technical-details-in-unreal-engine"
 section = "Unreal Engine 5.8 documentation, Lumen Technical Details, Far Field; Hardware Ray Tracing (Fallback Mesh)"
 quote = '''Lumen Hardware Ray Tracing implements Far Field traces, which extend Lumen Global Illumination and Reflections to one kilometer distance from the camera by default. [...] Far Field requires the use of HLOD1 to be built. When Far Field is enabled, it is traced beginning at the Max Trace Distance (default is 200m) and continues to r.LumenScene.FarField.MaxtraceDistance (default is 1 kilometer). [...] the near-field (objects from the camera to the Max Trace Distance) may be culled before the far-field traversal point, which will leave a gap in coverage. [...] Screen Traces are used to cover the mismatch between the full triangle meshes rendered by Nanite and the Fallback Mesh being ray-traced by Lumen. However, there are some cases where the mismatch is too large to be hidden. In these cases, raising the Fallback Relative Error can reduce incorrect self-intersection artifacts.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-rt-perf-tlas-instances-overlap"]
 url = "https://web.archive.org/web/20260913071353/https://dev.epicgames.com/documentation/en-us/unreal-engine/ray-tracing-performance-guide-in-unreal-engine"
 section = "Unreal Engine 5.8 documentation, Ray Tracing Performance Guide, Top Level Acceleration Structure Build; Managing Top Level Acceleration Structure Build Cost; Ray Traversal Cost"
 quote = '''In order to achieve a 30 frames per second target on next generation consoles, scenes should generally have 100,000 instances or fewer in the Ray Tracing Scene after culling. [...] The cost of building TLAS typically scales linearly with the number of instances before culling [...] When meshes overlap, the ray must traverse them all independently to find the closest hit, because Ray Tracing uses a two-level acceleration structure. The mesh overlap can cause extremely slow ray traversal in scenes built by piecing different assets together as needed (also called kitbashing). [...] In order for scenes to be compatible with Hardware Ray Tracing, mesh overlap must be kept to a minimum.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["unity-6000.6-rtas-relative-origin"]
 url = "https://docs.unity.com/en-us/engine/6000.6/script-reference/unityengine/rendering/raytracingaccelerationstructure/buildsettings/relativeorigin"
 section = "Unity 6000.6 Scripting API, RayTracingAccelerationStructure.BuildSettings.relativeOrigin, Remarks"
 quote = '''The relative origin of ray tracing instances. [...] This value is subtracted from the original instance position to get the final instance position. If you do camera-relative ray tracing, you can use relativeOrigin to get more accurate ray-geometry intersection results.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["unity-hdrp-camera-relative-rtas"]
 url = "https://github.com/Unity-Technologies/Graphics/blob/0efc28ea742b1966b9dd9cc4489e58b986a13faf/Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/HDRaytracingManager.HDRTASManager.cs#L366-L372"
@@ -4743,7 +4743,7 @@ quote = '''public void Build(HDCamera hdCamera)
             else
                 rtas.Build();
         }'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["unreal-5.8-preview-translation"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Private/SceneView.cpp#L694-L696"
@@ -4751,7 +4751,7 @@ section = "Unreal Engine 5.8.4, Engine/Private/SceneView.cpp, FViewMatrices::Ini
 quote = '''// Translate world-space so its origin is at ViewOrigin for improved precision.
 	ViewOrigin = LocalViewOrigin;
 	PreViewTranslation = -LocalViewOrigin;'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["unreal-5.8-rt-async-build"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Renderer/Private/DeferredShadingRenderer.cpp#L1104-L1137"
@@ -4761,7 +4761,7 @@ quote = '''const bool bRayTracingAsyncBuild = CVarRayTracingAsyncBuild.GetValueO
 [...]
 		RayTracingScene.Update(GraphBuilder, GetSceneUniforms(), &Scene->GPUScene, ComputePassFlags);
 		RayTracingScene.Build(GraphBuilder, ComputePassFlags | ERDGPassFlags::NeverCull, OutDynamicGeometryScratchBuffer);'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["unreal-5.8-rt-far-field-layer"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Renderer/Private/RayTracing/RayTracingScene.h#L33-L40"
@@ -4774,7 +4774,7 @@ quote = '''enum class ERayTracingSceneLayer : uint8
 
 	NUM
 };'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["unreal-5.8-rt-parallel-gather"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Renderer/Private/RayTracing/RayTracing.cpp#L90-L96"
@@ -4784,7 +4784,7 @@ static FAutoConsoleVariableRef CVarParallelGatherDynamicRayTracingInstancesNumTa
 	TEXT("r.RayTracing.DynamicInstances.Parallel.NumTasks"),
 	GParallelGatherDynamicRayTracingInstancesNumTasks,
 	TEXT("Controls the number of gather dynamic ray tracing instances tasks to run asynchronously."),'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["unreal-5.8-rt-translated-world-instances"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Shaders/Private/RayTracing/RayTracingInstanceBufferUtil.usf#L145-L153"
@@ -4792,79 +4792,79 @@ section = "Unreal Engine 5.8.4, Shaders/Private/RayTracing/RayTracingInstanceBuf
 quote = '''const FDFVector3 PreViewTranslation = MakeDFVector3(PreViewTranslationHigh, PreViewTranslationLow);
 [...]
 	float4x4 LocalToTranslatedWorld4x4 = DFFastToTranslatedWorld(InstanceSceneData.LocalToWorld, PreViewTranslation);'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["vulkan-1.4.367-cluster-acceleration-structure"]
 url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/v1.4.367/chapters/accelstructures.adoc#L3424-L3455"
 section = "Vulkan specification v1.4.367, Cluster Level Acceleration Structures (VK_NV_cluster_acceleration_structure), lines 3424-3455"
 quote = '''Acceleration structure build times in ray tracing applications with extensive geometry can: be reduced by introducing alternative acceleration structure types that facilitate bottom-level acceleration structure construction using pre-generated primitive clusters, improving geometry reuse. [...] A CLAS can: only contain a limited number of <<cluster-geometry-limits, triangles and vertices>>. CLAS objects cannot be directly referenced in a top level acceleration structure, instead, they must: be part of a <<acceleration-structure-bottom-level-clas, Cluster Level Bottom Level Acceleration Structure>>.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["vulkan-1.4.367-partitioned-tlas"]
 url = "https://github.com/KhronosGroup/Vulkan-Docs/blob/v1.4.367/chapters/accelstructures.adoc#L4845-L4893"
 section = "Vulkan specification v1.4.367, Partitioned Top Level Acceleration Structures (VK_NV_partitioned_acceleration_structure), global partition and partition translation, lines 4845-4893"
 quote = '''Partitioned Top Level Acceleration Structures (PTLAS) allow efficient reuse of previously constructed sections of the top level acceleration structure by eliminating a full rebuild when only a few instances are modified. [...] PTLAS organizes instances into partitions, enabling a two-stage build process: first, it constructs an acceleration structure for each partition by grouping the instances within it, and second, it combines these partition structures into a single acceleration structure [...] The global partition is well-suited for frequently updated instances, such as animated characters. [...] To handle large worlds requiring more precision than 32-bit floating-point numbers offer, PTLAS offers efficient partition translation. [...] World space coordinates can: also be updated efficiently without rebuilding the entire PTLAS.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wald-2003-two-level-toplevel-rebuild"]
 url = "https://www.sci.utah.edu/~wald/Publications/2003/Dynamic/dynamic.pdf#page=3"
 section = "Wald, Benthin and Slusallek, Distributed Interactive Ray Tracing of Dynamic Scenes, IEEE PVG 2003, p. 3, Section 3 (top level is a BSP/kd-tree over instances, not a BVH)"
 quote = '''hierarchical animation still invalidates the toplevel BSP, and as such makes it very likely that this toplevel structure has to be rebuilt every frame. However, the cost for rebuilding this toplevel BSP only depends on the number of objects in a scene, and is totally independent of the actual number of triangles contained in these objects.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-as-size-info-private"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/resource.rs#L2676-L2685"
 section = "wgpu-core 30.0.1, resource.rs, struct Tlas (struct Blas likewise at L2527-L2531): the sizes and the instance buffer are crate-private; wgpu's Blas and Tlas (wgpu/src/api/blas.rs, tlas.rs) have no size getter (searched)"
 quote = '''pub struct Tlas { pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>, pub(crate) device: Arc<Device>, pub(crate) size_info: hal::AccelerationStructureBuildSizes, pub(crate) max_instance_count: u32, [...] pub(crate) instance_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-blas-size-at-create"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L100-L118"
 section = "wgpu-core 30.0.1, device/ray_tracing.rs, Device::create_blas: each triangle geometry given to wgpu-hal's size query, its index buffer likewise the zero buffer (L60-L69); the BLAS is created at the size returned (L159-L164)"
 quote = '''entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> { vertex_buffer: Some(self.zero_buffer.as_ref()), vertex_format: desc.vertex_format, first_vertex: 0, vertex_count: desc.vertex_count, vertex_stride: 0, indices, transform, flags: desc.flags, }); } unsafe { self.raw().get_acceleration_structure_build_sizes( &hal::GetAccelerationStructureBuildSizesDescriptor { entries: &hal::AccelerationStructureEntries::Triangles(entries), flags: blas_desc.flags, }, ) }'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["wgpu-30-blas-compacted-size-private"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/resource.rs#L2509-L2518"
 section = "wgpu-core 30.0.1, resource.rs, enum BlasCompactState (crate-private); the compacted size reaches only a log line, device/queue.rs L2036-L2042"
 quote = '''pub(crate) enum BlasCompactState { [...] /// Ready to be compacted Ready { size: wgt::BufferAddress },'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-command-encoder-send-sync"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/command_encoder.rs#L27"
 section = "wgpu 30.0.1, api/command_encoder.rs; Tlas is WasmNotSendSync (api/tlas.rs L28), Queue Send + Sync (api/queue.rs L19)"
 quote = '''static_assertions::assert_impl_all!(CommandEncoder: Send, Sync);'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-device-as-hal"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/device.rs#L667-L673"
 section = "wgpu 30.0.1, api/device.rs, Device::as_hal: the route to wgpu-hal's Device, and through it get_acceleration_structure_build_sizes"
 quote = '''pub unsafe fn as_hal<A: hal::Api>( &self, ) -> Option<impl Deref<Target = A::Device> + WasmNotSendSync> {'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-encode-at-finish"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/mod.rs#L1283-L1285"
 section = "wgpu-core 30.0.1, command/mod.rs, encode_commands, which CommandEncoder finish runs (L1320-L1328): the recorded build is encoded, and its instances converted and staged, only at finish"
 quote = '''ArcCommand::BuildAccelerationStructures { blas, tlas } => { ray_tracing::build_acceleration_structures(&mut state, blas, tlas)?; }'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-encode-snatch-read"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/mod.rs#L1093-L1098"
 section = "wgpu-core 30.0.1, command/mod.rs, encode_commands: finish holds the device's snatch lock for reading while it encodes"
 quote = '''fn encode_commands( device: &Arc<Device>, cmd_buf_data: &mut CommandBufferMutable, ) -> Result<(), CommandEncoderError> { device.check_is_valid()?; let snatch_guard = device.snatchable_lock.read();'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-lowest-unmodified-unused"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/tlas.rs#L95-L110"
 section = "wgpu 30.0.1, api/tlas.rs, Tlas::get_mut_slice tracks lowest_unmodified; wgpu-core 30.0.1 only copies it (command/ray_tracing.rs L184) and never reads it in the build (searched), so every filled entry is re-staged each build"
 quote = '''/// All elements from the lowest accessed index up are marked as modified. // this recommendation is not useful yet, but is likely to be when ability to update arrives or possible optimisations for building get implemented.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-poll-snatch-write"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L719-L736"
 section = "wgpu-core 30.0.1, device/resource.rs, deferred_resource_destruction, run by every device poll, which locks only when a destroy left resources to free (L793-L804); Buffer::destroy (resource.rs L1074-L1080) and Texture::destroy (L1632-L1638) also take the lock for writing"
 quote = '''/// Destroying the resources requires taking a write lock on the device's snatch lock, [...] let Some(raw_view) = view.raw.snatch(&mut self.snatchable_lock.write())'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-prefer-fast-build-metal"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/conv.rs#L486-L491"
@@ -4875,176 +4875,176 @@ quote = '''if flags.contains(wgt::AccelerationStructureFlags::ALLOW_UPDATE) {
     if flags.contains(wgt::AccelerationStructureFlags::PREFER_FAST_BUILD) {
         usage |= MTLAccelerationStructureUsage::PreferFastBuild;
     }'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-tlas-barrier-before-build"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L1194-L1205"
 section = "wgpu-core 30.0.1, command/ray_tracing.rs, build_blas, run before every TLAS build: one global acceleration structure barrier from shader reads to build writes, not per structure"
 quote = '''if tlas_present { source_usage |= hal::AccelerationStructureUses::SHADER_INPUT; destination_usage |= hal::AccelerationStructureUses::BUILD_OUTPUT; } unsafe { cmd_buf_raw.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-tlas-binding-at-creation"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L3219-L3252"
 section = "wgpu-core 30.0.1, device/resource.rs, create_tlas_binding: a bind group holds the Tlas Arc and its raw structure from creation"
 quote = '''used.acceleration_structures.insert_single(tlas.clone()); [...] Ok(tlas.try_raw(snatch_guard)?)'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-tlas-instance-blas-only"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/blas.rs#L82"
 section = "wgpu 30.0.1, api/blas.rs, TlasInstance::new: an instance references a Blas, never a Tlas (no multi-level instancing); wgpu-types features.rs has no partitioned or cluster acceleration structure feature (searched)"
 quote = '''pub fn new(blas: &Blas, transform: [f32; 12], custom_data: u32, mask: u8) -> Self {'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-tlas-instance-buffer"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L268-L282"
 section = "wgpu-core 30.0.1, device/ray_tracing.rs, Device::create_tlas: a persistent device buffer of capacity x backend instance record, beside the TLAS"
 quote = '''let instance_buffer_size = self .alignments .raw_tlas_instance_size .checked_mul(desc.max_instances.max(1)) [...] label: hal_label(Some("(wgpu-core) instances_buffer"), self.instance_flags),'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-tlas-instances-capacity-vec"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/device.rs#L777-L784"
 section = "wgpu 30.0.1, api/device.rs, Device::create_tlas: the CPU-side instance list is allocated at capacity"
 quote = '''pub fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas { let tlas = self.inner.create_tlas(desc); Tlas { inner: tlas, instances: vec![None; desc.max_instances as usize], lowest_unmodified: 0, }'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-tlas-scratch-per-build"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L224-L314"
 section = "wgpu-core 30.0.1, command/ray_tracing.rs, build_acceleration_structures: scratch sized by the TLAS's creation-time build_scratch_size (its capacity), a new buffer per build call (scratch.rs L16-L27 creates it through wgpu-hal), freed when the submission retires (L460-L462)"
 quote = '''scratch_buffer_tlas_size = scratch_buffer_tlas_size.saturating_add(align_to( tlas.size_info.build_scratch_size, [...] let scratch_buffer = ScratchBuffer::new(state.device, scratch_size)?;'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-tlas-size-at-create"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/ray_tracing.rs#L242-L266"
 section = "wgpu-core 30.0.1, device/ray_tracing.rs, Device::create_tlas: the TLAS is sized once, by wgpu-hal, for max_instances"
 quote = '''let size_info = unsafe { self.raw().get_acceleration_structure_build_sizes( [...] count: desc.max_instances, [...] size: size_info.acceleration_structure_size, format: hal::AccelerationStructureFormat::TopLevel,'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-tlas-staging-per-build"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L377-L384"
 section = "wgpu-core 30.0.1, command/ray_tracing.rs, build_acceleration_structures: a new mapped staging buffer per build, of the filled records' bytes, then copied into the TLAS's instance buffer (L432-L436)"
 quote = '''let staging_buffer = if !instance_buffer_staging_source.is_empty() { let mut staging_buffer = StagingBuffer::new( state.device, wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap(), )?; staging_buffer.write(&instance_buffer_staging_source);'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-30-tlas-tracker-stateless"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/track/mod.rs#L635-L636"
 section = "wgpu-core 30.0.1, track/mod.rs, Tracker: TLASes carry no usage state between commands or submissions"
 quote = '''pub blas_s: BlasTracker, pub tlas_s: StatelessTracker<resource::Tlas>,'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-hal-30-as-raw-private"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/mod.rs#L1389-L1392"
 section = "wgpu-hal 30.0.1, metal/mod.rs, struct AccelerationStructure: its MTLAccelerationStructure is private with no public accessor; vulkan/mod.rs L795-L800 likewise (raw, buffer, allocation all private)"
 quote = '''pub struct AccelerationStructure { raw: Retained<ProtocolObject<dyn MTLAccelerationStructure>>, }'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-hal-30-build-sizes"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/lib.rs#L1194-L1197"
 section = "wgpu-hal 30.0.1, lib.rs, trait Device::get_acceleration_structure_build_sizes"
 quote = '''unsafe fn get_acceleration_structure_build_sizes( &self, desc: &GetAccelerationStructureBuildSizesDescriptor<<Self::A as Api>::Buffer>, ) -> AccelerationStructureBuildSizes;'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-hal-30-dx12-build-sizes"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/dx12/device.rs#L2573-L2584"
 section = "wgpu-hal 30.0.1, dx12/device.rs, get_acceleration_structure_build_sizes (fn at L2461)"
 quote = '''device5.GetRaytracingAccelerationStructurePrebuildInfo( &acceleration_structure_inputs, &mut info, ) }; crate::AccelerationStructureBuildSizes { acceleration_structure_size: info.ResultDataMaxSizeInBytes, update_scratch_size: info.UpdateScratchDataSizeInBytes, build_scratch_size: info.ScratchDataSizeInBytes,'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-hal-30-metal-as-barrier-empty"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1877-L1881"
 section = "wgpu-hal 30.0.1, metal/command.rs, place_acceleration_structure_barrier, whose body is empty (DX12 issues a null-resource UAV barrier, dx12/command.rs L1793-L1815; Vulkan a global memory barrier, vulkan/command.rs L747-L772)"
 quote = '''unsafe fn place_acceleration_structure_barrier( &mut self, _barriers: crate::AccelerationStructureBarrier, ) { }'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-hal-30-instance-bytes"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/adapter.rs#L1825"
 section = "wgpu-hal 30.0.1, vulkan/adapter.rs, the alignments the adapter exposes: a 64-byte instance record on Vulkan; dx12/adapter.rs L1037-L1040 sizes it as D3D12_RAYTRACING_INSTANCE_DESC, also 64 bytes"
 quote = '''raw_tlas_instance_size: 64,'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["wgpu-hal-30-metal-instance-bytes"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2123-L2124"
 section = "wgpu-hal 30.0.1, metal/device.rs, tlas_instance_to_bytes, which returns the descriptor's bytes (L2158); metal/adapter.rs L1503-L1506 sizes wgpu-core's instance record by the same type"
 quote = '''fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> { let temp = MTLIndirectAccelerationStructureInstanceDescriptor {'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["wgpu-hal-30-metal-build-sizes"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/device.rs#L2076-L2091"
 section = "wgpu-hal 30.0.1, metal/device.rs, get_acceleration_structure_build_sizes"
 quote = '''.accelerationStructureSizesWithDescriptor(&acceleration_structure_descriptor); crate::AccelerationStructureBuildSizes { acceleration_structure_size: info.accelerationStructureSize as u64, update_scratch_size: info.refitScratchBufferSize as u64, build_scratch_size: info.buildScratchBufferSize as u64, }'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-hal-30-metal-instances-buffer-unwrap"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/conv.rs#L384-L390"
 section = "wgpu-hal 30.0.1, metal/conv.rs, map_acceleration_structure_descriptor, also used by the size query: an instances entry must carry a buffer on Metal"
 quote = '''crate::AccelerationStructureEntries::Instances(instances) => { let descriptor = MTLInstanceAccelerationStructureDescriptor::new(); descriptor.setInstanceDescriptorType( MTLAccelerationStructureInstanceDescriptorType::Indirect, ); descriptor.setInstanceCount(instances.count as usize); descriptor.setInstanceDescriptorBuffer(Some(&instances.buffer.unwrap().raw));'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-hal-30-metal-one-queue"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/adapter.rs#L75-L79"
 section = "wgpu-hal 30.0.1, metal/adapter.rs, Adapter::open: one MTLCommandQueue per device (Queue::as_raw returns it, metal/mod.rs L492-L494)"
 quote = '''let queue = self .shared .device .newCommandQueueWithMaxCommandBufferCount(MAX_COMMAND_BUFFERS) .unwrap();'''
-checked = 2026-11-15
+checked = 2026-11-21
 
 ["wgpu-hal-30-vulkan-build-sizes"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/vulkan/device.rs#L2760-L2776"
 section = "wgpu-hal 30.0.1, vulkan/device.rs, get_acceleration_structure_build_sizes (fn at L2629)"
 quote = '''.acceleration_structure .get_acceleration_structure_build_sizes( vk::AccelerationStructureBuildTypeKHR::DEVICE, &geometry_info, &primitive_counts, &mut raw, ) [...] acceleration_structure_size: raw.acceleration_structure_size,'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-issue-10450"]
 url = "https://github.com/gfx-rs/wgpu/issues/10450"
 section = "gfx-rs/wgpu issue 10450, [ray tracing] Seperate tlas instance uploading and building (open, 2026-09-24)"
 quote = '''Because of this *every* tlas instance is uploaded which can be slow with large numbers of instances (see #9946). [...] Remove all CPU accessible instances, instead have `queue.write_instances` to assign to the instances and `command_encoder.copy_tlas_instances` for copying tlas instances'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-issue-10512"]
 url = "https://github.com/gfx-rs/wgpu/issues/10512"
 section = "gfx-rs/wgpu issue 10512, Add indirect building of TLASes (open, 2026-10-01)"
 quote = '''The only part of the tlas instance that needs to be validated on the CPU are the blases. We should have a way of building where only the blases are passed from the cpu and combined using an internal shader with a buffer containing tlas instances with indexes into the blas array'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-issue-6762"]
 url = "https://github.com/gfx-rs/wgpu/issues/6762"
 section = "gfx-rs/wgpu issue 6762, Ray Tracing Tracking Issue (open, updated 2026-10-03), Acceleration structures: Features and Nice to have"
 quote = '''- [ ] Update instead of build if possible and preferred. [...] - [ ] [Partitioned TLASes](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_partitioned_acceleration_structure.html) - PTLAS -  (may not require any / much API change) [...] - [ ] [Cluster geometry](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_NV_cluster_acceleration_structure.html) (CLASes)'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-issue-9946"]
 url = "https://github.com/gfx-rs/wgpu/issues/9946"
 section = "gfx-rs/wgpu issue 9946, Optimise TLAS building (open, 2026-07-27)"
 quote = '''Currently large `TLAS`es (on the order of hundreds of thousands of instances) can take multiple milliseconds on the CPU. [...] Currently a TLAS build loops over every `TlasInstance`, validates it, converts it to a hal `RawTlasInstance` which gets mapped into the raw bytes by the hal device and then appended each time to the bytes vector.'''
 cost = '''A quick benchmark suggests that an average TLAS build + submission (I used a single duplicated BLAS so this is only build speed) takes 60-80 ms with 100,000 instances and scales roughly linearly (9ms for 10,000 and 1ms for 1,000) [...] those numbers are from debug builds, but I checked and release builds have the same properties (but are 3-4x faster). (hardware not stated)'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wgpu-pr-10187"]
 url = "https://github.com/gfx-rs/wgpu/pull/10187"
 section = "gfx-rs/wgpu pull request 10187, Add raw_handle method on vulkan::AccelerationStructure (merged into trunk 2026-08-30, after v30.0.1; not in v30.0.2 of 2026-11-12)"
 quote = '''I'm trying to get NVIDIA's RTX Mega Geometry (`VK_NV_cluster_acceleration_structure`) working on wgpu. [...] What I can't do is build the TLAS over those cluster BLASes. [...] `wgpu_hal::vulkan::AccelerationStructure` keeps its handle private and exposes no way to get it.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["wgpu-types-30-tlas-binding-array"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/features.rs#L1450-L1462"
 section = "wgpu-types 30.0.1, features.rs, Features::ACCELERATION_STRUCTURE_BINDING_ARRAY (advertised by dx12/adapter.rs L627 and vulkan/adapter.rs L979, not Metal)"
 quote = '''/// - `var tlas: binding_array<acceleration_structure, 10>` (WGSL) /// /// This capability allows them to exist and to be indexed by dynamically uniform values. /// /// Supported platforms: /// - DX12 /// - Vulkan'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wright-2022-lumen-fallback-self-intersection"]
 url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=109"
 section = "Wright, Narkowicz and Kelly (Epic Games), Lumen, SIGGRAPH 2022 Advances, slides Tracing with Nanite (p. 109) and Avoiding Self-Intersection (p. 112), speaker notes"
 quote = '''We use Nanite fallback meshes as simplified representations of the rasterized geometry and store them in bottom-level acceleration structures. These fallback meshes bring their own set of challenges, as they do not provide any topological guarantee with the base mesh. Tracing directly from the GBuffer presents some obvious challenges when working with Nanite fallback meshes. The approximate shape creates the potential for self-intersections that cannot easily be overcome with a traditional ray bias. [...] Unfortunately, a proper implementation was too expensive for our budget. Instead, we modified our traversal algorithm to first cast a short ray, to some defined epsilon-distance, ignoring back faces. Only after successfully traversing this distance did we cast a long ray, without any sidedness properties.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wright-2022-lumen-far-field-hlod"]
 url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=119"
 section = "Wright, Narkowicz and Kelly (Epic Games), Lumen, SIGGRAPH 2022 Advances, slides Dealing with Instance and Geometric Complexity (p. 119) and Tracing with Far-Field (p. 120), speaker notes"
 quote = '''We chose to utilize the world partition system and its HLOD representation to accomplish this goal. Under the HLOD system, meshes are both simplified and merged together, creating amalgamations for geometry in the distance. In the typical case, HLOD representations are direct replacements for rasterized geometry; however, due to limitations with performant trace distance, we needed to incorporate the HLOD representation before the rasterizer would typically need this substitution. [...] To overcome this inconsistency, we submit both representations, but force mutual exclusion during ray traversal with a ray-mask. We tag the HLOD meshes as belonging to the "far-field" set of geometry. [...] For ordered traversal, we first trace against the near-field geometry to a distance aligned with our mesh culling distance. Rays that miss the near-field are re-queued for traversal against the far-field. We reverse the order of operations for shadow rays that do not require ordered traversal. We choose to do this because the far-field representation contains fewer instances and less geometry than the near-field.'''
-checked = 2026-11-05
+checked = 2026-11-21
 
 ["wright-2022-lumen-far-field-overlap"]
 url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=123"
 section = "Wright, Narkowicz and Kelly (Epic Games), Lumen, SIGGRAPH 2022 Advances, slides \"The Matrix Awakens\" - UE5 demo, PS5, 1080p (pp. 123-124), tables and speaker notes"
 quote = '''Submitting both near-field and far-field representations to the same top-level acceleration structure is NOT ideal. Doing so creates needless geometric overlap. While the ray-mask removes unnecessary traversal, the damage to the top-level acceleration structure build is substantial. Our early experiments with overlaying the far-field representation revealed a show-stopping 44% penalty to all near-field traversal costs. A proper solution would be to support multiple top-level acceleration structures, which would also avoid the need to use the ray-mask mentioned previously. [...] In the end, we do suffer a penalty for incorporating the geometry within the same acceleration structure, but the translational offset significantly reduces the overhead cost.'''
-checked = 2026-11-05
+checked = 2026-11-21
 cost = '''"The Matrix Awakens" - UE5 demo PS5, 1080p: Baseline: Overlapping: Translated; Near-Field: 1.65 ms: 2.37 ms: 1.77 ms; Far-Field: N/A: 1.04 ms: 0.60 ms'''
 
 ["wright-2022-lumen-tlas-instance-limit"]
@@ -5074,7 +5074,7 @@ checked = 2026-11-05
 url = "https://d3d3g8mu99pzk9.cloudfront.net/AstridHuntjens/Streaming%20the%20world%20of%20Horizon%20Zero%20Dawn.pdf#page=38"
 section = "Fahner, Streaming the World of Horizon Zero Dawn, Guerrilla Games publication (2023-03-21), slide TileBased Streaming Strategy, PDF p. 38"
 quote = '''TileBased Streaming Strategy • Loads/unloads tiles around player • Four tile resolutions: – 9 High, full resolution tiles – 9 Medium, medium res geometry and physics mesh – 9 Low, low res baked geometry – 12 Very low, always loaded'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["fahner-2023-hzd-area-hulls"]
 url = "https://d3d3g8mu99pzk9.cloudfront.net/AstridHuntjens/Streaming%20the%20world%20of%20Horizon%20Zero%20Dawn.pdf#page=40"
@@ -5553,7 +5553,7 @@ checked = 2026-11-06
 url = "https://www.activision.com/cdn/research/reac2021_geometry_pipeline_rendering_architecture_final.pptx"
 section = "Activision, Geometry Rendering Pipeline Architecture, REAC 2021, speaker notes of slides 10 and 19"
 quote = '''And finally, divide all work units into a hierarchy that allows progressive workload expansion, with interstage culling. [...] Initially CPU used to handle model culling and LOD selection. However, in a world of mass instancing and increasingly complex LOD logic, this quickly became the bottleneck. We were looking for a way to offload all this complex logic to GPU, thus introduced simplified model collections and simple hierarchies. [...] All sModels sharing same materials are furthermore prebuilt into AABB hierarchies. We can use them at runtime for: - Rough culling - LOD range selection for collection - Memory residency check'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["bevy-0.20-visibility-range-dither"]
 url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_pbr/src/render/pbr_functions.wesl#L66-L95"
@@ -5565,82 +5565,82 @@ quote = '''/// Visibility ranges, also known as HLODs, are crossfades between di
 /// Distinguishing between negative and positive values allows the dither
 /// patterns for different LOD levels of a single mesh to mesh together properly. [...]
     let coords = vec2<u32>(floor(frag_coord.xy)) % 4u;'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["brucks-2018-billboard-dither-taa"]
 url = "https://web.archive.org/web/20180322112218/http://www.shaderbits.com/blog/octahedral-impostors"
 section = "Ryan Brucks (Epic Games), Octahedral Impostors, Shader Bits blog, 18 March 2018, Traditional Billboards mode, Dither and PixelDepthOffset paragraphs"
 quote = '''Enabling "Dither" is like a masked Fresnel that uses DitherTemporalAA to smoothly hide the cards that are not facing the camera. It helps but TempAA is not an option for all platforms such as mobile, so this option is not reliable. Speedtree billboards use the vertex shader to simply hide the cards that are not facing the camera. Next, PixelDepthOffset (PDO) is enabled in the video. [...] plus it makes TempAA look smeary when parallax does not match for complicated reasons.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["brucks-2018-impostor-hlod-cost"]
 url = "https://web.archive.org/web/20180322112218/http://www.shaderbits.com/blog/octahedral-impostors"
 section = "Ryan Brucks (Epic Games), Octahedral Impostors, Shader Bits blog, 18 March 2018, HLOD section"
 quote = '''We use HLOD in UE4 to represent distant levels that are not actually loaded. We tend to refer to those as "Proxy HLODs". Originally, FNBR just used standard simplification for all the trees. [...] popping was quite noticeable. [...] All told, switching to impostors saved ~270,000 verts from being stored in always loaded memory (proxys never unstream) but it cost around 600 draw calls when viewing the whole island. [...] Standing in wailing woods, enabling impostors saved around 500k triangles from rendering.'''
 cost = '''Each impostor in FNBR uses a 2048 basecolor/alpha and 1024 normal/depth. So each tree is 5.4 + 1.4 or 6.8mb of textures. There are currently 12 trees so thats ~81mb of textures. [...] For mobile we limit impostors to 1024 textures across the board. In the ASTC format, the 1024s use 341kb each. (hardware not stated)'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["brucks-2018-octahedral-impostors"]
 url = "https://web.archive.org/web/20180322112218/http://www.shaderbits.com/blog/octahedral-impostors"
 section = "Ryan Brucks (Epic Games), Octahedral Impostors, Shader Bits blog, 18 March 2018, paragraphs on Hemi-Octahedron layout, frame blending and Fortnite frame counts"
 quote = '''For this version, I am using Octahedra and Hemi Octahedra to handle the mapping. [...] the Hemi-Octahedron still gains significant resolution for cases where you never need to see below the horizon. It is also kind of convenient that it gives a bit of over-sampling to the horizon, which is where trees are seen from in most games. Most trees should use the Hemi-Octahedron layout for that reason. [...] So if we want to blend smoothly across this grid, we need to be able to identify the 3 nearest frames. [...] This comparison shows a 12x12 layout impostor for one of the main Fortnite pine trees. It holds up pretty well at a medium distance. The smallest frame count used in Fortnite is for the smaller farm trees which get by pretty well with only an 8x8 layout.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["brucks-impostorbaker-c75d365"]
 url = "https://github.com/ictusbrucks/ImpostorBaker/blob/c75d365bf3a8a2f196502a79840857fbc9f684af/ImpostorBaker.uplugin"
 section = "Ryan Brucks, ImpostorBaker UE4 plugin, ImpostorBaker.uplugin at commit c75d365 (repository has no LICENSE file; GitHub reports no licence)"
 quote = '''"Description": "Generates a variety of Impostors for use as distant mesh LODs.", [...] "CreatedBy": "Ryan Brucks",'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["cesium-2022-dithered-lod-transitions"]
 url = "https://web.archive.org/web/20260909235459/https://cesium.com/blog/2022/10/20/smoother-lod-transitions-in-cesium-for-unreal/"
 section = "Cesium, Smoother LOD Transitions in Cesium for Unreal with Dithered Opacity Masking (blog, 20 Oct 2022)"
 quote = '''As the name suggests, the "Dither Temporal AA" material node works best with temporal anti-aliasing (TAA). [...] If TAA is enabled, the sampled noise changes every frame [...] the temporal accumulation ends up blending the foreground and background together over several frames [...] the implicit cost of LOD blending remains [...] We chose 0.5 seconds as the default transition length to balance transition smoothness, apparent latency, and GPU spikes.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["cesium-unreal-1104-dither-msaa"]
 url = "https://github.com/CesiumGS/cesium-unreal/issues/1104"
 section = "CesiumGS/cesium-unreal issue #1104 (kring, 23 May 2023), DitherFade material layer causes serious artifact with forward rendering / MSAA"
 quote = '''We're using an engine-provided material node that is meant for temporal AA, but it's not clear why it fails so badly with MSAA.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["decima-2017-cluster-sort-key"]
 url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=26"
 section = "Guerrilla Games, Decima Engine: Visibility in Horizon Zero Dawn, GCAP 2017, speaker notes, PDF p. 26"
 quote = '''We generate a sort key for each QueryInstance using filter bits, maxmimum LOD range, and Morton number. The filter allows us to quickly discard clusters that aren't relevant to a query, and the LOD range does a similar thing for dense areas of content. Below this the Morton numbers give a degreee of spatial coherence. After sorting, we use the changes in sort keys to define clusters, again with a minimum size of 4K instances to help with load balancing. Each cluster is a potential compute job.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["decima-2017-collapsed-lods"]
 url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=19"
 section = "Guerrilla Games, Decima Engine: Visibility in Horizon Zero Dawn, GCAP 2017, speaker notes, PDF pp. 19, 20 and 30"
 quote = '''many of our static resources looked like this, with a top-level LodMeshResource selecting between one or more LODs of building blocks, and one or more LODs of collapsed geometry created by export tools. The building blocks themselves have LOD nodes, but in the collapsed geometry that’s simplified away. [...] The key observation was that two LOD levels were enough to represent all those trees. We call these parent and child [...] A leaf is visible if and only if both parent and child LODs are selected. [...] we do both child LOD and accurate visibility tests since we need both results to update the LOD fade states.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["decima-2017-cpu-hierarchy-gpu-jobs"]
 url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=28"
 section = "Guerrilla Games, Decima Engine: Visibility in Horizon Zero Dawn, GCAP 2017, speaker notes, PDF p. 28"
 quote = '''We use the tile and cluster hierarchy to skip as many clusters as possible, and dispatch one compute job for each visible cluster. Then the CPU job waits for compute to finish.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["decima-2017-query-time"]
 url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=46"
 section = "Guerrilla Games, Decima Engine: Visibility in Horizon Zero Dawn, GCAP 2017, slide Statistics (image), PDF p. 46; PS4 from the p. 18 notes"
 quote = '''Typically have 500K – 1.5M StaticInstances StaticScene GPU data uses ~10-30MB Main static query time is ~1-2ms • Some of that time the CPU busy-waits for GPU • Shadow query times generally less'''
 cost = '''Main static query time is ~1-2ms (500K – 1.5M StaticInstances; PS4; resolution not stated)'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["decoret-2003-billboard-clouds"]
 url = "https://inria.hal.science/inria-00510175/document#page=2"
 section = "Décoret, Durand, Sillion and Dorsey, Billboard Clouds for Extreme Model Simplification, SIGGRAPH 2003 (ACM TOG 22(3), doi:10.1145/882262.882326), HAL inria-00510175, Abstract (PDF p. 2); Figure 10 caption (PDF p. 6); Section 6 (PDF p. 7); Table 1 (PDF p. 8)"
 quote = '''3D models are simplified onto a set of planes with texture and transparency maps. [...] This method does not require connectivity information, but instead avoids cracks by projecting primitives onto multiple planes when needed. For extreme simplification, our approach combines the strengths of mesh decimation and image-based impostors. [...] In particular, billboard clouds are usually limited by fill rates and the cost of context switching.'''
 cost = '''Table 1: Rendering time (in ms) for different number of billboards in the cloud. Bounding box of screen projection is about 128 [...] 31: 0.068; 60: 0.072; 416: 0.220; 552: 0.208 (Table 1 states no hardware; the caption of Figure 10, for the simplification timings, reads "Timings measured on a 2 GHz Pentium IV processor with NVidia GeForce 4 Ti4600 with 128MB.")'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["fatahalian-2010-small-triangle-overshade"]
 url = "https://graphics.stanford.edu/papers/fragmerging/shade_sig10.pdf#page=1"
 section = "Fatahalian et al., Reducing Shading on GPUs using Quad-Fragment Merging (SIGGRAPH 2010), abstract and Figure 1 caption, p. 1 (simulated pipeline)"
 quote = '''Current GPUs perform a significant amount of redundant shading when surfaces are tessellated into small triangles. [...] Over-shade in a GPU pipeline increases as scene triangle size shrinks [...] When this scene is tessellated into pixel-sized triangles, each pixel is shaded more than eight times.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["frostbite-2019-strand-pixel-width"]
 url = "https://advances.realtimerendering.com/s2019/hair_presentation_final.pdf#page=28"
@@ -5654,74 +5654,74 @@ url = "https://www.cs.cmu.edu/~garland/Papers/quadrics.pdf#page=1"
 section = "Garland and Heckbert, Surface Simplification Using Quadric Error Metrics (SIGGRAPH 1997, doi:10.1145/258734.258849), abstract and §1, p. 1; timing footnote 4, p. 5"
 quote = '''The algorithm uses iterative contractions of vertex pairs to simplify models and maintains surface error approximations using quadric matrices. By contracting arbitrary vertex pairs (not just edges), our algorithm is able to join unconnected regions of models.'''
 cost = '''our implementation can create a 100 face approximation of a 70,000 face model in 15 seconds. The error approximation is also very compact, requiring only 10 floating point numbers per vertex. [...] This data was collected on an SGI Indigo2 with a 195 MHz R10000 processor and 128 Mbytes of memory.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["godot-4.4-lod-generation"]
 url = "https://github.com/godotengine/godot/blob/4.4-stable/scene/resources/3d/importer_mesh.cpp#L450-L506"
 section = "Godot 4.4-stable, ImporterMesh::generate_lods, lines 450-506 (meshopt simplifyWithAttributes, normal weights 2.0, LockBorder)"
 quote = '''unsigned int index_target = 12; // Start with the smallest target, 4 triangles [...] const float max_mesh_error = FLT_MAX; // We don't want to limit by error, just by index target [...] if (new_index_count == 0 || (new_index_count >= (index_count * 0.75f))) { [...] lod.distance = MAX(mesh_error * scale, CMP_EPSILON2); [...] index_target = MAX(new_index_count, index_target) * 2;'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["godot-4.4-mesh-lod-threshold"]
 url = "https://github.com/godotengine/godot-docs/blob/db50fcf144b7ab3fc3382f93e0351f46caed3c2c/tutorials/3d/mesh_lod.rst?plain=1#L153-L190"
 section = "Godot 4.4 docs, Mesh level of detail, Comparing mesh LOD visuals and performance (L153-L156, L172) and Using mesh LOD with MultiMesh and particles (L185-L190)"
 quote = '''The default mesh LOD threshold of 1 pixel is tuned to look *perceptually* lossless; it provides a significant performance gain with an unnoticeable loss in quality. [...] When rendering the scene, mesh LOD selection uses a screen-space metric. [...] For LOD selection, the point of the node's AABB that is the closest to the camera is used as a basis. [...] this means that all instances will be drawn with the same LOD level at a given time.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["godot-4.4-visibility-range-hysteresis"]
 url = "https://github.com/godotengine/godot-docs/blob/db50fcf144b7ab3fc3382f93e0351f46caed3c2c/tutorials/3d/visibility_ranges.rst?plain=1#L111-L116"
 section = "Godot 4.4 docs, Visibility ranges (HLOD), Fade mode, lines 111-116"
 quote = '''Disabled: Uses hysteresis to switch between LOD levels instantly. This prevents situations where LOD levels are switched back and forth quickly when the player moves forward and then backward at the LOD transition point. [...] This mode provides the best performance as it doesn't force rendering to become transparent during the fade transition.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["godot-4.5-dithered-lod"]
 url = "https://docs.godotengine.org/en/4.5/tutorials/3d/visibility_ranges.html"
 section = "Godot 4.5 documentation, Visibility ranges (HLOD), Use dithering for LOD transitions"
 quote = '''There are two advantages to using dithering over alpha blending for LOD transitions: Higher performance, as dithering transparency is faster to render compared to alpha blending. No visual glitches due to transparency sorting issues during LOD transitions. The downside of dithering is that a "noisy" pattern is visible during LOD fade transitions. This may not be as noticeable at higher viewport resolutions or when temporal antialiasing is enabled.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["golus-2017-alpha-to-coverage"]
 url = "https://web.archive.org/web/20261016230034/https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f"
 section = "Ben Golus, Anti-aliased Alpha Test: The Esoteric Alpha To Coverage (Medium, 12 Aug 2017), Alpha to Coverage; Fixing the Solution"
 quote = '''Okay, so with 4x MSAA and Alpha to Coverage you get 5 levels of opacity you can play with, 4/4 through 0/4 samples. [...] Two or more overlapping triangles with 50% Alpha to Coverage results in no change in opacity. Only the closest coverage points get rendered. [...] If the output alpha is 50% with 4x MSAA only two coverage samples are written to. But it's going to be the same two coverage samples for everything that renders to that pixel with 50% A2C!'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["haar-aaltonen-2015-coarse-cpu-cull"]
 url = "https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf#page=13"
 section = "Haar and Aaltonen, GPU-Driven Rendering Pipelines, SIGGRAPH 2015 Advances, Rendering Pipeline Overview, p. 13 (legend colours stages CPU or GPU)"
 quote = '''COARSE FRUSTUM CULLING [...] BATCH DRAWCALLS INSTANCE CULLING (FRUSTUM/OCCLUSION) CLUSTER CHUNK EXPANSION CLUSTER CULLING (FRUSTUM/OCCLUSION/TRIANGLE BACKFACE) INDEX BUFFER COMPACTION MULTI-DRAW [...] - CPU - GPU'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["hasselgren-2021-appearance-driven-simplification"]
 url = "https://arxiv.org/pdf/2104.03989v1#page=1"
 section = "Hasselgren, Munkberg, Lehtinen, Aittala and Laine, Appearance-Driven Automatic 3D Model Simplification (EGSR 2021, arXiv 2104.03989v1), Fig. 1 caption and §1, p. 1; §5.3, p. 11"
 quote = '''Compared to the reference, we accurately capture the appearance of the scene at just a fraction (0.4%) of the triangle count. [...] Geometric simplification (LOD). Optimizing for the shape of a lower-resolution mesh to combat geometric aliasing and increase rendering efficiency.'''
 cost = '''For the final results, we run optimization at a resolution of 2048×2048 pixels for 10k steps, which typically takes a few hours on a single NVIDIA V100 GPU.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["hoppe-1996-geomorph"]
 url = "https://hhoppe.com/pm.pdf#page=3"
 section = "Hoppe, Progressive Meshes (SIGGRAPH 1996, doi:10.1145/237170.237216), §3.2 Geomorphs, p. 3"
 quote = '''Using such geomorphs, an application can smoothly transition from a mesh Mi to meshes Mi+1 or Mi−1 without any visible "snapping" of the meshes. [...] given a finer mesh Mf and a coarser mesh Mc [...] there exists a natural correspondence between their vertices: each vertex of Mf is related to a unique ancestor vertex of Mc by a surjective map Ac obtained by composing a sequence of ecol transformations [...] (In practice, this ancestor information Ac is gathered in a forward fashion as the mesh is refined.)'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["hoppe-1996-progressive-meshes"]
 url = "https://hhoppe.com/pm.pdf#page=1"
 section = "Hoppe, Progressive Meshes (SIGGRAPH 1996, doi:10.1145/237170.237216), §1 Introduction, p. 1"
 quote = '''A detailed mesh is used when the object is close to the viewer, and coarser approximations are substituted as the object recedes. Since instantaneous switching between LOD meshes may lead to perceptible “popping”, one would like to construct smooth visual transitions, geomorphs, between meshes at different resolutions.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["hoppe-1999-attribute-quadrics"]
 url = "https://hhoppe.com/newqem.pdf#page=1"
 section = "Hoppe, New Quadric Metric for Simplifying Meshes with Appearance Attributes (IEEE Visualization 1999, doi:10.1109/VISUAL.1999.809869), abstract, p. 1"
 quote = '''In this paper we present an improved quadric error metric for simplifying meshes with attributes. The new metric, based on geometric correspondence in 3D, requires less storage, evaluates more quickly, and results in more accurate simplified meshes. [...] The new scheme is demonstrated on a variety of meshes with colors and normals.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["karis-2021-hierarchy-dependent-dispatches"]
 url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=71"
 section = "Karis, Nanite, SIGGRAPH 2021 Advances, slide Hierarchical culling - naive approach, p. 71, notes"
 quote = '''Implemented naively looks like this with many passes, each processing a single level of the tree, appending any passing children nodes to a buffer to be processed by the next pass. Each pass depends on the previous, so the GPU is completely drained at every level of the tree. Because the CPU doesn't know how deep the recursion will go, enough dispatches have to be issued to cover the worst case. This means we can very easily end up with empty dispatches that don't do any processing at all!'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["karis-2021-instance-cull-cost"]
 url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=110"
@@ -5734,56 +5734,56 @@ checked = 2026-11-06
 url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=15"
 section = "Karis, Nanite, SIGGRAPH 2021 Advances in Real-Time Rendering, slide GPU Driven Pipeline, p. 15, slide and notes"
 quote = '''Per view: ● GPU instance cull ● Triangle rasterization [...] For each view we can determine the visible instances in a single dispatch'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["karis-2021-instances-new-triangles"]
 url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=95"
 section = "Karis, Nanite, SIGGRAPH 2021 Advances, slide Tiny instances, p. 95, notes"
 quote = '''Since getting their hands on Nanite our artists have pushed instance count just as much if not more so than polycount. Joke around the office is instances are the new triangles.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["karis-2021-persistent-threads-scheduling"]
 url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=73"
 section = "Karis, Nanite, SIGGRAPH 2021 Advances, slide Persistent Threads - Hierarchy Culling, p. 73"
 quote = '''● Relies on scheduling behavior ● Requires that once a group has started executing, it will not be starved indefinitely ● Scheduling behavior not defined by D3D or HLSL ● Works on consoles and all relevant GPUs we have tested ● An optimization. Not a requirement for Nanite'''
 cost = '''10-60% saving (typically ~25%), depending on scene complexity'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["kircher-2024-spider-man-2-distant-lods"]
 url = "https://web.archive.org/web/20260818170518/https://gdcvault.com/play/1034212/Applied-Mesh-Analysis-Automating-Distant"
 section = "Scott Kircher (Insomniac Games), Applied Mesh Analysis: Automating Distant-City LODs in 'Marvel's Spider-Man 2', GDC 2024, session overview"
 quote = '''The manual distant-LOD geometry pipeline of Marvel's Spider-Man and Marvel's Spider-Man: Miles Morales was no longer viable. This lecture describes how Insomniac Games transitioned to automated distant-LOD geometry generation. In particular, it covers in-depth the applications of fundamental mesh analysis concepts (dual meshes, the Euler Characteristic, curvature estimation, etc...) to several difficult problems (beyond standard reduction and remeshing)'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["levien-2021-gpuweb-no-progress-guarantee"]
 url = "https://github.com/gpuweb/gpuweb/issues/2229"
 section = "Raph Levien, gpuweb issue 2229 Atomic concerns (2021-10-30), issue body"
 quote = '''It's more of a forward progress concern, and we're very careful to avoid forward progress guarantees. (Indeed, we now have [empirical evidence](https://arxiv.org/abs/2109.06132) that not all existing GPUs can provide a strong forward progress guarantee).'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-attribute-simplify"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L467-L514"
 section = "meshoptimizer 0.25 README, Attribute-aware simplification (L467) and Permissive simplification (L514)"
 quote = '''This allows the simplifier to take attribute error into account which can improve shading (by using vertex normals), texture deformation (by using texture coordinates) [...] The permissive mode combined with selective locking provides a balance between simplification quality and attribute preservation, and usually results in higher quality LODs for the same target triangle count (and dramatically higher quality compared to `meshopt_simplifySloppy`).'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-lod-chain"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L521-L554"
 section = "meshoptimizer 0.25 README, Simplification (L521), Simplification with vertex update (L533) and Advanced simplification (L554)"
 quote = '''All simplification functions described so far reuse the original vertex buffer and only produce a new index buffer. This means that the resulting mesh will have the same vertex positions and attributes as the original mesh; this is optimal for minimizing the memory consumption [...] Using unique vertex data for each LOD in a chain can improve visual quality, but it comes at a cost of ~doubling vertex memory used (if each LOD is using half the triangles of the previous LOD). [...] When generating a LOD chain, you can either re-simplify each LOD from the original mesh or use the previous LOD as the starting point for the next level. The latter approach is more efficient and produces smoother visual transitions between LOD levels while preserving mesh attributes better. With this method, resulting error values from previous levels should be accumulated for LOD selection.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-lod-selection"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L454-L460"
 section = "meshoptimizer 0.25 README, Basic simplification, LOD selection example, lines 454-460"
 quote = '''The algorithm can also return the resulting normalized deviation that can be used to choose the correct level of detail based on screen size or solid angle [...] float d = max(0, distance(camera_position, mesh_center) - mesh_radius); float e = d * (tan(camera_fovy / 2) * 2 / screen_height); // 1px in mesh space bool lod_ok = e * lod_factor >= lod_error;'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-simplify-error"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L446-L452"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), README, Simplification: Basic simplification, lines 446-452"
 quote = '''Target error is an approximate measure of the deviation from the original mesh using distance normalized to `[0..1]` range (e.g. `1e-2f` means that simplifier will try to maintain the error to be below 1% of the mesh extents). [...] To disable the error limit, `target_error` can be set to `FLT_MAX`. [...] setting `target_index_count` to 0 will simplify the input mesh as much as possible within the specified error limit; this can be useful for generating LODs that should look good at a given viewing distance.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-simplify-original-vertices"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L433-L439"
@@ -5791,13 +5791,13 @@ section = "meshoptimizer v0.25, src/meshoptimizer.h, meshopt_simplify documentat
 quote = '''* Mesh simplifier
  * Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible [...]
  * The resulting index buffer references vertices from the original vertex buffer.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-simplify-sloppy"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L452"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2, which exposes simplify_sloppy), README, Simplification (L452, L544) and experimental API list (L716)"
 quote = '''`meshopt_simplifySloppy`, which doesn't follow the topology of the original mesh. This means that it doesn't preserve attribute seams or borders, but it can collapse internal details that are too small to matter because it can merge mesh features that are topologically disjoint but spatially close. [...] `meshopt_SimplifyPrune` allows the simplifier to remove isolated components regardless of the topological restrictions inside the component. [...] - `meshopt_simplifySloppy`'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-attribute-weights"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L470-L480"
@@ -5821,116 +5821,116 @@ checked = 2026-11-14
 url = "https://github.com/zeux/meshoptimizer/blob/v1.3/README.md?plain=1#L691"
 section = "meshoptimizer v1.3 README, Voxel remeshing (L691, L704) and experimental API list (L1003); not in the vendored 0.25"
 quote = '''small features can be removed but can't be merged together, and extra interior detail is often preserved until later stages of simplification. An alternative approach is to reconstruct an entirely new mesh, that has a similar shape to the original. This library provides a voxel-based remeshing algorithm for this purpose, that can generate a new mesh at a given voxel resolution `[4..256]` [...] The resulting mesh is generated as an unindexed array of triangles [...] If mesh attributes such as vertex normals, tangents or texture coordinates are required, they will need to be generated or transferred from the original mesh. [...] - `meshopt_remesh` function and `meshopt_Remesh*` flags'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["misiak-2021-xr-impostors"]
 url = "https://web.archive.org/web/20260715231257/https://cg.web.th-koeln.de/impostor-based-rendering-acceleration-for-virtual-augmented-and-mixed-reality/"
 section = "Mišiak, Fuhrmann and Latoschik, Impostor-based Rendering Acceleration for Virtual, Augmented, and Mixed Reality, VRST 2021, doi:10.1145/3489849.3489865, abstract on the authors' group page"
 quote = '''Motion parallax of typical head movements is compensated by using a ray marched parallax correction step. Our approach provides a dynamic run-time recreation of impostors as necessary for larger changes in view position. The dynamic run-time recreation is decoupled from the actual rendering process. Hence, its associated processing cost is therefore distributed over multiple frames. [...] our impostors compare favorably against the original mesh representation, as geometric and textural temporal aliasing artifacts are heavily suppressed.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["moore-2018-fc5-terrain-quadtree"]
 url = "https://web.archive.org/web/20260513233252/https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=14"
 section = "Jeremy Moore (Ubisoft), Terrain Rendering in Far Cry 5, GDC 2018, speaker notes, PDF pp. 4, 14, 15 and 22"
 quote = '''The Far Cry 5 world is 10km x 10km in size. [...] At the root the world is divided into a set of 2km square tiles which are always resident. [...] Until at the lowest LOD we load all of the nodes and keep them always resident. [...] But we use 6 levels in the Far Cry 5 quad tree.'''
 cost = '''Our target budget was around 2ms GPU for full screen terrain. (PDF p. 4; hardware not stated)'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["msl-4.1-sample-mask-output"]
 url = "https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=151"
 section = "Metal Shading Language Specification 4.1 (2026-06-04), §5.2.3.5 Fragment Function Output Attributes, Table 5.7, p. 151"
 quote = '''sample_mask uint Coverage mask. All OS: Metal 1 and later.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["msl-4.1-simdgroup-forward-progress"]
 url = "https://web.archive.org/web/20260925145438/https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=157"
 section = "Apple, Metal Shading Language Specification Version 4.1 (2026-06-04), kernel function attributes, p. 157"
 quote = '''SIMD-groups execute concurrently within a given threadgroup and make independent forward progress with respect to each other, in the absence of threadgroup barrier operations.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["niagara-567ebe3-gpu-lod-select"]
 url = "https://github.com/zeux/niagara/blob/567ebe331247e122425eaf1a6319d8c64daf816d/src/shaders/drawcull.comp.glsl#L106-L118"
 section = "Kapoulkine, niagara at 567ebe3 (MIT), drawcull.comp.glsl, per-draw LOD pick in the culling compute shader, lines 106-118; lodTarget set to 1 px in niagara.cpp L1526"
 quote = '''float distance = max(length(center) - radius, 0); float threshold = distance * cullData.lodTarget / drawData.scale; for (uint i = 1; i < mesh.lodCount; ++i) if (mesh.lods[i].error < threshold) lodIndex = i; } MeshLod lod = meshes[meshIndex].lods[lodIndex];'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["niagara-567ebe3-lod-chain"]
 url = "https://github.com/zeux/niagara/blob/567ebe331247e122425eaf1a6319d8c64daf816d/src/scene.cpp#L243-L268"
 section = "Kapoulkine, niagara at 567ebe3 (MIT), scene.cpp, LOD chain build (L243-L260) and RT LOD pick (L266-L268); MeshLod lods[8] in scene.h"
 quote = '''size_t nextIndicesTarget = (size_t(double(lodIndices.size()) * 0.6) / 3) * 3; [...] if (nextIndices >= size_t(double(lodIndices.size()) * 0.85)) break; [...] lodError = std::max(lodError * 1.5f, nextError); // important! since we start from last LOD, we need to accumulate the error [...] if (mesh.lods[i].error * maxScale < kShadowLodError) mesh.lodRT = i;'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["nv-alpha-to-coverage-dither-control"]
 url = "https://registry.khronos.org/OpenGL/extensions/NV/NV_alpha_to_coverage_dither_control.txt"
 section = "Khronos OpenGL registry, NV_alpha_to_coverage_dither_control (rev. 1.01, 31 May 2017), modification to §17.3.3"
 quote = '''It is also intended that the algorithm be pseudo-random in nature, to avoid image artifacts due to regular coverage sample locations. The function AlphaToCoverageDitherControlNV() allows to specify the kind of algorithm: If the mode is ALPHA_TO_COVERAGE_DITHER_ENABLE, the algorithm is different at different pixel locations. [...] If the mode is ALPHA_TO_COVERAGE_DITHER_DISABLE, then no dithering should be applied and the same conversion should happen regardless of the pixel coordinates.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["nvdiffmodeling-licence"]
 url = "https://github.com/NVlabs/nvdiffmodeling/blob/9b2ba2eff83c7d90127f78c20773b06ddc3ae1db/LICENSE.txt"
 section = "NVlabs nvdiffmodeling at 9b2ba2e, LICENSE.txt, Nvidia Source Code License (1-Way Commercial), §3.3 Use Limitation"
 quote = '''The Work and any derivative works thereof only may be used or intended for use non-commercially. [...] As used herein, "non-commercially" means for research or evaluation purposes only and not for any direct or indirect monetary gain.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["osg-3.6.5-small-feature-culling"]
 url = "https://github.com/openscenegraph/OpenSceneGraph/blob/OpenSceneGraph-3.6.5/include/osg/CullingSet#L252-L255"
 section = "OpenSceneGraph 3.6.5 (OSGPL 1.0), CullingSet::isCulled(const BoundingSphere&), L252-L255; default threshold in include/osg/CullSettings L220-L222, default mode L186-L187"
 quote = '''if (_mask&SMALL_FEATURE_CULLING) { if (((bs.center()*_pixelSizeVector)*_smallFeatureCullingPixelSize)>bs.radius()) return true; } [...] Threshold at which small features are culled. \param value Bounding volume size in screen space. Default is 2.0. [...] DEFAULT_CULLING = VIEW_FRUSTUM_SIDES_CULLING| SMALL_FEATURE_CULLING|'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["persson-2012-landmarks-distant-forest"]
 url = "https://web.archive.org/web/20261004131416/https://humus.name/Articles/Persson_CreatingVastGameWorlds.pdf#page=5"
 section = "Emil Persson (Avalanche Studios), Creating Vast Game Worlds: Experiences from Avalanche Studios, SIGGRAPH 2012 talk notes, PDF pp. 5 and 28"
 quote = '''For performance and memory reasons we can never have the whole world loaded, so only the relatively close locations are in memory. But for key landmarks and locations we have simple landmark models resident at all times. [...] a patch of billboard trees, you may have a hundred trees in there [...] in the far end it could be fading over to the coarse distant forest representation and close up it could be faded over to an actual fully detailed model'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["persson-2012-phone-wire-aa"]
 url = "https://web.archive.org/web/20260515045315/http://www.humus.name/index.php?page=3D&ID=89"
 section = "Emil Persson (Humus), Phone-wire AA, demo page, 26 June 2012"
 quote = '''A common culprit of aliasing in games is phone wires. Due to the thin geometry they tend to get broken up into a bunch of random disconnected dots after a distance. MSAA helpes reduce the problem but doesn't fully solve it. It merely pushes the problem a factor further into the distance. [...] The idea is to adjust the radius of the wire to make sure it does not get smaller than a pixel wide. If the wire's radius would make it smaller than a pixel, it clamps the width to a pixel and instead fades with an alpha value corresponding to the radius reduction ratio. [...] A similar approach could likely be used on other aliasing prone geometry based on thin geometry, such as antenna towers, pipes and railings.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["persson-2012-phone-wire-aa-licence"]
 url = "https://web.archive.org/web/20221218100843/http://www.humus.name/3D/PhoneWireAA.zip"
 section = "Emil Persson, PhoneWireAA.zip, PhoneWireAA/App.cpp header note"
 quote = '''You are free to use the code in any way you like, modified, unmodified or copied into your own work. However, I expect you to respect these points: [...] - For use in anything commercial, please request my approval.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["simplygon-10.1-remeshing"]
 url = "https://web.archive.org/web/20251217062512/https://documentation.simplygon.com/SimplygonSDK_10.1.400.0/concepts/remeshing.html"
 section = "Simplygon SDK 10.1.400.0 documentation, Concepts, Remeshing, Overview and Target"
 quote = '''The remeshed object is created and optimized for a certain on-screen pixel size - which means that holes and parts that are close to each other will have their gaps filled if the distance is below a pixel. At default settings, the proxy mesh is assumed to be viewed from the outside. Any interior mesh that cannot be seen is removed. [...] The LOD quality and triangle count is relative to this metric and will generate more triangles at larger values and fewer at lower, while keeping the geometrical error under one pixel for the given screen size.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["simplygon-10.4-on-screen-size"]
 url = "https://documentation.simplygon.com/SimplygonSDK_10.4.117.0/api/reference/processingandmaterialcasting/settingsobject/reductionsettings.html"
 section = "Simplygon SDK 10.4.117.0, API reference, ReductionSettings, ReductionTargetOnScreenSize"
 quote = '''ReductionTargetOnScreenSize The OnScreenSize value, used to calculate the maximum surface-deviation allowed, by assuming errors less than 1 pixel onscreen will not be noticeable.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["sorensen-2021-apple-obe-violation"]
 url = "https://arxiv.org/pdf/2109.06132v1#page=25"
 section = "Sorensen et al., Specifying and Testing GPU Workgroup Progress Models, OOPSLA 2021, p. 25 (OBE defined p. 2)"
 quote = '''Furthermore, our contacts at Apple provided an additional test that is able to show a violation of OBE on the A12 and A14. This test consists of threads repeatedly acquiring and releasing a mutex using a custom spin-lock (implemented using an atomic compare-and-swap).'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["sorensen-2021-progress-spec-gap"]
 url = "https://arxiv.org/pdf/2109.06132v1#page=1"
 section = "Sorensen, Salvador, Raval, Evrard, Wickerson, Martonosi and Donaldson, Specifying and Testing GPU Workgroup Progress Models, Proc. ACM Program. Lang. OOPSLA 2021, Article 131, abstract, p. 1"
 quote = '''Unfortunately, many GPU programming specifications (e.g. Vulkan and Metal) say almost nothing about relative forward progress guarantees between workgroups. Although prior work has proposed a spectrum of plausible progress models for GPUs, cross-vendor specifications have yet to commit to any model. [...] Most notably, we find that Apple and ARM GPUs do not support the linear occupancy-bound model'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["speedtree-runtime-billboard-a2c"]
 url = "https://docs.unity3d.com/speedtree-runtime-sdk/manual/level-of-detail.html"
 section = "SpeedTree Runtime SDK manual, Level of detail, Billboards/impostors and Overhead billboards (no archive snapshot available)"
 quote = '''Once the 3D tree is far enough away from the camera, it will gradually become a billboard. With alpha-to-coverage enabled, this is a smooth transition. The alpha values of the 3D trees gradually become transparent while the billboards gradually fade in with an increasing opacity. As the camera spins around the billboard, the shader will automatically select a billboard from an array of images that best matches the camera's azimuthal angle combined with the rotation of that tree instance. [...] The overhead billboard is cross-faded with the vertical billboards, depending on the camera angle.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["strugar-2010-cdlod-morph"]
 url = "https://github.com/fstrugar/CDLOD/blob/ea8195b335c1d542627a6af048e44326d75cb1ef/cdlod_paper_latest.pdf"
 section = "Strugar, Continuous Distance-Dependent Level of Detail for Rendering Heightmaps (CDLOD) (11 July 2010), Morph implementation, p. 7; Granularity issues, p. 9"
 quote = '''Using CDLOD, each vertex is morphed individually based on its own LOD metric [...] Morph operation is performed in the vertex shader in such way that every block of eight triangles from the more detailed mesh is smoothly morphed into the corresponding block of two triangles on the less detailed mesh by gradual enlargement of the two triangles and reduction of the remaining six triangles into degenerate triangles that are not rasterized. This process produces smooth transitions with no seams or T-junctions [...] One limitation of the algorithm is that a single quadtree node can only support transition between two LOD layers.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["tressfx-4.1-strand-expand"]
 url = "https://github.com/GPUOpen-Effects/TressFX/blob/v4.1.0/src/Shaders/TressFXStrands.hlsl#L100-L101"
@@ -5939,43 +5939,43 @@ quote = '''// We always to to expand for faster hair AA, we may want to gauge ma
     float expandPixels = 0.71;
 [...]
     Output.Position = ((vertexId & 0x01) ? hairEdgePositions[0] : hairEdgePositions[1]) + fDirIndex * float4(proj_right * expandPixels / winSize.y, 0.0f, 0.0f) * ((vertexId & 0x01) ? hairEdgePositions[0].w : hairEdgePositions[1].w);'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.6-auto-lod-groups"]
 url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/static-mesh-automatic-lod-generation-in-unreal-engine?application_version=5.6"
 section = "Unreal Engine 5.6 documentation, Static Mesh Automatic LOD Generation, intro and Using LOD Groups"
 quote = '''Automatic LOD generation uses what is called quadratic mesh simplification [...] It will continue to collapse edges until it reaches the requested target number of triangles. [...] SmallProp=(NumLODs=4,LODPercentTriangles=50,PixelError=10,Name=LOCTEXT("SmallPropLOD","Small Prop")) [...] HighDetail=(NumLODs=6,LODPercentTriangles=50,PixelError=6,Name=LOCTEXT("HighDetailLOD","High Detail"))'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["ue-5.6-cull-distance-volumes"]
 url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/cull-distance-volumes-in-unreal-engine?application_version=5.6"
 section = "Unreal Engine 5.6 documentation, Cull Distance Volumes"
 quote = '''These volumes store any number of size and distance combinations called Cull Distance Pairs . These are mapped to the bounds of an Actor (along its longest dimension) and then assigned to that Actor instance in the level. [...] Additional pair values and testing would improve the "popping" visible in the example.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["ue-5.6-lod-screen-size"]
 url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/creating-and-using-lods-in-unreal-engine?application_version=5.6"
 section = "Unreal Engine 5.6 documentation, Creating and Using LODs"
 quote = '''Also note that it is not calculated by distance, but by screen size, so if you place a larger instance of the mesh beside a smaller instance of the mesh and start moving an equal distance away from both of them, the smaller instance will switch to the next LOD before the larger instance does.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["ue-5.6-skeletal-lod-hysteresis"]
 url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/skeletal-mesh-lods-in-unreal-engine?application_version=5.6"
 section = "Unreal Engine 5.6 documentation, Skeletal Mesh LODs, LOD properties table"
 quote = '''LOD Hysteresis This value is used to avoid 'flickering' when crossing a LOD threshold. Only taken into account when transitioning from a complex to a simple LOD. Higher values will increase the hysteresis, or lag, of the perceived model, which can smooth transitions between radically different LODs.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["ue-5.8-dithered-lod-transition"]
 url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-material-properties?application_version=5.8"
 section = "Unreal Engine 5.8 Documentation, Material Properties, Advanced: Dithered LOD Transition; Dither Opacity Mask"
 quote = '''Dithered LOD Transition Whether meshes rendered with this material should support dithered LOD transitions. Dither Opacity Mask When combined with Temporal Anti-Aliasing, this can provide a form of limited translucency which supports all lighting features.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["ue-5.8-hlod-approximate-voxel"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Public/MeshMerge/MeshApproximationSettings.h#L73-L79"
 section = "Unreal Engine 5.8.4, Engine/Public/MeshMerge/MeshApproximationSettings.h, FMeshApproximationSettings (settings of the Approximated Mesh HLOD layer)"
 quote = '''/** Approximation Accuracy in Meters, will determine (eg) voxel resolution */ [...] float ApproximationAccuracy = 1.0f; /** Maximum allowable voxel count along main directions. This is a limit on ApproximationAccuracy. [...] */ [...] int32 ClampVoxelDimension = 1024;'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["ue-5.8-hlod-layer-defaults"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/HLODLayer.cpp#L34-L39"
@@ -5983,7 +5983,7 @@ section = "Unreal Engine 5.8.4, Engine/Private/WorldPartition/HLOD/HLODLayer.cpp
 quote = '''	, bIsSpatiallyLoaded(true)
 	, CellSize(25600)
 	, LoadingRange(51200) [...] return *FString::Format(TEXT("HLOD{0}_{1}m_{2}m"), { InLODLevel, int32(InCellSize * 0.01f), int32(InLoadingRange * 0.01f)}); [...] UE_DEPRECATED(5.7, "Deprecated. These streaming grid properties are now specified in the partition's settings.")'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["ue-5.8-hlod-layer-types"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Public/WorldPartition/HLOD/HLODLayer.h#L31-L39"
@@ -5997,7 +5997,7 @@ quote = '''enum class EHLODLayerType : uint8
 	Custom					UMETA(DisplayName = "Custom Builder"),
 	CustomHLODActor			UMETA(DisplayName = "Custom HLOD Actor"),
 };'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["ue-5.8-hlod-swap-warmup"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Private/WorldPartition/HLOD/HLODRuntimeSubsystem.cpp#L47-L50"
@@ -6005,25 +6005,25 @@ section = "Unreal Engine 5.8.4, Engine/Private/WorldPartition/HLOD/HLODRuntimeSu
 quote = '''TEXT("wp.Runtime.HLOD.WarmupNumFrames"),
 	5,
 	TEXT("Delay unloading of a cell for this amount of frames to ensure HLOD assets are ready to be shown at the proper resolution. Set to 0 to force disable warmup.")); [...] const bool bWarmupNeeded = (bNaniteEnabled && bWarmupNanite) || (bVirtualTextureEnabled && bWarmupVT);'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["unity-6000-speedtree-geomorph"]
 url = "https://docs.unity3d.com/6000.0/Documentation/Manual/class-LODGroup.html"
 section = "Unity 6 (6000.0) Manual, LOD Group, Working with SpeedTree Models; Blending for SpeedTree Models"
 quote = '''SpeedTree geometries store the next LOD position for each vertex. Every vertex then knows how to interpolate between the current LOD position and the next LOD position. [...] The Speed Tree mode uses the blend factor to interpolate the vertex positions between the current Mesh LOD level and the next Mesh LOD level, and then renders the geometry at that position.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["unity-6000.0-layer-cull-distances"]
 url = "https://docs.unity.com/en-us/engine/6000.0/script-reference/unityengine/camera/layerculldistances"
 section = "Unity 6000.0 Scripting API, Camera.layerCullDistances, Remarks"
 quote = '''You can set up some Layers to use smaller culling distances using layerCullDistances. This is very useful to cull small objects early on, if you put them into appropriate layers.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["unity-6000.0-lodgroup-transition-height"]
 url = "https://docs.unity.com/en-us/engine/6000.0/manual/analysis/graphics-performance-profiling/simplifying-distant-meshes-with-level-of-detail-lod/class-lodgroup"
 section = "Unity 6000.0 Manual, LOD Group component reference, LOD Group selection bar and Transitioning between LOD levels"
 quote = '''The percentage that appears in each LOD level box represents the threshold at which that level becomes active, based on the ratio of the GameObject's screen space height to the total screen height. [...] Cross-fading is the technique of rendering two levels at the same time, with a weighting of 1 to 0 for the current LOD level and 0 to 1 for the next LOD level [...] Unity usually implements the cross-fading by using either screen-space dithering or transparency. For the last LOD level, there is no cross-fading: the current level just fades out.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["unity-graphics-6000.0-cpu-instance-culling-job"]
 url = "https://github.com/Unity-Technologies/Graphics/blob/9808614cd04ae97bda6a5aed91c54b841e585133/Packages/com.unity.render-pipelines.core/Runtime/GPUDriven/InstanceCuller.cs#L135-L138"
@@ -6034,7 +6034,7 @@ quote = '''[BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.P
         public const int k_BatchSize = 32;
 [...]
             }.Schedule(instanceData.instancesLength, CullingJob.k_BatchSize);'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["unity-graphics-6000.0-small-mesh-culling"]
 url = "https://github.com/Unity-Technologies/Graphics/blob/9808614cd04ae97bda6a5aed91c54b841e585133/Packages/com.unity.render-pipelines.core/Runtime/GPUDriven/InstanceCuller.cs#L296-L310"
@@ -6045,7 +6045,7 @@ quote = '''else if(viewType < BatchCullingViewType.SelectionOutline && (instance
                 var maxDist = LODGroupRenderingUtils.CalculateLODDistance(minScreenRelativeHeight, worldSpaceSize);
 [...]
                 lodPercent = math.saturate((maxDist - cameraDist) / fadeOutRange);'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["unity-graphics-core-lod-dithering-taa"]
 url = "https://github.com/Unity-Technologies/Graphics/blob/0efc28ea742b1966b9dd9cc4489e58b986a13faf/Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl#L1673-L1685"
@@ -6054,38 +6054,38 @@ quote = '''// LOD0 must use this function with ditherFactor 1..0
 // LOD1 must use this function with ditherFactor -1..0 [...]
     // Generate a spatially varying pattern.
     // Unfortunately, varying the pattern with time confuses the TAA, increasing the amount of noise.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["unity-hlodsystem-04be7e8-readme"]
 url = "https://github.com/Unity-Technologies/HLODSystem/blob/04be7e86357c5f3e11726b6ac9c33bd4fe1c3040/README.md#L7-L22"
 section = "Unity Technologies, HLODSystem (com.unity.hlod), README at commit 04be7e8, overview and results table (L7-L22), licence (L64-L65)"
 quote = '''It can replace multiple Static Mesh Actors with single, combined Static Mesh Actor at long view distances. This helps reduce the number of Actors that need to be rendered for the scene, increasing performance by lowering the number of draw calls per frame. [...] Licensed under the Unity Companion License for Unity-dependent projects'''
 cost = '''DrawCalls: Tris [...] Normal: 5642: 8.0M; HLOD: 952: 3.9M; Rate: 16.87%: 48.75% (hardware not stated)'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["unity-urp-17-lod-crossfade-dither"]
 url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.universal@17.0/manual/universalrp-asset.html"
 section = "Unity URP 17.0 Manual, Universal Render Pipeline Asset, Quality: LOD Cross Fade Dithering Type"
 quote = '''When a LOD group has Fade Mode set to Cross Fade , Unity renders the Renderer's LOD meshes with cross-fade blending between them using either alpha testing or stencil testing. This property defines the dithering pattern of LOD cross-fade. Available options: Bayer Matrix : better performance than the Blue Noise option, but has a repetitive pattern. Blue Noise : uses a precomputed blue noise texture and provides a better look than the Bayer Matrix option, but has a slightly higher performance cost. 2x2 Stencil : Unity uses bits 4 and 8 in the stencil buffer to apply a 2 × 2 dithering pattern, instead of alpha testing.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["vk-lod-clusters-persistent-nvidia-only"]
 url = "https://github.com/nvpro-samples/vk_lod_clusters/blob/20352f04a5bce46938ca63871c1389b0fac921fa/README.md#L229"
 section = "nvpro-samples vk_lod_clusters (Apache-2.0) README at 20352f0, Limitations"
 quote = '''The number of threads used in the persistent kernel is based on a crude heuristic for now and was not evaluated to be the optimal amount. The Persistent kernel is deactivated for non-NVIDIA hardware.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["webgpu-alpha-to-coverage-mask"]
 url = "https://github.com/gpuweb/gpuweb/blob/688f043ecf3294687d54fe68b79e0cd527eafb4b/spec/index.bs#L17012-L17025"
 section = "WebGPU specification source, Rasterization, Alpha to Coverage"
 quote = '''In alpha-to-coverage mode, an additional alpha-to-coverage mask of MSAA samples is generated based on the alpha component of the fragment shader output value at `@location(0)`. The algorithm of producing the extra mask is platform-dependent and can vary for different pixels. [...] Not all platforms guarantee that the number of bits set to 1 in the mask monotonically increases as alpha increases for a given pixel.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["webgpu-sample-mask-vs-alpha-to-coverage"]
 url = "https://github.com/gpuweb/gpuweb/blob/688f043ecf3294687d54fe68b79e0cd527eafb4b/spec/index.bs#L8792-L8794"
 section = "WebGPU specification source, validating GPURenderPipelineDescriptor"
 quote = '''If the [=builtin/sample_mask=] builtin is a [=shader stage output=] of |descriptor|.{{GPURenderPipelineDescriptor/fragment}}: - |descriptor|.{{GPURenderPipelineDescriptor/multisample}}.{{GPUMultisampleState/alphaToCoverageEnabled}} is `false`.'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["wgpu-30.0.1-alpha-to-coverage"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/render.rs#L433-L442"
@@ -6100,20 +6100,20 @@ quote = '''/// Bitmask that restricts the samples of a pixel modified by this pi
     /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
     /// is guaranteed to be all 1-s.
     pub alpha_to_coverage_enabled: bool,'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["wihlidal-2024-empty-execute-indirect"]
 url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Nanite+GPU+Driven+Materials.pdf#page=114"
 section = "Wihlidal (Epic), Nanite GPU-Driven Materials, GDC 2024, p. 114 (empty-bin trace p. 113)"
 quote = '''On Xbox, an empty ExecuteIndirect on the graphics pipe is roughly 90 nanoseconds on average ● Some of them spike up to 500 nanoseconds (sometimes worse), when the memory location for the indirect args results in a GL2 cache miss [...] ● When the GPU is starved of work, misses are costly'''
 cost = '''roughly 90 nanoseconds on average [per empty ExecuteIndirect, Xbox]; spikes up to 500 nanoseconds'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["unity-6000-uv-distribution-metric"]
 url = "https://docs.unity.com/en-us/engine/6000.0/script-reference/unityengine/mesh/getuvdistributionmetric"
 section = "Unity 6.0 Scripting API, Mesh.GetUVDistributionMetric: description, return value and the example's CalculateMipmapLevel"
 quote = '''The UV distribution metric can be used to calculate the desired mipmap level based on the position of the camera. [...] Average of triangle area / uv area. [...] // uvDistributionMetric is the average of triangle area / uv area (a ratio from world space triangle area to normalised uv area) // - triangle area is in world space // - uv area is in normalised units (0->1 rather than 0->texture size)'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["wgpu-core-30-lose-if-oom"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L688-L699"
@@ -6259,148 +6259,148 @@ url = "https://gaoxifeng.github.io/papers/2023/TOG_High_Quality_Texture_Baking.p
 section = "Knodt, Pan, Wu and Gao, Joint UV Optimization and Texture Baking, ACM Transactions on Graphics 2023 (author-hosted copy), §2 Related Work, Texture Baking, p. 2; timing comparison text, p. 12; cost from Table 2, p. 13 (ms per iteration, iterations until convergence, 512 x 512 texture); hardware from §5 Experiments, p. 7"
 quote = '''Given the high-poly and the low-poly model with its UV layout, this approach first casts a ray for each surface texel of the low-poly along its normal direction, then computes the interpolated attributes at the intersection point between the ray and the high-poly, and directly assigns the attribute to the texture of the low-poly. [...] Raycasting approaches are two orders of magnitude faster than any of the approaches listed though and are the most efficient.'''
 cost = '''OursUV,SH (512) 607 4504 [...] a single NVIDIA Titan XP GPU with 12 GB of RAM'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["blender-5.2-selected-to-active"]
 url = "https://docs.blender.org/manual/en/5.2/render/cycles/baking.html"
 section = "Blender 5.2 Manual, Render, Cycles, Render Baking, Selected to Active"
 quote = '''The rays are cast from the low-poly object inwards towards the high-poly object. [...] A cage is a ballooned-out version of the low-poly mesh created either automatically [...] When not using a cage the rays will conform to the mesh normals. This produces glitches on the edges,'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-proxylod-ray-correspondence"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Plugins/Editor/ProxyLODPlugin/Source/ProxyLOD/Private/ProxyLODMaterialTransferUtilities.h#L30-L32"
 section = "Unreal Engine 5.8.4, ProxyLODPlugin, ProxyLODMaterialTransferUtilities.h, CreateCorrespondence (L30-L32) and MapFlattenMaterials' UnresolvedSrcColor parameter (L102-L103) (repository needs an Epic-linked GitHub account)"
 quote = '''This is done by firing rays from locations on the reduced mesh polys that correspond to [...] texel centers in a texture atlas grid space and recording the poly and uv-coordinate location [...] hit in the SrcMesh along with additional information. [...] Base color to be used when the src geometry can't be identified (e.g. regions where [...] gap filling has closed doors and windows)'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-proxylod-hit-selection"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Plugins/Editor/ProxyLODPlugin/Source/ProxyLOD/Private/ProxyLODMaterialTransferUtilities.cpp#L242-L291"
 section = "Unreal Engine 5.8.4, ProxyLODPlugin, ProxyLODMaterialTransferUtilities.cpp, CreateCorrespondence, L242, L288 and L291 (repository needs an Epic-linked GitHub account)"
 quote = '''// We have to shoot rays in forward & back-facing normal direction to look for the closest source triangle. [...] if (bForwardCodirectional && bReverseCodirectional) // Both hits were "valid" [...] // pick the closest'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-proxylod-supersampling"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Plugins/Editor/ProxyLODPlugin/Source/ProxyLOD/Private/ProxyLODPlugin.cpp#L990-L1055"
 section = "Unreal Engine 5.8.4, ProxyLODPlugin, ProxyLODPlugin.cpp, the super-sampled UV grid (L990) and the ray's termination distance (L1055) (repository needs an Epic-linked GitHub account)"
 quote = '''const int32 SuperSampleNum = 16; [...] double RequestedMaxRay = (bOverrideRayDist) ? InProxySettings.MaxRayCastDist : 6. * VoxelSize;'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["blender-5.2.3-bake-jitter"]
 url = "https://github.com/blender/blender/blob/v5.2.3/intern/cycles/kernel/integrator/init_from_bake.h#L19-L29"
 section = "Blender v5.2.3, Cycles kernel, intern/cycles/kernel/integrator/init_from_bake.h, comment above bake_jitter_barycentric, L19-L29 (SPDX-License-Identifier: Apache-2.0)"
 quote = '''/* In order to perform anti-aliasing during baking, we jitter the input barycentric coordinates [...] * (which are for the center of the texel) within the texel. [...] * However, the baking code currently doesn't support going to neighboring triangle, so if the [...] * For triangles that are smaller than a texel, this might take too many attempts, so eventually [...] * we just give up and don't jitter in that case.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["cignoni-1999-resampling-detail-textures"]
 url = "https://web.archive.org/web/20231202143542/https://irinsubria.uninsubria.it/bitstream/11383/10484/1/preserving2.pdf#page=4"
 section = "Cignoni, Montani, Rocchini, Scopigno and Tarini, Preserving attribute values on simplified meshes by resampling detail textures, The Visual Computer 15 (1999) pp. 519-539, §3.1 Sampling texture patches, pp. 522-523 (PDF pp. 4-5)"
 quote = '''For each elementary surface sample p S we detect the corresponding point p M ∈ M by computing the point at a minimal euclidean distance from p S (Fig. 2). [...] In some cases choosing the nearest face may produce aliasing. An example can be the case of a simplified mesh that contains subareas with a very thin solid section [...] Again, in this case we are trying to produce an impostor rather than a good simplified model, and therefore a standard projective technique is more adequate.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["cignoni-1999-oversampling"]
 url = "https://web.archive.org/web/20231202143542/https://irinsubria.uninsubria.it/bitstream/11383/10484/1/preserving2.pdf#page=8"
 section = "Cignoni, Montani, Rocchini, Scopigno and Tarini, Preserving attribute values on simplified meshes by resampling detail textures, The Visual Computer 15 (1999), §3.3 Improving texture quality, p. 526 (PDF p. 8); cost from Table 3, p. 529 (PDF p. 11): seconds without I/O for the fandisk mesh at sampling steps of 0.2%, 0.5%, 1% and 2% of the bounding box diagonal; hardware from §6, p. 536 (PDF p. 18)"
 quote = '''Our tool adopts oversampling to improve texture quality, and the oversampling rate is a user-selected parameter. Multiple samples are distributed regularly in the small sampling area associated with each point p and evaluated. The average of these samples is stored in the texture'''
 cost = '''Sampling – no multisampling 14.718 2.769 0.977 0.452 [...] Sampling – multisampling 3 × 3 128.441 22.520 7.279 3.205 [...] The times are associated with the SGI O2, R5000 180 MHz'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["cohen-1998-appearance-preserving"]
 url = "https://userpages.cs.umbc.edu/olano/papers/aps/APS.pdf#page=1"
 section = "Cohen, Olano and Manocha, Appearance-Preserving Simplification, SIGGRAPH 1998, Abstract and §1.1, p. 1; §4.2 Creating Texture and Normal Maps, p. 4"
 quote = '''We convert the input surface to a representation that decouples the sampling of these three attributes, storing the colors and normals in texture and normal maps, respectively. [...] The color and normal attributes are filtered by the run-time system at the pixel level, using standard mip-mapping techniques [1]. [...] To create a map, scan convert each triangle of M0, replacing each of its vertex coordinates, Vj, with F(Vj), the texture coordinates of the vertex.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-approximate-photo-set-sample"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/GeometryCore/Public/Image/SpatialPhotoSet.h#L100-L105"
 section = "Unreal Engine 5.8.4, GeometryCore, Image/SpatialPhotoSet.h, TSpatialPhotoSet::ComputeSample, doc comment L100-L105 and the TODO at L222 (the sampler behind the Approximated Mesh HLOD layer's bake; repository needs an Epic-linked GitHub account)"
 quote = '''This is effectively a reprojection process, that tries to find the "best" [...] pixel value in the photo set that projects onto the given Position/Normal. [...] A position may be visible from multiple photos, in this case the dot-product [...] between the view vector and normal is used to decide which photo pixel to use. [...] // TODO This bilinear sampling causes artefacts when it blends pixels from different depths (hence unrelated'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-approximate-bake-settings"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Public/MeshMerge/MeshApproximationSettings.h#L222-L228"
 section = "Unreal Engine 5.8.4, Engine/Public/MeshMerge/MeshApproximationSettings.h, FMeshApproximationSettings, Material Baking Settings, L222-L228 (repository needs an Epic-linked GitHub account)"
 quote = '''/** If Value is > 1, Multisample output baked textures by this amount in each direction (eg 4 == 16x supersampling) */ [...] int32 MultiSamplingAA = 0; [...] /** If Value is zero, use MaterialSettings resolution, otherwise override the render capture resolution */ [...] int32 RenderCaptureResolution = 2048;'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-material-proxy-texture-sizing"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Classes/Engine/MaterialMerging.h#L21"
 section = "Unreal Engine 5.8.4, Engine/Classes/Engine/MaterialMerging.h, ETextureSizingType, L21 (repository needs an Epic-linked GitHub account)"
 quote = '''TextureSizingType_AutomaticFromMeshDrawDistance UMETA(DisplayName = "Automatic - From Mesh Draw Distance", ToolTip = "When working with World Partition HLODs, the draw distance is automatically deduced from the runtime grid loading range."),'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["simplygon-10.4-mapping-image"]
 url = "https://documentation.simplygon.com/SimplygonSDK_10.4.490.0/api/concepts/processorsettings/mappingimagesettings.html"
 section = "Simplygon SDK 10.4.490.0 documentation, Concepts, Mapping image settings, introduction"
 quote = '''A Mapping image is basically a texture on the reduced geometry where each pixel contains information of which triangle and barycentric coordinate on the original geometry that the pixel corresponds to.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["simplygon-10.4-caster-layers"]
 url = "https://documentation.simplygon.com/SimplygonSDK_10.4.490.0/api/concepts/materialcasting/materialcasters/materialcasters.html"
 section = "Simplygon SDK 10.4.490.0 documentation, Concepts, Material casters, introduction and the Color caster's row"
 quote = '''The material casting is a post-process of all mapping image generating processing objects, where the caller application can use the mapping image data to "cast" material and texture data from the original onto the processed geometry. [...] General color casting (diffuse/basecolor/roughness etc.). If using the remesher, the color values will be accumulated through mapping image layers using the defined opacity channel.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-merge-unique-uv-bake"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Developer/MeshMergeUtilities/Private/MeshMergeUtilities.cpp#L2847-L2848"
 section = "Unreal Engine 5.8.4, MeshMergeUtilities.cpp, material merging of merged meshes, L2847-L2848 and L3117-L3118 (repository needs an Epic-linked GitHub account)"
 quote = '''// If we are generating a single LOD and want to merge materials we can utilize texture space better by generating unique UVs [...] // for the merged mesh and baking out materials using those UVs [...] // If we're working with a new set of UVs, we can bake all materials directly to the same bake output [...] // as our remapped UVs for each mesh don't overlap.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["unity-hlodsystem-04be7e8-simple-batcher"]
 url = "https://github.com/Unity-Technologies/HLODSystem/blob/04be7e86357c5f3e11726b6ac9c33bd4fe1c3040/com.unity.hlod/Documentation~/Batcher.md#L15-L19"
 section = "Unity Technologies, HLODSystem (com.unity.hlod) at commit 04be7e8, Documentation~/Batcher.md, SimpleBatcher, L15-L19"
 quote = '''we need to combine the textures referenced by different [...] materials into textures referenced by the new material, and [...] accordingly perform UV-remapping when building the merged mesh.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["simplygon-10.4-aggregation-tiled"]
 url = "https://documentation.simplygon.com/SimplygonSDK_10.4.490.0/api/concepts/processors/aggregation.html"
 section = "Simplygon SDK 10.4.490.0 documentation, Concepts, Aggregation processor, introduction"
 quote = '''The output geometry and each individual texture chart is identical to the inputs, but the charts have been combined and repositioned into a new, unified texture atlas. In relation to the usual Simplygon parameterizer, which generates new, unique UVs for every point on the mesh, the aggregator is a good solution for combining multiple instances of the same object, or when dealing with tiled textures. [...] One good example when to use the scene aggregator is when you want to combine objects to define a building, where each window is an instance of each other.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["chen-2023-robust-low-poly"]
 url = "https://zhenchen-jay.github.io/uploads/RobustLowPoly.pdf#page=2"
 section = "Chen, Pan, Wu, Vouga and Gao, Robust Low-Poly Meshing for General 3D Models, ACM Transactions on Graphics 42(4) (SIGGRAPH 2023), author-hosted copy, §1 Introduction, p. 2; hardware p. 11 and Timings p. 12 of the author-hosted PDF"
 quote = '''These additional properties are essential for artists to conveniently perform UV-generation and texture baking on the bare low-poly mesh.'''
 cost = '''We take about 7 minutes on average to finish the remeshing of the entire tested dataset while the others take less than 2 minutes, except for Gao et al. [2022] (over 10 minutes) [...] a workstation with a 32-cores Intel processor clocked at 3.7Ghz and 256Gb of memory'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["sander-2001-tmpm-packing-efficiency"]
 url = "https://hhoppe.com/tmpm.pdf#page=7"
 section = "Sander, Snyder, Gortler, Hoppe, Texture Mapping Progressive Meshes, SIGGRAPH 2001, §4.6 Pack chart polygons (p. 5), Table 1 (p. 6, four models, one per column), §5 Results (p. 7)"
 quote = '''We simplify the problem by conservatively approximating each chart polygon with the least-area rectangle that encloses it. [...] Packing efficiency is the sum of chart areas in 2D divided by the rectangular texture domain area. It is less than unity due to two factors: the enclosure of chart polygons into rectangles, and the wasted space between the packed rectangles. [...] rectangle-packing effic. 0.87 0.89 0.91 0.82 [...] packing efficiency 0.67 0.63 0.70 0.62'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["liu-2019-bounded-packing-efficiency"]
 url = "https://ustc-gcl-f.github.io/projects/AAAtlas/index.html"
 section = "Liu, Fu, Ye, Chai, Liu, Atlas Refinement with Bounded Packing Efficiency, ACM TOG 38(4) (SIGGRAPH 2019), doi:10.1145/3306346.3323001, abstract as on the authors' project page (the paper PDF itself was not opened)"
 quote = '''Central to this method is the use of the axis-aligned structure that converts the general polygon packing problem to a rectangle packing problem, which is easier to achieve high packing efficiency. [...] For all models, our method is able to produce packed atlases with bounded packing efficiency; for example, when the packing efficiency bound is set to 80%, we elongate the boundary length by an average of 78.7% and increase the distortion by an average of 0.0533%.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["xatlas-f700c77-planar-charts"]
 url = "https://github.com/jpcy/xatlas/blob/f700c7790aaa030e794b52ba7791a05c085faf0c/source/xatlas/xatlas.cpp#L5174"
 section = "xatlas at commit f700c77, source/xatlas/xatlas.cpp, struct PlanarCharts, comments at L5174 and L5248"
 quote = '''// Precompute regions of coplanar incident faces. [...] // Create charts from suitable planar regions.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["jylanki-2010-maxrects"]
 url = "https://github.com/juj/RectangleBinPack/blob/83e7e1132d93777e3732dfaae26b0f3703be2036/RectangleBinPack.pdf"
 section = "Jylänki, A Thousand Ways to Pack the Bin - A Practical Approach to Two-Dimensional Rectangle Bin Packing, self-published technical report, 2010-02-27, §5 Conclusions and Future Work, p. 33; in the author's repository at commit 83e7e11, whose Readme.txt says 'All the code is released to Public Domain.'"
 quote = '''clear that the MAXRECTS algorithms perform the best of all. [...] The GUILLOTINE variants are [...] faster than the MAXRECTS algorithms, but also perform slightly worse. The SHELF algorithms should only be favored if implementation simplicity is a concern.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["levy-2002-lscm-tetris-packing"]
 url = "https://www.cs.jhu.edu/~misha/Fall09/Levy02.pdf#page=7"
 section = "Lévy, Petitjean, Ray, Maillot, Least Squares Conformal Maps for Automatic Texture Atlas Generation, SIGGRAPH 2002, §4 Packing and Table 2 (p. 7), hardware from §5 Results (p. 8); copy on a Johns Hopkins course page"
 quote = '''For this reason, we propose a different algorithm, that packs the charts directly rather than their bounding rectangles. [...] As in classical approaches, in order to avoid unwanted blends caused by mip-mapping, an additional margin is added to the horizons. [...] packing ratio (rectangles) 0.48 0.51 0.43 0.37 [...] packing ratio (our algo.) 0.55 0.55 0.6 0.58'''
 cost = '''The algorithm performs well, and takes less than one second to process all the data sets we have tested. [...] obtained on a 1.3 GHz Pentium III (note that the timings for the packing algorithm are not included, since they are negligible)'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["carr-2002-mip-mappable-atlas"]
 url = "https://userpages.cs.umbc.edu/olano/s2004c01/ch10.pdf#page=13"
 section = "Carr and Hart, Meshed Atlases for Real-Time Procedural Solid Texturing, ACM TOG 21(2), April 2002, doi:10.1145/508357.508360, §3.3 Coverage (PDF p. 10), §5 A Multiresolution Mesh Atlas (p. 13), §6.1 Global Statistics (p. 20); copy on a UMBC course page"
 quote = '''The coverage of atlases of packed complex polygons was quite low, covering less than half of the available texture samples in our tests. [...] This section describes an alternative clustering method that yields rectangular chart images that pack efficiently and according to a property that preserves spatial coherence across all levels of the MIP map. [...] Because the chart images are rectangular, the coverage for the multiresolution atlas is 100% which means all of the available texture samples are used. The progressive mesh atlas [Sander et al. 2001] can also be MIP mapped, but its coverage was at most about 70%.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["xatlas-f700c77-pack-options"]
 url = "https://github.com/jpcy/xatlas/blob/f700c7790aaa030e794b52ba7791a05c085faf0c/source/xatlas/xatlas.h#L197-L232"
@@ -6414,38 +6414,38 @@ quote = '''// Number of pixels to pad charts with.
 
 	// Slower, but gives the best result. If false, use random chart placement.
 	bool bruteForce = false;'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["sander-2001-tmpm-gutter-pull-push"]
 url = "https://hhoppe.com/tmpm.pdf#page=6"
 section = "Sander, Snyder, Gortler, Hoppe, Texture Mapping Progressive Meshes, SIGGRAPH 2001, §4.7 Sample texture images (p. 6), §5 Results (p. 7)"
 quote = '''In general, schemes that pack multiple charts into a single texture image may give rise to mip-mapping artifacts, since coarser [...] levels will average together spatially disjoint charts. [...] To mitigate this, we apply a pull-push algorithm [7] to fill-in these unsampled regions with reasonable values. [...] A 1-texel gutter is required between texture charts in the texture domain. The overhead of these gutters depends on the resolution assigned to the texture.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["nvidia-2004-atlas-lower-mip-bleed"]
 url = "https://download.nvidia.com/developer/NVTextureSuite/Atlas_Tools/Texture_Atlas_Whitepaper.pdf#page=13"
 section = "NVIDIA, Improve Batching Using Texture Atlases, SDK White Paper, July 2004, Applying Texture Filtering To Atlases, PDF pp. 13-14 (printed pp. 12-13), Figure 8"
 quote = '''While bilinear filtering of the highest resolution mip-level is thus safe, anisotropic filtering of the same mip-level does potentially access unrelated neighboring texels. Worse, bilinear and anisotropic filtering of all lower mip-maps also access unrelated neighboring texels, as Figure 8 demonstrates. [...] These solutions have not yet been implemented, so the following discussion is only theory. [...] The first solution is to write a pixel-shader to clamp atlas coordinates to corresponding sub-textures taking into account which mip-level the texture operation is about to access. [...] The second solution is to pad textures and their mip-chains with border texels. For example, surround the 1x1 mip-map with identical texels so that it consumes a total of 3x3 texels space. These border texels of lower mip-maps, however, need to map up to the higher mip-levels. In the above example, the padded 3x3 mip-map is the lowest mip-level. The one above it would be of dimension 6x6 for a 2x2 block of data. This scheme quickly wastes texture-memory.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["nvidia-2004-atlas-power-of-two-lines"]
 url = "https://download.nvidia.com/developer/NVTextureSuite/Atlas_Tools/Texture_Atlas_Whitepaper.pdf#page=5"
 section = "NVIDIA, Improve Batching Using Texture Atlases, SDK White Paper WP-01387-001-v01, July 2004, Using Mip-Maps with Atlases, PDF p. 5 (printed p. 4), Figure 2"
 quote = '''Finally, even generating mip-map chains of atlases on the fly with a two-by-two [...] filter does not pollute mip-maps with neighboring texels [...] contains only power-of-two textures that do not unnecessarily cross power-of-two lines. For example, a 32x32 atlas containing one 16x16 texture and twelve 8x8 textures must ensure that the 16x16 texture is in one of the four corners of the atlas'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["vanwaveren-2012-svt-border-per-mip"]
 url = "https://mrelusive.com/publications/papers/Software-Virtual-Textures.pdf#page=9"
 section = "van Waveren, Software Virtual Textures, id Software, 2012-02-25, §3.2 Texture Filtering, pp. 9-10; cost from §4.1 Storage & Compression, p. 18"
 quote = '''In order to properly support hardware bi-linear filtering, each physical texture page must have a border of texels around it. [...] For instance, if texture pages have a 4-texel border then the first mip level of the physical texture is populated with pages that are half the size with a 2-texel border [...] The 4-texel border maps well to the 4x4 block size of a hardware supported compression format (DXT, S3TC, ETC, etc.)'''
 cost = '''With a 4-texel inset border for texture filtering and a physical page size of 128 x 128 texels this leaves only 120 x 120 texels worth of payload per page. As such, the border required for proper texture filtering winds up costing approximately 12% in additional texels.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ray-2010-invisible-seams-mip-levels"]
 url = "https://diglib.eg.org/bitstreams/7890a42e-dcd2-4396-8065-5ae568cca077/download#page=6"
 section = "Ray, Nivoliers, Lefebvre, Lévy, Invisible Seams, Computer Graphics Forum 29(4) (EGSR 2010), doi:10.1111/j.1467-8659.2010.01746.x, §4.4 MIP-mapping support (PDF pp. 6-7)"
 quote = '''We are nevertheless able to define a texture atlas providing continuous interpolation across several MIP–map levels – typically the three or four finest levels, depending on the initial texture resolution (see Figure 11). [...] Coarser levels are of course MIP-mapped but perfect continuity is no longer guaranteed. It is important to realize though that coarse levels correspond to far away viewpoints: The object is small on screen and MIP-map levels are strongly filtered – color differences across charts are difficult to perceive.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-material-proxy-defaults"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Private/MaterialMerging.cpp#L15-L21"
@@ -6457,32 +6457,32 @@ quote = '''FMaterialProxySettings::FMaterialProxySettings()
 	, MeshMaxScreenSizePercent(0.5f)
 	, MeshMinDrawDistance(10000.0f)
 	, GutterSpace(4.0f)'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["simplygon-10.4-gutter-space"]
 url = "https://documentation.simplygon.com/SimplygonSDK_10.4.199.0/api/reference/processingandmaterialcasting/settingsobject/mappingimageoutputmaterialsettings.html"
 section = "Simplygon SDK 10.4.199.0, API reference, MappingImageOutputMaterialSettings, GutterSpace"
 quote = '''The minimum number of pixels between charts of the output mapping image. [...] Type: unsigned int Default: 4'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["simplygon-10.4-dilation"]
 url = "https://documentation.simplygon.com/SimplygonSDK_10.4.199.0/api/reference/processingandmaterialcasting/settingsobject/colorcastersettings.html"
 section = "Simplygon SDK 10.4.199.0, API reference, ColorCasterSettings, Dilation and FillMode (inherited from MaterialCasterSettings)"
 quote = '''The Dilation value. Where applicable, such as colors and normals, the caster will fill empty pixels surrounding filled pixels with values mixed from the filled ones. This setting sets how many pixels to fill outside the original filled pixels. [...] Type: unsigned int Default: 10 [...] The fill mode determines what to do with the pixels that remain unfilled after both the casting and dilation has been performed.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["andersson-2007-colour-map-detail-maps"]
 url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/chapter5-andersson-terrain-rendering-in-frostbite.pdf#page=1"
 section = "Andersson (EA DICE), Terrain Rendering in Frostbite Using Procedural Shader Splatting, Advanced Real-Time Rendering in 3D Graphics and Games, SIGGRAPH 2007 course notes, ch. 5, §5.1 Introduction"
 quote = '''One of the more common approaches for terrain texturing is to combine low-resolution unique color maps (Figure 1) for low-frequency details with multiple tiled detail maps for high-frequency details that are blended in at certain distance to the camera.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["widmark-2012-bf3-terrain-virtual-texture"]
 url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/gdc12-terrain-in-battlefield3.pdf#page=31"
 section = "Mattias Widmark (EA DICE), Terrain in Battlefield 3: A Modern, Complete and Scalable System, GDC 2012, slides GPU optimization: Procedural virtual texturing (PDF p. 31), Virtual texture key values (p. 32) and Virtual texture issues (p. 38)"
 quote = '''Shader splatting not scalable in view distance [...] By splatting into a texture [...] 32 samples per meter [...] 256x256 tiles with integrated two pixel border [...] Have to limit detail view distance'''
 cost = '''Rendering full screen using the texture cost 2.5-3ms (PS3)'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-landscape-hlod-bake"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Landscape/Private/LandscapeHLODBuilder.cpp#L243-L297"
@@ -6495,19 +6495,19 @@ quote = '''LandscapeFlattenMaterial.SetPropertySize(EFlattenMaterialProperties::
 			{
 				int32 TextureSize = ComputeRequiredTextureSize(LandscapeProxy, static_cast<float>(InHLODBuildContext.MinVisibleDistance), MeshDescription);
 				LandscapeMaterial = BakeLandscapeMaterial(InHLODBuildContext, *MeshDescription, LandscapeProxy, TextureSize);'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["moore-2018-fc5-baked-albedo"]
 url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=80"
 section = "Jeremy Moore (Ubisoft), Terrain Rendering in Far Cry 5, GDC 2018, speaker notes, PDF pp. 14, 17 and 80"
 quote = '''In Far Cry the highest resolution for our terrain tiles is 64 meters square. [...] Baked albedo map (BC1, 132x132) [...] Far shading can be handled directly and cheaply using the albedo/normal of the quad tree payload. For near shading we need to use the splat map.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["werle-2017-wildlands-vista-texture"]
 url = "https://666uille.files.wordpress.com/2017/03/gdc2017_ghostreconwildlands_terrainandtechnologytools-onlinevideos1.pdf#page=34"
 section = "Werlé and Martinez (Ubisoft), Ghost Recon Wildlands: Terrain Tools and Technology, GDC 2017, speaker notes, PDF pp. 33-34; copy hosted at 666uille.files.wordpress.com"
 quote = '''The result of the material distribution is then saved into 2 textures We call the first one the « splatting ». It contains a material index for each entry of the heightmap [...] The second one is called the « Vista » texture and looks likes a google map screencapture. It will be used as an albedo map when rendering the distant patches.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["unity-hlodsystem-04be7e8-terrain-hlod"]
 url = "https://github.com/Unity-Technologies/HLODSystem/blob/04be7e86357c5f3e11726b6ac9c33bd4fe1c3040/com.unity.hlod/Documentation~/TerrainHLOD.md?plain=1#L3"
@@ -6518,43 +6518,43 @@ TerrainHLODMesh material. [...] **Size:** Specifies the size at which the textur
 
 **Texture properties:** We'll bake 3 textures for the material:
 Albedo, Normal, and Mask.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["rossignac-1993-vertex-clustering"]
 url = "https://faculty.cc.gatech.edu/~jarek/papers/VertexClustering.pdf#page=2"
 section = "Rossignac and Borrel, Multi-resolution 3D approximations for rendering complex scenes, IBM Research Report RC 17697 (1992), published in Geometric Modeling in Computer Graphics, Springer 1993, pp. 455-465; author-hosted scan with no text layer, read as page images: §1 Introduction (PDF p. 2), §3.1 Grading and §3.3 Clustering (PDF p. 3)"
 quote = '''an elongated solid may be approximated by a curve segment. However, the error introduced by the simplification is bounded (in the Hausdorf distance sense) by a user-controlled accuracy factor [...] We favor (1) vertices that have a higher probability of lying on the object's silhouettes from an arbitrary viewing direction and (2) vertices that bound large faces that should not be affected by the removal of small details. [...] A box, or other bound, containing the object is uniformly subdivided into cells. Vertices falling within one cell form a cluster and will be replaced by a unique vertex.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-sloppy-output"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/simplifier.cpp#L2172-L2260"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/simplifier.cpp, fillCellRemap (L2172-L2187), filterTriangles (L2217-L2260) and meshopt_simplifySloppy's result (L2695, L2706-L2707)"
 quote = '''float error = quadricError(cell_quadrics[cell], vertex_positions[i]); if (cell_remap[cell] == ~0u || cell_errors[cell] > error) { cell_remap[cell] = unsigned(i); cell_errors[cell] = error; } [...] if (c0 != c1 && c0 != c2 && c1 != c2) [...] // vertex collapses often result in duplicate triangles; we need a table to filter them out [...] *out_result_error = sqrtf(result_error);'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-sloppy-grid"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/simplifier.cpp#L2580-L2666"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/simplifier.cpp, computeVertexIds (L2022-L2040) and meshopt_simplifySloppy's grid search (L2589-L2590, L2607-L2609, L2625-L2626)"
 quote = '''vertex_ids[i] = (xi << 20) | (yi << 10) | zi; [...] // we expect to get ~2 triangles/vertex in the output size_t target_cell_count = target_index_count / 6; [...] // invariant: # of triangles in min_grid <= target_count int min_grid = int(1.f / (target_error < 1e-3f ? 1e-3f : (target_error < 1.f ? target_error : 1.f))); int max_grid = 1025; [...] if (min_triangles >= target_index_count / 3 || max_grid - min_grid <= 1) break;'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-sloppy-declaration"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L497-L511"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/meshoptimizer.h, meshopt_simplifySloppy, lines 497-511"
 quote = '''Experimental: Mesh simplifier (sloppy) [...] The algorithm doesn't preserve mesh topology but can stop short of the target goal based on target error. [...] vertex_lock can be NULL; when it's not NULL, it should have a value for each vertex; vertices that can't be moved should set 1 consistently for all indices with the same position [...] MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const unsigned char* vertex_lock, size_t target_index_count, float target_error, float* result_error);'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-gltfpack-simplify"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/gltf/mesh.cpp#L890-L956"
 section = "meshoptimizer 0.25, gltf/mesh.cpp (gltfpack), simplifyMesh, lines 911-950"
 quote = '''float target_error_aggressive = 1e-1f; [...] if (lock_borders) options |= meshopt_SimplifyLockBorder; else options |= meshopt_SimplifyPrune; [...] // if the precise simplifier got "stuck", we'll try to simplify using the sloppy simplifier; this is only used when aggressive simplification is enabled as it breaks attribute discontinuities [...] indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error_aggressive));'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-edge-collapse-topology"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/simplifier.cpp#L1281-L1343"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/simplifier.cpp, buildPositionRemap (L209-L210), pickEdgeCollapses (L1293-L1296) and meshopt_simplifyEdge (L2437)"
 quote = '''// build forward remap: for each vertex, which other (canonical) vertex does it map to? // we use position equivalence for this, and remap vertices to other existing vertices [...] for (int e = 0; e < 3; ++e) { unsigned int i0 = indices[i + e]; unsigned int i1 = indices[i + next[e]]; [...] // no edges can be collapsed any more due to topology restrictions'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-vertex-kinds"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/simplifier.cpp#L292-L300"
@@ -6564,7 +6564,7 @@ quote = '''Kind_Border,   // not on an attribute seam, has exactly two open edge
 	Kind_Complex,  // none of the above; these vertices can move as long as all wedges move to the target vertex
 	Kind_Locked,   // none of the above; these vertices can't move [...] // seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap [...] // more than one vertex maps to this one; we don't have classification available
 				result[i] = Kind_Locked;'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-vertex-lock"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L421-L467"
@@ -6577,76 +6577,76 @@ checked = 2026-11-16
 url = "https://docs.rs/crate/meshopt/0.6.2/source/src/simplify.rs"
 section = "`meshopt` crate 0.6.2, src/simplify.rs, SimplifyOptions (L5-L28), simplify_with_locks' lock type (L112), simplify_sloppy's doc comment (L282) and simplify_sloppy_with_locks (L361)"
 quote = '''const LockBorder = 1; [...] const Sparse = 2; [...] const ErrorAbsolute = 4; [...] const Prune = 8; [...] const Regularize = 16; [...] const Permissive = 32; [...] vertex_lock: &[bool], [...] /// The algorithm doesn't preserve mesh topology but is always able to reach target triangle count. [...] pub fn simplify_sloppy_with_locks('''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-prune-criterion"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/simplifier.cpp#L1869-L1959"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/simplifier.cpp, measureComponents (L1869-L1922), pruneComponents (L1924-L1959) and their use in meshopt_simplifyEdge (L2475-L2476, L2482-L2489)"
 quote = '''// compute approximate sphere center for each component as an average [...] // compute squared radius for each component [...] if (component_errors[c] > error_cutoff) [...] if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= vertex_error) result_count = pruneComponents(result, result_count, components, component_errors, component_count, vertex_error, component_nexterror); [...] // we're done with the regular simplification but we're still short of the target; try pruning more aggressively towards error_limit [...] float component_cutoff = component_nexterror * 1.5f < error_limit ? component_nexterror * 1.5f : error_limit;'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-simplify-prune-function"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L550"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2, which binds meshopt_simplifyPrune only in `meshopt::ffi`), README, Simplification: Advanced simplification, line 550"
 quote = '''In addition to the `meshopt_SimplifyPrune` flag, you can explicitly prune isolated components by calling the `meshopt_simplifyPrune` function. This can be done before regular simplification or as the only step, which is useful for scenarios like isosurface cleanup. Similar to other simplification functions, the `target_error` argument controls the cutoff of component radius and is specified in relative units (e.g., `1e-2f` will remove components under 1%). If an absolute cutoff is desired, divide the parameter by the factor returned by `meshopt_simplifyScale`.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-approximate-tiny-parts"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Public/MeshMerge/MeshApproximationSettings.h#L89-L95"
 section = "Unreal Engine 5.8.4, Engine/Public/MeshMerge/MeshApproximationSettings.h, FMeshApproximationSettings, lines 89-95 (repository needs an Epic-linked GitHub account)"
 quote = '''/** If enabled, tiny parts will be excluded from the mesh merging, which can improve performance */ [...] bool bIgnoreTinyParts = true; /** Multiplier on Approximation Accuracy used to define tiny-part threshold, using maximum bounding-box dimension */ [...] float TinyPartSizeMultiplier = 0.05f;'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["simplygon-10.4-part-remover"]
 url = "https://documentation.simplygon.com/SimplygonSDK_10.4.117.0/api/tools/partremover.html"
 section = "Simplygon SDK 10.4.117.0 documentation, API, Tools, Part remover"
 quote = '''The part remover is used to remove objects smaller than a set threshold from the scene. [...] EPartRemoverThresholdType::OnScreenSize - All objects that are smaller than 1 pixel, when the scene is viewed at the selected OnScreenSize, will be removed. [...] Objects with a bounding box diagonal smaller than the set threshold will be deleted.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["unity-hlodsystem-04be7e8-min-object-size"]
 url = "https://github.com/Unity-Technologies/HLODSystem/blob/04be7e86357c5f3e11726b6ac9c33bd4fe1c3040/com.unity.hlod/Editor/CreateUtils/GetMeshRenderer.cs#L73-L82"
 section = "Unity Technologies, HLODSystem (com.unity.hlod) at commit 04be7e8, Editor/CreateUtils/GetMeshRenderer.cs, MeshRendererCalculator.Calculate, lines 77-79"
 quote = '''float max = Mathf.Max(mr.bounds.size.x, mr.bounds.size.y, mr.bounds.size.z); if (max < minObjectSize) continue;'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-hlod-simplify-screen-size"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Plugins/Editor/WorldPartitionHLODUtilities/Source/Private/WorldPartition/HLOD/Builders/HLODBuilderMeshSimplify.cpp#L81-L104"
 section = "Unreal Engine 5.8.4, WorldPartitionHLODUtilities, HLODBuilderMeshSimplify.cpp, UHLODBuilderMeshSimplify::Build (the Simplified Mesh HLOD layer), lines 81-104 (repository needs an Epic-linked GitHub account)"
 quote = '''static const float ScreenX = 1920; static const float ScreenY = 1080; static const float HalfFOVRad = FMath::DegreesToRadians(45.0f); [...] float ScreenSizePercent = ComputeBoundsScreenSize(FVector::ZeroVector, static_cast<float>(GetComponentsBounds().SphereRadius), FVector(0.0f, 0.0f, InHLODBuildContext.MinVisibleDistance), ProjectionMatrix); UseSettings.ScreenSize = FMath::RoundToInt(ScreenSizePercent * ScreenX);'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["ue-5.8-approximate-simplify-policy"]
 url = "https://github.com/EpicGames/UnrealEngine/blob/5.8.4-release/Engine/Source/Runtime/Engine/Public/MeshMerge/MeshApproximationSettings.h#L128-L142"
 section = "Unreal Engine 5.8.4, Engine/Public/MeshMerge/MeshApproximationSettings.h, FMeshApproximationSettings, lines 128-142 (repository needs an Epic-linked GitHub account)"
 quote = '''EMeshApproximationSimplificationPolicy SimplifyMethod = EMeshApproximationSimplificationPolicy::GeometricTolerance; /** Target triangle count for Mesh Simplification, for SimplifyMethods that use a Count*/ [...] int32 TargetTriCount = 2000; [...] float TrianglesPerM = 2.0f; /** Allowable Geometric Deviation in Meters when SimplifyMethod incorporates a Geometric Tolerance */ [...] float GeometricDeviation = 0.1f;'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["chen-2023-pixel-criterion"]
 url = "https://robust-low-poly-meshing.github.io/paper/Robust_Self_Collision_Free_Remeshing.pdf"
 section = "Chen, Pan, Wu, Vouga and Gao, Robust Low-Poly Meshing for General 3D Models, ACM TOG 42(4) (SIGGRAPH 2023), doi 10.1145/3592396, problem statement and Overview (PDF pp. 4-5); cost from the experiment setup (p. 11) and Timings (p. 12)"
 quote = '''is indistinguishable from [...] when rendered from a faraway view (a view where the diagonal length of the bounding box of [...] is less than [...] pixels); [...] visual preservation in our second property is measured by Silhouette difference and the normal difference between [...] and finally remove all invisible disconnected components from the extracted iso-surface'''
 cost = '''run our experiments on a workstation with a 32-cores Intel processor clocked at 3.7Ghz and 256Gb of memory, and we use TBB for parallelization. [...] We take about 7 minutes on average to finish the remeshing of the entire tested dataset while the others take less than 2 minutes'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["gao-2022-silhouette-metric"]
 url = "https://lowpoly-modeling.github.io/paper.pdf"
 section = "Gao, Wu and Pan, Low-poly Mesh Generation for Building Models, SIGGRAPH 2022 Conference Proceedings (doi 10.1145/3528233.3530716), Selecting the Next-Best Primitive with eq. 2 (PDF p. 5), Computing Visual Metrics (p. 6), Experiment (p. 7); cost from Experiment (p. 7) and Discussion and Limitations (p. 8)"
 quote = '''which renders the mesh [...] into a stencil buffer, binary masking the occluded pixels and discarding the normal information. [...] is binary, so computing [...] amounts to performing a pixel-wise XOR operator. [...] We render each mesh to a 128×128 framebuffer [...] conventionally used metrics, e.g. Hausdorff distance, may not fit well for the rendering applications, since they are designed to measure the geometry preservation, instead of visual preservation'''
 cost = '''We run all our experiments on a workstation with a 32-cores Intel processor clocked at 3.5 Ghz and 64 Gb of memory. [...] ours requires 6 minutes. Over the 100 models, it takes our method from a second to tens of minutes to process a model. [...] For the dataset, our algorithm terminates within 3 mins for 85% of the models and the average computational cost is 45 secs.'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["gao-2022-low-poly-building"]
 url = "https://lowpoly-modeling.github.io/paper.pdf#page=1"
 section = "Gao, Wu and Pan, Low-poly Mesh Generation for Building Models, SIGGRAPH 2022 Conference Proceedings, project-page copy, Abstract, p. 1; hardware from Experiment, p. 7; cost from Discussion and Limitations, p. 8"
 quote = '''a watertight, self-collision-free visual hull is generated via Boolean intersecting 3D extrusions of input’s silhouettes [...] Executable program for this paper is at lowpoly-modeling.github.io.'''
 cost = '''For the dataset, our algorithm terminates within 3 mins for 85% of the models and the average computational cost is 45 secs. [...] a workstation with a 32-cores Intel processor clocked at 3.5 Ghz and 64 Gb of memory'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["meshoptimizer-0.25-licence"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/LICENSE.md"
 section = "meshoptimizer 0.25, LICENSE.md, lines 1-3"
 quote = '''MIT License [...] Copyright (c) 2016-2025 Arseny Kapoulkine'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["majercik-2019-ddgi-hysteresis"]
 url = "https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=10"
