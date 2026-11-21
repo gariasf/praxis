@@ -7646,3 +7646,315 @@ section = "Mueller (IO Interactive), Smolder: Real-Time Volumetric Effect Render
 quote = '''Let’s talk about some performance numbers, here’s a bunch of cases with PS5 equivalent quality settings. These do not contain the async shadow rendering cost.'''
 cost = '''PS5 Equivalent Settings [...] RTX 3060, 1080p: 1.230ms, 1.080ms, 3.462ms [...] RX 6700 XT, 1080p: 0.775ms, 0.642ms, 1.970ms [...] RTX 5060 Ti (DLSS Quality), 1080p(720p): 0.367ms, 0.299ms, 1.020ms [...] RTX 5060 Ti, 1080p: 0.637ms, 0.630ms, 1.820ms [...] RTX 5060 Ti, 4k: 2.410ms, 2.010ms, 7.160ms'''
 checked = 2026-11-14
+
+["ign-mdt02-metadata"]
+url = "https://www.idee.es/csw-inspire-idee/srv/spa/csw?service=CSW&version=2.0.2&request=GetRecordById&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full&id=spaignMDT02"
+section = "gmd:title; gmd:resourceConstraints, gmd:MD_LegalConstraints, gmd:otherConstraints; gmd:distributionInfo, gmd:onLine linkage"
+quote = '''Modelo Digital del Terreno con paso de malla de 2 metros (MDT02) de España [...] MDT02-cob2 2015-2021 CC-BY 4.0 scne.es [...] https://centrodedescargas.cnig.es/CentroDescargas/modelo-digital-terreno-mdt02-segunda-cobertura'''
+checked = 2026-11-21
+
+["usgs-public-domain"]
+url = "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits"
+section = "U.S. Geological Survey, Information Policies and Instructions, Copyrights and Credits"
+quote = '''USGS-authored or produced data and information are considered to be in the U.S. Public Domain. [...] When using information from USGS information products, publications, or websites, we ask that proper credit be given.'''
+checked = 2026-11-21
+
+["usgs-3dep-products"]
+url = "https://www.usgs.gov/3d-elevation-program/about-3dep-products-services"
+section = "U.S. Geological Survey, 3D Elevation Program, About 3DEP Products & Services; Standard DEMs"
+quote = '''All 3DEP products are available, free of charge and without use restrictions. [...] 1-meter seamless (S1M) – This is the highest resolution seamless elevation dataset that 3DEP produces for the Nation. [...] Each 10 km by 10km tile is in a cloud-optimized geotiff format [...] 1/3 arc-second – This is a medium resolution seamless DEM dataset for the U.S. with full coverage of the 48 conterminous states, Alaska, Hawaii, and U.S. territories. Ground spacing is approximately 10 meters north/south'''
+checked = 2026-11-21
+
+["copernicus-dem-glo30-licence"]
+url = "https://dataspace.copernicus.eu/sites/default/files/media/files/2025-06/copernicus_contributing_mission_data_access_v2_cop_dem_licenses.pdf"
+section = "Licence for Copernicus DEM instance COP-DEM-GLO-30-F Global 30m Full, Free & Open: Licence for the use of the Copernicus WorldDEM-30, Article 4 Right of Use and Article 6 User Obligations (a) and (e)"
+quote = '''The Licensor grants to the User the following non-exclusive rights of use regarding the Copernicus WorldDEM-30: (a) reproduction; (b) distribution; (c) communication to the General Public; (d) adaptation, modification and combination with other data and information. [...] When communicating to the General Public or distributing the Copernicus WorldDEM-30, the User shall inform the General Public of the source by using the following notice: © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved. [...] Where the user grants to any Subsequent User the rights to distribute or communicate to the General Public the Copernicus WorldDEM-30, modified or not, he shall ensure that its Subsequent Users are bound by the above obligations.'''
+checked = 2026-11-21
+
+["copernicus-dem-collection"]
+url = "https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM"
+section = "Copernicus Data Space Ecosystem, Copernicus DEM - Global and European Digital Elevation Model: overview; Licensing and citation guidelines; Processing/ Product quality"
+quote = '''The Copernicus DEM is a Digital Surface Model (DSM) that represents the surface of the Earth including buildings, infrastructure and vegetation. [...] can freely access the 30m and 90m resolution instances of the Copernicus DEM. [...] The GLO-30 and GLO-90 datasets are available worldwide with a free license. [...] File Format: GeoTIFF and DTED'''
+checked = 2026-11-21
+
+["copernicus-dem-aws-registry"]
+url = "https://registry.opendata.aws/copernicus-dem/"
+section = "Registry of Open Data on AWS, Copernicus Digital Elevation Model (DEM): Description; Resources on AWS"
+quote = '''GLO-30 Public provides limited worldwide coverage at 30 meters because a small subset of tiles covering specific countries are not yet released to the public by the Copernicus Programme. [...] AWS CLI Access (No AWS account required)'''
+checked = 2026-11-21
+
+["nasa-esdis-data-use"]
+url = "https://www.earthdata.nasa.gov/engage/open-data-services-software-policies/data-use-guidance"
+section = "NASA Earthdata, Data Use Guidance, Licensing and Copyright"
+quote = '''Unless the content is marked with a use restriction or license, data provided from a NASA-led mission are licensed as Creative Commons Zero (CC0). While there are no restrictions on the use of these data, data users are very strongly urged to cite the data used in their work products.'''
+checked = 2026-11-21
+
+["swisstopo-ogd-terms"]
+url = "https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices"
+section = "Terms of use for free geodata and geoservices (OGD) from swisstopo, version 1.3.2021, 2. Terms of use"
+quote = '''The free geodata and geoservices of swisstopo may be used, distributed and made accessible. Furthermore, they may be enriched and processed and also used commercially. A reference to the source is mandatory.'''
+checked = 2026-11-21
+
+["swisstopo-swissalti3d"]
+url = "https://www.swisstopo.admin.ch/en/height-model-swissalti3d"
+section = "swissALTI3D, Technical details: Structure; Format, resolution and file sizes. Its Terms of use link is the OGD terms page"
+quote = '''swissALTI3D is an extremely precise digital elevation model which describes the surface of Switzerland without vegetation and development. [...] The data are delivered as a grid with an aperture width of 0.5 m or 2 m. The data are delivered by complete 1 km2 tiles. [...] Cloud Optimized Geotiff (COG), LZW compression'''
+checked = 2026-11-21
+
+["gebco-grid-terms"]
+url = "https://www.gebco.net/data-products/gridded-bathymetry-data"
+section = "GEBCO, Gridded Bathymetry Data: Global ocean & land terrain models; Terms of use"
+quote = '''providing elevation data, in meters, on a 15 arc-second interval grid [...] can be download as global files in netCDF format or a set of 8 tiles (each with an area of 90° x 90°), giving global coverage, in Esri ASCII raster and data GeoTiff [...] The GEBCO Grid is placed in the public domain and may be used free of charge.'''
+checked = 2026-11-21
+
+["polyhaven-faq-photogrammetry"]
+url = "https://docs.polyhaven.com/en/faq"
+section = "Poly Haven Wiki, FAQ: Do you use photogrammetry/photoscanning?"
+quote = '''For textures, yes. The majority of our textures are made with photogrammetry, with a significant portion made with photometric stereo (light scanning) as well. [...] For some models, especially rocks and other nature assets, we also use photogrammetry. However the raw scan is generally not usable directly and requires further work in retopology, texture map generation, etc.'''
+checked = 2026-11-21
+
+["polyhaven-api-nature-models"]
+url = "https://api.polyhaven.com/assets?type=models&categories=nature"
+section = "Poly Haven API, the models of the nature category, counted on the date checked (the figures move): 110 records, of which 20 list the category trees, 37 rocks, 54 plants, 32 ground cover and 4 grass, and 72 set lods; max_resolution is 4096, 8192 or 16384 square across them and 8192 across the trees, whose texel_density spans 392 to 230007; the record of pine_tree_01"
+quote = '''"pine_tree_01":{"date_published":1687478400,"name":"Pine Tree 01" [...] "categories":["nature","plants","trees","collection: pine_forest"],"geonodes":true [...] "max_resolution":[8192,8192],"polycount":17427094,"texel_density":5861.203711242229 [...] "lods":true'''
+checked = 2026-11-21
+
+["polyhaven-api-pine-tree-files"]
+url = "https://api.polyhaven.com/files/pine_tree_01"
+section = "Poly Haven API, the files of pine_tree_01: top-level keys blend, fbx, gltf and usd beside its texture maps; the glTF package's buffer"
+quote = '''"pine_tree_01.bin":{"url":"https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/pine_tree_01/pine_tree_01.bin","md5":"3079e56cc48c57d8ba530d005e86bae6","size":948849556}'''
+checked = 2026-11-21
+
+["ambientcg-asset-types"]
+url = "https://ambientcg.com/list?type=3DModel,Terrain"
+section = "ambientCG, asset search, the Type filter"
+quote = '''Material HDRI Substance Decal Atlas 3D Model Plain Image Brush Terrain HDRI Element'''
+checked = 2026-11-21
+
+["fab-eula-tiers"]
+url = "https://www.fab.com/eula"
+section = "Fab End User License Agreement (Last updated: October 1st, 2024): the Fab Standard License summary, Additional notes, and the CC-BY summary under it; 2. Content License Grant, a. License Tiers"
+quote = '''Both pricing tiers (Personal and Professional) grant you the same scope of rights. [...] CC-BY (Creative Commons Attribution License) The usage is governed by the terms of the Creative Commons license. [...] You are only eligible for a Personal - Reference Only tier or Personal tier if, at the time of the Transaction you, together with any controlling entity and other entities under common control with you, have not generated more than $100,000 USD in gross revenue from your commercial activity in the digital content industry in the last 12 months.'''
+checked = 2026-11-21
+
+["fab-eula-linear-media"]
+url = "https://www.fab.com/eula"
+section = "Fab End User License Agreement (Last updated: October 1st, 2024), 4. How you can share Projects you've made with Content, Distributing Linear Media Projects"
+quote = '''you may freely Distribute a Project that is a rendered linear media product. This means, for example, you may freely Distribute: i. rendered video files (e.g., broadcast or streamed video files, cartoons, movies, or images) and ii. images created using Content.'''
+checked = 2026-11-21
+
+["fab-eula-sharing"]
+url = "https://www.fab.com/eula"
+section = "Fab End User License Agreement (Last updated: October 1st, 2024), 5. How you can share Content on its own, a. Sharing of Content"
+quote = '''Under a Standard License, you may not Distribute Content on a standalone basis to third parties except to your collaborators (either directly or through a third-party repository) who are utilizing the Content in good faith to develop a Project with you or on your behalf. This means, for example, that you may share Content with your employees, affiliates, and contractors in a private online repository while you work on a Project together.'''
+checked = 2026-11-21
+
+["fab-eula-restrictions"]
+url = "https://www.fab.com/eula"
+section = "Fab End User License Agreement (Last updated: October 1st, 2024), 6. Standard License Restrictions, a. Non-Compatible Licenses and General Restrictions iii"
+quote = '''you may not combine Content under a Standard License with code or content that is licensed under any of the following licenses: GNU General Public License (GPL), Lesser GPL (LGPL) (unless you are merely dynamically linking a shared library), or Creative Commons Attribution-ShareAlike License. [...] allow any third party to incorporate Content into their own products, services, or other projects (this means, for example, that you may not make Content available in world- or level-editing tools or templates or other modeling tools that allow works to be exported);'''
+checked = 2026-11-21
+
+["sketchfab-terms-free-downloads"]
+url = "https://sketchfab.com/terms"
+section = "Sketchfab Terms of Use, 4.2.2 Use by others for free; 4.2.4 Download API"
+quote = '''Users may make User Content available to other users for download for free via either the License Agreement or one of several Creative Commons licenses. [...] The User is solely responsible for choosing the appropriate license, if any, under which the Content is available for download. By downloading User Content made available by other Users, you agree to adhere to the terms of the license that applies at the time of download. [...] Users accessing and downloading User Content through the download API operated by Sketchfab shall be authenticated'''
+checked = 2026-11-21
+
+["sketchfab-download-api"]
+url = "https://sketchfab.com/developers/download-api"
+section = "Sketchfab for Developers, Download API; the site's categories in its header"
+quote = '''Cars & Vehicles [...] Nature & Plants [...] Sketchfab provides a library of over 1 million free models, available under Creative Commons licenses. Most models allow commercial use. Models are available in glTF, GLB, and USDZ formats. [...] Downloading models requires users to be authenticated with a Sketchfab account.'''
+checked = 2026-11-21
+
+["sketchfab-store-licence"]
+url = "https://sketchfab.com/licenses"
+section = "Sketchfab License Agreement, Simple Version: What is the difference between the editorial and standard license?; What is forbidden?"
+quote = '''Certain 3D assets are available under only an "editorial" license, which has certain restrictions. In particular, those assets (a) cannot be used for any commercial or promotional use [...] You may not use the 3D asset in a way that allows others to use or access the 3D asset as a stand-alone file (for instance, no sub-license or sale by you to others is allowed).'''
+checked = 2026-11-21
+
+["khronos-sample-assets-reuse-vehicles"]
+url = "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/edc7c9e67c639d230715049ee31f9a96a6babbbe/REUSE.toml"
+section = "glTF-Sample-Assets REUSE.toml: CarConcept (L166-L169), CesiumMilkTruck (L184-L187), DiffuseTransmissionPlant (L346-L349), ToyCar (L814-L817)"
+quote = '''path = "Models/CarConcept/*"
+precedence = "aggregate"
+SPDX-FileCopyrightText = [ "2024 Darmstadt Graphics Group GmbH", "2015 Khronos Group", "2017 Khronos Group" ]
+SPDX-License-Identifier = "CC-BY-4.0 AND LicenseRef-LegalMark-Khronos" [...] path = "Models/CesiumMilkTruck/*"
+precedence = "aggregate"
+SPDX-FileCopyrightText = [ "2017 Cesium", "2015 Cesium" ]
+SPDX-License-Identifier = "CC-BY-4.0 AND LicenseRef-LegalMark-Cesium" [...] path = "Models/DiffuseTransmissionPlant/*"
+precedence = "aggregate"
+SPDX-FileCopyrightText = [ "2024 Darmstadt Graphics Group GmbH", "2021 Public domain" ]
+SPDX-License-Identifier = "CC-BY-4.0 AND CC0-1.0" [...] path = "Models/ToyCar/*"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2020 Public"
+SPDX-License-Identifier = "CC0-1.0"'''
+checked = 2026-11-21
+
+["orca-speedtree"]
+url = "https://developer.nvidia.com/orca/speedtree"
+section = "NVIDIA ORCA, SpeedTree: History; License; Details"
+quote = '''SpeedTree has generously donated a collection of trees, ferns, hedges, flowers, and grass to the graphics research community, here in ORCA. [...] License: Creative Commons CC BY-NC-SA 3.0 Details: SpeedTree has donated the following separate assets: Azalea Backyard Grass Boston Fern European Linden Hedge Japanese Maple Red Maple Young White Oak File format: FBX'''
+checked = 2026-11-21
+
+["orca-emerald-square"]
+url = "https://developer.nvidia.com/orca/nvidia-emerald-square"
+section = "NVIDIA ORCA, NVIDIA Emerald Square City Scene: History; License; Details"
+quote = '''All content in the asset is original, created by Nicholas Hull, except for the trees and plants, which are the SpeedTree ORCA assets. License: Creative Commons CC BY-NC-SA 3.0 Details: 10,046,405 triangles'''
+checked = 2026-11-21
+
+["mcguire-archive"]
+url = "https://casual-effects.com/g3d/data10/index.html"
+section = "McGuire Computer Graphics Archive, Meshes (the page casual-effects.com/data frames; each model's record is its info.js)"
+quote = '''All meshes are packaged as zip files using OBJ and PNG to simplify loading in a research and prototyping environment. My collaborators and I have converted most of these models from their original formats and corrected geometry and texture errors.'''
+checked = 2026-11-21
+
+["mcguire-white-oak"]
+url = "https://casual-effects.com/g3d/data10/research/model/white_oak/info.js"
+section = "McGuire Computer Graphics Archive, the record of White Oak Tree"
+quote = '''title: "White Oak Tree", [...] triangles: 36760, [...] copyright: "&copy; 2017 SpeedTree", [...] license: "<a href='http://creativecommons.org/licenses/by-nc-sa/3.0/'>CC BY-NC-SA 3.0</a>",'''
+checked = 2026-11-21
+
+["mcguire-scrub-pine"]
+url = "https://casual-effects.com/g3d/data10/research/model/scrubPine/info.js"
+section = "McGuire Computer Graphics Archive, the record of Scrub Pine Tree"
+quote = '''title: "Scrub Pine Tree", [...] downloadSize: "384 kB", [...] license: "CC0 (Public Domain)",'''
+checked = 2026-11-21
+
+["mcguire-sports-car"]
+url = "https://casual-effects.com/g3d/data10/research/model/sportsCar/info.js"
+section = "McGuire Computer Graphics Archive, the record of Sports Car"
+quote = '''title: "Sports Car", [...] triangles: 300957, [...] copyright: "&copy; 2015 Yasutoshi Mori", [...] license: "<a href='http://creativecommons.org/licenses/by/4.0/'>CC BY 4.0</a>",'''
+checked = 2026-11-21
+
+["mcguire-bmw"]
+url = "https://casual-effects.com/g3d/data10/research/model/bmw/info.js"
+section = "McGuire Computer Graphics Archive, the record of BMW"
+quote = '''title: "BMW", [...] triangles: 385079, [...] copyright: "Mike Pan and Morgan McGuire", [...] license: "CC0/Public Domain", [...] This version has a single car with wheels in a default pose'''
+checked = 2026-11-21
+
+["blender-demo-files-licences"]
+url = "https://web.archive.org/web/20261115152100/https://www.blender.org/download/demo-files/"
+section = "blender.org, Demo Files: Asset Libraries; Blender Splash Artwork; Cycles (blender.org refused a direct fetch on the date checked; read from this snapshot)"
+quote = '''Human Base Meshes v1.4.1 by Blender Studio and community contributions. [...] 49 MB – CC0 [...] Blender 5.3 – OVERGROWN by Blender Studio 337MB – CC-BY [...] Blender 3.3 LTS – Scanlands by Piotr Krynski 81 MB – CC-BY-SA [...] Red forest, wind blowing by Robin Tran – License CC-BY-SA 3.0 [...] Classroom By Christophe Seux. (CC0, 72 MB)'''
+checked = 2026-11-21
+
+["blender-license-artwork"]
+url = "https://web.archive.org/web/20261118011440/https://www.blender.org/about/license/"
+section = "blender.org, License: The Software; Your Artwork (blender.org refused a direct fetch on the date checked; read from this snapshot)"
+quote = '''Blender is released under the GNU General Public License (GPL, or “free software”). [...] What you create with Blender is your sole property. All your artwork – images or movie files – including the .blend files and other data files Blender can write, is free for you to use as you like.'''
+checked = 2026-11-21
+
+["intel-samples-jungle-ruins"]
+url = "https://web.archive.org/web/20261115231104/https://www.intel.com/content/www/us/en/developer/topic-technology/graphics-research/samples.html"
+section = "Intel Graphics Research, Samples Library; Jungle Ruins Scene; Sponza Add-on Packages, Trees (intel.com refused a direct fetch on the date checked; read from this snapshot)"
+quote = '''Downloads are available under the Creative Commons Attribution license. Jungle Ruins Scene Access a large-scale, photorealistic environment inspired by the Amazon Rainforest. Features an over one trillion total triangle count optimized for physically based rendering (PBR). [...] Includes the Blender source and Universal Scene Description (USD) file formats. Download (4.0 GB) [...] The leaves of the Italian cypresses are created by using cards with alpha maps, as in traditional game production.'''
+checked = 2026-11-21
+
+["disney-moana-island-licence"]
+url = "https://media.disneyanimation.com/uploads/production/data_set_asset/4/asset/License.txt"
+section = "License for Moana Island Scene, conditions 1 and 2"
+quote = '''Redistribution and use of this scene description, with or without modification, are permitted provided that the following conditions are met: 1. The scene description or any part of it may only be used for research or software development (including benchmarking) purposes. 2. Redistributions of this scene description or any part of it must include the above copyright notice, this list of conditions and the following disclaimer.'''
+checked = 2026-11-21
+
+["disney-moana-island-packages"]
+url = "https://disneyanimation.com/resources/moana-island-scene/"
+section = "Walt Disney Animation Studios, Data Sets, Moana Island Scene"
+quote = '''Most notably it includes large amounts of geometry created through instancing as well as complex volumetric light transport. [...] Base [45 GB download / 93 GB unpacked] [...] USD [15 GB download / 17 GB unpacked] [...] PBRT v4 [5.6 GB download / 30 GB unpacked]'''
+checked = 2026-11-21
+
+["smithsonian-open-access-faq"]
+url = "https://web.archive.org/web/20261116210309/https://www.si.edu/openaccess/faq"
+section = "Smithsonian Open Access FAQ: May I use Smithsonian Open Access content for commercial use?; How can I identify which items are open access?; In what formats can I access open access content? (si.edu refused a direct fetch on the date checked; read from this snapshot)"
+quote = '''Yes, you may use Smithsonian Open Access assets designated as CC0 for commercial purposes without any attribution, permission, or fee paid to the Smithsonian. [...] If an item is not designated as CC0, it is subject to usage conditions. [...] 3D Images glTF glb obj (150k and full res versions)'''
+checked = 2026-11-21
+
+["sharetextures-licence"]
+url = "https://www.sharetextures.com/p/license"
+section = "ShareTextures, License: Summary of Terms of Service"
+quote = '''All assets on ShareTextures.com are provided under a custom CC0-based license [...] No asset redistribution on other websites, in plugins, or as part of collections without our written permission. [...] No automated downloads, hotlinking, or embedding direct downloads in third-party apps (like Blender addons).'''
+checked = 2026-11-21
+
+["ez-tree-licence"]
+url = "https://github.com/dgreenheck/ez-tree/blob/dcf309bd86bd521083d9c70f01f2de45fdc7c457/LICENSE"
+section = "EZ-Tree, LICENSE"
+quote = '''MIT License Copyright (c) 2024 Daniel Greenheck'''
+checked = 2026-11-21
+
+["ez-tree-readme"]
+url = "https://github.com/dgreenheck/ez-tree/blob/dcf309bd86bd521083d9c70f01f2de45fdc7c457/README.md"
+section = "EZ-Tree, README: introduction; the levels of detail generateLODs() builds"
+quote = '''EZ-Tree is a procedural tree generator with dozens of tunable parameters. [...] there is a standalone web app which allows you to create trees within the browser and export as .PNG or .GLB files. [...] All levels are meshed from the same skeleton, so the tree's silhouette stays consistent across switches — distant levels just use fewer ring segments and fewer (but larger) leaves. [...] All LOD levels share one bark material and one leaf material'''
+checked = 2026-11-21
+
+["ez-tree-texture-licence"]
+url = "https://github.com/dgreenheck/ez-tree/blob/dcf309bd86bd521083d9c70f01f2de45fdc7c457/src/app/public/textures/LICENSE.md"
+section = "EZ-Tree, src/app/public/textures/LICENSE.md, Texture Attribution"
+quote = '''The bark textures in `bark/` are sourced from [ambientcg.com](https://ambientcg.com) and are released under the [Creative Commons CC0 1.0 Universal license](https://creativecommons.org/publicdomain/zero/1.0/) (public domain dedication). [...] The leaf textures in `leaves/` are bundled with the EZ-Tree demo app and are licensed under the project's own license (see repository LICENSE).'''
+checked = 2026-11-21
+
+["infinigen-licence"]
+url = "https://github.com/princeton-vl/infinigen/blob/53033dd55c7191cbc436be6ffbb63c026935a509/LICENSE"
+section = "Infinigen, LICENSE"
+quote = '''BSD 3-Clause License Copyright (c) 2023, Princeton University'''
+checked = 2026-11-21
+
+["infinigen-readme"]
+url = "https://github.com/princeton-vl/infinigen/blob/53033dd55c7191cbc436be6ffbb63c026935a509/README.md"
+section = "Infinigen, README: title; Documentation; the note on code under CC-0"
+quote = '''Infinigen: Infinite Photorealistic Worlds Using Procedural Generation [...] [Exporting to external fileformats (OBJ, OpenUSD, etc)](docs/ExportingToExternalFileFormats.md) [...] It now features some procedural code obtained from the internet under CC-0 licenses, which are marked with code comments where applicable [...] Infinigen wouldn't be possible without the fantastic work of the [Blender Foundation](https://www.blender.org/) and it's open-source contributors.'''
+checked = 2026-11-21
+
+["speedtree-plans"]
+url = "https://unity.com/products/speedtree"
+section = "Unity, SpeedTree: Plans; FAQ"
+quote = '''SpeedTree Indie Funding | Revenue under 100k [...] A free, limited-export, 30 day trial can be started after downloading the SpeedTree Modeler. [...] We support .OBJ, .FBX, .USD, .ST, .STSDK, .CGF, .XML complete with games ready textures, atlas & LOD.'''
+checked = 2026-11-21
+
+["the-grove-licence"]
+url = "https://www.thegrove3d.com/buy/"
+section = "The Grove, Buy: the note under the editions"
+quote = '''The Grove is developed for artists. Do not sell or distribute 3D models of trees grown with The Grove.'''
+checked = 2026-11-21
+
+["gaea-eula"]
+url = "https://quadspinner.com/PDF/Gaea2-2025-07.pdf"
+section = "Gaea End-User License Agreement, July 14, 2025: 1.4.1 Community Edition, 1.4.2 Indie Edition, 1.4.3 Professional Edition; 1.8 Sale of Assets Created with Gaea, 1.8.2 and 1.8.3"
+quote = '''You may use the Community Edition of Software without a license for non-commercial purposes, including but not limited to Assets. [...] The Indie Edition of Software is restricted to individuals or entities whose annual gross revenue or capital does not exceed USD $100,000 [...] The Professional Edition is restricted to individuals or entities whose annual gross revenue or capital does not exceed USD $1,000,000 [...] You may sell or distribute Assets you create with the Software, subject to the following conditions: [...] Any public-facing product description for the Assets must include the text: “Assets created with QuadSpinner Gaea.” [...] Assets specifically include meshes, displacement maps, data maps, color maps, or any other output generated from the Software that can be used to recreate a 3D terrain in other applications.'''
+checked = 2026-11-21
+
+["gaea-editions"]
+url = "https://quadspinner.com/Order"
+section = "QuadSpinner, Order: the editions grid, columns Community, Indie, Professional, Enterprise. The Commercial Use row shows a cross under Community and a check under the other three, as icons"
+quote = '''Commercial Use Use work created with Gaea in commercial projects, subject to edition eligibility. [...] Single Build Resolution Maximum resolution for a single untiled terrain build. 1024 × 1024 8192 × 8192 16,384 × 16,384 16,384 × 16,384'''
+checked = 2026-11-21
+
+["world-machine-basic"]
+url = "https://www.world-machine.com/download.php"
+section = "World Machine, Download World Machine Basic: Free Community Edition"
+quote = '''Free for non-commercial use [...] If you want to sell, use in a commercial product, or otherwise profit from a work containing World Machine output you will need to buy one of our full licenses. [...] The one limit is output size: no asset larger than 1025x1025 pixels.'''
+checked = 2026-11-21
+
+["houdini-apprentice"]
+url = "https://www.sidefx.com/get/try-houdini/"
+section = "SideFX, Try Houdini for Free: Houdini Apprentice, free learning edition"
+quote = '''Houdini Apprentice gives you the same tools the pros use, free for personal, non-commercial projects.'''
+checked = 2026-11-21
+
+["treeit-overview"]
+url = "http://www.evolved-software.com/treeit/treeit"
+section = "Evolved Software, Tree It: Features"
+quote = '''Adjustable LOD. Exports to *.dbo *.fbx *.obj *.x . Free.'''
+checked = 2026-11-21
+
+["gltf-validator-licence"]
+url = "https://github.com/KhronosGroup/glTF-Validator/blob/602c54043ba66856b2e68c40fdf2bced975cdb8a/LICENSE"
+section = "glTF-Validator, LICENSE"
+quote = '''Apache License Version 2.0, January 2004'''
+checked = 2026-11-21
+
+["gaea-eula-versions"]
+url = "https://quadspinner.com/Legal"
+section = "QuadSpinner, Legal: End-User License Agreements, Gaea EULA"
+quote = '''License Agreement updates apply only to newer software versions released after the update. Older versions remain governed by the License Agreement that was in effect at the time they were released.'''
+checked = 2026-11-21

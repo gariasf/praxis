@@ -45,6 +45,8 @@ No attribution file exists. CC BY requires attribution wherever the file is redi
 
 McGuire Computer Graphics Archive (page content not retrievable), Fab/Quixel Megascans, Sketchfab, Blender demo files, glTF-Validator.
 
+Read on 2026-11-21 in `docs/research/world-content-sources.md`, which resolves these five and MDT02's licence (CC BY 4.0); Intel Sponza's licence version stays unresolved there.
+
 ## Sourcing strategy (approved by the owner, 2026-10-12)
 
 1. **Tier 1, procedural and in-repo.** Analytic spheres, UV grids, normal-Texture patterns, instancing grids, seeded scatter, heightfields. No licence, deterministic, tiny. These are the CI-gated Golden and scale-ladder Reference scenes.
