@@ -280,7 +280,7 @@ fn rank(
 
 /// The uses of streamed Textures by `chunk`'s Placements: each Primitive's
 /// Material, or the Placement's own, and each Texture it samples that has
-/// mips finer than those Resident.
+/// mips finer than its Resident tail, whichever of them are Resident.
 fn texture_uses(
     chunk: &LoadedChunk,
     meshes: &LoadedMeshes,
@@ -299,10 +299,10 @@ fn texture_uses(
                 continue;
             };
             for &texture in materials.textures_of(material) {
-                let Some((shape, resident_level)) = materials.texture_residency(texture) else {
+                let Some((shape, _)) = materials.texture_residency(texture) else {
                     continue;
                 };
-                if resident_level == 0 {
+                if shape.resident_tail_level() == 0 {
                     continue;
                 }
                 let (centre, radius, smallest_scale) = *sphere
@@ -411,16 +411,35 @@ mod tests {
         );
     }
 
-    struct TailReader {
-        texture: crate::cooked::CookedTexture,
+    /// Gives every Texture as a 2,048² BC7 Texture with its mips from
+    /// `first_level`, and the Material `id` as one sampling the Texture `id`.
+    struct TextureReader {
+        first_level: u32,
     }
 
-    impl crate::assets::AssetReader for TailReader {
+    impl crate::assets::AssetReader for TextureReader {
         fn material(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMaterial> {
-            anyhow::bail!("no Material {id}")
+            Ok(crate::cooked::CookedMaterial {
+                base_color: [1.0; 4],
+                metallic: 0.0,
+                roughness: 1.0,
+                emissive: [0.0; 3],
+                normal_scale: 1.0,
+                textures: [Some(id), None, None, None, None],
+            })
         }
         fn texture(&self, _id: AssetId) -> anyhow::Result<crate::cooked::CookedTexture> {
-            Ok(self.texture.clone())
+            let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
+            let level = |level: u32| {
+                vec![0; crate::cooked::level_bytes(format, 2048, 2048, level as usize)]
+            };
+            Ok(crate::cooked::CookedTexture {
+                format,
+                width: 2048,
+                height: 2048,
+                first_level: self.first_level,
+                levels: (self.first_level..12).map(level).collect(),
+            })
         }
         fn mesh(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMesh> {
             anyhow::bail!("no Mesh {id}")
@@ -430,31 +449,28 @@ mod tests {
         }
     }
 
-    /// A Material pool holding `textures`, 2,048² BC7 Textures with only
-    /// their Resident tails, from mip 3, Resident.
-    fn pool_of_tails(
+    fn empty_pool(
         context: &crate::gpu::GpuContext,
-        textures: &[AssetId],
     ) -> (MaterialPool, crate::render::staging::LoadStaging) {
-        let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
-        let level = |level| vec![0; crate::cooked::level_bytes(format, 2048, 2048, level)];
-        let reader = TailReader {
-            texture: crate::cooked::CookedTexture {
-                format,
-                width: 2048,
-                height: 2048,
-                first_level: 3,
-                levels: (3..12).map(level).collect(),
-            },
-        };
         let mut staging = crate::render::staging::LoadStaging::new(context.device.clone());
-        let mut pool = MaterialPool::new(
+        let pool = MaterialPool::new(
             &context.device,
             &crate::stats::gpu_memory::tests::gpu_memory(context),
             &mut staging,
             &crate::assets::PoolCapacities::checked_in(),
             false,
         );
+        (pool, staging)
+    }
+
+    /// A Material pool holding `textures`, 2,048² BC7 Textures with only
+    /// their Resident tails, from mip 3, Resident.
+    fn pool_of_tails(
+        context: &crate::gpu::GpuContext,
+        textures: &[AssetId],
+    ) -> (MaterialPool, crate::render::staging::LoadStaging) {
+        let reader = TextureReader { first_level: 3 };
+        let (mut pool, mut staging) = empty_pool(context);
         for &texture in textures {
             let channel = crate::assets::MaterialChannel::Albedo;
             pool.load_texture(
@@ -571,5 +587,71 @@ mod tests {
         assert_eq!(plan_from(-8.5, -8.2, true), (0, vec![]));
         assert_eq!(plan_from(-318.6, -300.0, false), (0, vec![]));
         staging.submit(&context.queue);
+    }
+
+    /// A drawn Placement 2.5 m away needs mip 1 of its Material's Texture.
+    /// First planned while the Texture is Resident to mip 0, as a Far
+    /// proxy's atlas loads, it keeps that need, so eviction cannot take mip
+    /// 0 from it; once the Texture is evicted to its tail, mip 3, the next
+    /// plan requests mips 1 and 2 and counts them late.
+    #[test]
+    fn a_texture_resident_to_mip_0_when_first_planned_keeps_its_use() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let texture = AssetId(10);
+        let pool_from = |first_level| {
+            let (mut pool, mut staging) = empty_pool(&context);
+            let material = pool
+                .load_making_room(
+                    &context.device,
+                    &mut staging,
+                    &TextureReader { first_level },
+                    texture,
+                    crate::assets::MaterialUse::Ordinary,
+                    &mut |_| false,
+                )
+                .expect("the Material loads");
+            (pool, staging, material)
+        };
+        let (at_mip_0, mut staging_at_mip_0, material) = pool_from(0);
+        let (evicted, mut staging_evicted, material_evicted) = pool_from(3);
+        assert_eq!(material, material_evicted);
+        let mut meshes = LoadedMeshes::default();
+        let mesh = meshes.insert(crate::assets::Mesh {
+            needs_material_handle: false,
+            vertices: 0..0,
+            bounds: [[0.0; 3]; 2],
+            texel_densities: vec![(1.0 / finest_pixel_metres_per_metre() / 2048.0) as f32],
+            materials: vec![Some(material)],
+        });
+        let mut drawn = chunk(1, false);
+        drawn
+            .placements
+            .push(crate::streaming::chunks::ChunkPlacement {
+                transform: Transform::IDENTITY,
+                mesh,
+                material: None,
+            });
+        let mut priority = MipPriority::default();
+        let plan = |priority: &mut MipPriority, pool: &MaterialPool| {
+            let (late_mips, requests) = priority.plan(
+                DVec3::new(0.0, 0.0, -2.5),
+                false,
+                std::iter::once((&drawn, Sight::Drawn)),
+                &meshes,
+                pool,
+            );
+            let requested: Vec<_> = (requests.iter())
+                .map(|request| (request.texture, request.levels.clone()))
+                .collect();
+            (late_mips, requested)
+        };
+
+        assert_eq!(plan(&mut priority, &at_mip_0), (0, vec![]));
+        assert_eq!(priority.eviction_rank(texture, 0, 0), None);
+        assert_eq!(plan(&mut priority, &evicted), (2, vec![(texture, 1..3)]));
+        staging_at_mip_0.submit(&context.queue);
+        staging_evicted.submit(&context.queue);
     }
 }
