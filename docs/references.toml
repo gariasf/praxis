@@ -6675,9 +6675,9 @@ checked = 2026-11-14
 
 ["majercik-2021-ddgi-hysteresis-thresholds"]
 url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=10"
-section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §4.3, pp. 10-11, with Listing 2; §9, p. 25 (what remains)"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §4.3, pp. 10-11, with Listing 2; §8.1, p. 25 (what remains)"
 quote = '''Our lower threshold detects changes with magnitude above 25% of maximum value and lowers the hysteresis by 0.15. [...] changes with magnitude above 80% and lowers the hysteresis to 0.0 [...] These thresholds are active only for irradiance updates—we found them to be too unstable when updating visibility. [...] Small lighting change (e.g., player-held flashlight turns on): reduce irradiance hysteresis by 15% for four frames [...] Large object change (e.g., ceiling caves in): reduce irradiance hysteresis by 50% for 10 frames and visibility hysteresis by 50% for seven frames. [...] hysteresis for all probes (not just the probes local to the change) is reduced [...] Note that temporal anti-aliasing (TAA) applies its own hysteresis, so the base hysteresis for our technique can be lower if TAA is applied. [...] there is still some ghosting in the indirect illumination for small, bright light sources'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["majercik-2021-ddgi-rays-against-hysteresis"]
 url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=18"
@@ -12258,4 +12258,112 @@ checked = 2026-11-21
 url = "https://github.com/KhronosGroup/glTF/blob/5b00b913b74c8f0260c64578b98a09ef2dde0b41/extensions/README.md#L8"
 section = "KhronosGroup/glTF (commit 5b00b91, 2026-11-20), extensions/README.md, the lists under Ratified Khronos Extensions (L8), In-progress Khronos and Multi-Vendor Extensions and Projects (L42), Multi-Vendor Extensions (L81) and Vendor Extensions (L89): no entry names a height field, an elevation raster or terrain"
 quote = '''## Ratified Khronos Extensions [...] * [KHR_mesh_quantization](2.0/Khronos/KHR_mesh_quantization/README.md) [...] ## Vendor Extensions'''
+checked = 2026-11-21
+
+["heckel-blog-repository-licence"]
+url = "https://github.com/MaximeHeckel/blog.maximeheckel.com/blob/b9bd314ebfa05419fa2e32e122d0707d5af8998c/README.md#license"
+section = "MaximeHeckel/blog.maximeheckel.com at commit b9bd314, the commit the site's footer linked on 2026-11-21, README.md, License; its LICENSE file is the MIT License, Copyright (c) 2024 Maxime Heckel, and its content/LICENSE the text of Attribution-NonCommercial 4.0 International"
+quote = '''The source code of this repository is licensed under the MIT License. [...] The content of this repository (articles, blog posts, images, etc.) is licensed under the Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) License.'''
+checked = 2026-11-21
+
+["heckel-2026-gi-screen-space-drawbacks"]
+url = "https://blog.maximeheckel.com/posts/lighting-that-feels-just-right/"
+section = "Heckel, Lighting That Feels Just Right, 2026-11-17, Tracing Light from Pixels, Temporal accumulation"
+quote = '''With frame accumulation, we must reset the accumulated lighting on every camera movement (unless you like datamoshing!). For that, we can leverage reprojection, but I personally do not like how it looks [...] Moreover, since we’re in screen-space, we cannot compute indirect lighting for things off camera.'''
+checked = 2026-11-21
+
+["heckel-2026-gi-probe-form"]
+url = "https://blog.maximeheckel.com/posts/lighting-that-feels-just-right/"
+section = "Heckel, Lighting That Feels Just Right, 2026-11-17, Estimating Light with Probes (World space probes, Hysteresis) and Final Thoughts"
+quote = '''We’ll use a 2D storage texture called an atlas where each probe stores six lighting estimates. Each estimate gathers light over a hemisphere facing one of the positive or negative coordinate axes. [...] Skip the probe if it lies inside solid geometry. [...] traceWorld finds the nearest sphere or box intersection. [...] With hysteresis set to 0.95, once enough history has accumulated, the blend consists of 95% history and 5% updated measurements. While the lighting remains unchanged, we give history progressively more influence. [...] When lighting changes, stableFrames is reset without clearing the atlas, allowing probes to make new measurements that gradually replace the old lighting instead of starting from scratch. [...] Yes, there still is some ghosting when the light changes abruptly, [...] it’s definitely not production-grade in any way'''
+checked = 2026-11-21
+
+["heckel-2026-gi-probe-occlusion-at-shading"]
+url = "https://blog.maximeheckel.com/posts/lighting-that-feels-just-right/"
+section = "Heckel, Lighting That Feels Just Right, 2026-11-17, Estimating Light with Probes (the list of steps) and Rendering light from our probe atlas; the listing Sampling the probe atlas there, read as evidence and not quoted, traces from the shaded point toward each neighbouring probe and skips a probe when the trace hits nearer than the probe"
+quote = '''We read and blend the stored lighting estimate in our post-processing effect to shade visible surfaces. Occluded probes are also discarded. [...] explore its neighbors in a 3 x 3 x 3 neighborhood around it'''
+checked = 2026-11-21
+
+["majercik-2019-ddgi-trilinear-blend"]
+url = "https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=14"
+section = "Majercik, Guertin, Nowrouzezahrai and McGuire, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, §5.2, p. 14, the last item of the list of weights"
+quote = '''we then perform a standard trilinear interpolation based on the distance between the shading point and the probe centers, using the aforementioned weighting and biasing factors.'''
+checked = 2026-11-21
+
+["heckel-2026-gi-sky-and-reflections"]
+url = "https://blog.maximeheckel.com/posts/lighting-that-feels-just-right/"
+section = "Heckel, Lighting That Feels Just Right, 2026-11-17, Reflections, Sky Light, and Final Touches (Tracing reflections, Adding sky light)"
+quote = '''Once we’ve found that surface, we can compute its lighting by combining emissions, direct lighting, and indirect lighting by sampling our probe atlas as we did in the previous part. [...] I decided to put it in its own compute shader, to only run it when necessary [...] Finally, this function can be called within probeUpdate shader whenever a ray misses a surface / scene geometry.'''
+checked = 2026-11-21
+
+["threejs-light-probe-grid-baked"]
+url = "https://github.com/mrdoob/three.js/blob/ea074ee9d4118fd31d3ab3ec6bfecf1d39e6ed98/examples/jsm/lighting/LightProbeGridWebGL.js#L59-L85"
+section = "three.js at commit ea074ee, examples/jsm/lighting/LightProbeGridWebGL.js, the class comment (lines 59 to 85) and the comment of bake (lines 220 to 225); the class examples/webgl_lightprobes.html builds its grid from"
+quote = '''A 3D grid of L2 Spherical Harmonic irradiance probes that provides [...] position-dependent diffuse global illumination. [...] Baking is fully GPU-resident: cubemap rendering, SH projection, and [...] texture packing all happen on the GPU with zero CPU readback. [...] Bakes probes by rendering cubemaps at each probe position and [...] projecting to L2 SH.'''
+checked = 2026-11-21
+
+["heckel-2026-sky-shortcuts"]
+url = "https://blog.maximeheckel.com/posts/on-rendering-the-sky-sunsets-and-planets/"
+section = "Heckel, On Rendering the Sky, Sunsets, and Planets, 2026-05-12, LUT Based Atmospheric Scattering and Final Thoughts"
+quote = '''The aerial perspective LUT is a 3D texture in the paper, while in my implementation I use a simple 2D render target where each pixel of the resulting texture corresponds to the current frame’s visible pixel. [...] Multi-Scattering is skipped [...] There’s some banding and flickering happening, particularly in the sky-view'''
+checked = 2026-11-21
+
+["heckel-2025-light-shafts-shadow-map"]
+url = "https://blog.maximeheckel.com/posts/shaping-light-volumetric-lighting-with-post-processing-and-raymarching/"
+section = "Heckel, On Shaping Light, 2025-06-10, Shadow Mapping, Performance improvements and Asteroid Belt"
+quote = '''To solve this, we will need to generate a shadow map of our scene: a texture representing the depth of the scene from the point of view of our light. [...] Moreover, by slightly shifting the noise pattern on every frame we can increase the quality of our output and make the dithering pattern from the noise almost unnoticeable. [...] You may notice the shadow beams flickering at first. This is a side-effect of the shadow map resolution.'''
+checked = 2026-11-21
+
+["heckel-2023-clouds-dither-and-upscale"]
+url = "https://blog.maximeheckel.com/posts/real-time-cloudscapes-with-volumetric-raymarching/"
+section = "Heckel, Real-time dreamy Cloudscapes with Volumetric Raymarching, 2023-10-31, Performance optimization (Blue noise dithering, Upscaling with Bicubic filtering)"
+quote = '''We then introduce that number as an offset at the beginning of the raymarched loop, moving our sampling start point along our ray for each pixel of our output. [...] I discovered that introducing a temporal aspect to the blue noise can attenuate this issue. [...] Bicubic filtering is used in upscaling and allows smoothing out some noise patterns while retaining details by calculating the value of a new pixel by considering 16 neighboring pixels through a cubic polynomial [...] You can notice that there are not a lot of differences between 1x and 0.5x which is great'''
+checked = 2026-11-21
+
+["heckel-2024-caustics-method"]
+url = "https://blog.maximeheckel.com/posts/caustics-in-webgl/"
+section = "Heckel, Shining a light on Caustics with Shaders and React Three Fiber, 2024-01-23, Anatomy of a Caustic Effect in WebGL, Calculating caustics intensity and Fitting our caustic pattern inside the plane"
+quote = '''We're absolutely going to cheat our way through this. [...] We'll simulate in a fragment shader the refracted rays from a light source going through a target mesh. [...] We'll render the resulting pattern in a caustic plane which we'll then scale and position accordingly based on the position of the light source in relation to our object. [...] The method highlighted in steps 2, 3 and 4 above comes from the article titled Rendering Realtime Caustics in WebGL [...] it covers most of the use cases I encountered, although I could sometimes notice the pattern being subtly cut by the bounds of the plane'''
+checked = 2026-11-21
+
+["wallace-2016-caustics-area-ratio"]
+url = "https://medium.com/@evanwallace/rendering-realtime-caustics-in-webgl-2a99a29a0b2c"
+section = "Wallace, Rendering Realtime Caustics in WebGL, 2016-01-07, the whole article, on the WebGL Water demo of 2011"
+quote = '''Caustics create intricate light patterns with sharp creases that will be blurred and may even be lost completely when using these realtime approximations. [...] A better approach is to approximate a wavefront of the light using a mesh. [...] The brightness change is proportional to the ratio of the original area to the final area. Representing area directly instead of sampling it avoids needing a massive number of samples to clearly resolve caustic shapes and so is much more efficient. This approach only works in certain cases but it’s perfect for caustics due to the refraction of light through a planar body of water. [...] It’s actually possible to compute the ratio of the original and final triangle areas without ever needing the vertex locations. [...] each one can compute the instantaneous screen-space partial derivative along the x and y axes of any value using finite differencing between itself and the neighboring fragment shader along that axis. [...] The vertex shader in the demo positions the vertices by tracing a ray for that vertex along the sunlight direction, refracting it through the surface, and intersecting it with the ground geometry. [...] My demo uses a few more tricks like rendering the caustics to a texture that can then be draped over the scene, but that’s optional and not fundamental to the approach'''
+checked = 2026-11-21
+
+["wallace-2011-webgl-water-licence"]
+url = "https://github.com/evanw/webgl-water/blob/73eda8be832b649367b25ea5690c1f0181bb56ad/main.js#L1-L7"
+section = "evanw/webgl-water at commit 73eda8b, main.js, header comment (lines 1 to 7); the repository has no LICENSE file and GitHub reports no licence for it"
+quote = '''Copyright 2011 Evan Wallace [...] Released under the MIT license'''
+checked = 2026-11-21
+
+["heckel-2023-refraction-scene-copy"]
+url = "https://blog.maximeheckel.com/posts/refraction-dispersion-and-other-shader-light-effects/"
+section = "Heckel, Refraction, dispersion, and other shader light effects, 2023-01-24, Transparent mesh with FBO, Refraction, Splitting colors with Chromatic Aberration, Backside rendering and Conclusion"
+quote = '''We take a snapshot of our entire scene (the other meshes, the background, etc.) by rendering it in the render target. [...] With that resulting vector, we can slightly shift each pixel of the texture coordinate, which gives us a relatively convincing refraction effect for our transparent material. [...] Introducing individual IOR for each value of R, G, and B. [...] Thus I attempted to render the backside of the mesh and then render the frontside, both with the same material and its light effects and dispersion properties. [...] using a for loop in my shader is probably a questionable choice, and the fps can drop a lot the higher the sample number is.'''
+checked = 2026-11-21
+
+["khr-materials-transmission-opaque-behind"]
+url = "https://github.com/KhronosGroup/glTF/blob/5b00b913b74c8f0260c64578b98a09ef2dde0b41/extensions/2.0/Khronos/KHR_materials_transmission/README.md#implementation-notes"
+section = "Khronos glTF repository at commit 5b00b91, KHR_materials_transmission, Limitations of Alpha as Coverage (its last paragraph: what the extension covers) and Implementation Notes, a section marked non-normative (the closing paragraphs and the caption of the figure Multi-layer Transparency)"
+quote = '''This extension aims to address the simplest and most common use cases for optical transparency: infinitely-thin materials with no refraction, scattering, or dispersion. [...] Various techniques are available to trade off physical accuracy against realtime performance requirements in client implementations. This extension does not mandate any particular technique. [...] We recommend that client implementations aim to display at least opaque objects through a transmissive material. [...] The minimum expectation for a compliant renderer is to render only opaque objects (i.e. like the first image). Additional transparent layers may be rendered but are not required.'''
+checked = 2026-11-21
+
+["khr-materials-volume-refraction"]
+url = "https://github.com/KhronosGroup/glTF/blob/5b00b913b74c8f0260c64578b98a09ef2dde0b41/extensions/2.0/Khronos/KHR_materials_volume/README.md#refraction"
+section = "Khronos glTF repository at commit 5b00b91, KHR_materials_volume, Overview and Refraction"
+quote = '''By default, a glTF 2.0 material describes the scattering properties of a surface enclosing an infinitely thin volume. [...] Volumes provide effects like refraction, absorption and scattering. [...] Light rays falling through the volume boundary are refracted according to the index of refraction (IOR) given in `KHR_materials_ior`.'''
+checked = 2026-11-21
+
+["khr-materials-dispersion-per-channel-ior"]
+url = "https://github.com/KhronosGroup/glTF/blob/5b00b913b74c8f0260c64578b98a09ef2dde0b41/extensions/2.0/Khronos/KHR_materials_dispersion/README.md#implementation"
+section = "Khronos glTF repository at commit 5b00b91, KHR_materials_dispersion, Overview and Implementation"
+quote = '''The dispersion effect is a result of the wavelength-dependent index of refraction of a material. [...] One real-time method for rendering dispersion effects is to trace volume transmission separately for each of color channel accounting for the per channel IOR as determined by the Abbe number.'''
+checked = 2026-11-21
+
+["heckel-2024-dithering-as-style"]
+url = "https://blog.maximeheckel.com/posts/the-art-of-dithering-and-retro-shading-web/"
+section = "Heckel, The Art of Dithering and Retro Shading for the Web, 2024-08-06, Dithering techniques and A first pass at dithering in React Three Fiber"
+quote = '''Today, dithering is more an artistic choice than a workaround. [...] Output a white or black pixel based on whether the luminance falls above or below said random number.'''
 checked = 2026-11-21
