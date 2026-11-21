@@ -198,7 +198,7 @@ A Far proxy that is not Resident while its Chunk is in the Far field: counted on
 _Avoid_: Missing proxy, far pop-in
 
 **Late mip**:
-A mip of a Texture that a frame's drawn Chunks need, by its priority from where the camera is, and that is not yet Resident: it shows as blur from a coarser mip, never as a hole.
+A mip of a Texture that a frame's drawn Chunks or Renderables need, by its priority from where the camera is, and that is not yet Resident: it shows as blur from a coarser mip, never as a hole.
 _Avoid_: Missing mip, texture pop
 
 **Fast travel**:
