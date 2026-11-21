@@ -8584,8 +8584,8 @@ checked = 2026-11-21
 
 ["bevy-feronia-0.8.4-licence"]
 url = "https://github.com/NicoZweifel/bevy_feronia/blob/9533d0fe6cfe896b8824c2e8630e4bbba77bbcfb/README.md#L182"
-section = "bevy_feronia v0.8.4 (NicoZweifel, commit 9533d0f, 2026-06-22), README.md (L182, L187): the code's licence; assets/LICENSE holds other terms for the example assets, which were not opened"
-quote = '''The code is dual-licensed: [...] Feel free to copy the grass assets. All the other assets used in the examples are licensed assets.'''
+section = "bevy_feronia v0.8.4 (NicoZweifel, commit 9533d0f, 2026-06-22), README.md (L182, L184, L185, L187): the code's licence; assets/LICENSE holds other terms for the example assets, which were not opened"
+quote = '''The code is dual-licensed: [...] * MIT License ([LICENSE-MIT](LICENSE-MIT) or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT)) [...] * Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0)) [...] Feel free to copy the grass assets. All the other assets used in the examples are licensed assets.'''
 checked = 2026-11-21
 
 ["bevy-feronia-0.8.4-wind"]
@@ -10307,7 +10307,7 @@ checked = 2026-11-21
 ["surricchio-2023-gowr-snow-tessellation"]
 url = "https://80.lv/articles/santa-monica-s-senior-programmer-on-how-god-of-war-ragnar-k-s-snow-system-was-made"
 section = "Paolo Surricchio (Santa Monica Studio) interviewed by Arti Sergeev, 80 Level, 16 October 2023, sections God of War Ragnarök's Snow System and the one on performance"
-quote = '''Instead of using Screen Space Parallax Mapping (a version of parallax mapping created by our at-the-time Technical Director), we decided to use geometry displacement with hardware tessellation. [...] It's hard to give exact numbers for hardware tessellation since there are many control variables that can change the performance profile [...] Each terrain mesh was, in fact, 2 draw calls, one with hardware tessellation, and one with regular vertex shader pipeline. A compute shader was able to do both camera culling and decide which chunks fell into the displacement area and which didn't.'''
+quote = '''we render the water waves and ripples in both God of War (2018) and God of War Ragnarök with a similar technique as the old snow system), for our terrain, we had to change the core rendering part. Instead of using Screen Space Parallax Mapping (a version of parallax mapping created by our at-the-time Technical Director), we decided to use geometry displacement with hardware tessellation. [...] It's hard to give exact numbers for hardware tessellation since there are many control variables that can change the performance profile [...] Each terrain mesh was, in fact, 2 draw calls, one with hardware tessellation, and one with regular vertex shader pipeline. A compute shader was able to do both camera culling and decide which chunks fell into the displacement area and which didn't.'''
 checked = 2026-11-21
 
 ["bentley-2025-yotei-snow-displacement-buffer"]
@@ -10628,7 +10628,7 @@ checked = 2026-11-21
 ["snowflow-5450397-deformation-buffer"]
 url = "https://github.com/Noniv/snowflow_demo/blob/545039733b74eec742862f161990142c7ca7c7ec/README.md"
 section = "Noniv/snowflow_demo (commit 5450397, 2026-07-28), README.md, sections Terrain, Deformation, the post chain and Performance: a WebGPU demo in WGSL, its author's own figures; the readme was read, the code was not, and nothing was run"
-quote = '''A nested-ring geometry clipmap: 8 rings, 8.5 cm inner spacing [...] world placement, CDLOD morphing and displacement all happen in the vertex shader [...] two 2048² RGBA16F targets covering 80 m (3.9 cm texels), ping-ponged by a single full-screen pass per frame [...] The displacement is real geometry in the beauty pass *and* in all three shadow cascades through one shared include [...] Depth-based reprojection, variance clipping, and a five-tap Catmull-Rom'''
+quote = '''A nested-ring geometry clipmap: 8 rings, 8.5 cm inner spacing [...] world placement, CDLOD morphing and displacement all happen in the vertex shader [...] two 2048² RGBA16F targets covering 80 m (3.9 cm texels), ping-ponged by a single full-screen pass per frame [...] The displacement is real geometry in the beauty pass *and* in all three shadow cascades through one shared include [...] - **TAA** — Halton(2,3) jitter written straight into the projection and frozen [...] Depth-based reprojection, variance clipping, and a five-tap Catmull-Rom'''
 checked = 2026-11-21
 cost = '''Measured with WebGPU timestamp queries at 2560×1440 on Chrome / Windows 11 / RTX 5070 Ti, with every system running: [...] base scene (clipmap, snow, 3 cascades, sky, character, deformation, prepass) | 1.64 ms'''
 
