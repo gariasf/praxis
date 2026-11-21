@@ -102,8 +102,9 @@ milestone ladder):
   logging so a broken script never crashes the engine.
 - **Coroutine task scheduler.** Lua coroutines yield on engine
   timers, events and predicates; engine resumes them when
-  conditions are satisfied. Frame-budget aware so a Lua loop can't
-  starve the renderer.
+  conditions are satisfied. Its budget is a count per Tick, such as
+  coroutine resumes, never a time, so a Lua loop can't starve the
+  renderer and the fixed schedule still reads no wall clock (ADR 0022).
 - **Hot-reload.** File watcher reloads changed `.lua` modules; Lua VM
   is recreated; engine state (ECS components, GPU resources, scene)
   survives. All persistent Lua state lives in well-defined tables that
