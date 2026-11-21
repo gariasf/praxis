@@ -9307,3 +9307,843 @@ url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definit
 section = "Unity HDRP 17.0 manual, Water system simulation; documentation only"
 quote = '''Ocean, Sea, or Lake water surfaces have three simulation bands, two for'''
 checked = 2026-11-21
+
+["rockstar-2026-gta6-now-available"]
+url = "https://www.rockstargames.com/newswire/article/39akk424a9oo53/grand-theft-auto-vi-now-available"
+section = "Rockstar Games, Newswire, Grand Theft Auto VI Now Available, the page's description; rockstargames.com/VI dates the post November 19, 2026"
+quote = '''Today we are proud to announce that Grand Theft Auto VI is now available worldwide for PlayStation 5 and XBOX Series X|S.'''
+checked = 2026-11-21
+
+["rockstar-2026-gta6-videos"]
+url = "https://www.rockstargames.com/VI/an-extended-look"
+section = "Rockstar Games, Grand Theft Auto VI site, An Extended Look: the video's date and description, and the list of the other videos with their dates"
+quote = '''August 27, 2026 Captured entirely from in-game footage on the PlayStation 5, this extended look at Grand Theft Auto VI showcases the biggest, most immersive evolution of the series yet. [...] Grand Theft Auto VI: Out Now November 19, 2026 [...] Grand Theft Auto VI Launch Trailer October 15, 2026 [...] Grand Theft Auto VI Trailer 2 May 6, 2025 [...] Grand Theft Auto VI Trailer 1 December 4, 2023'''
+checked = 2026-11-21
+
+["parkin-2026-edge-gta6-pedestrians"]
+url = "https://www.gamesradar.com/edge/gtavi-cover/"
+section = "Simon Parkin, Edge 430 (November 2026) cover story on Grand Theft Auto VI, published on GamesRadar+ 29 October 2026, reported from Rockstar North with Rob Nelson, Aaron Garbut and Phil Hooker; the paragraphs on Leonida's pedestrians"
+quote = '''Rather than relying chiefly on procedural systems to assemble interchangeable crowds, Rockstar established an entire Los Angeles-based team of writers, directors and producers devoted to making Leonida's NPCs more individually realised. The studio art-directed every one of them, creating around 600,000 animations, but appearance is only the surface. These pedestrians are assigned personality traits that help determine how they respond: temperament, aggression, where they are, what they have seen, and how the player has behaved towards them. [...] Different districts have their own demographic and professional textures. Nelson describes the process of building Leonida's population as repeatedly asking: "Who's going to be aggressive? How many people are going to go for a weapon? How many are going to test me?"'''
+checked = 2026-11-21
+
+["parkin-2026-edge-gta6-interiors"]
+url = "https://www.gamesradar.com/edge/gtavi-cover/"
+section = "Simon Parkin, Edge 430 (November 2026) cover story on Grand Theft Auto VI, published on GamesRadar+ 29 October 2026, reported from Rockstar North with Rob Nelson, Aaron Garbut and Phil Hooker; the paragraph on interiors"
+quote = '''The game contains "an order of magnitude more interiors" than its predecessors, Aaron Garbut, also a head of development and co-studio head, tells us. [...] "Every back alley is as densely detailed and interesting as the others. You can go anywhere, any random location, and so many people have thought about that location."'''
+checked = 2026-11-21
+
+["parkin-2026-edge-gta6-simulation-rebuilt"]
+url = "https://www.gamesradar.com/edge/gtavi-cover/"
+section = "Simon Parkin, Edge 430 (November 2026) cover story on Grand Theft Auto VI, published on GamesRadar+ 29 October 2026, reported from Rockstar North with Rob Nelson, Aaron Garbut and Phil Hooker; the paragraphs on what Grand Theft Auto V's simulation could not do"
+quote = '''New hardware could increase draw distances, traffic and pedestrian density, but the underlying simulation remained largely fixed. "You couldn't tear it apart and get in there and rework the traffic system or the law system," Nelson says. With RDR2, Rockstar deliberately began doing exactly that, rebuilding the open world around richer interactive systems of crime, witnesses, NPC behaviour and player interaction. [...] "If you want a pedestrian population to behave believably, and you can stand in front of them and produce an automatic shotgun out of nowhere and they don't react, then that doesn't work. That barely held in GTAV, where you could literally produce one of those weapons in front of somebody and they would not react unless you aimed it at them. Only then would they run.'''
+checked = 2026-11-21
+
+["parkin-2026-edge-gta6-witnesses"]
+url = "https://www.gamesradar.com/edge/gtavi-cover/"
+section = "Simon Parkin, Edge 430 (November 2026) cover story on Grand Theft Auto VI, published on GamesRadar+ 29 October 2026, reported from Rockstar North with Rob Nelson, Aaron Garbut and Phil Hooker; the paragraphs on carried weapons, witnesses and the police's 'heat' record"
+quote = '''Pedestrians notice how you are carrying it: slung over your back is one thing; carried in your hands is another. Crowds edge away or scatter, while other characters may challenge you. [...] The simulation is attentive, too, to whether anyone sees what you are doing. [...] A 'heat' system tracks the information police have gathered: your physical description, whether you were working alone or with a partner, what you were wearing, whether CCTV captured you, what weapon you were carrying.'''
+checked = 2026-11-21
+
+["parkin-2026-edge-gta6-weather"]
+url = "https://www.gamesradar.com/edge/gtavi-cover/"
+section = "Simon Parkin, Edge 430 (November 2026) cover story on Grand Theft Auto VI, published on GamesRadar+ 29 October 2026, reported from Rockstar North with Rob Nelson, Aaron Garbut and Phil Hooker; the paragraph on weather"
+quote = '''GTAV's weather has preset conditions: sunny, rainy, overcast. "Generally speaking, it's either rainy or sunny or whatever," says Aaron Garbut. "This game is much more granular." Cloud systems move independently in GTAVI, shaped by wind, humidity, fog, time of day and season. [...] A player standing in bright sunshine may be able to see a storm forming in the distance: dark clouds, lightning flashes, the haze of falling rain. Drive towards it and the environment changes gradually. Roads become wet; buildings drip after the storm has passed; surfaces dry at different rates. [...] Pedestrians respond, too, seeking shelter as weather deteriorates. "Everything comes down to these granular levels," Garbut says, "and then it just interacts."'''
+checked = 2026-11-21
+
+["parkin-2026-edge-gta6-transit-and-studios"]
+url = "https://www.gamesradar.com/edge/gtavi-cover/"
+section = "Simon Parkin, Edge 430 (November 2026) cover story on Grand Theft Auto VI, published on GamesRadar+ 29 October 2026, reported from Rockstar North with Rob Nelson, Aaron Garbut and Phil Hooker; the paragraphs on public transport and on which studio led which system"
+quote = '''The game features fully functioning bus and train systems. [...] Phil Hooker, a third lead who shares the job title head of development and the person responsible for driving the game towards stability, admits that he now spends much of his time waiting for buses [...] "I'm obsessed with making sure they always turn up," he says. [...] staff at Toronto, for example, have played a leading role in world population and research, while the San Diego team has helped drive the development of ambient and interactive events.'''
+checked = 2026-11-21
+
+["weber-2026-ign-gta6-preview"]
+url = "https://www.ign.com/articles/gta-6-exclusive-preview"
+section = "Rachel Weber, IGN, Grand Theft Auto 6 exclusive preview from Rockstar North, updated 28 August 2026; Rob Nelson quoted on memory, the reporter on NPC reactions"
+quote = '''NPCs now have a wide range of tolerance for any BS you may or may not throw their way. Taunt them, and they could act offended or even attack you. Pull a gun, and they could cower or choose to escalate. [...] "One of the coolest things about this game being developed from the ground up on this generation of hardware is taking advantage of all the memory that we have on the latest generation of consoles, combined with our teams’ experience doing this for so long together."'''
+checked = 2026-11-21
+
+["weber-2026-ign-nelson-interview"]
+url = "https://www.ign.com/articles/gta-6-rob-nelson-interview-rockstar-north"
+section = "IGN, interview with Rob Nelson (co-studio head, Rockstar North) on Grand Theft Auto VI, updated 27 August 2026"
+quote = '''if you stand too close to a group, they should notice that you're eavesdropping." [...] "This NPC interaction system is one that is returning and evolved from Red Dead Redemption 2, [...] "We have to do so much work in design, in code behaviors, in animation, in writing, to get these interactions to feel believable," [...] you see the density of the traffic, the density of population, and the fidelity of their responses to you."'''
+checked = 2026-11-21
+
+["techradar-2026-garbut-animation-counts"]
+url = "https://www.techradar.com/gaming/rockstar-reveals-it-built-a-gta-6-team-that-focused-solely-on-creating-more-realistic-npcs-with-over-600-000-animations-twice-as-many-as-red-dead-redemption-2-had"
+section = "TechRadar, relaying Aaron Garbut's (co-head, Rockstar North) interview with The New York Times of 27 August 2026, whose own page refused the fetch; the counts are the relay's wording, the sentences in quotation marks Garbut's and Nelson's"
+quote = '''"We art-directed each individual one of them," said Garbut, revealing that GTA 6 has over 600,000 animations, compared to GTA 5's 55,000 and double Red Dead Redemption 2's 300,000 animations. [...] "Once we managed to accomplish that level of interactive fidelity in a more sparsely populated version of America 100 years ago," Nelson said, "we were already imagining what it would be like if we could do that at the scale and density of a modern environment."'''
+checked = 2026-11-21
+
+["linneman-2026-df-gta6-review"]
+url = "https://www.digitalfoundry.net/reviews/grand-theft-auto-6-a-landmark-achievement-that-redefines-a-console-generation"
+section = "John Linneman, Digital Foundry, review of Grand Theft Auto 6, 18 November 2026: the paragraphs on distance, hair and pedestrians"
+quote = '''Even distant level-of-detail transitions remain imperceptible, preserving active traffic, pedestrian crowds and functional street lamps right up to the horizon [...] Rockstar has deployed a cutting-edge, physics-driven strand hair system across all characters too, unlike most games that constrain this expensive tech to their protagonists. Every bystander features individual hair strands that react realistically to momentum, wind and water immersion. [...] Pedestrians demonstrate remarkable behavioural autonomy too, spontaneously starting altercations after traffic accidents or fleeing into nearby shops during street shootouts.'''
+checked = 2026-11-21
+
+["judd-2026-df-gta6-cpu"]
+url = "https://www.digitalfoundry.net/features/why-isnt-grand-theft-auto-6-60fps"
+section = "William Judd, Digital Foundry, Why isn't Grand Theft Auto 6 60fps?, 20 November 2026: the paragraphs on crowds, streaming and ray tracing"
+quote = '''in dense places like airports or beaches, there are dozens of individuals going through their virtual lives. [...] When the crowd starts to panic, the AI load increases substantially, as NPCs turn to fight, start to flee or perform other actions in response. This is accompanied by a precipitous drop in frame-rate, especially on the non-Pro machines, as these CPU-based calculations quickly overwhelm the frame-time budget. [...] the CPU is still pegged while organising these incoming assets. [...] Coordinating bounding volume hierarchies (BVHs) and ray-traced acceleration structures for dense city blocks, moving traffic and pedestrians requires extensive CPU intervention.'''
+checked = 2026-11-21
+
+["judd-2026-df-gta6-police"]
+url = "https://www.digitalfoundry.net/features/gta-6s-police-pursuit-ai-is-something-else-heres-how-it-works"
+section = "William Judd, Digital Foundry, GTA 6's police pursuit AI is something else: here's how it works, 20 November 2026"
+quote = '''Some may flee from a fight, for example, while others may be packing weaponry and eager to take you on. This seems to vary based on locale, too, with those out in the boonies being a bit more likely to be heavily armed than those in the posher, safer parts of Vice City. [...] correctly-coloured liquids streaming out of bullet-ridden bottles, glass display cases shattering, shelves collapsing and so on.'''
+checked = 2026-11-21
+
+["rouillon-2026-troiscouleurs-gta6-preview"]
+url = "https://www.troiscouleurs.fr/cinema/we-saw-gtavi-running-at-rockstar-north-our-exclusive-preview-and-interview/"
+section = "Etienne Rouillon, TROISCOULEURS, preview of Grand Theft Auto VI played by Rob Nelson at Rockstar North and interview, 27 August 2026; the reporter's account of the demo"
+quote = '''you stop pinching yourself over every detail (the sand on your shoes, the sweat on your skin after a sprint, the way aquatic plants float in the water)'''
+checked = 2026-11-21
+
+["techradar-2026-hynd-wanted-system"]
+url = "https://www.techradar.com/gaming/gta-6-dev-says-rockstar-designed-the-wanted-system-so-players-feel-the-seriousness-of-your-actions-complete-with-competent-pursuit-behaviours-at-times-we-use-unfit-cop-types-that-are-easy-to-get-away-from-who-might-give-up-when-chasing-you"
+section = "TechRadar Gaming, written answers from David Hynd (vice president of technology, Rockstar), 19 November 2026"
+quote = '''vice president of technology David Hynd said the law enforcement and crime system saw "lots and lots of iteration," as "there were many times throughout development where the cops were too easy or too hard." [...] "Once we had a suite of behaviours, we were happy with (ramming, PIT manoeuvres, boxing in, blocking in front, shooting out tyres, etc.), we were able to adapt and choose the best ones to orchestrate the kind of experience we wanted players to have," Hynd said.'''
+checked = 2026-11-21
+
+["vg247-2018-schilstra-crowd-versus-individuals"]
+url = "https://www.vg247.com/2018/10/23/red-dead-redemption-2-physics-ai-euphoria-phil-hooker-interview/"
+section = "Kirk McKeand (VG247), Red Dead Redemption 2 - how advanced AI and physics create the most believable open world yet, first published 23 October 2018; quote of Klaas Schilstra, director of engineering, Rockstar North"
+quote = '''"RDR is slower paced than GTA, but it's also deeply textured and extremely detailed," director of engineering Klaas Schilstra adds. [...] For GTA, we needed a crowd to walk the streets. For RDR, we had to have a populated town of recognisable individuals, and each character in that town needs to do be believable, and seen to be doing something meaningful. It's possible to recognise the beginnings of this in the technology for GTA 5, but at the same time every one of our systems has evolved beyond recognition to make RDR possible."'''
+checked = 2026-11-21
+
+["vg247-2018-hooker-gtav-newgen-ai-left-alone"]
+url = "https://www.vg247.com/2018/10/23/red-dead-redemption-2-physics-ai-euphoria-phil-hooker-interview/"
+section = "Kirk McKeand (VG247), Red Dead Redemption 2 - how advanced AI and physics create the most believable open world yet, first published 23 October 2018; quote of Phil Hooker, director of technology, Rockstar North"
+quote = '''“It’s such a complex mixture of animation, AI, and dialogue that we couldn’t unravel it without fear of breaking such a complex game," Hooker says when asked about retroactively adding AI improvements to the next gen version of GTA 5. [...] The studio was able to increase the volume of pedestrians and put more cars on the roads, but it was unable to make improvements to the AI, even if the new hardware could handle it.'''
+checked = 2026-11-21
+
+["vg247-2018-hynd-witnesses-and-saloon-appraisal"]
+url = "https://www.vg247.com/2018/10/23/red-dead-redemption-2-physics-ai-euphoria-phil-hooker-interview/"
+section = "Kirk McKeand (VG247), Red Dead Redemption 2 - how advanced AI and physics create the most believable open world yet, first published 23 October 2018; quote of David Hynd, lead AI programmer"
+quote = '''"For example, if a witness catches you doing something and Arthur says, ‘Ah, s**t…’ as you have to chase them down," lead AI programmer David Hynd adds. "Or if you chase a witness into the woods and Arthur says, ‘Come on out…’. Or if you barge into a saloon, the AI might stop and look, or the music may stop playing - the AI will weigh you up for a brief moment before going back about their business. Or not, if they see you as a threat.'''
+checked = 2026-11-21
+
+["vg247-2018-hooker-predators-prey-and-ambient-riders"]
+url = "https://www.vg247.com/2018/10/23/red-dead-redemption-2-physics-ai-euphoria-phil-hooker-interview/"
+section = "Kirk McKeand (VG247), Red Dead Redemption 2 - how advanced AI and physics create the most believable open world yet, first published 23 October 2018; quote of Phil Hooker"
+quote = '''“If you are hunting carefully, you will find herbivores fleeing in the opposite direction of a predator if they are close to one another,” Hooker tells me. “It’s not something that’s limited to herbivores - further up the food chain you could also encounter wolves fleeing a grizzly bear if they find themselves at a disadvantage. Or a predator’s location might be given away by a desperate fight back from an unfortunate group of ambient riders.”'''
+checked = 2026-11-21
+
+["vg247-2018-hooker-euphoria-is-one-part"]
+url = "https://www.vg247.com/2018/10/23/red-dead-redemption-2-physics-ai-euphoria-phil-hooker-interview/"
+section = "Kirk McKeand (VG247), Red Dead Redemption 2 - how advanced AI and physics create the most believable open world yet, first published 23 October 2018; quote of Phil Hooker"
+quote = '''“We use Euphoria specifically to enhance the physics-based reactions of both humans and animals and have really evolved it on Red Dead Redemption 2,” Hooker explains. “For example, if a rider’s horse is shot then there are a range of realistic outcomes like rolling off the horse, being dragged in the stirrups, or even being trapped under a dead horse and fighting to get free. [...] “However, Euphoria is just a part of how we simulate and animate characters and, outside of it, we have radically overhauled our entire animation system to create more accurate human-like and animal-like behaviour across the board.”'''
+checked = 2026-11-21
+
+["vg247-2018-lyons-animation-physics-coupling"]
+url = "https://www.vg247.com/2018/10/23/red-dead-redemption-2-physics-ai-euphoria-phil-hooker-interview/"
+section = "Kirk McKeand (VG247), Red Dead Redemption 2 - how advanced AI and physics create the most believable open world yet, first published 23 October 2018; quote of Ben Lyons, lead physics programmer"
+quote = '''"Another key area of focus was the interaction between animation and physics in general, which has really allowed us to deepen how connected characters are with the environment and the vehicles they can use to explore it. Canoes and row boats will surge forward perfectly in time with every paddle stroke. Bushes and trees will move when you get close and you’ll see the player actively brush them away. You can run over uneven terrain with rocks and scree loosely falling away and see the player or horse adapt to the terrain, sometimes sliding down the steep and often perilous slopes. [...] Wagons themselves have a real sense of weight, they creak and rock over every bump or crevice, their wheels can buckle, and their bodies can be broken into hundreds of separate pieces.'''
+checked = 2026-11-21
+
+["jeuxactu-2018-nelson-ambient-population-system"]
+url = "https://web.archive.org/web/20181227192442/http://www.jeuxactu.com/red-dead-redemption-2-notre-interview-de-rob-nelson-de-rockstar-113721.htm"
+section = "Maxime Chao (JeuxActu), Red Dead Redemption 2 : notre interview de Rob Nelson de Rockstar, interview dated 26 March 2018; answers of Rob Nelson, co-studio head, Rockstar North, to the questions on urban versus natural open worlds"
+quote = '''Dans GTA, on peut marcher dans la rue et croiser des PEDS, on appelle PEDS les PNJ qui tiennent un gobelet de café. Si vous vous mettez en travers de leur chemin, ou pire, si vous pointez votre arme sur eux, ils vont quasiment tous lâcher leur gobelet et faire demi-tour aussitôt. [...] On n’avait pas beaucoup de situations qui pouvaient fonctionner entre elles. C’était tellement complexe à gérer. [...] On a donc dû faire évoluer notre « Ambiant Population System » pour que ces PNJ fassent autre chose que faire tomber leur gobelet de café et partir en courant. On a donc dû créer plusieurs types de PNJ, avec différents caractères, plus intimes, moins neutres et pas juste agressifs. Il était important pour nous pour qu’ils aient différentes façons de penser, qu’il s’agisse d’un garde dans un ranch ou dans une usine, ils ne réagissent pas de la même manière.'''
+checked = 2026-11-21
+
+["jeuxactu-2018-nelson-dirt-authored-hair-by-subtraction"]
+url = "https://web.archive.org/web/20181227192442/http://www.jeuxactu.com/red-dead-redemption-2-notre-interview-de-rob-nelson-de-rockstar-113721.htm"
+section = "Maxime Chao (JeuxActu), Red Dead Redemption 2 : notre interview de Rob Nelson de Rockstar, 26 March 2018, published in French; question 15 and Rob Nelson's answer"
+quote = '''j’ai noté plusieurs types et degrés de saleté sur les vêtements d’Arthur. De la crasse, de la sueur, de la boue, etc. Est-ce que ça évoluera en temps réel ou ce sont juste des textures qui ne bougeront pas ? [...] On a mis en place un système, mais on a essentiellement fait cela à la main, sachant que le jeu prendra en compte le temps pendant lequel vous aurez gardé vos vêtements sur vous. Bien évidemment, si vous vous roulez dans la boue, vous allez vous salir. Il y a donc un système, mais c’est quand même généré à la main et nous l’avons incorporé selon les situations. C’est à peu près la même chose avec les cheveux qui poussent et que vous pouvez couper aussi… [...] La barbe aussi. Mais cette fois-ci, c’est uniquement par soustraction. Pas comme dans GTA V où l’on pouvait aller chez le coiffeur et ressortir avec une barbe et des cheveux encore plus longs. Vous allez devoir attendre que votre barbe pousse'''
+checked = 2026-11-21
+
+["thr-2018-garbut-townspeople-and-systemic-plus-scripted"]
+url = "https://www.hollywoodreporter.com/heat-vision/rockstar-reveals-plot-details-red-dead-redemption-2-1139857"
+section = "Patrick Shanley (The Hollywood Reporter), interview with Josh Bass and Aaron Garbut, 7 September 2018; quote of Aaron Garbut, director of art, Rockstar North"
+quote = '''“It’s the sense of life the game has that most sets it apart,” Garbut adds. “When you first enter a town and you see the townspeople going about their business, building houses, selling papers, hanging out, you can instantly tell that we’ve never experienced this detail in an open world game before. [...] When all the systemic parts of the world come together with our scripted content in the right ways, it’s kind of incredible.”'''
+checked = 2026-11-21
+
+["thr-2018-bass-gtav-ps3-concepts-rdr2-persistence"]
+url = "https://www.hollywoodreporter.com/heat-vision/rockstar-reveals-plot-details-red-dead-redemption-2-1139857"
+section = "Patrick Shanley (The Hollywood Reporter), interview with Josh Bass and Aaron Garbut, 7 September 2018; quote of Josh Bass, art director, Rockstar San Diego"
+quote = '''“Grand Theft Auto V set a pretty high benchmark for us as a company, but even the PlayStation 4 and Xbox One versions of that game were based on technical concepts from the PS3 era,” Bass says. “Red Dead Redemption 2 is our first game for the latest generation of hardware, and was an opportunity for our teams to upgrade every single aspect of our approach to game design at once, from graphics and lighting to AI, to weather, sound and score, facial and body animation and more. We have used that power to create a world that goes far beyond anything we have ever done in terms of depth, interactivity and persistence.”'''
+checked = 2026-11-21
+
+["ign-2018-nelson-no-forest-fires-handcrafted-world"]
+url = "https://wccftech.com/red-dead-redemption-2-procedural-limits/"
+section = "Nathan Birch (Wccftech), Red Dead Redemption 2 Devs Considered Procedural Missions, Opted For a Game With Limits, 4 May 2018, quoting an IGN interview with Rob Nelson, studio head, Rockstar North; ign.com itself was not opened"
+quote = '''the way that we make these worlds is [to] basically handcraft them. [...] “It would be nice, but no. Because it's not practical. You could burn structures down, but a forest fire would change the map in such a way it would change the feeling of the world and the things that are in there.”'''
+checked = 2026-11-21
+
+["vulture-2018-jones-peds-80-page-scripts"]
+url = "https://www.vulture.com/2018/10/the-making-of-rockstar-games-red-dead-redemption-2.html"
+section = "Harold Goldberg (Vulture / New York Magazine), How the West Was Digitized, 14 October 2018; quote of Lazlow Jones, writer"
+quote = '''He tells me that “even the peds [RDR2’s non-playable characters] have 80-page scripts — each.”'''
+checked = 2026-11-21
+
+["vulture-2018-animation-and-dialogue-counts"]
+url = "https://www.vulture.com/2018/10/the-making-of-rockstar-games-red-dead-redemption-2.html"
+section = "Harold Goldberg (Vulture / New York Magazine), How the West Was Digitized, 14 October 2018"
+quote = '''Bringing the script to life meant 2,200 days of motion-capture work — compared with just five for Grand Theft Auto III — requiring 1,200 actors, all SAG-AFTRA, 700 of them with dialogue. [...] The finished game includes 300,000 animations, 500,000 lines of dialogue, and many more lines of code.'''
+checked = 2026-11-21
+
+["rockstar-2018-wildlife-200-species-ecosystem"]
+url = "https://gematsu.com/2018/09/red-dead-redemption-2-details-wildlife-hunting-fishing-and-horses"
+section = "Rockstar Games, official Red Dead Redemption 2 site, Wildlife feature (rockstargames.com/reddeadredemption2/features/wildlife), 24 September 2018, as reproduced by Sal Romano (Gematsu)"
+quote = '''The diverse habitats and climates of Red Dead Redemption 2 are home to around 200 species of animals, birds, and fish, all of which behave and respond to their environment in a unique way. [...] Deer, bison and pronghorn traverse the plains in large herds, scavengers quickly sniff out carrion, sockeye salmon leap upstream, wolves attack in packs surrounding their prey, geese fly in fixed formations, possums play dead, rodents scamper into tree hollows, grizzly bears bluff charge when threatened, and birds of prey soar on thermals. They all form part of a complex ecosystem and must continually fight for their place on the food chain. [...] Just try not to leave it too long or the scavengers will come looking. [...] There are 19 breeds of horse in Red Dead Redemption 2 [...] With 59 different styles of coat'''
+checked = 2026-11-21
+
+["rockstar-2018-gameplay-video-camp-and-witness"]
+url = "https://www.gtabase.com/news/red-dead-redemption-2/red-dead-redemption-2-first-gameplay-video-released"
+section = "Rockstar Games, Red Dead Redemption 2: Official Gameplay Video, 9 August 2018, narration as transcribed by GTABase (Andy)"
+quote = '''This is where gang members eat, sleep, perform chores, play games and share stories. [...] Helping the camp with food and supplies will keep morale high, while spending time with other gang members can reveal new secrets, fun things to do and opportunities for mischief. [...] Call out to a passing rider, talk yourself into trouble with a local tough guy, or out of trouble with a town sheriff, or intimidate a witness into silence and more.'''
+checked = 2026-11-21
+
+["kleanthous-2021-movement-systems-unified"]
+url = "https://gta.com.ua/img/news/making-horses-rdr2-gdc2021.pdf#page=6"
+section = "Tobias Kleanthous (Rockstar Games, Lead AI/Gameplay Programmer), Making The Believable Horses of 'Red Dead Redemption II', GDC 2021 AI Summit (GDC Vault session https://gdcvault.com/play/1027113), slide STARTING OUT, PDF page 6; slides read from a copy a fan site hosts"
+quote = '''BIG revamp of systems from GTAV [...] Unify disparate movement systems for humans, [...] animals & horses'''
+checked = 2026-11-21
+
+["kleanthous-2021-locomotion-data-counts"]
+url = "https://gta.com.ua/img/news/making-horses-rdr2-gdc2021.pdf#page=42"
+section = "Tobias Kleanthous (Rockstar Games), Making The Believable Horses of 'Red Dead Redemption II', GDC 2021 AI Summit (GDC Vault session https://gdcvault.com/play/1027113; slides read from a copy a fan site hosts), slide STYLE AND Varied Locomotion, PDF page 42"
+quote = '''Data-driven selection of “Motion Type” [...] “Blackboard” for condition-able data [...] ~210 locomotion “Archetypes” [...] ~2500 unique “Motion Types” [...] ~6300 unique “Motions” [...] ~1800 data-driven “CONDITIONs”'''
+checked = 2026-11-21
+
+["kleanthous-2021-terrain-analysis-blackboard"]
+url = "https://gta.com.ua/img/news/making-horses-rdr2-gdc2021.pdf#page=43"
+section = "Tobias Kleanthous (Rockstar Games), Making The Believable Horses of 'Red Dead Redemption II', GDC 2021 AI Summit (GDC Vault session https://gdcvault.com/play/1027113; slides read from a copy a fan site hosts), slides Terrain ANALYSIS and the following code slide, PDF pages 43 to 44"
+quote = '''Global and local data pushed to “blackboard” [...] Forward integration of controller to produce path [...] Navmesh and physics casts to validate [...] Surface data cached: normal, positions, etc. [...] “Deep” surface depths detected (snow, water, mud) [...] Environmental features, bug swarms, wind velocities [...] blackboard.Set<float>(SurfaceDepth, 0.4f); [...] blackboard.Set<hashstring>(SurfaceName, SNOW_LOOSE); [...] blackboard.PushEvent(ShakeTail);'''
+checked = 2026-11-21
+
+["kleanthous-2021-agitation-utility-system"]
+url = "https://gta.com.ua/img/news/making-horses-rdr2-gdc2021.pdf#page=55"
+section = "Tobias Kleanthous (Rockstar Games), Making The Believable Horses of 'Red Dead Redemption II', GDC 2021 AI Summit (GDC Vault session https://gdcvault.com/play/1027113; slides read from a copy a fan site hosts), slide Agitation & Unruliness, PDF page 55"
+quote = '''Trigger negative and increasingly uncontrolled [...] behaviour to certain stimuli [...] Predators [...] Guns [...] Rider Handling [...] Baseline responses, differentiator between breeds [...] Communicate via character, not UI [...] Simple utility system: “motivations”'''
+checked = 2026-11-21
+
+["kleanthous-2021-horse-animation-budget"]
+url = "https://gta.com.ua/img/news/making-horses-rdr2-gdc2021.pdf#page=60"
+section = "Tobias Kleanthous (Rockstar Games), Making The Believable Horses of 'Red Dead Redemption II', GDC 2021 AI Summit (GDC Vault session https://gdcvault.com/play/1027113; slides read from a copy a fan site hosts), slide BREEDS, PDF page 60 (speed: slide A BELIEVEABLE HORSE, IN A BELIEVABLE WORLD, PDF page 38)"
+quote = '''~3k animations across 23 unique movement styles [...] Already a big runtime budget [...] 19 Different breeds at launch split in four [...] Fastest horses almost 18m/s (40 mph), potential for'''
+checked = 2026-11-21
+
+["bauer-2019-time-of-day-weather-cycles-climate-regions"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Fabian Bauer (Rockstar Games, Sr. Graphics Programmer), Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution, SIGGRAPH 2019 Advances in Real-Time Rendering in Games; speaker notes of slides 2 and 16, slide 74 Future Outlook"
+quote = '''Red Dead Redemption 2 is an open world western game with dynamic Time Of Day, weather cycles and climate regions. [...] We’ve shipped supporting a multitude of volumetric effects, while staying in our 30 fps frame budget. [...] In a dedicated pass, we copy the slice of the corresponding weather from the cloud LUT atlas to a single strip texture. This allows us to blend LUTs in weather transitions. [...] Future Outlook [...] Localized weather'''
+checked = 2026-11-21
+
+["mcv-2013-hooker-everything-streamed-around-player"]
+url = "https://www.mcvuk.com/inside-rockstar-north-part-3-the-tech/"
+section = "MCV Staff (MCV/Develop), Inside Rockstar North - Part 3: The Tech, 5 October 2013 (from Develop's October 2013 issue); quote of Phil Hooker, associate technical director, Rockstar North"
+quote = '''“The assets now are so big that pretty much everything is in a streaming state. When the game is running, it has loaded in the immediate area around the player, plus mission objects and so on, and the nav mesh for AI.”'''
+checked = 2026-11-21
+
+["techradar-2013-garbut-animation-variety-through-streaming"]
+url = "https://www.techradar.com/news/gaming/the-tech-that-built-an-empire-how-rockstar-created-the-world-of-gta-5-1181281"
+section = "Hugh Langley (TechRadar), The tech that built an empire: how Rockstar created the world of GTA 5, 16 September 2013; quotes of Aaron Garbut"
+quote = '''"We can stream far more and compress far more into memory, meaning orders of magnitude more detail than we had in 4," adds Garbut. [...] If you look at a night based screenshot, all the little lights you see in the far distance are real, you can drive towards them and find the bulb that casts the light. [...] "The animation system is amazing. It's able to blend in so many actions incredibly smoothly to give us a really rich movement across all characters. It also utilises the streaming improvements to give us huge amounts of variety and specific actions, allowing us to seamlessly blend in and out of cutscenes.'''
+checked = 2026-11-21
+
+["rockstar-2014-gtav-newgen-wildlife-and-traffic"]
+url = "https://web.archive.org/web/20140913121233/http://www.rockstargames.com/newswire/article/52308/grand-theft-auto-v-release-dates-and-exclusive-content"
+section = "Rockstar Games, Rockstar Newswire, Grand Theft Auto V Release Dates and Exclusive Content Details for PlayStation 4, Xbox One and PC, 12 September 2014 (Wayback copy of 13 September 2014)"
+quote = '''In addition to increased draw distances and higher resolution, players can expect a range of additions and improvements including: [...] Additional wildlife [...] Denser traffic [...] New foliage system [...] Enhanced damage and weather effects, and much more [...] with online play now for up to 30 players on PlayStation 4 and Xbox One'''
+checked = 2026-11-21
+
+["vermeij-2024-traffic-created-70m-removed-90m"]
+url = "https://libertycity.net/news/8122-how-cars-appear-and-disappear-in-the.html"
+section = "Obbe Vermeij (former technical director, Rockstar North), post on X (https://x.com/ObbeVermeij/status/1841467041917686189, not opened; the post's own date not confirmed), reproduced in full by LibertyCity (NDRoyal), 3 October 2024"
+quote = '''"As the player moves around, cars are constantly created and deleted to give the appearance of a busy city. [...] For gta3, Vice & SA, my code places cars at about 70m from the player if they would be in view of the camera. They get removed at around 90m. [...] For SA, I changed the rule so that cars would have to be off-screen for at least 2 seconds to be removed. This fixed it. [...] My code looked for road nodes at the appropriate distance to create cars and that didn’t already have cars nearby. Sometimes there were no suitable nodes which could result in empty or unusually busy streets.'''
+checked = 2026-11-21
+
+["vermeij-2024-reduced-physics-beyond-20m"]
+url = "https://libertycity.net/news/8122-how-cars-appear-and-disappear-in-the.html"
+section = "Obbe Vermeij (former technical director, Rockstar North), post on X (https://x.com/ObbeVermeij/status/1841467041917686189, not opened), reproduced in full by LibertyCity, 3 October 2024"
+quote = '''Cars further than 20m away use reduced physics/collision. In this state, cars do not detect collisions and would drive straight through walls. When the player gets close, the full physics is switched on. You can notice this happening as cars drop a little until the suspension settles. Cars don’t switch back to the reduced physics state'''
+checked = 2026-11-21
+
+["vermeij-2024-vehicle-models-phased-by-area"]
+url = "https://www.sportskeeda.com/gta/former-gta-3-vice-city-san-andreas-dev-explains-vehicle-limitations-ps2"
+section = "Rajarshi Acharya (Sportskeeda), 16 May 2024, quoting Obbe Vermeij's posts on X (https://x.com/ObbeVermeij/status/1790730197286752530, not opened)"
+quote = '''"My code would occasionally pick a car model to be phased out. Once there were none left on the map, this model would be removed and a new model could be loaded. The code would pick a model that was appropriate for the area (sports cars in business district, old cars in run-down areas, etc.)." [...] "At times there would only be 1 or 2 cars models available for ambient traffic. This lack of variation was particularly noticeable if the player was driving the one car that had to be used." [...] "Yes, same with IV. Maybe the number of vehicle models was a bit higher, but there was a similar limit."'''
+checked = 2026-11-21
+
+["vermeij-2026-gta4-npc-schedules-abandoned"]
+url = "https://www.dexerto.com/gta/ex-gta-dev-reveals-feature-that-was-so-problematic-it-needed-to-be-removed-3399051/"
+section = "Connor Bennett (Dexerto), 17 August 2026, quoting Obbe Vermeij's interview with Edge magazine"
+quote = '''“Leslie Benzies wanted all the NPCs [in GTA 4] to have their own lives. A place to live. A schedule. Every morning, they would drive to work,” the former developer said. [...] “We worked towards it for a bit, but it ended up being so problematic. There were so many bugs,” [...] “It wasn’t really important that everyone had their own schedule and their own life. I actually think that, psychologically, players are fine with NPCs being a little fake and shallow.”'''
+checked = 2026-11-21
+
+["vermeij-2026-litter-and-what-breaks-the-illusion"]
+url = "https://www.gtaboom.com/exclusive-if-an-npc-walks-into-a-wall-the-illusion-breaks-how-gta-really-feels-alive-aa3d"
+section = "Hassan Sajid (GTA BOOM), interview with Obbe Vermeij, part 2, 19 February 2026"
+quote = '''From the things I worked on I would say the litter in the streets made a huge visual difference without people noticing it too much. Papers get pulled along in the slipstream of cars. It doesn't look like much but without it the world looks sterile. [...] In terms of fidelity I would say NPC AI and animation is the thing that breaks the illusion more than anything. It doesn't matter that your models look photo realistic if an NPC walks into a wall.'''
+checked = 2026-11-21
+
+["naturalmotion-2007-euphoria-in-gta4"]
+url = "https://www.gamedeveloper.com/pc/product-i-grand-theft-auto-iv-i-using-naturalmotion-s-euphoria"
+section = "Brandon Boyer (Gamasutra, now Game Developer), Product: Grand Theft Auto IV Using NaturalMotion's Euphoria, 29 June 2007; statement of NaturalMotion and quote of its CEO Torsten Reil"
+quote = '''Based on NaturalMotion’s DMS technology, Euphoria uses the CPUs of next-generation platforms to synthesize interactive animations on the fly, using fast simulations of the game character’s actual motor control, muscles and biomechanics. [...] NaturalMotion CEO Torsten Reil commented, "Euphoria is about giving people an interactive experience they have never seen before. We now have the processing power to simulate humans, and the possibilities for games are endless.'''
+checked = 2026-11-21
+
+["nvidia-2015-gtav-distant-vehicles-as-blobs"]
+url = "https://www.nvidia.com/en-gb/geforce/news/grand-theft-auto-v-pc-graphics-and-performance-guide/"
+section = "Andrew Burnes (NVIDIA), Grand Theft Auto V PC Graphics & Performance Guide, 21 April 2015, section Population Density"
+quote = '''changes to the setting don't occur until you run or drive sufficiently far from your present location. [...] Turns out, vehicles aren't always constrained to the immediate vicinity as you might expect, instead spawning at your maximum Distance Scaling and Extended Distance Scaling view distances on occasion. Civilians, in comparison, are almost always constrained to short and medium range. [...] As nothing more than blobs they cost a fraction of a frame per second to render, and help the world appear more populated (note, the maximum visible distance of these blobs can be affected by the two Distance Scaling settings). As you approach a distance at which they need to be detailed models, the game will remove or upgrade them depending on your Density settings, a process that can be jarring when flying. [...] In the canned benchmark we see a spread of only a few frames per second, but in various gameplay tests that figure typically doubles, and sometimes triples.'''
+checked = 2026-11-21
+
+["nvidia-2015-gtav-population-variety-is-memory"]
+url = "https://www.nvidia.com/en-gb/geforce/news/grand-theft-auto-v-pc-graphics-and-performance-guide/"
+section = "Andrew Burnes (NVIDIA), Grand Theft Auto V PC Graphics & Performance Guide, 21 April 2015, section Population Variety"
+quote = '''if there are 100 vehicles in the game files, and 50 civilians, 50% Population Variety will load 50 vehicles and 25 civilians into your video card's memory (VRAM), and randomly place them in the world. [...] Per general game design rules, each civilian and vehicle is built with a strict polygon count, ensuring the performance cost of rendering five different civilians or vehicles is the same as rendering one five times.'''
+checked = 2026-11-21
+
+["courreges-2015-gtav-distant-headlights-are-quads"]
+url = "https://www.adriancourreges.com/blog/2015/11/02/gta-v-graphics-study-part-2/"
+section = "Adrian Courrèges, GTA V - Graphics Study - Part 2: LOD and Reflections, 2 November 2015, section Lights"
+quote = '''every single small light spot you can see is a quad rendered with a small 32x32 texture like the one on the right. [...] And these are not just static geometry: the car headlights are also moving along the roads, updated in real-time. [...] Of course at this distance, no need to render the full car models, only 2 headlights are enough to create the illusion. [...] But if you decide to go near some distant light, as you come closer, the LOD increases and eventually the full model of the car is drawn.'''
+checked = 2026-11-21
+
+["courreges-2015-gtav-streaming-bounds-player-speed"]
+url = "https://www.adriancourreges.com/blog/2015/11/02/gta-v-graphics-study-part-2/"
+section = "Adrian Courrèges, GTA V - Graphics Study - Part 2: LOD and Reflections, 2 November 2015, section on level of detail and streaming"
+quote = '''When you drive a car normally, the speed you’re moving at is slow enough that the streaming system has enough bandwidth to keep-up with the updates. [...] This is not the case for planes: they are way too fast for the streaming system, that’s why their speed has been greatly reduced on purpose compared to the real-world. [...] When flying, meshes are also drawn at a lower LOD than when walking/driving to relieve the pressure on the streaming, but still there can be some “pop-in” of assets from time to time.'''
+checked = 2026-11-21
+
+["df-2018-rdr2-snow-and-mud-trails-persist"]
+url = "https://www.eurogamer.net/digitalfoundry-2018-red-dead-redemption-2-tech-analysis"
+section = "John Linneman (Digital Foundry, Eurogamer), Red Dead Redemption 2 tech analysis, 25 October 2018"
+quote = '''A realistic deformation system similar to that seen in Rise of the Tomb Raider is featured, and it's applied to both snow and mud. The results trails persist a great distance from the player making it possible to double back on your progress. Look closely and you'll see that during rainfall, puddles form within the notches and divots in deformed terrain.'''
+checked = 2026-11-21
+
+["df-2018-rdr2-cloth-muscle-hair-on-characters"]
+url = "https://www.eurogamer.net/digitalfoundry-2018-red-dead-redemption-2-tech-analysis"
+section = "John Linneman (Digital Foundry, Eurogamer), Red Dead Redemption 2 tech analysis, 25 October 2018"
+quote = '''Plants and branches also feature bend points which collide with character models, giving the impression of foliage reacting to the player as you explore. [...] Texture detail is relatively high, while hair and beards are nicely modelled and grow over time, requiring your character to shave [...] As you stroll around on foot, your tools and clothing bounce realistically with each step, while animated normal maps are used to simulate cloth folding and twisting as you walk. This same technique is applied to your horse as well - you can see your horse's muscles contort realistically while galloping.'''
+checked = 2026-11-21
+
+["ubisoft-2018-aco-three-states"]
+url = "https://news.ubisoft.com/en-us/article/1fBJdvSr4f7pMNH3EQ8Z2Y/assassins-creed-origins-building-living-worlds-through-artificial-intelligence"
+section = "Youssef Maguid (Ubisoft), Assassin's Creed Origins – Building Living Worlds Through Artificial Intelligence, Ubisoft News, 2 May 2018, paragraphs on the three states"
+quote = '''characters in Assassin's Creed Origins exist in three different states: virtual, bulk, and real. [...] The "virtual" state is for objects so far away from the player that they can't be seen. Since they're not visible anyway, these objects enter into virtual space and disappear entirely from view. That soldier you can't see is still going about his business, but his behavior only updates every five to 15 seconds, depending on his distance from the player. [...] Objects a bit closer to players exist in the "bulk" state. These can be seen, but not in great detail. Their models aren't fully rendered, and their actions update every other frame when in sight, and once per second when out of sight. Lastly, objects closer to the player than 80 meters (the furthest distance a Predator Bow arrow can travel) exist in the "real" state. They are fully rendered, and update every frame.'''
+checked = 2026-11-21
+
+["cournoyer-2015-acu-crowd-limits"]
+url = "https://www.gdcvault.com/play/1022141/Massive-Crowd-on-Assassin-s"
+section = "Francois Cournoyer (Ubisoft), Massive Crowd on Assassin's Creed Unity: AI Recycling, GDC 2015, session overview on GDC Vault"
+quote = '''In this presentation, we will introduce a new technique of AI level of detail that has allowed us to create thousands of replicated, persistent, interactive NPCs for Assassin's Creed: Unity. We will go over how we created a pooling system that allowed us to swap from low-res NPCs to high-res NPCs without the player noticing. This talk will then explain how to create a simplistic AI brain to animate the thousands of NPCs. With the limit of 40 real AIs and 120 high resolution models, we could successfully create a scene where 10,000 crowd NPCs are on screen at the same time.'''
+checked = 2026-11-21
+
+["smrcek-2026-kcd2-scope"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Petr_Smrcek_SupportingThousandsOfNPCsInKingdomComeDeliveranceAndKingdomComeDeliverance2.pdf#page=5"
+section = "Petr Smrček (Warhorse Studios), Supporting Thousands of NPCs in 'Kingdom Come: Deliverance' & 'Kingdom Come: Deliverance II', GDC 2026, slides KCD2 Scope (slide 5) and Whole world simulation (slide 9)"
+quote = '''KCD2 Scope • Two 4x4 km maps • 2400 NPCs • 1400 NPCs in Kuttenberg • Complex behaviors • Always present and simulated High cost [...] Whole world simulation • Reasons NPCs are correctly positioned Consequences affect the world Player is not necessary • Performance heavy AI LOD'''
+checked = 2026-11-21
+
+["smrcek-2026-kcd-ai-update-cost"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Petr_Smrcek_SupportingThousandsOfNPCsInKingdomComeDeliveranceAndKingdomComeDeliverance2.pdf#page=22"
+section = "Petr Smrček (Warhorse Studios), Supporting Thousands of NPCs in 'Kingdom Come: Deliverance' & 'Kingdom Come: Deliverance II', GDC 2026, slides AI Update Performance (21), AI Update on Thread (22), AI Update in KCD2 (60); hardware and scene not stated"
+quote = '''AI Update Performance Passive triggers LOD handling NPC Behavior Trees Move triggers 0.6ms 0.35ms 5.5ms 0.4ms Navigation Other NPC Updates Perception 0.1ms 1.5ms 0.7ms [...] AI Update on Thread • AI Update > 10ms - unfeasible on MainThread • Moved to thread [...] AI Update in KCD2 Time triggers LOD handling NPC Behavior Trees Move triggers 0.25ms -60% 0.8ms +130% 2.6ms -50% 0.2ms -50% Navigation NPC Update Perception 0.7ms +600% 0.6ms -60% 0.7ms -0%'''
+checked = 2026-11-21
+
+["smrcek-2026-kcd2-three-lods"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Petr_Smrcek_SupportingThousandsOfNPCsInKingdomComeDeliveranceAndKingdomComeDeliverance2.pdf#page=36"
+section = "Petr Smrček (Warhorse Studios), Supporting Thousands of NPCs in 'Kingdom Come: Deliverance' & 'Kingdom Come: Deliverance II', GDC 2026, slides Ambitions (32), Core of the solution (33), Middle LOD (34)"
+quote = '''Ambitions • Way more NPCs • Big city • Fix of the scripting interface • No unloading of NPCs • Design with AI LOD in mind [...] Core of the solution • 3 AI LODs • Close 70 visible NPCs up to 150m • Middle Fast switch to Close LOD Up to 400 NPCs or 600m • Far Heavily optimized [...] Middle LOD • Quick change to Close LOD Position & state precise Full AI simulation • Similar optimization to KCD • Transparent animations'''
+checked = 2026-11-21
+
+["smrcek-2026-kcd2-far-lod"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Petr_Smrcek_SupportingThousandsOfNPCsInKingdomComeDeliveranceAndKingdomComeDeliverance2.pdf#page=38"
+section = "Petr Smrček (Warhorse Studios), Supporting Thousands of NPCs in 'Kingdom Come: Deliverance' & 'Kingdom Come: Deliverance II', GDC 2026, slides Far LOD: Requirements (35), Far LOD: Behavior selection (36), Far LOD: Simulation (37), Far LOD: Reactions (39)"
+quote = '''Far LOD: Requirements • Takes time for player to reach Position within ~10m No states or item handling • Behavior execution not simulated • Fast behavior startup [...] • Repeating patterns Time of Day Properties of the NPC Constraints Deterministic chance • Configured in script, executed in code [...] Far LOD: Simulation • Purely in code Extremely cheap • Move uses only paths [...] Far LOD: Reactions • No perception • Rarely something to perceive • Crime has representation Switches NPCs to Middle LOD • Passive approach'''
+checked = 2026-11-21
+
+["smrcek-2026-kcd2-far-lod-memory"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Petr_Smrcek_SupportingThousandsOfNPCsInKingdomComeDeliveranceAndKingdomComeDeliverance2.pdf#page=41"
+section = "Petr Smrček (Warhorse Studios), Supporting Thousands of NPCs in 'Kingdom Come: Deliverance' & 'Kingdom Come: Deliverance II', GDC 2026, slide Far LOD: Memory savings (38)"
+quote = '''Far LOD: Memory savings Released memory Remaining memory 75kB Character 5kB RPG representation 25kB Physics 10kB Reaction AI 30kB Big AI components 10kB Small AI components 20kB Other engine stuff 20kB Small engine components Down to < 50kB, ~25%'''
+checked = 2026-11-21
+
+["smrcek-2026-kcd2-lod-selection"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Petr_Smrcek_SupportingThousandsOfNPCsInKingdomComeDeliveranceAndKingdomComeDeliverance2.pdf#page=45"
+section = "Petr Smrček (Warhorse Studios), Supporting Thousands of NPCs in 'Kingdom Come: Deliverance' & 'Kingdom Come: Deliverance II', GDC 2026, slides LOD Switch (41), Desired LOD Selection (42), LOD Selection: Sorting by Distance (43), LOD Selection: Selecting desired LOD (44), LOD Selection: Resource constraints (45)"
+quote = '''LOD Switch Several stages Not instant Desired MBT gracious cleanup Behavior Budgeting System Deferring Resource streaming [...] Desired LOD Selection • Computed each frame • Algorithm has 3 parts: Sorting by distance Selecting desired LOD Resource constraints [...] • Common round robin Distance cached every ~10 frames [...] LOD Selection: Selecting desired LOD • Budget, not pure distance Utilization of resources • Distance thresholds • LOD Constraints [...] LOD Selection: Resource constraints • Switching NPCs still consume resources • Wait for resources • Extra switching budget'''
+checked = 2026-11-21
+
+["smrcek-2026-kcd2-city-density"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Petr_Smrcek_SupportingThousandsOfNPCsInKingdomComeDeliveranceAndKingdomComeDeliverance2.pdf#page=53"
+section = "Petr Smrček (Warhorse Studios), Supporting Thousands of NPCs in 'Kingdom Come: Deliverance' & 'Kingdom Come: Deliverance II', GDC 2026, slides The Challenge (47), Setting early limitations (48), Visibility Areas (49), Results (53)"
+quote = '''The Challenge • Must look busy ~1400 NPCs • Limit for Close LOD Still 70 [...] • Avoid showing too many NPCs No long streets No see -through fences Fewer people beneath walls Soft vision breakers [...] Visibility Areas • Structural visibility • Split into areas ~100m2 Relative visibility • Occlusion insufficient • Close / Middle LOD [...] Results • ~1400 NPCs in the city at 60FPS • Distances ~50m Soft vision breakers Dithering'''
+checked = 2026-11-21
+
+["smrcek-2026-kcd2-animals-and-battles"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Petr_Smrcek_SupportingThousandsOfNPCsInKingdomComeDeliveranceAndKingdomComeDeliverance2.pdf#page=64"
+section = "Petr Smrček (Warhorse Studios), Supporting Thousands of NPCs in 'Kingdom Come: Deliverance' & 'Kingdom Come: Deliverance II', GDC 2026, slides Skip Time (55), Battles (57), Animals (58)"
+quote = '''Skip Time • Simulated Crime or danger Quest progress • Small AI LOD budgets [...] Battles • Player cannot leave • World still simulated Global Far LOD • Soldiers optimized differently No behavior, always visible Sprites, Hard animated [...] Animals • Spawning is sufficient No identity Not referenced • Halves NPC numbers'''
+checked = 2026-11-21
+
+["dragert-2021-wdl-loading-bubble"]
+url = "https://media.gdcvault.com/GDC+2021/Census_GDC2021-Complete.pdf#page=26"
+section = "Christopher Dragert (Ubisoft Toronto), Census: The Systemic Backbone of Play-As-Anyone in Watch Dogs: Legion, GDC 2021, slides Census - High Level Requirements and Persistence (two diagrams)"
+quote = '''/ London is massive- the population can’t be pre -baked or scripted [...] / Characters must be simulated and persistentto provide opportunity for player interaction and recruitment / Census must respect strict performance budgets [...] Persistence Do not spawn Player Spawn Loading Bubble Persistence Despawns Respawns Entity Entity Same Entity Stores Attaches ID! Census Data Persistent!'''
+checked = 2026-11-21
+
+["dragert-2021-wdl-census-cost"]
+url = "https://media.gdcvault.com/GDC+2021/Census_GDC2021-Complete.pdf#page=21"
+section = "Christopher Dragert (Ubisoft Toronto), Census: The Systemic Backbone of Play-As-Anyone in Watch Dogs: Legion, GDC 2021, two slides titled Census Performance"
+quote = '''Census Performance / Used SQLite on PS4 for prototyping, but performance was unacceptable / Engine team created a custom bit-field representation / Each census field is represented in memory as a bit field / Bit-fields are statically allocated during initialization to take advantage of cache locality, avoiding cache misses and expensive dynamic allocations [...] / Shipped data: / 19 fields / Total of 919 values (not including names/surnames) / 18 825 relations / Full refinement takes 0.6 msworst case'''
+checked = 2026-11-21
+
+["dragert-2021-wdl-schedules"]
+url = "https://media.gdcvault.com/GDC+2021/Census_GDC2021-Complete.pdf#page=35"
+section = "Christopher Dragert (Ubisoft Toronto), Census: The Systemic Backbone of Play-As-Anyone in Watch Dogs: Legion, GDC 2021, slides Scheduling - Structure, Scheduling Activities, Schedule Generation - Performance, Schedule Following"
+quote = '''/ Day is divided into 1 -hour slots [...] # of Locations 4143 [...] # of Activities (total) 96100 [...] / Scheduling does not require immediacy / Can aggressively time -slice and spread work across many frames [...] / Solution– Cache 38MB of schedule queries / Result: Worst case schedule queries return in < 1s [...] / Characters walk or take the tube to reach next activity / 90% success rate for characters to reach their next activity on time'''
+checked = 2026-11-21
+
+["sunshine-hill-2013-deleting-characters"]
+url = "http://www.gameaipro.com/GameAIPro/GameAIPro_Chapter37_Alibi_Generation_Fooling_All_the_Players_All_the_Time.pdf#page=8"
+section = "Ben Sunshine-Hill, Alibi Generation: Fooling All the Players All the Time, Game AI Pro (CRC Press, 2013), chapter 37, section 37.7 Maintaining and Deleting Characters"
+quote = '''As a first approach, we can simply delete characters when their current sector becomes invisible. That’s akin to the simulation bubble, but it creates obvious potential problems. Even if the player hasn’t been watching a character for long, she still might notice if she goes around a corner, comes back, and he’s gone. We can make this a little less likely by depopulating invisible sectors only if the player is more than a specified distance away or only once they’ve been invisible for a certain period of time [...] It’s a good idea to extend the lifetimes of characters with alibis.'''
+checked = 2026-11-21
+
+["kratochvil-2010-mafia2-pedestrian-spawning"]
+url = "https://media.gdcvault.com/gdceurope2010/slides/J_Kratochvil_Technology_Living%20City%20in%20Mafia%20II.pdf#page=10"
+section = "Jan Kratochvíl (2K Czech), Living city in Mafia II, GDC Europe 2010, slides Human spawn, Human despawn, Action points in the city"
+quote = '''Human spawn • Spawn point placement depends on: – Player position – Visibility – Usability – Aggregation • Spawn points – Directly on Kynapse nodes Human despawn • When to despawn a Pedestrian? – Is too far away – Is not visible for too long – Is not in any action • Line of death – Most useful when driving a car [...] Action points in the city • General mechanism • Attracts pedestrians [...] • Usually bound to some physical object • Limited only by amount of memory available in the city'''
+checked = 2026-11-21
+
+["kratochvil-2010-mafia2-car-spawning"]
+url = "https://media.gdcvault.com/gdceurope2010/slides/J_Kratochvil_Technology_Living%20City%20in%20Mafia%20II.pdf#page=16"
+section = "Jan Kratochvíl (2K Czech), Living city in Mafia II, GDC Europe 2010, slides Car spawn, Car despawn, Police issues"
+quote = '''• Different types for spawn – Moving – Parked – “Translocated” [...] Car despawn • Reasons to get despawned: – Not visible and not moving towards player – Be too far away and out of sight • Visible cars are never despawned • Car makes lot of noise, so you cannot despawn it if it is close • Police has special rules [...] • Cars from traffic prevents precise maneuvers – We are lowering traffic while police chases player'''
+checked = 2026-11-21
+
+["kratochvil-2010-mafia2-roadmap-and-driver"]
+url = "https://media.gdcvault.com/gdceurope2010/slides/J_Kratochvil_Technology_Living%20City%20in%20Mafia%20II.pdf#page=21"
+section = "Jan Kratochvíl (2K Czech), Living city in Mafia II, GDC Europe 2010, slides Roadmap, Driver speed, AI Driver world"
+quote = '''Roadmap • Catmull‐Rom splines • Whole city roadmap is about 400Kb [...] – No streaming of roadmap • Navigation through crossroads is also defined using the same splines Driver speed • Actually required speed is set as minimum of: – Behavior speed – traffic lights, crossings, … – Obstacle speed – some (moving?) obstacle in front of the car – Curve speed • Every desire subsystem can only decrease actual wish speed of the car [...] AI Driver world • knows about the roadmap • knows about dynamic objects around him • doesn’t know b about h the h physics scene'''
+checked = 2026-11-21
+
+["adzima-2001-midtown-rails-and-physics"]
+url = "https://www.gamedeveloper.com/programming/ai-madness-using-ai-to-bring-open-city-racing-to-life"
+section = "Joe Adzima (Angel Studios), AI Madness: Using AI to Bring Open-City Racing to Life, Game Developer, 24 January 2001"
+quote = '''During normal driving conditions, all the ambient vehicles are positioned and oriented by a 2D spline curve. [...] each ambient vehicle contains only a pointer to the next ambient vehicle directly in front of it in the same lane. [...] When an ambient vehicle collides with the player, or with a dynamic or static obstacle in the city, the ambient vehicle switches from using a partially simulated physics model to a fully simulated physics model. [...] For example, once a vehicle has come to rest, the vehicle manager resets it back to the partially simulated physics model.'''
+checked = 2026-11-21
+
+["epic-2021-matrix-awakens-city-counts"]
+url = "https://www.unrealengine.com/en-US/wakeup"
+section = "Epic Games, Introducing The Matrix Awakens: An Unreal Engine 5 Experience, unrealengine.com (copy from web.archive.org, snapshot requested for 2022; the live page returned no text to curl)"
+quote = '''Because the systems that drive its actors are part of a global simulation that is evaluated continuously, the activity that takes place in the city is far more consistent and believable. [...] There are seven thousand buildings made of thousands of modular pieces, 45,073 parked cars (of which 38,146 are drivable), over 260 km of roads, 512 km of sidewalk, 1,248 intersections, 27,848 lamp posts, and 12,422 manholes.'''
+checked = 2026-11-21
+
+["fauerby-2012-hitman-crowd-cost"]
+url = "https://media.gdcvault.com/gdc2012/slides/Programming%20Track/Fauerby_Kasper_CrowdsInHitman.pdf#page=31"
+section = "Kasper Fauerby (IO Interactive), Crowds in Hitman: Absolution, GDC 2012, slides Highlevel goals, Performance: PS3, Performance"
+quote = '''● Around 1200 agents per crowd, 500 on-screen • Player should not distinguish between crowd & npc actors [...] Performance: PS3 ● Some numbers: 1200 agents simulated, 500 on-screen ● PPU: 5ms ● Animation system: ~2ms ● Crowd AI / steering: ~2ms ● Framework: ~1ms ● SPU: ~20ms, distributed across multiple SPUs [...] ● GPU: 8ms ● Listed here as an example, but obviously very dependent on render tech and meshes used ● In G2: the vertex shader is limiting factor on PS3 due to skinning massive amount of vertices [...] ● Scales nearly linearly with number of agents in crowd ● Culled/on-screen ratio also affects performance, due to animation cost'''
+checked = 2026-11-21
+
+["fauerby-2012-hitman-agent-memory"]
+url = "https://media.gdcvault.com/gdc2012/slides/Programming%20Track/Fauerby_Kasper_CrowdsInHitman.pdf#page=32"
+section = "Kasper Fauerby (IO Interactive), Crowds in Hitman: Absolution, GDC 2012, slides The cell map, Performance (memory layout), Sensor updates on SPUs"
+quote = '''● We overlay a regular grid on top of the nav mesh ● This means that the crowd area is only 2.5D (no overlaps in height) [...] ● Size of a full agent ~256 bytes ● Separate out ”agent core”. Stores the most basic properties: position, speed etc. 36 bytes [...] ● Our crowds have around 16k cells [...] (1200 agents: 42kb)'''
+checked = 2026-11-21
+
+["fauerby-2012-hitman-possession"]
+url = "https://media.gdcvault.com/gdc2012/slides/Programming%20Track/Fauerby_Kasper_CrowdsInHitman.pdf#page=28"
+section = "Kasper Fauerby (IO Interactive), Crowds in Hitman: Absolution, GDC 2012, slide Core game mechanics"
+quote = '''● Possession system ● On-demand upgrade agent to full NPC AI ● Allocates small pool of invisible NPCs ● Simple API allows game programmers to switch between crowd agent and NPC ● Made it trivial to support advanced gameplay mechanics'''
+checked = 2026-11-21
+
+["fauerby-2012-hitman-variety-and-animation"]
+url = "https://media.gdcvault.com/gdc2012/slides/Programming%20Track/Fauerby_Kasper_CrowdsInHitman.pdf#page=30"
+section = "Kasper Fauerby (IO Interactive), Crowds in Hitman: Absolution, GDC 2012, slides Animation: Second try, Visual variety"
+quote = '''● Ambitious goal - 500 agents on screen with no foot sliding plus support for transition and turn/banking animations [...] ● Agents are now moved by a trajectory channel in the animations, rather than from steering velocity! [...] ● Unique scaling factor for each agent ● Small amount: ~5% ● Softens up horizon ● Does wonders for percieved diversity of crowd ● Diffuse texture overrides ● Simply replace the diffuse texture of material ● Cheap way of having red shirt, yellow shirt etc..'''
+checked = 2026-11-21
+
+["tremblay-2024-cp2077-crowd-animation"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Tremblay_Charles_Anatomy_of_a.pdf#page=36"
+section = "Charles Tremblay (CD Projekt RED), Anatomy of a frame in Cyberpunk 2077: Phantom Liberty, GDC 2024, slides Methodology, Animation System"
+quote = '''Animation System Animation Component register to the Animation System Parallel update per bucket Manage Animation instancing for massive standing crowd No update if occluded. (exception if closer than 5m of player) Sleep mode for door / vehicles if no movement Animation Streaming of 40mb budget • 3k – 4k animations in game [...] All numbers were taken on PC • 13th Gen Intel(R) Core(TM) i9-13950HX 2.20 GHz • Nvidia RTX 4090 Laptop GPU Number of Job Workers limited to 5'''
+checked = 2026-11-21
+
+["tremblay-2024-cp2077-frame-and-streaming"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Tremblay_Charles_Anatomy_of_a.pdf#page=58"
+section = "Charles Tremblay (CD Projekt RED), Anatomy of a frame in Cyberpunk 2077: Phantom Liberty, GDC 2024, slides What about resource streaming?, Gameplay Systems, CPU Frame Time"
+quote = '''What about resource streaming? Deserialization & Decompression on Jobs • At the lowest job priority Throttle the amount of resource processed at any given time All render resources are created asynchronously No frame dependent job chain can wait on any resource streaming. [...] Gameplay Systems Vehicles System • Update of all vehicle in game • Vehicle suspension • NPC Collision Puppet System • Complex & simple NPC Vehicle or NPC cannot communicate directly to another Entity • Event System was the main communication method [...] CPU Frame Time 20 16.1 15 11.9 11.1 11.6 10.2 10.4 10 5 0 5 WORKER 9 WORKER 12 WORKER 15 WORKER 18 WORKER 24 WORKER MILLISECONDS'''
+checked = 2026-11-21
+
+["thompson-2020-wd2-reaction-rules"]
+url = "https://www.gamedeveloper.com/design/how-spreadsheets-power-civilian-ai-in-watch-dogs-2"
+section = "Tommy Thompson (AI and Games), How Spreadsheets Power Civilian AI in Watch Dogs 2, Game Developer, 4 November 2020"
+quote = '''These are all written by hand by designers and there are over 700 different rules for an NPC to react. But in addition to all of this, the reaction matrix also included over 200 rules for what audio barks are to be played based on the final reaction the NPC selects as well as another 200 animation rules to tell the NPC what animation they should play alongside it. [...] But on top of this, there are also dynamic attractors. These are the same attractor characters, but this time they’re generated at runtime and placed into the world courtesy of an event manager.'''
+checked = 2026-11-21
+
+["cederskoog-2017-thehunter-herds"]
+url = "https://www.gamedeveloper.com/design/thehunter-call-of-the-wild-designing-believable-simulated-animal-ai"
+section = "Karin Cederskoog (formerly Avalanche Studios), theHunter: Call of the Wild - Designing Believable, Simulated Animal AI, Game Developer, 13 July 2017, sections Habitat and Schedule"
+quote = '''I designed the habitat size and distribution for each species in the reserve, painting them with a tool in the engine. [...] It was critical to research and incorporate animal schedules to ensure animals traveled to eating, drinking, and resting areas at appropriate times. [...] There is a certain degree of randomness to the schedules, but I also had to design them to ensure that there was always some movement in the reserve!'''
+checked = 2026-11-21
+
+["thompson-2019-hzd-collective"]
+url = "https://www.gamedeveloper.com/design/behind-the-ai-of-horizon-zero-dawn-part-1-"
+section = "Tommy Thompson (AI and Games), Behind The AI of Horizon Zero Dawn (Part 1), Game Developer, 30 January 2019, sections Agent Hierarchy and The Collective"
+quote = '''Each machine is represented in the world as a separate non-player-character AI called an ‘agent’, but perhaps more interestingly, so is each herd. [...] The collective is the supergroup: all machine groups and individual machines exist in the collective. It manages the spawning of all machines into the world, keeps track of whether they’re in a group and handles their movement between groups and manages the machine ecosystem, such that performance isn’t impacted overall. [...] So the collective can recycle isolated machines to join other groups.'''
+checked = 2026-11-21
+
+["zubek-2017-highrise-daily-scripts"]
+url = "http://www.gameaipro.com/GameAIPro3/GameAIPro3_Chapter34_1000_NPCs_at_60_FPS.pdf#page=2"
+section = "Robert Zubek (SomaSim), 1000 NPCs at 60 FPS, Game AI Pro 3 (2017), chapter 34, sections 34.1.1 and 34.2.2"
+quote = '''so we needed the NPCs to be simulated on an ongoing basis instead of being simply instanced into view and then culled. [...] We gave ourselves a concrete performance goal: The game needed to be able to simulate and display 1000 NPCs, running at 60 FPS on a reasonably recent desktop-grade personal computer. [...] we decided to abandon planning altogether, and reimplement NPC behavior as libraries of stereotyped scripts, which were descriptions of routine activities such as going to the office, going to a sit-down restaurant and sitting down to eat [...] Scripts would then be bundled together into various daily schedules, with very simple logic for picking the right script based on current conditions, such as the time of day and the contents of a simple “working memory” [...] { from 8 to 20 tasks [ go-work-at-workstation ] } [...] { at 12 prob 1 tasks [ go-get-lunch ] } [...] { at 17.5 prob 0.25 tasks [ go-visit-retail ] }'''
+checked = 2026-11-21
+
+["zubek-2017-highrise-needs-removed"]
+url = "http://www.gameaipro.com/GameAIPro3/GameAIPro3_Chapter34_1000_NPCs_at_60_FPS.pdf#page=5"
+section = "Robert Zubek (SomaSim), 1000 NPCs at 60 FPS, Game AI Pro 3 (2017), section 34.2.2 Second System: Daily Scripts"
+quote = '''state such as hunger or tiredness, but over time we removed all of this detail. [...] when multiplied by dozens or hundreds of NPCs, this made for many frustrating moments of trying to understand when entire populations behaved unexpectedly. [...] players appreciate them being complex. However, as the number gets larger, this does not scale.'''
+checked = 2026-11-21
+
+["carter-2005-oblivion-schedules"]
+url = "https://gamebanshee.com/k68pc"
+section = "Gavin Carter (Bethesda, producer) quoted from a Next Generation interview, reproduced in GameBanshee news post The Elder Scrolls IV: Oblivion Interview, written by BuckGB, 17 August 2005"
+quote = '''"The Radiant AI system dictates the daily lives of all 1000+ NPCs in Oblivion," Carter explains. "They all have 24-hour schedules which include activities like sleeping, eating, going to work, and reading to name a few." [...] "Once I was working on a demo scene and ended up accidentally making a change in a general AI package that dictated when people in a town should go to find lunch. When I loaded up the game, every single person in the town showed up at a single lower class tavern to try and get some food.'''
+checked = 2026-11-21
+
+["plch-2014-ai-budget-5ms"]
+url = "https://cdn.aaai.org/ojs/12705/12705-52-16222-1-2-20201228.pdf#page=7"
+section = "Plch et al. (Warhorse Studios, Charles University), An AI System for Large Open Virtual World, AIIDE 2014, Quantitative Evaluation of MBTs and Table 1"
+quote = '''The project leads gave us a budget of 5ms per frame (on a [...] single core) for the whole AI system. [...] Table 1: The results of the quantitative evaluation. The table displays mean and .99 quantile / maximum (in brackets) times taken by individual components of the AI system. All times in ms per frame. [...] a simple tree (10 nodes, depth 4). [...] All NPCs were updated [...] every frame (no LOD). [...] 300 0.75 (1.1 / 4.0) 0.30 (0.5 / 3.3) 0.05 (0.4 / 1.1) 0.59 (1.0 / 4.0) 1.71 (2.6 / 6.8) [...] 30 0.56 (0.9 / 1.8) 0.14 (0.2 / 0.5) 0.02 (0.1 / 0.3) 0.23 (0.7 / 2.7) 0.96 (1.6 / 3.9)'''
+checked = 2026-11-21
+
+["plch-2014-lod-delta-catch-up"]
+url = "https://cdn.aaai.org/ojs/12705/12705-52-16222-1-2-20201228.pdf#page=5"
+section = "Plch et al. (Warhorse Studios, Charles University), An AI System for Large Open Virtual World, AIIDE 2014, PDF page 5, text on MBT execution under a LOD policy (before Figure 3)"
+quote = '''if an NPC playing cards (and cheating) should win a coin every minute, but is updated in 3 minute intervals, it should receive 3 coins in each update. Note however, that updates may be scarce only if the NPC is not visible to the player, otherwise animation and movement actions could not be performed instantaneously without the player noticing glitches. To resolve this issue, the MBT tracks the interval since its last update (called delta) and action nodes estimate the game time they will need to finish. [...] NPC is updated only scarcely with delta = 3s.'''
+checked = 2026-11-21
+
+["plch-2014-lua-as-little-as-possible"]
+url = "https://cdn.aaai.org/ojs/12705/12705-52-16222-1-2-20201228.pdf#page=7"
+section = "Plch et al. (Warhorse Studios, Charles University), An AI System for Large Open Virtual World, AIIDE 2014, Qualitative Evaluation of MBTs"
+quote = '''In the end we started instructing our scripters to use Lua as little as possible for two reasons: first, invoking Lua environment was computationally expensive and second, Lua code was less readable to the scripters than the visual structure of MBTs. On the other hand Lua nodes proved very useful as a tool to prototype new functionality'''
+checked = 2026-11-21
+
+["cerny-2014-situations-budget"]
+url = "https://cdn.aaai.org/ojs/12715/12715-52-16232-1-2-20201228.pdf#page=2"
+section = "Černý, Brom, Barták (Charles University), Antoš (Warhorse Studios), Spice It Up! Enriching Open World NPC Simulation Using Constraint Satisfaction, AIIDE 2014, Requirements and Problem Analysis and Quantitative Results"
+quote = '''In our scenario the goal is to select 2-5 participants meeting various constraints from a pool of several dozen [...] although situations are scheduled at relatively long intervals (several situations per minute at maximum), an individual search must not take more than 1 ms in the worst case and the average should be lower than 100 µs. [...] situations are, in our case, only “eye candy” so there is no need to consider NPCs that are too far from the player and cannot become visible to the player for the duration of the situation. [...] search more than a few dozen candidate NPCs. [...] Tests were run on an Intel i5-3470 quad core processor @3.2 GHz, with 8GB RAM. [...] 2 the individual executions were faster than 1 µs. Since the solver does not need to be run frequently (a 1 Hz tick is still acceptable) it means that it is safe to execute the local solver within the AI updates.'''
+checked = 2026-11-21
+
+["iassenev-2008-stalker-online-offline"]
+url = "https://web.archive.org/web/2012/http://aigamedev.com/open/interviews/stalker-alife/"
+section = "Dmitriy Iassenev (GSC Game World) interviewed by Alex J. Champandard, A-Life, Emergent AI and S.T.A.L.K.E.R., AiGameDev.com, 25 February 2008, answer to Could you tell us more about how you implemented the A-Life?"
+quote = '''The offline behavior is very simple: the character does not play animations or sounds, does not manage his inventory actively, does not build detailed and smooth paths (although he does build paths according to the global navigation graph, but more on that later), etc. In contrast, online behavior is fully detailed. Thus, offline behavior can be considered the LoD (level of detail) of the online. [...] not all characters in the player’s level have the online behavior, but only those who are in a predefined radius from the player (can vary from level to level, but usually it is about 150 meters), or what the game designer sets it to. To achieve this, the A-life system follows the player’s and offline characters’ movements, and switches the latter to online/offline as necessary.'''
+checked = 2026-11-21
+
+["iassenev-2008-stalker-offline-events"]
+url = "https://web.archive.org/web/2012/http://aigamedev.com/open/interviews/stalker-alife/"
+section = "Dmitriy Iassenev (GSC Game World) interviewed by Alex J. Champandard, AiGameDev.com, 25 February 2008, answers on implementation, other important parts, and character AI"
+quote = '''For each graph a less detailed version is created, the vertices of which can be connected with vertices of graphs from other levels. This is the graph used by characters for navigation in offline. [...] In offline mode this was simulated as a TBS: the opponents took turns making moves, the result calculated based on a formula and the random factor. [...] To notify player about the offline activity, we used news, which were generated if some character could see an event or its consequences. [...] Offline character AI is very simple: if there is no goal, try to get one. If a goal cannot be found, wonder about aimlessly. If there is a goal, go to the place at which it can be achieved.'''
+checked = 2026-11-21
+
+["iassenev-2008-stalker-smart-terrains"]
+url = "https://web.archive.org/web/2012/http://aigamedev.com/open/interviews/stalker-alife/"
+section = "Dmitriy Iassenev (GSC Game World) interviewed by Alex J. Champandard, A-Life, Emergent AI and S.T.A.L.K.E.R.: An Interview with Dmitriy Iassenev, AiGameDev.com, 25 February 2008, answer to What were the other important parts of the system"
+quote = '''Characters would now get quests not from dealers, but from the so-called smart terrains (not the same as in Sims). A character’s life now worked in such a way, that he took the quest generated by some smart terrain, then walked to the destination it had set for him. After getting there, he would get points, and the smart terrain would take him under control for some time. Under the control of a smart terrain, the character prioritized and carried out the available tasks. This is how the game got faction bases, stalkers by campfires, and such.'''
+checked = 2026-11-21
+
+["koster-2006-uo-ecology-ai-and-cost"]
+url = "https://www.raphkoster.com/2006/06/04/uos-resource-system-part-2/"
+section = "Raph Koster (lead designer, Ultima Online), UO’s resource system, part 2, raphkoster.com, June 2006, section Applications for AI (fetched as https://www.raphkoster.com/?p=519; the URL above is the page's canonical link)"
+quote = '''If I’m hungry, search for items that produce stuff on my FOOD list, and attack or eat them. Wander as far as needed to accomplish this. [...] However, put more wolves together and they summed together their “bite,” making them willing to attack fairly large things. [...] All that stuff worked. The problem was that the constant radial searches were incredibly expensive, and so was all the pathfinding. One of the first things to go was the search frequency. Next, the step was taken to put every creature to “sleep” when players were not nearby. This change alone really ruins the large-scale ecological applications completely.'''
+checked = 2026-11-21
+
+["koster-2006-uo-lessons-lod"]
+url = "https://www.raphkoster.com/2006/06/05/uos-resource-system-part-3/"
+section = "Raph Koster, UO’s resource system, part 3, raphkoster.com, June 2006, section Problems: closed loops, homeostasis, feedback (fetched as https://www.raphkoster.com/?p=520; the URL above is the page's canonical link)"
+quote = '''It has to be visible and responsive to players. This includes exposing causality. [...] The myriad of variables must push towards homeostasis, rather than boom-bust cycles. A lot of Alife sims end up in boom-bust, and that’s not interesting to users. [...] Naturally renewing resources can’t be in a closed loop, because of player hoarding effects. [...] If no players are around, stop instancing up individual wolves hunting individual rabbits; instead, save all those off, and calculate periodically how many wolves and how many rabbits would be there after a certain amount of time. [...] or you could timestamp the last interaction, and “catch the sim up” when a player approaches. This latter method was in fact used for handling harvesters and the like in SWG, since they tended to reside in areas that we actually took offline when no players were around.'''
+checked = 2026-11-21
+
+["ruskin-2012-dialog-rule-matching"]
+url = "https://cdn.cloudflare.steamstatic.com/apps/valve/2012/GDC2012_Ruskin_Elan_DynamicDialog.pdf#page=49"
+section = "Elan Ruskin (Valve), GDC 2012 talk on dynamic dialog, slides with speaker notes (file GDC2012_Ruskin_Elan_DynamicDialog.pdf; talk title not read from the file), notes on PDF pages 49 and 64 (read from https://web.archive.org/web/2024/https://cdn.cloudflare.steamstatic.com/apps/valve/2012/GDC2012_Ruskin_Elan_DynamicDialog.pdf; the Valve host did not connect)"
+quote = '''A “context” or “fact” is a piece of world state. Like “current map is swamp.” A query is a pile of those glued together. All the state of the world, used to lookup an action. A criterion is a single function that returns true or false for a piece of world state. Like “zombies greater than 3.” A rule is a list of a criteria, all which must be true for the rule to “match.” [...] But rule 7 has more criteria than the rest. It scores higher, so is the most specific line,'''
+checked = 2026-11-21
+
+["ruskin-2012-dialog-volume-and-cost"]
+url = "https://cdn.cloudflare.steamstatic.com/apps/valve/2012/GDC2012_Ruskin_Elan_DynamicDialog.pdf#page=45"
+section = "Elan Ruskin (Valve), GDC 2012 talk on dynamic dialog, speaker notes on PDF pages 45, 67, 108 and 110 (read from the web.archive.org copy of the Valve-hosted PDF)"
+quote = '''The Left4Dead series had more dialog than any of our games to date – over ten thousand lines. [...] Each character in game polls itself every few seconds to see if it has any “I’m idle” dialog it wants to play. [...] If you can get down to about fifty rules per bucket, and each rule has an average of eight criteria, you can do a lookup in less than a microsecond. [...] Stream dialog rules in with the level data.'''
+checked = 2026-11-21
+
+["ruskin-2012-dialog-memory"]
+url = "https://cdn.cloudflare.steamstatic.com/apps/valve/2012/GDC2012_Ruskin_Elan_DynamicDialog.pdf#page=57"
+section = "Elan Ruskin (Valve), GDC 2012 talk on dynamic dialog, speaker notes on PDF pages 57, 58 and 68 (read from the web.archive.org copy of the Valve-hosted PDF)"
+quote = '''Then there’s the persistent store inside the character, arbitrary data that can be written either by code or by writer-generated rules. This is where we store things like how many times a particular line has been said, events that happened previously, and so on. [...] The world can have a persistent memory store as well, just like individual characters. [...] The latter is an example to show that you can have automatic expiration times on a particular fact, if you want to prevent two successive bits of a running gag from being played too close together.'''
+checked = 2026-11-21
+
+["skubch-2017-ffxv-smart-locations"]
+url = "http://www.gameaipro.com/GameAIPro3/GameAIPro3_Chapter35_Ambient_Interactions_Improving_Believability_by_Leveraging_Rule-Based_AI.pdf#page=2"
+section = "Hendrik Skubch, Ambient Interactions: Improving Believability by Leveraging Rule-Based AI, Game AI Pro 3 (2017), chapter 35, sections 35.2 (PDF page 2), 35.4 and 35.4.1 (PDF page 8)"
+quote = '''They are invisible objects that refer to multiple concrete objects. [...] each action identifies a state machine or behavior tree on the lower individual AI level. [...] A smart location equipped with a script emitter will periodically query a spatial database for NPCs in the vicinity in order to start an interaction scene. [...] Since scripts operate on a local blackboard, each NPC only participates in at most one script at a time, and smart locations have exclusive ownership over their props, multiple script instances can be executed concurrently without the need for thread synchronization. [...] and simple, meaning rarely more than three or four distinct roles and rarely more than five actors.'''
+checked = 2026-11-21
+
+["holba-2021-mafia3-perception-events"]
+url = "http://www.gameaipro.com/GameAIProOnlineEdition2021/GameAIProOnlineEdition2021_Chapter16_Open-world_Enemy_AI_in_Mafia_III.pdf#page=3"
+section = "Jiri Holba and Gael Huber, Open-world Enemy AI in Mafia III, Game AI Pro Online Edition 2021, chapter 16, sections 3.1.1 Sight (PDF page 3) and 3.1.2 Hearing (PDF page 4)"
+quote = '''Every NPC in the game has a sight detector attached to its head and can detect any sight event within range. The player is constantly emitting the “Player” event which can be detected by enemies. The system is not limited to player detection. It is used, for example, to detect a melee fight in progress by emitting the “melee” event on both participants of the fight. NPCs detect dead bodies, pedestrians react when seeing a weapon in the player’s hand, etc. [...] The Mafia III sight engine uses five detection points [...] In Mafia III the AI hearing engine is completely independent of the audio engine. [...] as footsteps, we react only when we get a certain number of events during a short time span.'''
+checked = 2026-11-21
+
+["sunshinehill-2013-lod-trader-cost"]
+url = "http://www.gameaipro.com/GameAIPro/GameAIPro_Chapter14_Phenomenal_AI_Level-of-Detail_Control_with_the_LOD_Trader.pdf#page=16"
+section = "Ben Sunshine-Hill, Phenomenal AI Level-of-Detail Control with the LOD Trader, Game AI Pro (2013), chapter 14, sections 14.1 (PDF pages 1 and 2) and 14.7 The LOD Trader in Practice (PDF page 16)"
+quote = '''We’ll use lower quality locomotion and collision avoidance systems for characters more than ten meters away, or simulate out-of-view characters at a lower update rate, or (similar to visibility culling above) delete characters entirely when they’re too far away. [...] There’s no “LOD threshold distance” we could pick which would respect our budget and give most visible characters the detail we want. [...] close that things like low-quality locomotion could be clearly seen [...] The LOD Trader itself had very good performance: its average execution time was 57 microseconds per frame, or 0.17% of the target frame time. Its memory usage was 500 kB for the transition data and 48 bytes per entity'''
+checked = 2026-11-21
+
+["graham-2021-event-based-updates"]
+url = "http://www.gameaipro.com/GameAIProOnlineEdition2021/GameAIProOnlineEdition2021_Chapter02_Efficient_Event_Based_Simulations.pdf#page=2"
+section = "David Rez Graham, Efficient, Event-Based Simulations, Game AI Pro Online Edition 2021, chapter 2, sections 2 Motivation (PDF page 2) and 3 Event-Based Updates (PDF page 3)"
+quote = '''Time-slicing reduces spikes; it doesn’t improve overall framerate. [...] game development situations. For example, loot drops that disappear, timed quests, NPC AI schedule updates, items like food that decay in the world and weather events can all be affected. [...] updates into a priority queue based on when they need to be updated. Every frame, we look at the front of the queue and check to see if it’s time to call that update.'''
+checked = 2026-11-21
+
+["thompson-2019-hitman-ai-lod-and-crowd"]
+url = "https://www.gamedeveloper.com/design/the-ai-of-hitman-2016-"
+section = "Tommy Thompson (AI and Games), The AI of Hitman (2016), Game Developer blog, 7 August 2019, sections on the behaviour tree system and Crowds"
+quote = '''while there can be over 300 active behaviour-tree-driven AI in a given level, the ones farthest away from the player update their behaviour less frequently as the CPU resource used for updating AI prioritises those closest to you. [...] with only three main states of behaviour: standing idle, walking and what's called 'pending walk' [...] any character in a crowd can - depending on the current situation in the game - be possessed by a behaviour tree AI, effectively upgrading them a to fully responsive and coordinated character. [...] When first built for Absolution, it could support up to 1200 agents in a single crowd, with up to 500 of them visible at the same time.'''
+checked = 2026-11-21
+
+["ck-papyrus-persistence-cost"]
+url = "https://ck.uesp.net/wiki/Persistence_(Papyrus)"
+section = "CreationKit Wiki, Persistence (Papyrus), Overview and Properties (snapshot web.archive.org/web/20240229222349)"
+quote = '''Persistence is the act of making an Object Reference stick around in the game and not be unloaded. This applies to all references in the game, including things like actor references. Because they continue to stick around, they consume processor time and memory when other references in the same area will have disappeared and unloaded. [...] When a script property is pointed at a reference in the editor, the target reference will be flagged as "permanently persistent". In other words, nothing you do during runtime will unload the object.'''
+checked = 2026-11-21
+
+["ck-cell-reset-timers"]
+url = "https://ck.uesp.net/wiki/Cell_Reset"
+section = "CreationKit Wiki, Cell Reset, When do Cells Reset? (snapshot web.archive.org/web/20250321012430)"
+quote = '''The player leaves a location after clearing it, iHoursToRespawnCellCleared pass (default: 30d), and then the player reenters it. [...] The player leaves a location without clearing it, iHoursToRespawnCell pass (default: 10d), and then the player reenters it. [...] Note that cells only reset when the player actually reenters them. [...] The cell's Encounter Zone is marked 'Never Resets'''
+checked = 2026-11-21
+
+["ck-cell-reset-what-resets"]
+url = "https://ck.uesp.net/wiki/Cell_Reset"
+section = "CreationKit Wiki, Cell Reset, What Resets? (snapshot web.archive.org/web/20250321012430)"
+quote = '''Placed items respawn. [...] Doors reset their open state and lock setting. [...] Containers reset their contents, open state, and lock setting. [...] The Enable State of Actors and Objects does not reset. [...] Destructible Objects do not reset. [...] Player-dropped items are not normally cleaned up. [...] Created refs (i.e. refs placed via PlaceAtMe). [...] Player-killed corpses are cleaned up as part of a separate code process independent of the Cell Reset system.'''
+checked = 2026-11-21
+
+["ck-save-versus-patched-masterfile"]
+url = "https://ck.uesp.net/wiki/Save_File_Notes_(Papyrus)"
+section = "CreationKit Wiki, Save Files Notes (Papyrus), When can the game save?, Removing From an Object, Changing Masterfile Value (snapshot web.archive.org/web/2026)"
+quote = '''The game can save at any time. This can be between lines in your script, or even in the middle of running a single line. [...] If you remove a script from an object in the masterfile after a save was made, that script will still exist on the object when the save is loaded. [...] If you have an existing property and change its value in the masterfile, the script will only receive the new value if it doesn't exist in the save. In other words - changing the value will not overwrite the value it has in the save game.'''
+checked = 2026-11-21
+
+["sawyer-2011-save-as-differences"]
+url = "https://kotaku.com/trying-to-explain-skyrims-awful-ps3-lag-5865381"
+section = "Kotaku, Trying to explain Skyrim's awful PS3 lag, December 6, 2011, block quote attributed Joshua Sawyer [Formspring]"
+quote = '''The longer you play a character, the more bit differences on objects (characters, pencils on tables, containers, etc.) get saved off and carried around in memory. I think we’ve seen save games that are pushing 19 megs, which can be really crippling in some areas…It’s an engine-level issue with how the save game data is stored off as bit flag differences compared to the placed instances in the main .esm + DLC .esms. As the game modifies any placed instance of an object, those changes are stored off into what is essentially another .esm. When you load the save game, you’re loading all of those differences into resident memory.'''
+checked = 2026-11-21
+
+["horneman-2024-spatial-and-session-persistence"]
+url = "https://www.intelligent-artifice.com/2024/a-presentation-on-save-games/"
+section = "Jurie Horneman, A presentation on implementing save games, Intelligent Artifice, 24 November 2024, How many copies?"
+quote = '''If your game's entire world run-time data does not fit into memory, such as in an open world game but definitely not just those, you will need to support spatial persistence (the player comes back and things are the way they were), as well as session persistence (the player turns their machine back on and things are the way they were). [...] These two concepts are not the same, and I strongly encourage you to treat them as different. [...] some persistent systems may cache save game data for areas the player is not in, so those can be turned into full run-time data structures the next time the player goes there.'''
+checked = 2026-11-21
+
+["unity-globalobjectid-editor-only"]
+url = "https://docs.unity3d.com/ScriptReference/GlobalObjectId.html"
+section = "Unity Scripting API (6000.6), GlobalObjectId, Remarks"
+quote = '''The identifiers are stable and persistent across editing sessions and data serialization operations, such as changing the active scene and saving and reloading. [...] identifiers can't be used at application runtime in the Editor's Play mode or in standalone Player builds. [...] {l} is the local file ID of the object. For objects inside a prefab instance, this ID is the local file ID of the original source object that is part of the prefab. [...] Moving an object to a new scene changes its'''
+checked = 2026-11-21
+
+["rouwe-2022-hfw-20k-bodies"]
+url = "https://jrouwe.nl/architectingjolt/ArchitectingJoltPhysics_Rouwe_Jorrit_Notes.pdf#page=13"
+section = "Jorrit Rouwe (Guerrilla), Architecting Jolt Physics for Horizon Forbidden West, GDC 2022, slide 13 Open World - Requirements, speaker notes"
+quote = '''we have 10s of Scenes and 28 tiles active at any time. In those Scenes and Tiles there are approximately 20K bodies. When the player walks around, these Scenes and Tiles are constantly changing. Because of this a lot of objects need to be added to and removed from the broad phase.'''
+checked = 2026-11-21
+
+["rouwe-2022-hfw-add-remove-cost"]
+url = "https://jrouwe.nl/architectingjolt/ArchitectingJoltPhysics_Rouwe_Jorrit_Notes.pdf#page=13"
+section = "Jorrit Rouwe (Guerrilla), Architecting Jolt Physics for Horizon Forbidden West, GDC 2022, slide 13 notes; removal figure in the notes of Quad Tree – Removing Bodies (PDF page 28)"
+quote = '''Adding objects to the world used to be very expensive since it required the broad phase tree to be rebuilt while the physics world was locked. This often caused 5-10 ms stalls that would result in frame rate hiccups. What we want from our physics engine is the ability to do most of the work on a background thread so that there is as little interference as possible with the running game. [...] we can remove a body from the tree in about 0.5 us on PS4.'''
+checked = 2026-11-21
+
+["rouwe-2022-hfw-physics-time"]
+url = "https://jrouwe.nl/architectingjolt/ArchitectingJoltPhysics_Rouwe_Jorrit_Notes.pdf#page=51"
+section = "Jorrit Rouwe (Guerrilla), Architecting Jolt Physics for Horizon Forbidden West, GDC 2022, slide 46 Conclusion notes and slides 47-48 titles (PDF pages 51-53); PS5 thread count on slide 30 (PDF page 33)"
+quote = '''We were able to switch our simulation frequency from the 30 Hz that we were using in all our previous games to two steps of 60 Hz while spending less time on the physics update. In performance mode, which is 60 fps, it means we only need 1 physics update per frame, so we save half of the cost. [...] We also managed to reduce our run-time memory cost by 25% and reduced the size of all physics assets (meshes, terrain etc.) by 30%. [...] Before (avg 3.3 ms, spike 21 ms) [...] After (avg 2.1 ms, spike 10 ms) [...] the game running on PS5 with 13 worker threads'''
+checked = 2026-11-21
+
+["jolt-docs-sleeping-islands"]
+url = "https://jrouwe.github.io/JoltPhysics/index.html"
+section = "Jolt Physics Architecture and API documentation, section Sleeping, and Check Body Sleeping in the physics update description"
+quote = '''At the end of each step, all the bodies in an island are checked to see if they have come to rest, if this is the case then the entire island is put to sleep. When a body is sleeping, it can still detect collisions with other objects that are not sleeping, but it will not move or otherwise participate in the simulation to conserve CPU cycles. [...] Unlike some other physics engines, removing a Body from the world doesn't wake up any surrounding bodies. [...] When the timer reaches a certain time, the object has is considered non-moving and is put to sleep.'''
+checked = 2026-11-21
+
+["jolt-streaming-batches-and-licence"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/master/README.md"
+section = "Jolt Physics README, Design considerations and License (raw copy from raw.githubusercontent.com); batch functions in the documentation's Bodies section (https://jrouwe.github.io/JoltPhysics/index.html)"
+quote = '''Used by Horizon Forbidden West and Death Stranding 2: On the Beach. [...] Sections of the simulation can be loaded / unloaded in the background. We prepare a batch of physics bodies on a background thread without locking or affecting the simulation. We insert the batch into the simulation with a minimal impact on performance. [...] Accidental wake up of bodies cause performance problems when loading / unloading content. Therefore, bodies will not automatically wake up when created. Neighboring bodies will not be woken up when bodies are removed. [...] The project is distributed under the [MIT license](LICENSE). [...] Useful when streaming in level sections and the player decides to go the other way. [...] Adding many bodies, one at a time, results in a really inefficient broadphase'''
+checked = 2026-11-21
+
+["jolt-docs-state-snapshot-and-body-ids"]
+url = "https://jrouwe.github.io/JoltPhysics/index.html"
+section = "Jolt Physics Architecture and API documentation, sections Deterministic Simulation (rolling back a simulation) and Saving Shapes"
+quote = '''SaveState only records the state that the physics engine modifies during its update step (positions, velocities etc.), so if you change anything else you need to restore this yourself. [...] E.g. ShouldSaveBody could simply return false for all static or inactive bodies which can be used to limit the size of the snapshot. [...] you'll also need to ensure that the BodyIDs are kept the same [...] Data stored in this way is optimized for simulation performance and loading speed but is very likely to change between versions of the library, so this should never be your primary data format.'''
+checked = 2026-11-21
+
+["richter-2020-control-200-active-bodies"]
+url = "https://cgworld.jp/feature/202008-gdccontrol.html"
+section = "Kenji Ono, CGWORLD.jp, 31 August 2020, report of Johannes Richter (Remedy), Destructible Environments in 'Control': Lessons in Procedural Destruction, GDC Summer 2020"
+quote = '''リヒター氏は「画面上でアクティブなリジットボディをもつオブジェクトは、常時200個以下になるように制限されている」と述べた。そのため画面外に飛び出たオブジェクトは、そのまま消滅させるなどしている。 [...] 第一層が大きめの破片や、机や椅子などの小道具類だ。これらは物理エンジン下の剛体（リジッドボディ）シミュレーションで表現される。第二層はより小さな破片類で、パーティクルやリジッドボディヒエラルキー、デカールで表現される。'''
+checked = 2026-11-21
+
+["surricchio-2023-gowr-snow-carving"]
+url = "https://80.lv/articles/santa-monica-s-senior-programmer-on-how-god-of-war-ragnar-k-s-snow-system-was-made"
+section = "Paolo Surricchio (Santa Monica Studio) interviewed by Arti Sergeev, 80 Level, 16 October 2023, Making the Collisions Work"
+quote = '''This was achieved by attaching the same capsules that we use on characters to our physics rigid bodies. From a rendering perspective, there is no difference between a character or a generic object for the snow: you can have carving shapes attached to anything in the world, and they will push the snow down depending on how the object intersects with the snow plane, and where the hard ground below the snow is. [...] We added the feature to our VFX system to read the displacement information, which is carved every frame at runtime.'''
+checked = 2026-11-21
+
+["valve-source-decal-cap"]
+url = "https://developer.valvesoftware.com/wiki/Decals"
+section = "Valve Developer Community, Decals (snapshot web.archive.org/web/20260212023448; the live site did not answer)"
+quote = '''Created in response to impacts, blood, and so on. Limited in number by the value of r_decals, unreliable when transmitted, and not transmitted to players who connect after creation.'''
+checked = 2026-11-21
+
+["rouwe-2022-hfw-tiles-and-collision"]
+url = "https://jrouwe.nl/architectingjolt/ArchitectingJoltPhysics_Rouwe_Jorrit_Notes.pdf#page=12"
+section = "Jorrit Rouwe (Guerrilla), Architecting Jolt Physics for Horizon Forbidden West, GDC 2022, slide 12 Open World - Tiles, speaker notes"
+quote = '''The streaming tiles are 256 x 256 meters. We keep a 3x3 grid of tiles at maximum detail. When the player moves over the tile border, we update the set of active tiles. Around the high detail tiles we have a set of medium LOD tiles which have medium detail baked out version of the graphics and a full detail baked out version of the collision. [...] We keep an extra row of medium tiles loaded in the direction where the player is moving to cover loading times. Beyond the medium LOD tiles we have low LOD tiles which contain the low LOD graphics but no collision information.'''
+checked = 2026-11-21
+
+["rouwe-2022-hfw-scene-radii"]
+url = "https://jrouwe.nl/architectingjolt/ArchitectingJoltPhysics_Rouwe_Jorrit_Notes.pdf#page=11"
+section = "Jorrit Rouwe (Guerrilla), Architecting Jolt Physics for Horizon Forbidden West, GDC 2022, slide 11 Open World - Scenes notes, and slide 12 notes for the 450 m figure"
+quote = '''The Scene consists of a circular encounter area that has a radius of max 125 m. Within this area the Scene script can freely spawn game objects and move them around. When a Scene is active, we guarantee that all collision under the encounter area is loaded. Around the encounter area, there is a radius of max 200 m. If the player is within this radius, the Scene should activate because the player could interact with it. [...] a scene can be active from 450 meter which is twice the encounter radius + the activation radius'''
+checked = 2026-11-21
+
+["fitzgerald-2018-spiderman-tile-per-second"]
+url = "https://blog.playstation.com/2018/09/06/insomniac-interview-the-tech-behind-marvels-spider-man"
+section = "PlayStation.Blog, Insomniac Interview: The Tech Behind Marvel's Spider-Man, 6 September 2018, answer by Mike Fitzgerald (Insomniac)"
+quote = '''Like many open-world games, we have to carefully parcel up our world up into small sections, since the whole island of Manhattan would be impossible to fit into the PS4’s memory at one time. There are approximately 800 square tiles making up our version of Marvel’s New York, each 128 meters square, making the city several times larger than what we built for Sunset Overdrive. As you swing through it, we’re constantly unloading tiles behind you as well as loading tiles ahead of you—seamlessly transitioning so you’re always exposed to the highest detail level. And when Spider-Man is really pushing his top speed, we’re loading about one new tile every second.'''
+checked = 2026-11-21
+
+["epic-mass-lod-max-counts"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/overview-of-mass-gameplay-in-unreal-engine"
+section = "Epic Games, MassGameplay Overview (Unreal Engine 5.9 documentation), Mass Representation, Mass LOD, Mass Simulation LOD"
+quote = '''The system outputs four LOD values: High, Medium, Low, and Off. For each LOD level, you can configure distances at which the level is relevant and a maximum count of Entities per level. [...] For each representation LOD value, the subsystem provides a choice between four types of representation: [...] No representation. [...] Mass Simulation LOD is an implementation for load balancing all the entity calculations. [...] It also provides the option to give a variable frequency update for all your calculations.'''
+checked = 2026-11-21
+
+["epic-2021-matrix-awakens-global-simulation"]
+url = "https://blog.playstation.com/2021/12/09/the-matrix-awakens-an-unreal-engine-5-experience-hits-ps5-today/"
+section = "Ross Hogben (Unreal Engine Copywriter, Epic Games), The Matrix Awakens: An Unreal Engine 5 Experience hits PS5 today, PlayStation.Blog, 9 December 2021"
+quote = '''It’s characters and traffic are not just generated spontaneously depending on where the player is looking—they are actors in a global simulation that is constantly evaluated. In short, they exist whether you are looking at them or not. [...] To give the sense of a living, breathing metropolis, tens of thousands of ultra-realistic digital characters populate the city, driven by a sophisticated AI system.'''
+checked = 2026-11-21
+
+["ehrhardt-2020-cyberpunk-deletes-out-of-view"]
+url = "https://www.tomshardware.com/news/cyberpunk-deletes-idling-cars-scared-crowds"
+section = "Michelle Ehrhardt, Tom's Hardware, 15 December 2020, Not a Bug: Cyberpunk Deletes Idling Cars, Scared Crowds, reporting Gareth Damian Martin's video (PS5)"
+quote = '''He then demonstrates this in a video where he parks in front of a few cars and walks back and forth between them, with one or two cars disappearing every time he looks away. [...] While human NPCs will run away when shot at rather than just standing still, these running NPCs also disappear from the world when you look away.'''
+checked = 2026-11-21
+
+["kovalovs-2020-tlou2-blood-render-target-persistence"]
+url = "https://s3.amazonaws.com/nd.images/research/2020_siggraph/GpuParticles.pptx"
+section = "Artem Kovalovs (Naughty Dog), GPU Driven Effects of The Last of Us Part II, SIGGRAPH 2020, slides 27-28 Persist or Not Persist? and Persistence Solutions: Render Targets"
+quote = '''Are we ok with losing particles that are not visible? [...] Sometimes it’s ok (rain splashes) [...] Sometimes it is unacceptable (blood) [...] Dynamic blood uses render targets [...] Anything in render target is persistent until cleared'''
+checked = 2026-11-21
+
+["kovalovs-2020-tlou2-drip-cost"]
+url = "https://s3.amazonaws.com/nd.images/research/2020_siggraph/GpuParticles.pptx"
+section = "Artem Kovalovs (Naughty Dog), GPU Driven Effects of The Last of Us Part II, SIGGRAPH 2020, slide 49 Performance"
+quote = '''A serial update of the drips on character (up to 16k particles) is ~0.04ms but will become insignificant by using async compute [...] Major savings compared to character unwrapping [...] The cost of rendering is higher than cost of update'''
+checked = 2026-11-21
+
+["brinck-2020-tlou2-wetness-one-parameter"]
+url = "https://s3.amazonaws.com/nd.images/research/2020_siggraph/NaughtyDog_TechArt_TLOU2-final.pptx"
+section = "Waylon Brinck and Qingzhou Steven Tang (Naughty Dog), The Technical Art of The Last of Us Part II, SIGGRAPH 2020, speaker notes of slide 9 BRDF and slide 30 Uncharted 4 Wetness"
+quote = '''We also have a few special parameters (like Wetness) that are accumulated independently throughout the layers, and then modify the final BRDF values before writing to the GBuffer. [...] A single wetness parameter drives the progression from dampness all the way to standing water, affecting all BRDF parameters.'''
+checked = 2026-11-21
+
+["brinck-2020-tlou2-wet-skin-mask-and-specular-normal"]
+url = "https://s3.amazonaws.com/nd.images/research/2020_siggraph/NaughtyDog_TechArt_TLOU2-final.pptx"
+section = "Waylon Brinck and Qingzhou Steven Tang (Naughty Dog), The Technical Art of The Last of Us Part II, SIGGRAPH 2020, speaker notes of slides 32 Wetness Mask, 33 Specular Normals, 34 Wetness Animation, 37 Caustic Lighting"
+quote = '''we decided the artist should ONLY have to author a wetness mask, and derive all the needed data off of that. [...] we activate a different permutation of our deferred shader (and configuration of the gbuffer) where we have separate normals for specular lighting and for diffuse lighting. [...] In the case of water on skin, I apply a threshold to the wetness mask and set it to the appropriate scale for a heightmap, and generate Specular Normals from that [...] The artist authors a “static” mask, painting where the rivulets should flow. And then we have a scrolling cloud texture which is overlaid on top of the static mask [...] If the normal was shared, the drips would look like veins.'''
+checked = 2026-11-21
+
+["brinck-2020-tlou2-character-dirt-package"]
+url = "https://s3.amazonaws.com/nd.images/research/2020_siggraph/NaughtyDog_TechArt_TLOU2-final.pptx"
+section = "Waylon Brinck and Qingzhou Steven Tang (Naughty Dog), The Technical Art of The Last of Us Part II, SIGGRAPH 2020, speaker notes of slide 10 BRDF – Shader Packages"
+quote = '''The Character Dirt package, for example, affects color, normal, and roughness, and has all the necessary code for being driven dynamically by gameplay.'''
+checked = 2026-11-21
+
+["brinck-2016-u4-wetness-and-porosity"]
+url = "https://advances.realtimerendering.com/other/2016/naughty_dog/NaughtyDog_TechArt_Final.pdf#page=64"
+section = "Waylon Brinck and Andrew Maximov (Naughty Dog), The Technical Art of Uncharted 4, SIGGRAPH 2016, speaker notes of pages 62 and 64 (wetness section)"
+quote = '''for some scenes we wanted the ability to drive wetness dynamically via gameplay. [...] The artists have control of two parameters, “Wetness” and “Porosity”, which can be blended independently. Wetness drives the transition between the different phases explained on the previous slide. Porosity is an optional control (if it’s omitted, Roughness is used instead). Porosity affects darkening of the base color [...] Note that we just lerp to a “squared” version of the base color'''
+checked = 2026-11-21
+
+["bentley-2025-yotei-directional-grid"]
+url = "https://blog.playstation.com/2025/10/23/ghost-of-yotei-tech-deep-dive/"
+section = "Adrian Bentley (Director of Programming, Sucker Punch), Ghost of Yōtei – tech deep dive, PlayStation Blog, 23 October 2025, section Character and movement"
+quote = '''In addition to affecting the world, we anchor characters by having the world punch back. We do this by splatting information into a directional grid deformed around the character which we then use to layer in texture effects to make the character wet, bloody, muddy or snowy.'''
+checked = 2026-11-21
+
+["activision-2022-mw2-wetness-dries-by-material"]
+url = "https://www.callofduty.com/blog/2022/12/call-of-duty-modern-warfare-II-next-gen-tech-advanced-game-performance"
+section = "Call of Duty Staff, Call of Duty blog, 5 December 2022, section Water Physics / Gameplay, quoting Michal Drobot (Infinity Ward)"
+quote = '''“In teamplay, you might actually learn the enemy team came through the flooded tunnels, because they’re dripping wet,” Drobot hints. [...] To that end, Drobot and his crew literally implemented a complex new system, which allows every object in the game to get soaked, with variable effects on looks and performance, and then eventually dry out based on the type of material.'''
+checked = 2026-11-21
+
+["platkow-gilewski-2015-witcher3-beard-states"]
+url = "https://kotaku.com/beard-growth-comes-to-video-games-1693288691"
+section = "Brian Ashcraft, Kotaku, Beard Growth Comes to Video Games, 24 March 2015, quoting Michał Platkow-Gilewski (CD Projekt) as told to Eurogamer"
+quote = '''“The beard has several ‘states’ and these states determine its length – the longest is really long but it’s not Gandalf-long,” CD Projekt’s Michał Platkow-Gilewski told Eurogamer'''
+checked = 2026-11-21
+
+["kulikov-2025-indiana-jones-strand-hair-budget"]
+url = "https://www.advances.realtimerendering.com/s2025/content/Strand%20Hair%20in%20IJGC%20-%20Final%20Slides%20(Post-Conference).pdf#page=5"
+section = "Sergei Kulikov (MachineGames), Strand-based hair and fur in Indiana Jones and the Great Circle, SIGGRAPH 2025 Advances in Real-Time Rendering in Games, PDF page 5 Priorities with its notes, and the notes of PDF page 7 on what strands are used for"
+quote = '''The GPU budget for the entire system was estimated as 2 milliseconds for simulation plus rendering on min spec at worst-case scenario, which is around a dozen characters on screen with some of them close to the camera. [...] First, all character grooms and facial hair are done with strands. I think we have 2 corpses in the entire game with hair cards. [...] Xbox Series X/S, PS5, RT-capable desktop GPUs [...] Estimated budget around 2ms for worst case (close-ups on multiple characters)'''
+checked = 2026-11-21
+
+["kulikov-2025-indiana-jones-strand-hair-lod"]
+url = "https://www.advances.realtimerendering.com/s2025/content/Strand%20Hair%20in%20IJGC%20-%20Final%20Slides%20(Post-Conference).pdf#page=17"
+section = "Sergei Kulikov (MachineGames), Strand-based hair and fur in Indiana Jones and the Great Circle, SIGGRAPH 2025 Advances in Real-Time Rendering in Games, PDF pages 16-18 LODs, No LODs, With LODs"
+quote = '''Max 65k strands (PC High, Xbox Series X, PS5) Max 32k strands (PC Low, Xbox Series S, Steam Deck) [...] We use an upper boundary of 2000 segments per 64x64 tile on all platforms [...] Limit frame workload to 2 million segments (for all models combined) [...] Without LODs we can only fit 7 hair models in frame, and 2 of them are Indiana’s hands'''
+checked = 2026-11-21
+
+["capcom-2023-re4-strand-hair-cost"]
+url = "https://www.docswell.com/s/CAPCOM_RandD/KVVYN3-RE2023"
+section = "Capcom R&D, Resident Evil 4 Hair Discussion, CAPCOM Open Conference Professional RE:2023, slides 28 Performance and 29 Optimization: LOD with their notes"
+quote = '''With Checkerboard rendering at 4K, it takes about 4.0ms to render the hair. [...] With framerate priority, the processing time is approximately 3.6ms. [...] This is in addition to the number of characters, simulation and lighting calculations. [...] Reduce amount of hair during non-cut scenes in-game to prioritize gameplay [...] In-game in RE4, hair is always displayed with 70% off on the console for performance reasons. [...] PS5 1920p@ CBR PS5 2160p@ CBR Setup 0.478 ms 0.526 ms Software Drawing 2.890 ms 2.986 ms Hardware Rendering 0.285 ms 0.496 ms Total 3.653 ms 4.008 ms'''
+checked = 2026-11-21
+
+["lewin-2018-frostbite-cloth-cost"]
+url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/gdc2018-chrislewin-clothselfcollisionwithpredictivecontacts.pdf#page=1"
+section = "Chris Lewin (EA Frostbite), Cloth Self Collision with Predictive Contacts, GDC 2018 paper, Figure 1 caption"
+quote = '''The total simulation cost is 0.4ms per 30Hz simulation step, using a single CPU thread.'''
+checked = 2026-11-21
+
+["evans-2014-ryse-face-rig-and-distance-lod"]
+url = "https://www.fxguide.com/fxfeatured/the-tech-of-cryteks-ryse-son-of-rome/"
+section = "Ian Failes, fxguide, The tech of Crytek's Ryse: Son of Rome, 20 March 2014, quoting Christopher Evans (Crytek), facial rig section"
+quote = '''Roman general Marius Titus, has 260 facial joints and 230 corrective facial blendshapes [...] So in the first two meters we cull all of the facial blend shape fixers based upon importance – how much they contribute to the final pose at run-time. So the blend shapes fade off after two meters. You’re then left with an 8 influence 260 joint face, and then we cull it down to 96 4 influences and then again and again. [...] “So as you move further away the individual leaf joints deactivate and only the parents move,” says Evans.'''
+checked = 2026-11-21
+
+["paciello-2020-tlou2-systemic-facial-counts"]
+url = "https://blog.playstation.com/2020/08/28/the-story-behind-the-last-of-us-part-iis-staggeringly-realistic-in-game-character-facial-animation/"
+section = "PlayStation Blog, The story behind The Last of Us Part II's staggeringly realistic in-game character facial animation, 28 August 2020, interview with Keith Paciello (Naughty Dog)"
+quote = '''it picks a facial expression from a range of nearly 20 different emotional states for any of the 25 key characters that are on-screen. That covers leads, co-op partners, enemies, even Infected to an extent. [...] Some 40 poses for each of the 15-20 emotion sets. By the end of production, he’d totted up an impressive 15,000 individual, hand-sculpted poses. [...] “We could emotionally pace out our characters from the absolute beginning of the game to the absolute end of the game and blend in and out of cinematics seamlessly.”'''
+checked = 2026-11-21
+
+["waszak-2020-jedi-fallen-order-physical-animation"]
+url = "https://www.gamedeveloper.com/programming/leveraging-physical-animation-to-sell-force-powers-in-i-jedi-fallen-order-i-"
+section = "Chris Kerr, Game Developer, Leveraging physical animation to sell Force powers in Jedi: Fallen Order, 7 August 2020, quoting Bartlomiej Waszak (Respawn)"
+quote = '''"The first method is motors. The motor is part of the joint constraint between rag doll bodies, and they use a specified animation target to generate the local force between connected bodies, That local force drives bodies to follow the animation target," he said. [...] "The solution was to keep the hip body as a physically simulated body and create a new constraint for that body," continues Waszak. [...] "What we do is monitor the distance between the actual position of the hip body and the desired animation target. If the constant drive for that hip body is unable to hit the target within some threshold, we just switch to a free-fall rag doll mode."'''
+checked = 2026-11-21
+
+["bergamin-2019-drecon-cost-per-character"]
+url = "https://static-wordpress.ubisoft.com/montreal.ubisoft.com/wp-content/uploads/2019/11/13214229/DReCon.pdf"
+section = "Bergamin, Clavet, Holden, Forbes, DReCon: Data-Driven Responsive Control of Physics-Based Characters, ACM Transactions on Graphics 38(6), 2019, section 7.6 Runtime Cost, Table 1 and the performance breakdown figure"
+quote = '''Our method has a remarkably low runtime cost, placing it within the typical budget for character animation and physics provided by a AAA video-game. [...] All performance measures were taken single threaded on an Intel Xeon E5-1650 V3 CPU. [...] Kinematic Control State Construction Policy Evaluation Physics Simulation Total Runtime 40µs 40µs 60µs 200µs 340µs'''
+checked = 2026-11-21
+
+["smrcek-2026-kcd1-naive-lod"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Petr_Smrcek_SupportingThousandsOfNPCsInKingdomComeDeliveranceAndKingdomComeDeliverance2.pdf#page=31"
+section = "Petr Smrček (Warhorse Studios), Supporting Thousands of NPCs in 'Kingdom Come: Deliverance' & 'Kingdom Come: Deliverance II', GDC 2026, slides Naive AI LOD (15), Movement vs LOD (17), Results for KCD (30)"
+quote = '''Naive AI LOD • Optimization of far NPCs Remove render, animation and physics • Breaks the script LOD branching in script [...] Movement vs LOD • No physics and animation • Teleport Consecutive small teleports • Transparent to script [...] Results for KCD • ~600 NPCs • 30 FPS • 60-90m NPC visibility • Some NPCs unloaded • Bloated scripting logic • Long faders'''
+checked = 2026-11-21
