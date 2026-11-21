@@ -280,7 +280,7 @@ fn rank(
 
 /// The uses of streamed Textures by `chunk`'s Placements: each Primitive's
 /// Material, or the Placement's own, and each Texture it samples that has
-/// mips finer than its Resident tail, whichever of them are Resident.
+/// mips finer than its Resident tail, however many of them are Resident.
 fn texture_uses(
     chunk: &LoadedChunk,
     meshes: &LoadedMeshes,
@@ -430,7 +430,7 @@ mod tests {
         }
         fn texture(&self, _id: AssetId) -> anyhow::Result<crate::cooked::CookedTexture> {
             let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
-            let level = |level: u32| {
+            let zeroed_level = |level: u32| {
                 vec![0; crate::cooked::level_bytes(format, 2048, 2048, level as usize)]
             };
             Ok(crate::cooked::CookedTexture {
@@ -438,7 +438,7 @@ mod tests {
                 width: 2048,
                 height: 2048,
                 first_level: self.first_level,
-                levels: (self.first_level..12).map(level).collect(),
+                levels: (self.first_level..12).map(zeroed_level).collect(),
             })
         }
         fn mesh(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMesh> {
