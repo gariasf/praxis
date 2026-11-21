@@ -8254,7 +8254,7 @@ checked = 2026-11-21
 
 ["spartan-engine-5f3f9f2-licence"]
 url = "https://github.com/PanosK92/SpartanEngine/blob/5f3f9f241bb70b2eddc8ca245186903f1c099eb9/license.md#L1"
-section = "Spartan Engine at commit 5f3f9f2 (2026-11-19), license.md, sections 1, 2, 3.1 and 10; the licence replaced MIT in commit 230a887 (2026-09-24). Of this commit only license.md and license_faq.md were read"
+section = "Spartan Engine at commit 5f3f9f2 (2026-11-19), license.md, sections 1, 2, 3.1 and 10; version 1.0 of this licence replaced MIT in commit 230a887 (2026-09-24). Of this commit only license.md and license_faq.md were read"
 quote = '''# Spartan Engine License 2.0 [...] This license does not withdraw permissions already granted for copies or versions previously released under the MIT License [...] to use, copy, modify, combine, and distribute the Software, in source or compiled form, for noncommercial purposes. [...] after that, you owe 3% of the Product's Gross Revenue above $1,000,000, calculated per calendar quarter. [...] This is a custom source-available license, not an open source license.'''
 checked = 2026-11-21
 
