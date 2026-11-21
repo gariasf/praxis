@@ -30,7 +30,7 @@ _Avoid_: Level, detail level
 A Mesh's LODs in order, each coarser than the one before.
 
 **LOD error**:
-How far a LOD strays from LOD 0, in metres.
+The simplifier's estimate of how far a LOD strays from LOD 0, in metres: an approximate measure, not a bound.
 _Avoid_: LOD distance
 
 **LOD threshold**:

@@ -291,7 +291,7 @@ for corner in [first, second, third] {
     mesh::push_lod(&amp;mut proxy, error_metres, &amp;[&amp;shell, &amp;ground_geometry])?;
     finer_indices = coarser.len();
 }</code></pre>
-  <p class="code-source"><code>cook</code>, <code>src/cook/far_proxy.rs</code>. A LOD's <span class="concept" data-term="LOD error" data-tip="How far a LOD strays from LOD 0, in metres.">LOD error</span> is the error the simplifier reports from LOD 0, which is what it was simplified from.</p>
+  <p class="code-source"><code>cook</code>, <code>src/cook/far_proxy.rs</code>. A LOD's <span class="concept" data-term="LOD error" data-tip="The simplifier's estimate of how far a LOD strays from LOD 0, in metres: an approximate measure, not a bound.">LOD error</span> is the error the simplifier reports from LOD 0, which is what it was simplified from.</p>
   <p>A coarser LOD has no atlas of its own. <code>Atlas::map_lod</code> gives each of its faces the chart nearest it among those whose normal is within 45&deg; of its own, by the summed distance of its vertices from the chart's rectangle, or the nearest of all where none faces its way, and holds each vertex's UV inside that chart's rectangle.</p>
 <pre class="code"><code>let (_, chart) = nearest(LIKE_NORMAL_COSINE)
     .or_else(|| nearest(f32::NEG_INFINITY))
