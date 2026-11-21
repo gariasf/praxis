@@ -28,7 +28,7 @@ use crate::transform::WorldTransform;
 
 /// The Renderables, whose Textures mip priority plans beside the
 /// Placements'.
-type RenderableQuery = QueryState<(
+type MipRenderableQuery = QueryState<(
     &'static WorldTransform,
     &'static MeshRef,
     Option<&'static MaterialRef>,
@@ -748,8 +748,8 @@ pub(crate) struct ChunkStreaming {
     /// places more loads alone.
     instances_placed_per_frame: usize,
     mips: MipPriority,
-    /// Made from the World at the first `update`.
-    renderables: Option<RenderableQuery>,
+    /// The query of the World's Renderables, once the World is first streamed.
+    renderables: Option<MipRenderableQuery>,
     fast_travel: FastTravelClock,
 }
 
@@ -1049,7 +1049,7 @@ impl ChunkStreaming {
 struct MipStreaming<'a> {
     io: &'a mut IoPool,
     priority: &'a mut MipPriority,
-    renderables: &'a mut RenderableQuery,
+    renderables: &'a mut MipRenderableQuery,
     renderer: &'a mut Renderer,
     settle: bool,
     teleported: bool,

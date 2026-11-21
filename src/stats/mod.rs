@@ -107,8 +107,8 @@ pub struct FrameStats {
     pub materials_refused: u32,
     /// Chunks whose loads failed this frame, each requested again later.
     pub chunks_not_loaded: u32,
-    /// Late mips: mips the frame's drawn Chunks need, by their Textures'
-    /// priority, that are not Resident.
+    /// Late mips: mips the frame's drawn Chunks or Renderables need, by
+    /// their Textures' priority, that are not Resident.
     pub late_mips: u32,
     /// Whether the camera, since it last arrived, still waits for a Chunk
     /// within the Load radius to load, so its path pauses.

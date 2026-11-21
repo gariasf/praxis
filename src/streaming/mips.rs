@@ -89,7 +89,8 @@ pub(crate) struct MipRequest {
     pub levels: Range<u32>,
 }
 
-/// The loaded Chunks' uses of streamed Textures, and the requests in flight.
+/// The loaded Chunks' and drawn Renderables' uses of streamed Textures,
+/// and the requests in flight.
 #[derive(Default)]
 pub(crate) struct MipPriority {
     /// Each loaded Chunk's uses, by its Asset ID.
@@ -171,10 +172,10 @@ impl MipPriority {
             }
         }
         self.renderable_uses.clear();
-        let mut unstreamed = None;
+        let mut last_without_streamed_textures = None;
         for (world_transform, mesh, material) in renderables {
-            let drawn = (mesh.0, material.map(|material| material.0));
-            if unstreamed == Some(drawn) {
+            let mesh_and_material = (mesh.0, material.map(|material| material.0));
+            if last_without_streamed_textures == Some(mesh_and_material) {
                 continue;
             }
             let (scale, rotation, translation) = world_transform.0.to_scale_rotation_translation();
@@ -184,10 +185,11 @@ impl MipPriority {
                 scale: scale.as_vec3(),
             };
             let uses_before = self.renderable_uses.len();
-            let (mesh, material) = drawn;
+            let (mesh, material) = mesh_and_material;
             let uses = &mut self.renderable_uses;
             push_texture_uses(uses, &transform, mesh, material, meshes, materials);
-            unstreamed = (self.renderable_uses.len() == uses_before).then_some(drawn);
+            last_without_streamed_textures =
+                (self.renderable_uses.len() == uses_before).then_some(mesh_and_material);
         }
         for texture_use in &self.renderable_uses {
             add_need(
@@ -659,11 +661,6 @@ mod tests {
         staging.submit(&context.queue);
     }
 
-    /// A drawn Placement 2.5 m away needs mip 1 of its Material's Texture.
-    /// First planned while the Texture is Resident to mip 0, as a Far
-    /// proxy's atlas loads, it keeps that need, so eviction cannot take mip
-    /// 0 from it; once the Texture is evicted to its tail, mip 3, the next
-    /// plan requests mips 1 and 2 and counts them late.
     /// A Material pool holding the Material `texture`, sampling the Texture
     /// `texture` with its mips from `first_level` Resident, and the
     /// Material's Handle.
@@ -702,6 +699,11 @@ mod tests {
         })
     }
 
+    /// A drawn Placement 2.5 m away needs mip 1 of its Material's Texture.
+    /// First planned while the Texture is Resident to mip 0, as a Far
+    /// proxy's atlas loads, it keeps that need, so eviction cannot take mip
+    /// 0 from it; once the Texture is evicted to its tail, mip 3, the next
+    /// plan requests mips 1 and 2 and counts them late.
     #[test]
     fn a_texture_resident_to_mip_0_when_first_planned_keeps_its_use() {
         let Some(context) = crate::assets::pools::tests::gpu_context() else {
