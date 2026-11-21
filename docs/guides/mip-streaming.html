@@ -202,15 +202,20 @@ fn finest_mip_needed(texels_per_metre: f64, distance_metres: f64) -&gt; u32 {
     let lead_metres = (closing.max(0.0) * LEAD_FRAMES).min(CHUNK_EDGE_METRES);
     let distance_ahead = (distance - lead_metres).max(0.0);
     let texels_per_metre = texture_use.texels_per_metre;
-    let level = finest_mip_needed(texels_per_metre, distance_ahead);
-    keep_finest(&amp;mut self.needed, texture_use.texture, level);
-    if sight == Sight::Drawn {
-        let level = finest_mip_needed(texels_per_metre, distance);
-        keep_finest(&amp;mut self.drawn_needed, texture_use.texture, level);
-    }
+    let ahead = finest_mip_needed(texels_per_metre, distance_ahead);
+    let drawn = match sight {
+        Sight::Drawn =&gt; finest_mip_needed(texels_per_metre, distance),
+        Sight::Ahead | Sight::Replaced =&gt; u32::MAX,
+    };
+    let need = self.needed.entry(texture_use.texture).or_insert(Need {
+        ahead: u32::MAX,
+        drawn: u32::MAX,
+    });
+    need.ahead = need.ahead.min(ahead);
+    need.drawn = need.drawn.min(drawn);
 }</code></pre>
   <p class="code-source"><code>MipPriority::plan</code>, <code>src/streaming/mips.rs</code>.</p>
-  <p>The lead is how far the camera closed on the use's sphere since the last plan, times 16 frames, the Chunk streamer's least lead (<code>LEAST_LEAD_FRAMES</code>), and at most a Chunk edge, 256&nbsp;m, as the Chunk streamer requests nothing further than one past its radius; a camera moving away gets none, nor one that teleported this frame. The need from there, <code>needed</code>, is what requests and eviction read. A drawn use also gives its need from the camera itself, <code>drawn_needed</code>, which only the late mips read. A Texture's need of each kind is the finest any of its uses gives.</p>
+  <p>The lead is how far the camera closed on the use's sphere since the last plan, times 16 frames, the Chunk streamer's least lead (<code>LEAST_LEAD_FRAMES</code>), and at most a Chunk edge, 256&nbsp;m, as the Chunk streamer requests nothing further than one past its radius; a camera moving away gets none, nor one that teleported this frame. The need from there, <code>needed</code>, is what requests and eviction read. A drawn use also gives its need from the camera itself, <code>drawn</code>, which only the late mips read. A Texture's need of each kind is the finest any of its uses gives.</p>
   <p>The uses are built once per loaded Chunk or Resident Far proxy, the first frame that sees it: for each Placement, each Primitive's Material, or the Placement's own, and each Texture of it that has mips finer than those Resident. A Far proxy is a Chunk of one Placement. A Placement whose Materials have nothing to stream costs no transform, and an unloaded Chunk's or proxy's uses are dropped. How each is seen this frame, its <code>Sight</code>, decides what its uses give: a drawn one (<code>Sight::Drawn</code>) both needs; one held past its radius, a Chunk past the Load radius or a Far proxy past the View distance, where the camera may come to draw it (<code>Sight::Ahead</code>), its need from a lead ahead alone, so its mips are requested and never late; and a Far proxy held while its Chunk is drawn in its place (<code>Sight::Replaced</code>) nothing. Which Chunks and proxies are held, and why, is on <a href="chunk-streamer.html">The Chunk streamer</a>. Every one counts, in front of the camera or behind it.</p>
 </section>
 
@@ -283,7 +288,7 @@ self.write_layer(staging, id, texture_channel, target.layer());</code></pre>
   <div class="part-mark">5 &middot; <code>MaterialPool::evict_for</code> &middot; <code>MipPriority::eviction_rank</code></div>
   <h2>Eviction</h2>
   <p class="key-idea">A move whose Channel has no room for its class first evicts one finest mip: of the Textures whose chain lies in that very class, the one with the coarsest need goes, the least recently used breaking ties, so the slice it gives back is the one the move takes. A finest mip stays until its Texture's need coarsens by two mips, a Texture never loses a mip it needs, and a Resident tail never leaves.</p>
-<pre class="code"><code>let finest_mip_needed = needed.get(&amp;texture).copied().unwrap_or(u32::MAX);
+<pre class="code"><code>let finest_mip_needed = needed.get(&amp;texture).map_or(u32::MAX, |need| need.ahead);
 let evictable =
     finest_mip_needed &gt; first_level &amp;&amp; finest_mip_needed &gt;= resident_level.saturating_add(2);
 evictable.then(|| EvictionRank {
@@ -333,12 +338,11 @@ if !settle || (settled &amp;&amp; mips_settled) {
 }</code></pre>
   <p class="code-source"><code>ChunkStreaming::update</code>, <code>src/streaming/io.rs</code>.</p>
   <p>The late mips read only the drawn needs, whatever was requested ahead:</p>
-<pre class="code"><code>let mut late_mips = 0;
-for (&amp;texture, &amp;needed) in &amp;self.drawn_needed {
-    if let Some((_, resident)) = materials.texture_residency(texture) {
-        late_mips += resident.saturating_sub(needed);
-    }
-}</code></pre>
+<pre class="code"><code>for (&amp;texture, need) in &amp;self.needed {
+    let Some((_, resident)) = materials.texture_residency(texture) else {
+        continue;
+    };
+    late_mips += resident.saturating_sub(need.drawn);</code></pre>
   <p class="code-source"><code>MipPriority::plan</code>, <code>src/streaming/mips.rs</code>.</p>
   <p>A Settled frame's Textures therefore hold every mip its drawn Placements need from the camera, by a footprint no larger than any pixel's of a 1440p view, wherever their Channels had room, and a capture smaller than that samples no finer: the Goldens render bit-exact against images drawn with every mip loaded. A window never waits, nor the bench after its counter frames, so a mip that is late shows as its coarser mips, magnified, until it arrives. A mip requested ahead for a held Chunk or proxy is never late; a drawn one's need finer than what a lead ahead brought, as when the camera speeds up, is.</p>
 </section>
