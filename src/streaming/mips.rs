@@ -70,6 +70,15 @@ struct TextureUse {
     texels_per_metre: f64,
 }
 
+/// The finest mip a Texture's uses need: from where the camera will be a
+/// lead ahead, and its drawn uses' from where the camera is, `u32::MAX`
+/// when none is drawn.
+#[derive(Clone, Copy, Debug)]
+struct Need {
+    ahead: u32,
+    drawn: u32,
+}
+
 /// The mips one Texture needs that are not Resident: the request that
 /// brings them.
 #[derive(Clone, Debug)]
@@ -83,12 +92,8 @@ pub(crate) struct MipRequest {
 pub(crate) struct MipPriority {
     /// Each loaded Chunk's uses, by its Asset ID.
     uses: HashMap<AssetId, Vec<TextureUse>>,
-    /// The finest mip each Texture needs, from where the camera will be a
-    /// lead ahead, kept for its memory.
-    needed: HashMap<AssetId, u32>,
-    /// The finest mip each Texture's drawn uses need from where the camera
-    /// is, kept for its memory.
-    drawn_needed: HashMap<AssetId, u32>,
+    /// What each Texture needs, kept for its memory.
+    needed: HashMap<AssetId, Need>,
     /// The camera's position at the last `plan`.
     camera_before: Option<DVec3>,
     /// The `plan`s so far.
@@ -140,7 +145,6 @@ impl MipPriority {
         let camera_before = self.camera_before.replace(camera);
         let camera_before = camera_before.filter(|_| !teleported);
         self.needed.clear();
-        self.drawn_needed.clear();
         self.plans += 1;
         for (chunk, sight) in chunks {
             let uses = self
@@ -159,27 +163,39 @@ impl MipPriority {
                 let lead_metres = (closing.max(0.0) * LEAD_FRAMES).min(CHUNK_EDGE_METRES);
                 let distance_ahead = (distance - lead_metres).max(0.0);
                 let texels_per_metre = texture_use.texels_per_metre;
-                let level = finest_mip_needed(texels_per_metre, distance_ahead);
-                keep_finest(&mut self.needed, texture_use.texture, level);
-                if sight == Sight::Drawn {
-                    let level = finest_mip_needed(texels_per_metre, distance);
-                    keep_finest(&mut self.drawn_needed, texture_use.texture, level);
-                }
-            }
-        }
-        for (&texture, &needed) in &self.needed {
-            let resident = materials.texture_residency(texture);
-            if resident.is_some_and(|(_, resident)| needed <= resident) {
-                self.last_used_plan.insert(texture, self.plans);
+                let ahead = finest_mip_needed(texels_per_metre, distance_ahead);
+                let drawn = match sight {
+                    Sight::Drawn => finest_mip_needed(texels_per_metre, distance),
+                    Sight::Ahead | Sight::Replaced => u32::MAX,
+                };
+                let need = self.needed.entry(texture_use.texture).or_insert(Need {
+                    ahead: u32::MAX,
+                    drawn: u32::MAX,
+                });
+                need.ahead = need.ahead.min(ahead);
+                need.drawn = need.drawn.min(drawn);
             }
         }
         let mut late_mips = 0;
-        for (&texture, &needed) in &self.drawn_needed {
-            if let Some((_, resident)) = materials.texture_residency(texture) {
-                late_mips += resident.saturating_sub(needed);
+        self.requests.clear();
+        for (&texture, need) in &self.needed {
+            let Some((_, resident)) = materials.texture_residency(texture) else {
+                continue;
+            };
+            late_mips += resident.saturating_sub(need.drawn);
+            if need.ahead <= resident {
+                self.last_used_plan.insert(texture, self.plans);
+            }
+            if need.ahead < resident
+                && !self.in_flight.contains(&texture)
+                && !self.refused.contains(&texture)
+            {
+                self.requests.push(MipRequest {
+                    texture,
+                    levels: need.ahead..resident,
+                });
             }
         }
-        self.requests.clear();
         let (needed_by_texture, last_used_plan) = (&self.needed, &self.last_used_plan);
         let eviction_rank = |texture, resident_level| {
             rank(
@@ -191,28 +207,15 @@ impl MipPriority {
             )
         };
         let mut evictable_needs = None;
-        for (&texture, &needed) in needed_by_texture {
-            let Some((_, resident)) = materials.texture_residency(texture) else {
-                continue;
+        self.requests.retain(|request| {
+            let needed = request.levels.start;
+            let Some(class) = materials.full_class_for_mips(request.texture, needed) else {
+                return true;
             };
-            if needed >= resident {
-                continue;
-            }
-            if self.in_flight.contains(&texture) || self.refused.contains(&texture) {
-                continue;
-            }
-            if let Some(class) = materials.full_class_for_mips(texture, needed) {
-                let needs = evictable_needs
-                    .get_or_insert_with(|| materials.coarsest_evictable_needs(&eviction_rank));
-                if needs.get(&class).is_none_or(|&coarsest| coarsest <= needed) {
-                    continue;
-                }
-            }
-            self.requests.push(MipRequest {
-                texture,
-                levels: needed..resident,
-            });
-        }
+            let needs = evictable_needs
+                .get_or_insert_with(|| materials.coarsest_evictable_needs(&eviction_rank));
+            needs.get(&class).is_some_and(|&coarsest| coarsest > needed)
+        });
         self.requests
             .sort_unstable_by_key(|request| (request.levels.start, request.texture.0));
         for request in &self.requests {
@@ -255,21 +258,15 @@ impl MipPriority {
     }
 }
 
-/// Keeps `level` as `texture`'s in `needed` where it is finer.
-fn keep_finest(needed: &mut HashMap<AssetId, u32>, texture: AssetId, level: u32) {
-    let finest = needed.entry(texture).or_insert(level);
-    *finest = (*finest).min(level);
-}
-
 /// `MipPriority::eviction_rank` from its `needed` and `last_used_plan`.
 fn rank(
-    needed: &HashMap<AssetId, u32>,
+    needed: &HashMap<AssetId, Need>,
     last_used_plan: &HashMap<AssetId, u64>,
     texture: AssetId,
     resident_level: u32,
     first_level: u32,
 ) -> Option<EvictionRank> {
-    let finest_mip_needed = needed.get(&texture).copied().unwrap_or(u32::MAX);
+    let finest_mip_needed = needed.get(&texture).map_or(u32::MAX, |need| need.ahead);
     let evictable =
         finest_mip_needed > first_level && finest_mip_needed >= resident_level.saturating_add(2);
     evictable.then(|| EvictionRank {
@@ -280,7 +277,7 @@ fn rank(
 
 /// The uses of streamed Textures by `chunk`'s Placements: each Primitive's
 /// Material, or the Placement's own, and each Texture it samples that has
-/// mips finer than those Resident.
+/// mips finer than its Resident tail, however many of them are Resident.
 fn texture_uses(
     chunk: &LoadedChunk,
     meshes: &LoadedMeshes,
@@ -299,10 +296,10 @@ fn texture_uses(
                 continue;
             };
             for &texture in materials.textures_of(material) {
-                let Some((shape, resident_level)) = materials.texture_residency(texture) else {
+                let Some((shape, _)) = materials.texture_residency(texture) else {
                     continue;
                 };
-                if resident_level == 0 {
+                if shape.resident_tail_level() == 0 {
                     continue;
                 }
                 let (centre, radius, smallest_scale) = *sphere
@@ -390,7 +387,13 @@ mod tests {
     fn a_finest_mip_gives_way_once_its_need_coarsens_by_two() {
         let mut priority = MipPriority::default();
         let (seen, unseen) = (AssetId(1), AssetId(2));
-        priority.needed.insert(seen, 3);
+        priority.needed.insert(
+            seen,
+            Need {
+                ahead: 3,
+                drawn: u32::MAX,
+            },
+        );
         priority.last_used_plan.insert(seen, 7);
 
         assert_eq!(priority.eviction_rank(seen, 2, 0), None);
@@ -411,16 +414,35 @@ mod tests {
         );
     }
 
-    struct TailReader {
-        texture: crate::cooked::CookedTexture,
+    /// Gives every Texture as a 2,048² BC7 Texture with its mips from
+    /// `first_level`, and the Material `id` as one sampling the Texture `id`.
+    struct TextureReader {
+        first_level: u32,
     }
 
-    impl crate::assets::AssetReader for TailReader {
+    impl crate::assets::AssetReader for TextureReader {
         fn material(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMaterial> {
-            anyhow::bail!("no Material {id}")
+            Ok(crate::cooked::CookedMaterial {
+                base_color: [1.0; 4],
+                metallic: 0.0,
+                roughness: 1.0,
+                emissive: [0.0; 3],
+                normal_scale: 1.0,
+                textures: [Some(id), None, None, None, None],
+            })
         }
         fn texture(&self, _id: AssetId) -> anyhow::Result<crate::cooked::CookedTexture> {
-            Ok(self.texture.clone())
+            let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
+            let zeroed_level = |level: u32| {
+                vec![0; crate::cooked::level_bytes(format, 2048, 2048, level as usize)]
+            };
+            Ok(crate::cooked::CookedTexture {
+                format,
+                width: 2048,
+                height: 2048,
+                first_level: self.first_level,
+                levels: (self.first_level..12).map(zeroed_level).collect(),
+            })
         }
         fn mesh(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMesh> {
             anyhow::bail!("no Mesh {id}")
@@ -430,31 +452,28 @@ mod tests {
         }
     }
 
-    /// A Material pool holding `textures`, 2,048² BC7 Textures with only
-    /// their Resident tails, from mip 3, Resident.
-    fn pool_of_tails(
+    fn empty_pool(
         context: &crate::gpu::GpuContext,
-        textures: &[AssetId],
     ) -> (MaterialPool, crate::render::staging::LoadStaging) {
-        let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
-        let level = |level| vec![0; crate::cooked::level_bytes(format, 2048, 2048, level)];
-        let reader = TailReader {
-            texture: crate::cooked::CookedTexture {
-                format,
-                width: 2048,
-                height: 2048,
-                first_level: 3,
-                levels: (3..12).map(level).collect(),
-            },
-        };
         let mut staging = crate::render::staging::LoadStaging::new(context.device.clone());
-        let mut pool = MaterialPool::new(
+        let pool = MaterialPool::new(
             &context.device,
             &crate::stats::gpu_memory::tests::gpu_memory(context),
             &mut staging,
             &crate::assets::PoolCapacities::checked_in(),
             false,
         );
+        (pool, staging)
+    }
+
+    /// A Material pool holding `textures`, 2,048² BC7 Textures with only
+    /// their Resident tails, from mip 3, Resident.
+    fn pool_of_tails(
+        context: &crate::gpu::GpuContext,
+        textures: &[AssetId],
+    ) -> (MaterialPool, crate::render::staging::LoadStaging) {
+        let reader = TextureReader { first_level: 3 };
+        let (mut pool, mut staging) = empty_pool(context);
         for &texture in textures {
             let channel = crate::assets::MaterialChannel::Albedo;
             pool.load_texture(
@@ -571,5 +590,71 @@ mod tests {
         assert_eq!(plan_from(-8.5, -8.2, true), (0, vec![]));
         assert_eq!(plan_from(-318.6, -300.0, false), (0, vec![]));
         staging.submit(&context.queue);
+    }
+
+    /// A drawn Placement 2.5 m away needs mip 1 of its Material's Texture.
+    /// First planned while the Texture is Resident to mip 0, as a Far
+    /// proxy's atlas loads, it keeps that need, so eviction cannot take mip
+    /// 0 from it; once the Texture is evicted to its tail, mip 3, the next
+    /// plan requests mips 1 and 2 and counts them late.
+    #[test]
+    fn a_texture_resident_to_mip_0_when_first_planned_keeps_its_use() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let texture = AssetId(10);
+        let pool_from = |first_level| {
+            let (mut pool, mut staging) = empty_pool(&context);
+            let material = pool
+                .load_making_room(
+                    &context.device,
+                    &mut staging,
+                    &TextureReader { first_level },
+                    texture,
+                    crate::assets::MaterialUse::Ordinary,
+                    &mut |_| false,
+                )
+                .expect("the Material loads");
+            (pool, staging, material)
+        };
+        let (at_mip_0, mut staging_at_mip_0, material) = pool_from(0);
+        let (evicted, mut staging_evicted, material_evicted) = pool_from(3);
+        assert_eq!(material, material_evicted);
+        let mut meshes = LoadedMeshes::default();
+        let mesh = meshes.insert(crate::assets::Mesh {
+            needs_material_handle: false,
+            vertices: 0..0,
+            bounds: [[0.0; 3]; 2],
+            texel_densities: vec![(1.0 / finest_pixel_metres_per_metre() / 2048.0) as f32],
+            materials: vec![Some(material)],
+        });
+        let mut drawn = chunk(1, false);
+        drawn
+            .placements
+            .push(crate::streaming::chunks::ChunkPlacement {
+                transform: Transform::IDENTITY,
+                mesh,
+                material: None,
+            });
+        let mut priority = MipPriority::default();
+        let plan = |priority: &mut MipPriority, pool: &MaterialPool| {
+            let (late_mips, requests) = priority.plan(
+                DVec3::new(0.0, 0.0, -2.5),
+                false,
+                std::iter::once((&drawn, Sight::Drawn)),
+                &meshes,
+                pool,
+            );
+            let requested: Vec<_> = (requests.iter())
+                .map(|request| (request.texture, request.levels.clone()))
+                .collect();
+            (late_mips, requested)
+        };
+
+        assert_eq!(plan(&mut priority, &at_mip_0), (0, vec![]));
+        assert_eq!(priority.eviction_rank(texture, 0, 0), None);
+        assert_eq!(plan(&mut priority, &evicted), (2, vec![(texture, 1..3)]));
+        staging_at_mip_0.submit(&context.queue);
+        staging_evicted.submit(&context.queue);
     }
 }
