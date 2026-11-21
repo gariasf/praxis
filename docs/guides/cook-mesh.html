@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Mesh Cooking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; before the frame &middot; <code>src/cook/mesh.rs</code></div>
+  <h1>Mesh cooking</h1>
+  <p class="definition">The cook of one <span class="concept" data-term="Mesh" data-tip="An ordered list of Primitives that are rendered together. Every LOD of its LOD chain is Resident with it; rays trace its LOD 0.">Mesh</span>: each <span class="concept" data-term="Primitive" data-tip="One contiguous range of a Mesh&#39;s vertices and, in each LOD, of its indices.">Primitive</span> of a glTF file or a procedural scene welded on position, UV and normal, given MikkTSpace tangents, packed as 28-byte vertices with a QTangent, ordered for the vertex cache, overdraw and vertex fetch and cut in order into <span class="concept" data-term="Meshlet" data-tip="A small group of one Primitive&#39;s triangles in one LOD, bounded in vertex and triangle count, that the GPU draws as a unit; culling tests the Instance&#39;s Mesh bounds, not the Meshlet&#39;s (ADR 0019).">Meshlets</span>; then the whole Mesh simplified, each <span class="concept" data-term="LOD" data-tip="One of a Mesh&#39;s cooked simplifications; LOD 0 is the source.">LOD</span> to half the triangles of the one before, on LOD 0's vertices, with every <span class="concept" data-term="Thin Primitive" data-tip="A Primitive declared a tube of a given radius, drawn a pixel wide where it would be narrower, whose shadow ends where it would fall between a pixel and half a pixel wide.">Thin Primitive</span> kept whole and its radius stored; all of it in one Mesh <span class="concept" data-term="Blob" data-tip="One cooked Asset&#39;s bytes, named by their content hash.">Blob</span>, the same bytes on every machine that cooks it.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 53708600 (2026-11-21). A rewrite of this page moves the commit; nothing is appended. <b>Read first:</b> <a href="cook-texture.html#runs">Texture cooking</a> for the Cook key and the Cooked cache, <a href="camera-relative-placement.html">Camera-relative placement</a> for the 128 m a vertex may lie from its pivot, <a href="culling-pass.html#lod">The culling pass</a> for how a LOD is chosen from its LOD error.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>Before the frame, never during it: in <code>praxis cook</code>, one Mesh after another on the calling thread, for each Mesh of a manifest source or a Reference scene whose <span class="concept" data-term="Cook key" data-tip="The hash of everything that determines a Blob: what it cooks from, dependencies, settings and cooker versions. A changed Cook key means the Asset is cooked again.">Cook key</span> changed; in a dev launch, for a Mesh a load names whose Blob is missing or stale; and, its LOD 0 and LOD steps only, inside the <a href="cook-far-proxy.html">Far proxy cook</a>.</dd>
+      <dt>Reads</dt><dd>A Mesh's Primitives as <code>SourcePrimitive</code>s: a <code>Geometry</code> of positions, normals, UVs and indices, a box its bounds must hold, if any, a Thin Primitive's radius, if any, and the <span class="concept" data-term="Asset ID" data-tip="The stable name of an Asset, derived from its source file&#39;s GUID, or a procedural Reference scene&#39;s name. It survives moving and editing the source, except an edit that renames the Asset inside it, gives another item its name, or moves it while its name is missing or shared (the glTF index then names it).">Asset ID</span> of its Material. From glTF through <code>gltf_meshes</code>, from a procedural scene through its <code>meshes</code>.</dd>
+      <dt>Writes</dt><dd>One <code>CookedMesh</code> per Mesh, stored as a Blob of magic <code>PXME</code> and <code>MESH_FORMAT_VERSION</code> 8 into the <span class="concept" data-term="Cooked cache" data-tip="The store of Blobs plus the index from Asset ID to Blob. Disposable: it can always be rebuilt from sources.">Cooked cache</span>, under its Asset ID and Cook key.</dd>
+      <dt>Counted</dt><dd>Not in Frame stats: the cook runs outside the frame. The cook's <code>cook complete</code> log counts Meshes among the Assets cooked and unchanged; the frame later counts what a loaded Mesh takes of the arenas and the triangles it draws.</dd>
+      <dt>Where in the code</dt><dd><code>cook</code>, <code>lod_0</code>, <code>coarser_lods</code>, <code>push_lod</code>, <code>cook_primitive</code>, <code>weld</code>, <code>qtangent</code>, <code>meshlet_triangle_counts</code>, <code>thin_primitive</code>, <code>cook_key</code> and <code>gltf_meshes</code> in <code>src/cook/mesh.rs</code>; <code>mesh_blob</code> and <code>cook_sources</code> in <code>src/cook/mod.rs</code>; the Blob in <code>CookedMesh</code>, <code>CookedLod</code>, <code>CookedPrimitive</code>, <code>CookedMeshlet</code> and <code>CookedVertex</code>, <code>src/assets/cooked.rs</code>; <code>Geometry</code> and <code>Geometry::thin</code> in <code>src/scenes/mod.rs</code>; the compiler flag in <code>.cargo/config.toml</code>.</dd>
+      <dt>Files</dt><dd><code>src/cook/mesh.rs</code>, <code>src/assets/cooked.rs</code></dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#sources-read">1 &middot; What the cook reads</a>
+    <a href="#refusals">2 &middot; What it refuses</a>
+    <a href="#vertices">3 &middot; Weld, tangents, QTangent</a>
+    <a href="#meshlets">4 &middot; Order and Meshlets</a>
+    <a href="#chain">5 &middot; The LOD chain</a>
+    <a href="#thin">6 &middot; Thin Primitives</a>
+    <a href="#machines">7 &middot; The same bytes on every machine</a>
+    <a href="#blob">8 &middot; The Blob and its Cook key</a>
+    <a href="#tests">9 &middot; How it is tested</a>
+    <a href="#cost">10 &middot; What it costs</a>
+    <a href="#why">11 &middot; Why this way</a>
+    <a href="#limits">12 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="sources-read">
+  <div class="part-mark">1 &middot; <code>gltf_meshes</code> &middot; <code>Geometry</code></div>
+  <h2>What the cook reads</h2>
+  <p class="key-idea">Every Mesh reaches the cook in one shape, whatever its source: a list of Primitives, each an indexed triangle list in mesh-local space with the Material it names. A Primitive is declared thin at its source, by a radius in metres, and the cook takes that radius as it is.</p>
+  <p><code>gltf_meshes</code> reads each Mesh of a glTF file: triangles only, positions and normals required, the first UV set or zeros, indices or the vertices in order, and the Material by the Asset ID the Material cook gives it. A procedural scene's <code>meshes</code> builds the same <code>Geometry</code> in code, and a scene's Material is named by the scene's own Asset ID. Either may declare a Primitive thin. In glTF it is a number named <code>thin_radius_metres</code> in the Primitive's <code>extras</code>; a value there that is not a number stops the cook with the Mesh's name.</p>
+<pre class="code"><code>let thin_radius_metres = (primitive.extras().as_deref())
+    .map(|extras| serde_json::from_str::&lt;serde_json::Value&gt;(extras.get()))
+    .transpose()?
+    .as_ref()
+    .and_then(|extras| extras.get("thin_radius_metres"))
+    .map(|radius_metres| {
+        radius_metres.as_f64().with_context(|| {
+            format!("{name:?}: a primitive's thin_radius_metres is {radius_metres}")
+        })
+    })
+    .transpose()?
+    .map(|radius_metres| radius_metres as f32);</code></pre>
+  <p class="code-source"><code>gltf_meshes</code>, <code>src/cook/mesh.rs</code>.</p>
+  <p>In code a scene calls <code>Geometry::thin</code>. <code>town</code> declares its wires at 1.5 cm, its railing posts, top rails and aerial masts at 2.5 cm, the aerial's bars at 1.5 cm, its lamps at 7.5 and 4 cm and its utility poles at 11.5 and 7 cm, the aerial, the lamp and the pole as two Primitives each. A Primitive may also carry a box its Mesh's bounds must hold besides its vertices: a bent Mesh's every shape, or a Far proxy's Chunk.</p>
+</section>
+
+<section class="part prose" id="refusals">
+  <div class="part-mark">2 &middot; <code>cook</code> &middot; <code>thin_primitive</code></div>
+  <h2>What it refuses</h2>
+  <p class="key-idea">A Mesh with a vertex more than 128 m from its pivot is refused, and so is a Primitive declared thin that is not a tube of about its radius. Either stops the cook with a message naming the Mesh.</p>
+<pre class="code"><code>anyhow::ensure!(
+    farthest_metres &lt;= MAX_PIVOT_DISTANCE_METRES,
+    "a vertex lies {farthest_metres:.1} m from the Mesh's pivot, past ADR 0014's {MAX_PIVOT_DISTANCE_METRES} m"
+);</code></pre>
+  <p class="code-source"><code>cook</code>, <code>src/cook/mesh.rs</code>. The Far proxy cook calls <code>lod_0</code> directly and is not held to it.</p>
+  <p><code>thin_primitive</code> checks a declared tube against its normals. An edge whose two ends, each moved inwards along its normal by the radius, land within a quarter of the radius times the normals' difference of each other lies on one ring of the tube; a triangle passes if all its corners lie at the positions of ring vertices and it has such an edge, a side, or every edge no longer than the ring's diameter widened by a quarter, a cap. Any other triangle is refused with its corners. A box declared thin fails, as its faces' normals do not point away from a centre line; a cylinder of six faces at 5 cm cooks declared at 6 cm, not at 7.</p>
+  <p>Passed, the Primitive's cap vertices take the normal of the ring vertex at the same position, so that the cap's rim moves out with the tube's side when the vertex shader widens the tube to a pixel, and nothing opens between them.</p>
+<pre class="code"><code>let mut tube = geometry.clone();
+for (vertex, normal) in (0..).zip(&amp;mut tube.normals) {
+    if !ring_vertices.contains(&amp;vertex)
+        &amp;&amp; let Some(ring_normal) = ring_normals.get(&amp;position_bits(vertex))
+    {
+        *normal = *ring_normal;
+    }
+}</code></pre>
+  <p class="code-source"><code>thin_primitive</code>, <code>src/cook/mesh.rs</code>.</p>
+</section>
+
+<section class="part prose" id="vertices">
+  <div class="part-mark">3 &middot; <code>cook_primitive</code> &middot; <code>weld</code> &middot; <code>qtangent</code></div>
+  <h2>Weld, tangents, QTangent</h2>
+  <p class="key-idea">A Primitive's vertices are welded where position, UV and normal are equal to the bit, given a MikkTSpace tangent per corner, and split again only where two corners of one vertex end up with different tangent frames. Each vertex is then 28 bytes: position and UV in f32 and the whole tangent frame as one quaternion in four 16-bit numbers.</p>
+  <p><code>weld</code> keys each vertex by its eight floats and merges equal keys with meshoptimizer's vertex remap. <code>corner_tangents</code> runs <code>bevy_mikktspace</code> over the welded triangles, which glTF prescribes for a Primitive that brings no tangents, with v flipped, since MikkTSpace puts the bitangent along +v and glTF's v runs down the image while its normal Textures take +Y as up. Each corner then becomes a <code>CookedVertex</code>, and the corners are welded again, on all 28 bytes, so a vertex whose corners disagree on their tangent stays split there.</p>
+<pre class="code"><code>// Corners of one welded vertex stay apart where their QTangents differ.
+let (vertex_count, remap) = meshopt::generate_vertex_remap(&amp;corners, None);
+let vertices = meshopt::remap_vertex_buffer(&amp;corners, vertex_count, &amp;remap);
+let indices = meshopt::remap_index_buffer(None, corners.len(), &amp;remap);</code></pre>
+  <p class="code-source"><code>cook_primitive</code>, <code>src/cook/mesh.rs</code>.</p>
+  <p><code>qtangent</code> builds the frame whose columns are the tangent made perpendicular to the normal, the bitangent and the normal, takes its rotation as a unit quaternion with w made positive, and then gives w the bitangent sign: a quaternion and its negation are the same rotation, so the sign is free to carry it. A w that would round to zero is held at one Snorm16 step, <code>QTANGENT_SMALLEST_W</code>, so that the sign survives.</p>
+<pre class="code"><code>if rotation.w &lt; QTANGENT_SMALLEST_W {
+    let axis =
+        rotation.xyz().normalize() * (1.0 - QTANGENT_SMALLEST_W * QTANGENT_SMALLEST_W).sqrt();
+    rotation = Quat::from_xyzw(axis.x, axis.y, axis.z, QTANGENT_SMALLEST_W);
+}
+if bitangent_sign &lt; 0.0 {
+    rotation = -rotation;
+}
+rotation
+    .to_array()
+    .map(|component| (component * i16::MAX as f32).round() as i16)</code></pre>
+  <p class="code-source"><code>qtangent</code>, <code>src/cook/mesh.rs</code>.</p>
+  <p>Each Primitive also gets its texel density, <code>texel_density</code>: the square root of its triangles' UV area over their area in metres, which mip priority reads later as UV units per metre.</p>
+</section>
+
+<section class="part prose" id="meshlets">
+  <div class="part-mark">4 &middot; <code>lod_0</code> &middot; <code>meshlet_triangle_counts</code> &middot; <code>CookedMeshlet::split</code></div>
+  <h2>Order and Meshlets</h2>
+  <p class="key-idea">Each Primitive's triangles are ordered for the vertex cache and then for overdraw, and cut, in that order, into the longest runs that keep to 64 vertices and 124 triangles. The Meshlets follow the index stream and never reorder it, so a cook changes no image by cutting them.</p>
+  <p><code>cook_primitive</code> ends with meshoptimizer's vertex cache pass and its overdraw pass, which may worsen the cache order by up to <code>OVERDRAW_THRESHOLD</code>, 1.05. <code>lod_0</code> appends the Primitives' vertices and indices one after another, renumbers the whole Mesh's vertices in order of first use for vertex fetch, which keeps each Primitive's vertices one run, and then cuts each Primitive. <code>meshlet_triangle_counts</code> walks the triangles and opens a new Meshlet when the next would pass either limit, as meshoptimizer's scan builder does; <code>CookedMeshlet::split</code> then gives each Meshlet its vertices, numbered in order of first use with each triangle's corners taken lowest first, so that the numbering survives the index codec rotating a triangle.</p>
+<pre class="code"><code>if counts
+    .last()
+    .is_none_or(|&amp;count| count == MESHLET_MAX_TRIANGLES)
+    || run_vertices.len() + new_vertices &gt; MESHLET_MAX_VERTICES
+{
+    for vertex in run_vertices.drain(..) {
+        in_run[vertex as usize] = false;
+    }
+    counts.push(0);
+}</code></pre>
+  <p class="code-source"><code>meshlet_triangle_counts</code>, <code>src/cook/mesh.rs</code>. <code>MESHLET_MAX_VERTICES</code> is 64, as a packed index carries the vertex within its Meshlet in six bits; <code>MESHLET_MAX_TRIANGLES</code> is 124, what a closed mesh of 64 vertices has, so the vertex limit binds first on closed geometry.</p>
+  <p>The Mesh's bounds are the box around its vertices and any box a Primitive brings.</p>
+</section>
+
+<section class="part prose" id="chain">
+  <div class="part-mark">5 &middot; <code>coarser_lods</code></div>
+  <h2>The LOD chain</h2>
+  <p class="key-idea">Each coarser LOD is the one before simplified to half its triangles, the whole Mesh in one call, with normals and UVs weighed beside positions and no error limit. The <span class="concept" data-term="LOD chain" data-tip="A Mesh&#39;s LODs in order, each coarser than the one before.">chain</span> ends at eight LODs, at a LOD that keeps more than 85% of the one before, or at an empty one. Every LOD indexes LOD 0's vertices; only its indices and Meshlets are its own.</p>
+  <p><code>coarser_lods</code> hands meshoptimizer the Mesh's 28-byte vertices for positions and, per vertex, five attributes: the normal decoded from its QTangent, weighted <code>LOD_NORMAL_WEIGHT</code>, 0.5, as the simplifier's own example weighs normals, and the UV divided by the UV units across the Mesh's extent, weighted <code>LOD_UV_WEIGHT</code>, 1. The target is half the indices of the finer LOD, the error limit <code>f32::MAX</code>.</p>
+<pre class="code"><code>let simplified = meshopt::simplify_with_attributes_and_locks(
+    &amp;finer,
+    &amp;positions,
+    attributes.as_flattened(),
+    &amp;weights,
+    size_of::&lt;[f32; 5]&gt;(),
+    &amp;locked,
+    finer.len() / 6 * 3,
+    // No error limit [ref:meshoptimizer-0.25-simplify-error].
+    f32::MAX,
+    meshopt::SimplifyOptions::None,
+    Some(&amp;mut relative_error),
+);
+if simplified.is_empty()
+    || simplified.len() as f32 &gt; finer.len() as f32 * LOD_KEPT_INDICES_CEILING
+{
+    break;
+}
+error_metres += relative_error * extent_metres;</code></pre>
+  <p class="code-source"><code>coarser_lods</code>, <code>src/cook/mesh.rs</code>.</p>
+  <p>The simplifier reports its error relative to the Mesh's extent; times <code>simplify_scale</code> it is metres, and each LOD's <span class="concept" data-term="LOD error" data-tip="How far a LOD strays from LOD 0, in metres.">LOD error</span> is the sum of those down to it, as meshoptimizer advises for a chain each of whose levels starts from the one before. The error mixes position, normal and UV, so it is a measure of its own rather than a distance; the culling pass compares it with a pixel's size at the Instance (<a href="culling-pass.html#lod">The culling pass</a>).</p>
+  <p>Simplifying the whole Mesh in one call collapses a border between two Primitives the same way on both sides, so no crack opens there. The simplifier keeps each triangle on vertices of one Primitive, since no two Primitives share a vertex; the cook splits the result back by Primitive, refuses a triangle that mixes two, and orders and cuts each Primitive's run as LOD 0's. A Primitive a LOD leaves no triangle of keeps an empty run, with its Material.</p>
+  <p><code>push_lod</code> is the other way into a chain, for a cook that simplifies its own geometry: it cooks each Primitive of the new LOD as LOD 0's were and appends only the vertices no earlier LOD holds in the same Primitive, found by their 28 bytes. The Far proxy cook uses it; a source Mesh never does.</p>
+</section>
+
+<section class="part prose" id="thin">
+  <div class="part-mark">6 &middot; <code>coarser_lods</code> &middot; <code>CookedPrimitive</code></div>
+  <h2>Thin Primitives</h2>
+  <p class="key-idea">A Thin Primitive's vertices are locked, so every LOD keeps its whole tube and the halving falls on the Mesh's other Primitives. Its radius is stored with the Primitive in every LOD, where the main pass reads it to widen the tube to a pixel.</p>
+<pre class="code"><code>let locked: Vec&lt;bool&gt; = primitive_of_vertex
+    .iter()
+    .map(|&amp;primitive_index| {
+        mesh.primitives[primitive_index]
+            .thin_radius_metres
+            .is_some()
+    })
+    .collect();</code></pre>
+  <p class="code-source"><code>coarser_lods</code>, <code>src/cook/mesh.rs</code>.</p>
+  <p>Collapsed, a tube of six faces would turn into a ribbon or a line of no width, which the vertex shader cannot widen along its normals. Locked, it stays a tube: a Mesh whose Primitives are all thin, as each of <code>town</code>'s wires, posts, rails, aerials, lamps and poles is, cannot halve, keeps more than 85% of its triangles at the first try and has a chain of one LOD. A Mesh with a thin Primitive beside others, a post beside a sphere in the tests, halves the sphere and keeps the post at every LOD.</p>
+  <p><code>CookedPrimitive</code> holds the radius as <code>thin_radius_metres</code>; a vertex's position less its normal times the radius lies on the tube's centre line, which is what the widening needs. The Blob stores zero for a Primitive that is not thin.</p>
+</section>
+
+<section class="part prose" id="machines">
+  <div class="part-mark">7 &middot; <code>qtangent_normal</code> &middot; <code>.cargo/config.toml</code></div>
+  <h2>The same bytes on every machine</h2>
+  <p class="key-idea">A Mesh Blob is the same bytes on the M4 Pro and on CI's Linux runners. The cook does the arithmetic whose rounding varies by architecture in scalar code, and meshoptimizer's C++ is built without fused multiply-adds; two hash tests fail on a machine that cooks other bytes.</p>
+  <p>glam normalises a quaternion and takes its dot products differently on NEON and on SSE2, so <code>qtangent</code> normalises by hand and <code>qtangent_normal</code>, which decodes the normal the simplifier weighs, is scalar.</p>
+<pre class="code"><code>pub(crate) fn qtangent_normal(qtangent: [i16; 4]) -&gt; [f32; 3] {
+    // Scalar only: glam's SIMD rounds by architecture, and a Blob's bytes must not.
+    let [x, y, z, w] = qtangent.map(f32::from);
+    let length_squared = x * x + y * y + z * z + w * w;
+    [
+        2.0 * (x * z + w * y) / length_squared,
+        2.0 * (y * z - w * x) / length_squared,
+        1.0 - 2.0 * (x * x + y * y) / length_squared,
+    ]
+}</code></pre>
+  <p class="code-source"><code>qtangent_normal</code>, <code>src/cook/mesh.rs</code>.</p>
+  <p>A compiler that fuses a multiply and an add rounds once where meshoptimizer rounds twice, and the simplifier then collapses other edges. The <code>meshopt</code> crate builds meshoptimizer through <code>cc</code>, which reads the flags <code>.cargo/config.toml</code> sets for the two targets that cook:</p>
+<pre class="code"><code># meshoptimizer must not fuse a multiply and an add: a compiler that does cooks other bytes, and a Blob is the same bytes on every machine.
+CXXFLAGS_aarch64_apple_darwin = "-ffp-contract=off"
+CXXFLAGS_x86_64_unknown_linux_gnu = "-ffp-contract=off"</code></pre>
+  <p class="code-source"><code>.cargo/config.toml</code>.</p>
+  <p>The procedural scenes' geometry is part of the input: a sphere's sines and cosines are taken in f64 and rounded, because the platforms' f32 sine and cosine differ. <code>the_reference_scenes_meshes_cook_to_the_same_blobs_on_every_machine</code> hashes every Reference scene's Mesh Blobs and the committed glTF's; <code>the_densest_chunks_proxy_cooks_to_the_same_blob_on_every_machine</code> hashes a Far proxy. A hash that moves on every machine is a change to the cook; one that moves on a single machine has met one of these roundings.</p>
+</section>
+
+<section class="part prose" id="blob">
+  <div class="part-mark">8 &middot; <code>CookedMesh::to_blob</code> &middot; <code>cook_key</code></div>
+  <h2>The Blob and its Cook key</h2>
+  <p class="key-idea">A Mesh Blob is the magic <code>PXME</code>, its format version and one zstd frame at level 19: counts, bounds, the Primitives, each LOD's table, a byte per Meshlet, then meshoptimizer's encoded vertices and every LOD's indices as one encoded stream. A Meshlet stores only its triangle count; its vertices and triangles are rebuilt from its run of the indices on reading.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Field</th><th class="n">Bytes each</th><th>Encoding</th></tr></thead>
+    <tbody>
+      <tr><td>vertex, Primitive and LOD counts</td><td class="n">3 &times; 4</td><td>u32, little-endian</td></tr>
+      <tr><td>bounds, lowest then highest</td><td class="n">6 &times; 4</td><td>f32</td></tr>
+      <tr><td>per Primitive: Material Asset ID, texel density, Thin Primitive radius</td><td class="n">16, 4, 4</td><td>u128 big-endian, zero for none; f32; f32, zero for none</td></tr>
+      <tr><td>per LOD, LOD 0 first: LOD error, index count</td><td class="n">4, 4</td><td>f32 metres; u32</td></tr>
+      <tr><td>per LOD and Primitive: first index, index count, Meshlet count</td><td class="n">3 &times; 4</td><td>u32</td></tr>
+      <tr><td>per Meshlet, every LOD's in order: triangle count</td><td class="n">1</td><td>u8</td></tr>
+      <tr><td>encoded vertices: their byte length, then the stream</td><td class="n">4 + &hellip;</td><td>meshoptimizer's vertex codec 0</td></tr>
+      <tr><td>every LOD's indices</td><td class="n">&hellip;</td><td>meshoptimizer's index codec, one stream</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><code>CookedMesh::from_blob</code> refuses another magic or version with a re-cook message, a LOD count outside 1 to <code>MESH_MAX_LODS</code>, a LOD error that is not finite or is smaller than the finer LOD's, an index count not whole triangles, a Primitive past its LOD's indices, a negative radius, and a Meshlet past its limits. <code>CookedCache::mesh</code> reads one by Asset ID.</p>
+  <p>The Cook key is SHA-256 over the magic, the version, a sentence naming every encoder version and setting, then every field of each Primitive's <code>Geometry</code> and its Material, each length-prefixed. The fields are taken by name, so a field added to <code>Geometry</code> does not compile until the key covers it.</p>
+<pre class="code"><code>let Geometry {
+    positions,
+    normals,
+    uvs,
+    indices,
+    bounds,
+    thin_radius_metres,
+} = geometry;</code></pre>
+  <p class="code-source"><code>cook_key</code>, <code>src/cook/mesh.rs</code>. <code>encoder_settings</code> writes the sentence: <code>bevy_mikktspace</code>'s and meshoptimizer's versions, the vertex codec, the overdraw threshold, the Meshlet limits, the chain's rules and weights, and zstd's version and level.</p>
+  <p>The key does not see the compiler's flags or how the cook rounds; when those changed, <code>MESH_FORMAT_VERSION</code>, which every key covers, was bumped, and every Cooked cache cooked its Meshes once more.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">9 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">The cook is tested at its seam, Primitives in and a Blob read back out: every Reference scene Mesh against its own source triangles, the chain's halving and stop rule on spheres, a closed surface split in two Primitives for cracks, the Thin Primitives' tubes at every LOD, and two hashes for the bytes.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>every_reference_scene_mesh_reads_back_as_cooked_in_valid_meshlets</code></td><td><code>src/cook/mesh.rs</code></td><td>every Reference scene Mesh and glTF Mesh, written to a scratch cache and read back by Asset ID, equals its cook; its Meshlets of at most 64 vertices and 124 triangles hold its triangles in index order, each once, and they are the source's; its bounds are the box around the source's vertices and added boxes</td></tr>
+      <tr><td><code>a_lod_chain_halves_until_its_stop_rule_within_eight_lods_and_its_errors_never_decrease</code></td><td><code>src/cook/mesh.rs</code></td><td>a sphere of 65,024 triangles cooks eight LODs, each between half the one before less one and 85% of it, with errors that grow, the last between 0.01 and 1 m; ten times its size, errors 5 to 20 times larger; a Mesh four fifths of whose triangles cannot collapse ends at LOD 1, and one nine tenths of which cannot has LOD 0 alone</td></tr>
+      <tr><td><code>no_lod_has_a_crack_along_a_border_between_primitives</code></td><td><code>src/cook/mesh.rs</code></td><td>a sphere cooked as two hemispheres keeps every edge matched in every LOD, each Primitive on its own half, while the equator loses at least three quarters of its 64 vertices</td></tr>
+      <tr><td><code>towns_wires_rails_aerials_lamps_and_poles_cook_as_thin_primitives</code></td><td><code>src/cook/mesh.rs</code></td><td>the six Meshes cook with their declared radii in every LOD, and every Thin Primitive keeps LOD 0's index count</td></tr>
+      <tr><td><code>a_thin_primitive_keeps_every_triangle_at_each_lod_of_a_mesh_that_simplifies</code></td><td><code>src/scenes/town.rs</code></td><td>a post beside a sphere keeps all its indices at every LOD of a chain longer than one</td></tr>
+      <tr><td><code>the_cook_takes_a_thin_primitive_only_as_a_tube_near_its_declared_radius</code></td><td><code>src/scenes/town.rs</code></td><td>wires and cylinders cook within a quarter of their radius and not past it; a box, a post merged with a box, a radius of zero and one of NaN are refused</td></tr>
+      <tr><td><code>a_thin_primitives_cap_vertices_cook_with_their_rings_normals</code></td><td><code>src/scenes/town.rs</code></td><td>every vertex of a post and of a tapered pole, moved in by the radius along its cooked normal, lands on the centre line</td></tr>
+      <tr><td><code>a_thin_primitive_without_radial_normals_is_refused_by_mesh_and_primitive</code></td><td><code>src/cook/mod.rs</code></td><td>a flat plane declared thin fails the cook, naming the Mesh and the Primitive</td></tr>
+      <tr><td><code>a_gltf_primitives_extras_declare_it_thin</code></td><td><code>src/cook/mesh.rs</code></td><td>a number under <code>thin_radius_metres</code> declares a radius, no <code>extras</code> or a non-object none, and a string is refused</td></tr>
+      <tr><td><code>the_reference_scenes_meshes_cook_to_the_same_blobs_on_every_machine</code></td><td><code>src/cook/mesh.rs</code></td><td>the SHA-256 of every Reference scene's Mesh Blobs and the committed glTF's, equal on the M4 Pro and CI's Linux jobs</td></tr>
+      <tr><td><code>the_densest_chunks_proxy_cooks_to_the_same_blob_on_every_machine</code></td><td><code>src/cook/far_proxy.rs</code></td><td>the same for a Far proxy, which goes through <code>lod_0</code> and <code>push_lod</code></td></tr>
+      <tr><td><code>mesh_blob_round_trips_its_lod_chain_and_thin_radius_and_refuses_format_version_4</code></td><td><code>src/assets/cooked.rs</code></td><td>a Mesh of two Primitives and three LODs, one leaving a Primitive empty, reads back as written with its radius; a negative radius and an older version are refused</td></tr>
+      <tr><td><code>the_cook_key_covers_every_part_a_mesh_cooks_from</code></td><td><code>src/cook/mesh.rs</code></td><td>a change to any field of the Geometry, its bounds and radius included, or to its Material changes the Cook key</td></tr>
+      <tr><td><code>qtangents_decode_to_their_frame_within_snorm16_precision</code></td><td><code>src/cook/mesh.rs</code></td><td>frames about every axis and near the half turns decode within four Snorm16 steps, with their bitangent sign</td></tr>
+      <tr><td><code>a_plane_has_its_uv_aligned_tangent_frame</code></td><td><code>src/cook/mesh.rs</code></td><td>a plane's tangent is +X, its normal +Y and its bitangent sign +1</td></tr>
+      <tr><td><code>a_triangle_soup_plane_welds_to_four_vertices</code>, <code>sci_fi_helmet_welds_to_14085_vertices</code></td><td><code>src/cook/mesh.rs</code></td><td>the weld: two triangles of six corners to four vertices, and the helmet to the 14,085 the compression research counted</td></tr>
+      <tr><td><code>a_square_metre_quad_has_the_uv_units_per_metre_its_uvs_span</code></td><td><code>src/cook/mesh.rs</code></td><td>texel density 1 and 2 for UVs spanning 1 and 2 per metre</td></tr>
+      <tr><td><code>a_mesh_reaching_past_128_m_from_its_pivot_is_refused</code></td><td><code>tests/cook.rs</code></td><td>a vertex at 128 m cooks and one at 128.1 m is refused, naming the Mesh</td></tr>
+      <tr><td><code>every_reference_scene_mesh_cooks_and_reads_back</code></td><td><code>tests/cook.rs</code></td><td>a cook of the asset tree reads every scene's Meshes back, and SciFiHelmet, when fetched, at no more than <code>HELMET_MESH_BYTES_PER_TRIANGLE</code>, 15.29 bytes per LOD 0 triangle</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">10 &middot; <code>praxis cook</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">The Mesh cook costs cook time and bytes, never frame time. A Blob holds its whole chain in about 15 bytes per LOD 0 triangle on the helmet; the chain's indices add about as many again as LOD 0's, and its vertices nothing.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Mesh</th><th class="n">Vertices</th><th class="n">Triangles per LOD</th><th class="n">LOD error of the last, m</th><th class="n">Meshlets, LOD 0</th><th class="n">Blob, bytes</th><th class="n">Bytes per LOD 0 triangle</th></tr></thead>
+    <tbody>
+      <tr class="focus"><td>SciFiHelmet</td><td class="n">14,127</td><td class="n">23,358 &middot; 11,679 &middot; 5,838 &middot; 2,918 &middot; 1,453 &middot; 720</td><td class="n">0.7049</td><td class="n">278</td><td class="n">356,958</td><td class="n">15.28</td></tr>
+      <tr><td><code>orrery</code>'s sphere</td><td class="n">1,223</td><td class="n">2,208 &middot; 1,103 &middot; 550 &middot; 274 &middot; 136 &middot; 67 &middot; 32 &middot; 15</td><td class="n">0.6780</td><td class="n">27</td><td class="n">23,767</td><td class="n">10.76</td></tr>
+      <tr><td><code>town</code>'s red car, three Primitives</td><td class="n">216</td><td class="n">168 &middot; 84 &middot; 42 &middot; 28</td><td class="n">1.7438</td><td class="n">5</td><td class="n">1,844</td><td class="n">10.98</td></tr>
+      <tr><td><code>town</code>'s wire, thin</td><td class="n">64</td><td class="n">90</td><td class="n">&mdash;</td><td class="n">1</td><td class="n">1,244</td><td class="n">13.82</td></tr>
+      <tr><td><code>town</code>'s utility pole, two thin Primitives</td><td class="n">60</td><td class="n">48</td><td class="n">&mdash;</td><td class="n">2</td><td class="n">1,094</td><td class="n">22.79</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Read back from a scratch Cooked cache that a release build of <code>praxis::cook::cook</code> at 53708600 wrote for <code>town</code>, <code>helmet</code> and <code>orrery</code> on the Apple M4 Pro; the bytes are the same on every machine. Of <code>town</code>'s 21 Meshes, ten have two to four LODs; the six with Thin Primitives have one, and so do the box, the bird, the bench, the solar panel and the lamp head, whose first halving keeps more than 85%.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">11 &middot; ADRs 0014, 0018, 0019, 0027</div>
+  <h2>Why this way</h2>
+  <p><b>A discrete chain, cooked.</b> A chain of simplified LODs, picked per Instance by projected error, is what shipped engines cook; ADR 0019 rules out virtual geometry beside 4x MSAA, as Nanite and Bevy's meshlets draw without MSAA and Nanite hides its switches with TAA. The LOD survey (<code>docs/research/lod-hlod-and-far-field.md</code>) estimated that drawing half of <code>town</code>'s indices takes about a third off its gate.</p>
+  <p><b>LOD 0's vertices, not each LOD's own.</b> Unique vertices per LOD would let a coarse LOD move its vertices to fit better, at about twice the vertex memory; the simplifier's default reuses the source's, the survey's first option, and the cook takes it. Only the Far proxy cook, whose faces need normals of their own, appends vertices.</p>
+  <p><b>Each LOD from the one before, its error summed.</b> Simplifying each LOD from LOD 0 is the other way meshoptimizer names; starting from the previous LOD is more efficient and gives smoother transitions between LODs, and its errors are then accumulated for selection.</p>
+  <p><b>The whole Mesh in one call.</b> Simplified Primitive by Primitive, two Primitives sharing a border would each collapse it their own way and open a crack between them; in one call both sides collapse the same edges.</p>
+  <p><b>Meshlets in index order.</b> ADR 0018 cuts each Primitive as meshoptimizer's scan builder does. Its spatial builder reorders the triangles, the index codec then rotates them differently, and images changed; in order, the vertex cache and overdraw passes' order is the drawn order.</p>
+  <p><b>A 28-byte vertex with a QTangent.</b> ADR 0018 packs the normal, tangent and bitangent sign into one quaternion against the 48 bytes before; positions stay f32, as 16 bits over a 256 m pivot range would be 3.9 mm, past ADR 0014's bar.</p>
+  <p><b>Thin Primitives declared, not found.</b> ADR 0027 widens a Thin Primitive's vertices from its centre line until it draws a pixel wide, which needs a radius the cook can check against the normals. Declared at the source, the radius is the author's, and the cook only refuses a shape that is not the tube it claims; locking it keeps that tube in every LOD, where a collapsed one could not be widened.</p>
+  <p><b>Bytes fixed by the source.</b> A Blob is named by its content hash, so two machines that round differently cook two Blobs for one source and tests that compare against one of them fail on the other. Scalar arithmetic and an unfused build make the bytes a property of the source alone.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">12</div>
+  <h2>Limits</h2>
+  <p><b>The error is the simplifier's.</b> A LOD error mixes position with weighted normals and UVs and is summed over the chain, so it is not the distance a surface moved: on a Far proxy's roof slab the simplifier's measure read about a tenth under the true drop.</p>
+  <p><b>A chain may end early.</b> It ends at the first LOD that keeps more than 85% of the one before, though a later step might collapse more; a Mesh of locked or faceted Primitives keeps LOD 0 alone.</p>
+  <p><b>No error limit.</b> Every LOD halves whatever it costs, so a coarse LOD of a small Mesh may stray by metres, as <code>town</code>'s ground does at 86 m for one triangle; the selection threshold, not the cook, keeps it from being drawn near.</p>
+  <p><b>A Thin Primitive halves nothing.</b> A Mesh of tubes draws its LOD 0 at every distance until the culling pass drops it, once its widest tube keeps no sample.</p>
+  <p><b>Rounding outside the cook.</b> Sines and cosines in <code>town</code>'s tubes and rotations through glam's SIMD in the scenes are left as they are, because every machine's hash agrees today; a change to their inputs can move a hash on one machine alone.</p>
+  <p><b>Tangents only from MikkTSpace.</b> A glTF Primitive's own tangents are ignored and recomputed, and a degenerate face gets a default tangent.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">The sources the code cites, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under each key.</p>
+  <dl class="reading">
+    <dt><a href="https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L521-L554">meshoptimizer 0.25, README, Simplification and Advanced simplification</a></dt><dd>each LOD simplified from the one before, its errors accumulated for selection, and the source's vertices reused; <code>meshoptimizer-0.25-lod-chain</code></dd>
+    <dt><a href="https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L446-L452">meshoptimizer 0.25, README, Basic simplification</a></dt><dd>the largest float disables the error limit; <code>meshoptimizer-0.25-simplify-error</code></dd>
+    <dt><a href="https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L540-L546">meshoptimizer 0.25, the simplifier's scale</a></dt><dd>a relative error times the scale is absolute; <code>meshoptimizer-0.25-simplify-scale</code></dd>
+    <dt><a href="https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L470-L480">meshoptimizer 0.25, README, Attribute-aware simplification</a></dt><dd>the normal weight of 0.5; <code>meshoptimizer-0.25-attribute-weights</code></dd>
+    <dt><a href="https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L552">meshoptimizer 0.25, README, a mesh of several materials</a></dt><dd>a triangle stays on one material's vertices; <code>meshoptimizer-0.25-simplify-materials</code></dd>
+    <dt><a href="https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L421-L467">meshoptimizer 0.25, the vertex lock flags</a></dt><dd>a locked vertex does not move; <code>meshoptimizer-0.25-vertex-lock</code></dd>
+    <dt><a href="https://github.com/zeux/meshoptimizer/blob/v0.25/src/clusterizer.cpp#L360-L370">meshoptimizer 0.25, the scan Meshlet builder</a></dt><dd>how a run is cut, a degenerate triangle's repeated corner counted twice; <code>meshoptimizer-0.25-scan-meshlets</code></dd>
+    <dt><a href="https://github.com/zeux/meshoptimizer/blob/v0.25/src/vertexcodec.cpp#L125">meshoptimizer 0.25, the default vertex codec</a> and <a href="https://github.com/zeux/meshoptimizer/blob/v0.25/src/vertexcodec.cpp#L701-L713">its block size</a></dt><dd>codec 0, and 256 vertices a block at 28 bytes; <code>meshoptimizer-0.25-vertex-codec</code>, <code>meshoptimizer-0.25-vertex-block</code></dd>
+    <dt><a href="https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc?plain=1#L1759">glTF 2.0 specification, Meshes</a></dt><dd>missing tangents computed by MikkTSpace, and the bitangent from the normal, the tangent and its sign; <code>gltf-2.0-mikktspace-tangents</code>, <code>gltf-2.0-tangent-bitangent</code></dd>
+    <dt><a href="https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc?plain=1#L2299">glTF 2.0 specification, Textures</a> and <a href="https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/schema/material.schema.json#L65">the normal Texture's schema</a></dt><dd>v runs down the image and a normal Texture's +Y is up, so v is flipped for MikkTSpace; <code>gltf-2.0-texture-origin</code>, <code>gltf-2.0-normal-texture-convention</code></dd>
+    <dt><a href="https://docs.unity.com/en-us/engine/6000.0/script-reference/unityengine/mesh/getuvdistributionmetric">Unity 6.0, Mesh.GetUVDistributionMetric</a></dt><dd>texel density as triangle area over UV area, which the cook inverts as a length; <code>unity-6000-uv-distribution-metric</code></dd>
+  </dl>
+  <p class="note">The surveys behind the choices are <code>docs/research/asset-compression-and-cooked-data.md</code> for the vertex, the weld and the codecs, and <code>docs/research/lod-hlod-and-far-field.md</code> for the chain.</p>
+  <h3>History</h3>
+  <p class="note">The Mesh cook first replaced 48-byte runtime vertices with the welded 28-byte QTangent vertex and meshoptimizer's ordering and codecs, then cut each Primitive into Meshlets for the culling pass. The far field brought the LOD chain into the Blob, with each LOD's error and its own indices and Meshlets on LOD 0's vertices; then Thin Primitives, declared at their source with their radius checked and stored, and kept whole at every LOD; and, when CI's machines were found to cook other chains than the M4 Pro, the scalar arithmetic and unfused build that make a Blob the same bytes everywhere. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/cook/mesh.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/cook/mod.rs</code>, <code>src/cook/launch.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/scenes/town.rs</code>, <code>.cargo/config.toml</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0014, 0018, 0019 and 0027, and one release-build cook on the M4 Pro, all at <code>main</code> 53708600.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="box-filtering.html">Previous: Box filtering</a><a href="index.html">All field guides</a><a href="cook-chunk.html">Next: Chunk cooking</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>
