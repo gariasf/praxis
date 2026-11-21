@@ -181,13 +181,8 @@ scripts/sweep.sh               # the nightly sweep: re-benches a slower
                                  a needs-triage issue per pinned Regression
                                  (`praxis history regressions`), then
                                  benches main's scenes lacking a record on a
-                                 Series here, on a quiet machine; on the RTX
-                                 2070 SUPER then runs the Goldens test and
-                                 opens a pull request re-recording the
-                                 counters that moved; beside it
-                                 its launchd
-                                 (sweep.plist) and Task Scheduler
-                                 (sweep-task.xml) definitions
+                                 Series here, on a quiet M4 Pro; beside it
+                                 its launchd definition (sweep.plist)
 scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  tests with Goldens, bench counters
                                  against Baselines and Budgets
