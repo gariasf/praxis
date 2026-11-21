@@ -1277,8 +1277,8 @@ mod tests {
         }
     }
 
-    /// An entry's custom data is its slot, of which wgpu keeps the lower 24
-    /// bits [ref:wgpu-30-tlas-instance-fields].
+    /// An entry's custom data is its slot, of which wgpu accepts only the
+    /// lower 24 bits [ref:wgpu-30-tlas-instance-fields].
     #[test]
     fn every_slot_the_checked_in_budgets_give_fits_an_entrys_custom_data() {
         let capacities = RenderCapacities::checked_in();

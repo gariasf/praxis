@@ -262,9 +262,11 @@ When reviewing changes, check for:
       (`docs/agents/workflow.md`, Review: Sources)
 - [ ] Every name the change renames, removes or changes the behaviour
       of (pass, buffer, format, Blob field, constant) is grepped in
-      comments, ADRs and `CONTEXT.md`; each clause the change makes
-      false (a doc comment, an "until", "today", "yet" or count, a
-      Consequence, a prediction) is rewritten or dated in the same PR;
+      comments, ADRs, `CONTEXT.md` and `docs/research/`; each clause
+      the change makes false (a doc comment, an "until", "today", "yet"
+      or count, a Consequence, a prediction, a research note's account
+      of Praxis, or its open question a measure answers) is rewritten
+      or dated in the same PR;
       a new glossary term is grepped against `pub struct`/`enum` names
       and a same-named item of another meaning goes in its `_Avoid_`
       line

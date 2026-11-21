@@ -3343,9 +3343,9 @@ checked = 2026-10-27
 
 ["erikson-2001-hlod"]
 url = "https://doi.org/10.1145/364338.364376"
-section = "Erikson, Manocha and Baxter, I3D 2001, pp. 111-120 (title and venue per Crossref)"
-quote = '''HLODs for faster display of large static and dynamic environments [...] Proceedings of the 2001 symposium on Interactive 3D graphics'''
-checked = 2026-10-27
+section = "Erikson, Manocha and Baxter, HLODs for faster display of large static and dynamic environments, I3D 2001, pp. 111-120, abstract (as OpenAlex serves the ACM record)"
+quote = '''We augment the LODs with automatically-generated hierarchical levels of detail (HLODs) that serve as higher fidelity drastic simplifications of entire branches of the scene graph.'''
+checked = 2026-11-21
 
 ["yoon-2004-quick-vdr"]
 url = "https://doi.org/10.1109/VISUAL.2004.86"
@@ -5051,6 +5051,7 @@ cost = '''"The Matrix Awakens" - UE5 demo PS5, 1080p: Baseline: Overlapping: Tra
 url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=118"
 section = "Wright et al. (Epic Games), Lumen: Real-time Global Illumination in Unreal Engine 5, SIGGRAPH 2022 Advances, PDF p. 118, Dealing with Instance and Geometric Complexity, slide and notes"
 quote = '''TLAS complexity ○ Rebuilt every frame ○ 100K instance limit, but 1M expected instances [...] Our system rebuilds the top-level acceleration structure every frame and early experiments suggested that our model would be limited to 100K instances. At the time of the experiment, content dressing was approaching 500k active instances, with the intention of reaching 1M.'''
+checked = 2026-11-21
 
 ["decima-2017-static-tiles"]
 url = "https://www.guerrilla-games.com/media/News/Files/GCAP2017_DecimaVisibility.pdf#page=21"
@@ -5646,8 +5647,8 @@ checked = 2026-11-21
 url = "https://advances.realtimerendering.com/s2019/hair_presentation_final.pdf#page=28"
 section = "Tafuri, Strand-based Hair Rendering in Frostbite, SIGGRAPH 2019 Advances in Real-Time Rendering, slides 28-30 and 34, speaker notes"
 quote = '''Since the strands are very thin, they will usually have a width that is less than that of a screen pixel. We therefore need to take the pixel size into account when tessellating, and increase the width appropriately, or we will risk getting missing or broken up hair strands. [...] this will have another not so nice side effect which can cause the hair to look too thick [...] Just enabling MSAA does unfortunately not solve all problems. While it does improve on aliasing issues [...] It will suffer an even bigger performance hit due to overdraw [...] So before talking about performance I need to again point out that this is still very much work in progress. [...] we have always rendered and simulated all the strands in our test models, which is probably not something someone would do in a game. [...] here are some numbers showing what the performance is currently like on a regular PS4 at 900p resolution, without MSAA, with the hair covering a big chunk of the screen.'''
-cost = '''Regular PS4, 900P, no MSAA, all strands rendered [...] Long hair 10 000 [strands] 240 000 [points] 4.7ms [physics] 4.5ms [render] Short hair 15 000 75 000 0.4ms 1.9ms'''
-checked = 2026-11-14
+cost = '''Regular PS4, 900P, no MSAA, all strands rendered Asset: # Strands: # Points: Physics: Render Long hair: 10 000: 240 000: 4.7ms: 4.5ms Short hair: 15 000: 75 000: 0.4ms: 1.9ms'''
+checked = 2026-11-21
 
 ["garland-1997-qem"]
 url = "https://www.cs.cmu.edu/~garland/Papers/quadrics.pdf#page=1"
@@ -5726,9 +5727,9 @@ checked = 2026-11-21
 ["karis-2021-instance-cull-cost"]
 url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=110"
 section = "Karis, Nanite, SIGGRAPH 2021 Advances, Pipeline numbers p. 109 and Performance p. 110; hardware not stated"
-quote = '''Main pass Instances pre-cull 896322 Instances post-cull 3668 [...] Post pass Instances pre-cull 102804 Instances post-cull 365'''
+quote = '''Main pass Instances pre-cull: 896322 Instances post-cull: 3668 [...] Post pass Instances pre-cull: 102804 Instances post-cull: 365'''
 cost = '''Average ~2496x1404 upsampled to 4k [...] ~2.5ms to draw entire VisBuffer [...] Main Pass: InstanceCull 108ms Main Pass: ClusterCull 406us [...] Post Pass: InstanceCull 125us'''
-checked = 2026-11-06
+checked = 2026-11-21
 
 ["karis-2021-instance-cull-single-dispatch"]
 url = "https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf#page=15"
@@ -6568,10 +6569,10 @@ checked = 2026-11-21
 
 ["meshoptimizer-0.25-vertex-lock"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L421-L467"
-section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/meshoptimizer.h, the vertex lock flags (L421-L426) and the documentation of meshopt_simplifyWithAttributes (L467)"
+section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/meshoptimizer.h, the vertex lock flags (L421-L427) and the documentation of meshopt_simplifyWithAttributes (L467)"
 quote = '''Experimental: Simplification vertex flags/locks, for use in `vertex_lock` arrays in simplification APIs [...] /* Do not move this vertex. */
 	meshopt_SimplifyVertex_Lock = 1 << 0, [...] vertex_lock can be NULL; when it's not NULL, it should have a value for each vertex; 1 denotes vertices that can't be moved'''
-checked = 2026-11-16
+checked = 2026-11-21
 
 ["meshopt-0.6.2-simplify-options"]
 url = "https://docs.rs/crate/meshopt/0.6.2/source/src/simplify.rs"
