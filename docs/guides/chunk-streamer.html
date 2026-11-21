@@ -116,16 +116,16 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
   <div class="eyebrow">Praxis &middot; Chunks &middot; <code>src/streaming/</code></div>
   <h1>The Chunk streamer</h1>
-  <p class="definition">The module that decides, each frame, which <span class="concept" data-term="Chunk" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk's edge.">Chunks</span> of a <span class="concept" data-term="Game world" data-tip="The playable space, divided into Chunks.">Game world</span> to request, keep and unload around the camera, from the camera's <span class="concept" data-term="World position" data-tip="A position in a Game world, in metres from its origin. Positions relative to the camera, a Chunk or a parent entity derive from it.">World position</span> and the loads its IO finished, and reports its <span class="concept" data-term="Late Chunk" data-tip="A Chunk the camera came within the Load radius of before it was loaded.">Late Chunks</span>, its hold after a teleport and whether the frame is Settled; with the IO pool that reads and decodes Chunks, and the mips mip streaming requests, off the main thread, it keeps the World's loaded Chunks.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 4e3a8793 (2026-11-12), with a load that waits on a Chunk read in flight as this change leaves it. A change to the Chunk streamer rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="cook-chunk.html">Chunk cooking</a> for the Chunks it streams and the Asset IDs their Placements name; <a href="prepare.html#slots">Prepare</a> for the slot ranges loaded Chunks take.</p>
+  <p class="definition">The module that decides, each frame, which <span class="concept" data-term="Chunk" data-tip="A fixed-size vertical column of the Game world, addressed by integer coordinates, that loads and unloads as a unit with its Placements and lights. A Placement belongs to the Chunk that holds its pivot, so its Mesh may reach past the Chunk's edge.">Chunks</span> of a <span class="concept" data-term="Game world" data-tip="The playable space, divided into Chunks.">Game world</span> to request, keep and unload around the camera, from the camera's <span class="concept" data-term="World position" data-tip="A position in a Game world, in metres from its origin. Positions relative to the camera, a Chunk or a parent entity derive from it.">World position</span> and the loads its IO finished, and reports its <span class="concept" data-term="Late Chunk" data-tip="A Chunk the camera came within the Load radius of before it was loaded: before its Placements were placed, which a streamed load does once the BLASes of the Meshes it brings are built and compacted.">Late Chunks</span>, its hold after a teleport and whether the frame is Settled; with the IO pool that reads and decodes Chunks, their <span class="concept" data-term="Far proxy" data-tip="A Mesh cooked per Chunk, drawn in place of the Chunk's Placements while the Chunk is within the View distance and not drawn, outside the Load radius or a Late Chunk within it: the Chunk's static Placements merged, with a Material baked for it and the Chunk's ground tiles (ADR 0026).">Far proxies</span> and the mips mip streaming requests, off the main thread, it keeps the World's loaded Chunks and, through a second streamer whose radius is the View distance, its Resident Far proxies.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 62052fe8 (2026-11-21). A change to the Chunk streamer rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="cook-chunk.html">Chunk cooking</a> for the Chunks it streams and the Asset IDs their Placements name, <a href="cook-far-proxy.html">Far proxy cooking</a> for the Far proxies; <a href="prepare.html">Prepare</a> for the slot ranges loaded Chunks and Far proxies take; <a href="blas.html">BLASes</a> for the builds a streamed load waits for before it is placed.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
-      <dt>Runs</dt><dd>Once a frame, in <code>State::update</code> after the Ticks and before prepare, through <code>ChunkStreaming::update</code>; with a Settled wait, which capture, the Goldens and the bench's frames up to the end of its counter frames take, again until the frame is Settled; mip streaming runs after its loads in each pass (<a href="mip-streaming.html">Mip streaming</a>). The streamer itself reads no GPU state, records no GPU work and reads no clock; <code>ChunkStreaming</code> reads one, to time a <span class="concept" data-term="Fast travel" data-tip="A teleport of the camera. The Chunk streamer holds until every Chunk within the Load radius has loaded, the camera path pauses until then, and the hold is timed from the jump. None of its Chunks is a Late Chunk.">Fast travel</span>'s hold; the IO pool's four threads read and decode beside the frame.</dd>
-      <dt>Reads</dt><dd>The camera's World position, whether it teleported, from the <code>Camera</code> resource's <code>teleported</code>, which <code>ChunkStreaming</code> clears, and each finished load from its <code>ChunkIo</code>: the Chunk's coordinates and the Mesh and Material Asset IDs its Placements name, or none when the load failed. Which Chunks exist and the <span class="concept" data-term="Load radius" data-tip="The horizontal distance from the camera within which Chunks are loaded.">Load radius</span> are given at creation, from the scene's <code>chunk_coordinates</code> and <code>load_radius_metres</code>.</dd>
-      <dt>Writes</dt><dd>Its requests, nearest first, to its <code>ChunkIo</code>, and a <code>ChunkFrame</code>: the Chunks requested, loaded, not loaded, held and unloaded this frame, the Assets whose last user unloaded, the Late Chunks, whether it holds and whether the frame is Settled. Through <code>ChunkStreaming</code>, the frame's <code>StreamedFrame</code>, which reports whether the camera still holds and, on the frame a Fast travel's hold ends, its time from the jump; the Chunks loaded into the Mesh and Material pools, nearest the camera first and up to the frame's load bytes, and the World's <code>LoadedChunks</code>: loads join it, unloads leave it and give back their pool users, held Chunks are marked.</dd>
-      <dt>Counted</dt><dd>Frame stats' <code>late_chunks</code>, <code>chunks_loaded</code>, <code>chunks_unloaded</code>, <code>bytes_read</code>, which counts mip streaming's reads too, and <code>pool_entries_freed</code>, which the bench's <code>Counters</code> sum over their frames; <code>chunks_not_loaded</code>, and the pools' refusals since the frame before, <code>meshes_refused</code> and <code>materials_refused</code>, which the traversal sums; the bytes its loads write into the load staging, in <code>uploaded_bytes</code>; <code>holding</code> and <code>fast_travel_hold</code>, which the bench reduces to a Fast travel's hold; the CPU stage <code>stream_chunks</code>.</dd>
-      <dt>Where in the code</dt><dd><code>ChunkStreamer</code>, <code>ChunkIo</code>, <code>FinishedLoad</code>, <code>ChunkFrame</code> and <code>ChunkStreamer::within_hold_radius</code> in <code>src/streaming/mod.rs</code>; <code>ChunkStreaming</code> with <code>cook_ahead</code>, <code>StreamedFrame</code>, the IO pool, <code>IoRequest</code>, <code>decode_chunk</code> and <code>DecodedReader</code> in <code>src/streaming/io.rs</code>; <code>LoadedChunks</code> in <code>src/streaming/chunks.rs</code>; the Chunk's edge, <code>CHUNK_EDGE_METRES</code>, in <code>src/assets/cooked.rs</code>.</dd>
+      <dt>Runs</dt><dd>Once a frame, in <code>State::update</code> after the Ticks and before prepare, through <code>ChunkStreaming::update</code>: the Mesh pool's BLASes polled, the Chunks' streamer, in a scene with a <span class="concept" data-term="Far field" data-tip="The band between the Load radius and the View distance, where Far proxies are drawn.">Far field</span> the Far proxies' streamer within the same caps, then mip streaming (<a href="mip-streaming.html">Mip streaming</a>); with a Settled wait, which capture, the Goldens and the bench's frames up to the end of its counter frames take, again until the frame is Settled. The streamer itself reads no GPU state, records no GPU work and reads no clock; <code>ChunkStreaming</code> reads one, to time a <span class="concept" data-term="Fast travel" data-tip="A teleport of the camera. The Chunk streamer holds until every Chunk within the Load radius has loaded, the camera path pauses until then, and the hold is timed from the jump. Its fill, from the hold's end until every Far proxy within the View distance is Resident, is timed too. None of its Chunks is a Late Chunk, and none of the Far proxies that fill the Far field after it is a Late Far proxy.">Fast travel</span>'s hold and its Far field's fill; the IO pool's four threads read and decode beside the frame.</dd>
+      <dt>Reads</dt><dd>The camera's World position, whether it teleported, from the <code>Camera</code> resource's <code>teleported</code>, which <code>ChunkStreaming</code> clears, and each finished load from its <code>ChunkIo</code>: the Chunk's coordinates and the Mesh and Material Asset IDs its Placements name, or none when the load failed. Which Chunks exist, the <span class="concept" data-term="Load radius" data-tip="The horizontal distance from the camera within which Chunks are loaded.">Load radius</span> and the <span class="concept" data-term="View distance" data-tip="How far from the camera the Game world is drawn: 2 km at target scale (ADR 0013), never less than the Load radius.">View distance</span> are given at creation, from the scene's <code>chunk_coordinates</code>, <code>load_radius_metres</code> and <code>view_distance_metres</code>.</dd>
+      <dt>Writes</dt><dd>Its requests, nearest first, to its <code>ChunkIo</code>, and a <code>ChunkFrame</code>: the Chunks requested, loaded, not loaded, held and unloaded this frame, the Assets whose last user unloaded, the Late Chunks, whether it holds and whether the frame is Settled. Through <code>ChunkStreaming</code>, the frame's <code>StreamedFrame</code>; the Chunks and Far proxies loaded into the Mesh and Material pools, nearest the camera first, up to the frame's loads and load bytes, and placed once their BLASes are ready, up to the frame's placed Instances; the World's <code>LoadedChunks</code> and <code>ResidentFarProxies</code>: placed loads join them, unloads leave them and give back their pool users, held ones are marked.</dd>
+      <dt>Counted</dt><dd>Frame stats' <code>late_chunks</code>, <code>late_far_proxies</code>, <code>chunks_loaded</code>, <code>chunks_unloaded</code>, <code>bytes_read</code>, which counts Far proxies' and mip streaming's reads too, and <code>pool_entries_freed</code>, which the bench's <code>Counters</code> sum over their frames; <code>chunks_not_loaded</code>, and the pools' refusals since the frame before, <code>meshes_refused</code> and <code>materials_refused</code>, which the traversal sums; the bytes its loads write into the load staging, in <code>uploaded_bytes</code>; <code>holding</code> and <code>fast_travel_hold</code>, <code>far_field_filling</code> and <code>far_field_fill</code>, which the bench reduces to a Fast travel's hold and fill; the CPU stage <code>stream_chunks</code>.</dd>
+      <dt>Where in the code</dt><dd><code>ChunkStreamer</code>, <code>ChunkIo</code>, <code>FinishedLoad</code>, <code>ChunkFrame</code> and <code>ChunkStreamer::within_hold_radius</code> in <code>src/streaming/mod.rs</code>; <code>ChunkStreaming</code> with <code>cook_ahead</code>, <code>StreamedFrame</code>, <code>FastTravelClock</code>, the IO pool, its <code>RequestQueue</code>, <code>IoRequest</code>, <code>decode_chunk</code>, <code>DecodedReader</code> and <code>FrameIo</code> in <code>src/streaming/io.rs</code>; <code>LoadedChunks</code>, <code>ResidentFarProxies</code>, <code>FarGround</code> and <code>load_far_proxy</code> in <code>src/streaming/chunks.rs</code>; the Chunk's edge, <code>CHUNK_EDGE_METRES</code>, in <code>src/assets/cooked.rs</code>.</dd>
       <dt>Files</dt><dd><code>src/streaming/mod.rs</code>, <code>src/streaming/io.rs</code>, <code>src/streaming/chunks.rs</code></dd>
     </dl>
   </aside>
@@ -136,11 +136,12 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
     <a href="#arrivals">4 &middot; Late Chunks, the hold and Settled</a>
     <a href="#last-users">5 &middot; Last users</a>
     <a href="#io-pool">6 &middot; The IO pool</a>
-    <a href="#engine">7 &middot; Settled frames and the loaded Chunks</a>
-    <a href="#tests">8 &middot; How it is tested</a>
-    <a href="#cost">9 &middot; What it costs</a>
-    <a href="#why">10 &middot; Why this way</a>
-    <a href="#limits">11 &middot; Limits</a>
+    <a href="#engine">7 &middot; Loads, placements and the loaded Chunks</a>
+    <a href="#far-proxies">8 &middot; Far proxies, the swap and the far ground</a>
+    <a href="#tests">9 &middot; How it is tested</a>
+    <a href="#cost">10 &middot; What it costs</a>
+    <a href="#why">11 &middot; Why this way</a>
+    <a href="#limits">12 &middot; Limits</a>
     <a href="#sources">Sources</a>
   </nav>
 </header>
@@ -158,7 +159,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
 };
 along(camera.x, x).hypot(along(camera.z, z))</code></pre>
   <p class="code-source"><code>distance_metres</code>, <code>src/streaming/mod.rs</code>.</p>
-  <p>Over the middle of a Chunk, the camera has its own Chunk, the four beside it at 128 m and the four at its corners at 181 m within 256 m: nine. Near the middle of an edge it has the two Chunks the edge divides, the four beside those and one of the two beyond: seven. Near a corner it has the four that share the corner and four of those around them: eight. <code>chunks_within</code> lists the Chunks that overlap the square around the camera of the radius's half-size, and each is kept only if it is in the Game world, which the streamer was given at creation, and within the radius.</p>
+  <p>Over the middle of a Chunk, the camera has its own Chunk, the four beside it at 128 m and the four at its corners at 181 m within 256 m: nine. Near the middle of an edge it has the two Chunks the edge divides, the four beside those and one of the two beyond: seven. Near a corner it has the four that share the corner and four of those around them: eight. <code>chunks_within</code> lists the Chunks that overlap the square around the camera of the radius's half-size, clamped to the lowest and highest coordinates of the Game world's Chunks, and each is kept only if it is in the Game world, which the streamer was given at creation, and within the radius.</p>
 </section>
 
 <section class="part prose" id="requests">
@@ -176,17 +177,17 @@ if metres &gt; (load_radius_metres + lead_metres).min(hold_radius_metres) {
     continue;
 }</code></pre>
   <p class="code-source"><code>update</code>, <code>src/streaming/mod.rs</code>.</p>
-  <p>Speed and load time are both counted in frames: how far each Chunk's nearest point came closer since the frame before, and, for each load that finishes, the frames from its request to the frame the streamer saw it finish. By <code>ChunkIo</code>'s contract a load finishes once its Chunk's content is applied and the Assets it names are Resident, so the lead covers all of that. A load is seen on the frame after IO completes it, so one as long as the slowest can be seen a frame later; the extra frame covers that.</p>
+  <p>Speed and load time are both counted in frames: how far each Chunk's nearest point came closer since the frame before, and, for each load that finishes, the frames from its request to the frame the streamer saw it finish. By <code>ChunkIo</code>'s contract a load finishes once its Chunk's content is applied, the Assets it names are Resident and rays may trace its Meshes: for a streamed load, the frame its Placements are placed, after the BLASes of the Meshes it brings are built and compacted (<a href="#engine">section 7</a>). The lead covers all of that. A load is seen on the frame after IO completes it, so one as long as the slowest can be seen a frame later; the extra frame covers that.</p>
   <p>The distance to a Chunk, a square, from a camera flying a straight line at a steady speed falls ever more slowly as the camera passes it, so the last frame's closing rate never makes the Chunk look farther off than it is: a Chunk the camera will reach within the lead is requested at least the lead ahead, and a load as slow as any so far lands first. The camera can still come within the Load radius of a Chunk before it loads if it turns or speeds up, or if a load takes longer than every one before it and the floor. A Chunk the camera passes beside, outside the Load radius, closes ever more slowly and is never requested, nor are Chunks behind it, which only grow farther.</p>
-  <p>The floor covers a slow load that no earlier load foretold. Most loads take a frame; a Chunk naming Assets the pools lack, such as a settlement's first facade Materials, takes several, and the first of them follows nothing but one-frame loads, so no lead built from past loads alone could cover it. Sixteen frames is 13.3 m at 50 m/s. Above the floor the lead follows the slowest load, and it never shrinks. On a teleport, and on the first frame, nothing is closing and only Chunks within the Load radius are requested.</p>
+  <p>The floor covers a slow load that no earlier load foretold. Most loads take a frame or two; one naming Assets the pools lack, such as a settlement's first facade Materials, or bringing Meshes whose BLASes must build, takes several, and the first of them follows nothing but fast loads, so no lead built from past loads alone could cover it. Sixteen frames is 13.3 m at 50 m/s. Above the floor the lead follows the slowest load, and it never shrinks. On a teleport, and on the first frame, nothing is closing and only Chunks within the Load radius are requested.</p>
   <p>No Chunk's request radius passes the hold radius, so nothing is requested that would be unloaded on arrival. The square <code>chunks_within</code> lists spans the widest request radius, the camera's whole move times the lead, which no Chunk's closing rate exceeds. Requests are sorted by distance, ties by coordinates, so a run of the same camera path and the same IO requests the same Chunks in the same order.</p>
 </section>
 
 <section class="part prose" id="hold-radius">
   <div class="part-mark">3 &middot; <code>update</code> &middot; <code>ChunkFrame</code></div>
   <h2>Held and unloaded</h2>
-  <p class="key-idea">A loaded Chunk stays loaded to the hold radius, one Chunk (256 m) beyond the Load radius, and unloads past it. Between the two it is held: kept with its Assets but neither drawn nor traced, so the camera can cross the Load radius back and forth without a reload.</p>
-  <p>At a Load radius of 256 m the hold radius is 512 m, which holds 20 to 23 Chunks. <code>ChunkFrame::held</code> lists every held Chunk each frame, by coordinates; a held Chunk the camera comes back to leaves the list and is drawn again without IO. A load that finishes for a Chunk the camera has since left past the hold radius is dropped, never loaded, and a load in flight is never requested twice.</p>
+  <p class="key-idea">A loaded Chunk stays loaded to the hold radius, one Chunk (256 m) beyond the Load radius, and unloads past it. Between the two it is held: kept with its Assets but neither drawn, traced nor lit, so the camera can cross the Load radius back and forth without a reload.</p>
+  <p>At a Load radius of 256 m the hold radius is 512 m, which holds 20 to 23 Chunks. <code>ChunkFrame::held</code> lists every held Chunk each frame, by coordinates; a held Chunk the camera comes back to leaves the list and is drawn again without IO. Most Chunks of a camera in travel load held: the lead requests them while they are still outside the Load radius. A load that finishes for a Chunk the camera has since left past the hold radius is dropped, never loaded, and a load in flight is never requested twice.</p>
 </section>
 
 <section class="part prose" id="arrivals">
@@ -194,21 +195,23 @@ if metres &gt; (load_radius_metres + lead_metres).min(hold_radius_metres) {
   <h2>Late Chunks, the hold and Settled</h2>
   <p class="key-idea">A Late Chunk is counted on the frame the camera comes within the Load radius of a Chunk not yet loaded, once per load. A teleport is an arrival, not travel: its Chunks are not Late, and the streamer holds until every Chunk within the Load radius has loaded. A frame is Settled when every Chunk within its own request radius on that frame has loaded.</p>
 <pre class="code"><code>let entered = !self.within_load_radius_before.contains(&amp;coordinates);
-if !arrived &amp;&amp; !loaded &amp;&amp; entered &amp;&amp; self.counted_late.insert(coordinates) {
+if !arriving &amp;&amp; !loaded &amp;&amp; entered &amp;&amp; self.counted_late.insert(coordinates) {
     frame.late_chunks += 1;
 }</code></pre>
   <p class="code-source"><code>update</code>, <code>src/streaming/mod.rs</code>.</p>
   <p>The streamer keeps the set of Chunks within the Load radius on the frame before, so a Chunk counts on entering, not on every frame it is late, and the Chunks it has counted until their loads finish, so a camera crossing a late Chunk's border back and forth counts it once. The first frame arrives as a teleport does, since the camera did not travel to it. The hold starts on an arrival and ends on the frame the last Chunk within the Load radius loads:</p>
-<pre class="code"><code>frame.holding = (frame.holding || arrived) &amp;&amp; !every_chunk_within_load_radius_loaded;</code></pre>
+<pre class="code"><code>frame.holding = (frame.holding || arrived) &amp;&amp; !every_chunk_within_load_radius_loaded;
+self.filling = self.far_proxies &amp;&amp; frame.holding &amp;&amp; !arrival_failing;</code></pre>
   <p class="code-source"><code>update</code>, <code>src/streaming/mod.rs</code>.</p>
-  <p>Settled reaches further than the hold: it waits for the lead's Chunks too, so a frame of travel whose lead has a request in flight is not Settled though it does not hold. A <span class="concept" data-term="Settled frame" data-tip="A frame rendered only after every load it requested is Resident, so streaming cannot change what it shows. Captures and Goldens render them, and the bench its frames up to the end of the counter frames; a window never waits for one.">Settled frame</span> is one a capture may render; the hold is what a Fast travel waits on, and while it lasts a capture's or the bench's camera path pauses (<a href="bench.html#hold">The bench</a>).</p>
+  <p>The Chunks' streamer is <code>arriving</code> only on the frame it arrives. A Far proxies' streamer stays <code>arriving</code> while its own hold lasts, filling the Far field, so a Far proxy the camera reaches meanwhile loads behind the others and is not late, unless a load within its radius is failing (<a href="#far-proxies">section 8</a>).</p>
+  <p>Settled reaches further than the hold: it waits for the lead's Chunks too, so a frame of travel whose lead has a request in flight is not Settled though it does not hold. A <span class="concept" data-term="Settled frame" data-tip="A frame rendered only after every load it requested is Resident and placed, so streaming cannot change what it shows. Captures and Goldens render them, and the bench its frames up to the end of the counter frames; a window never waits for one.">Settled frame</span> is one a capture may render; the hold is what a Fast travel waits on, and while it lasts a capture's or the bench's camera path pauses (<a href="bench.html#hold">The bench</a>).</p>
 </section>
 
 <section class="part prose" id="last-users">
   <div class="part-mark">5 &middot; <code>update</code> &middot; <code>FinishedLoad</code></div>
   <h2>Last users</h2>
   <p class="key-idea">The streamer counts how many times the loaded Chunks name each <span class="concept" data-term="Asset ID" data-tip="The stable name of an Asset, derived from its source file's GUID, or a procedural Reference scene's name. It survives moving and editing the source, except an edit that renames the Asset inside it, gives another item its name, or moves it while its name is missing or shared (the glTF index then names it).">Asset ID</span>. An unload that brings a count to zero reports that Asset as having lost its last user, in a fixed order.</p>
-  <p>A finished load carries the Mesh and Material Asset IDs its Placements name, in Placement order; an Asset named twice is counted twice, and so reaches zero once, at its last name. Held Chunks keep their counts. Chunks unload in coordinate order, and within each, its Assets in its own order:</p>
+  <p>A finished load carries the Mesh and Material Asset IDs its Placements name, each once; an Asset named by two Chunks is counted twice, and so reaches zero once, at its last Chunk. Held Chunks keep their counts. Chunks unload in coordinate order, and within each, its Assets in its own order:</p>
 <pre class="code"><code>for asset in assets.iter() {
     let Some(count) = users.get_mut(asset) else {
         continue;
@@ -224,9 +227,26 @@ if !arrived &amp;&amp; !loaded &amp;&amp; entered &amp;&amp; self.counted_late.i
 </section>
 
 <section class="part prose" id="io-pool">
-  <div class="part-mark">6 &middot; <code>IoPool</code> &middot; <code>decode_chunk</code></div>
+  <div class="part-mark">6 &middot; <code>IoPool</code> &middot; <code>RequestQueue</code> &middot; <code>decode_chunk</code></div>
   <h2>The IO pool</h2>
-  <p class="key-idea">Four std threads take requests from one channel, each an <code>IoRequest</code>: the streamer's Chunks, and mip streaming's mips. For a Chunk, a thread reads its Blob from the Cooked cache and every Mesh, Material and Texture Blob it names, through its Meshes' Materials to their Textures, and decodes each where it read it, into CPU memory, a Texture's <span class="concept" data-term="Resident tail" data-tip="The smallest mips of a texture, which stay in GPU memory for as long as the texture is loaded, so a texture whose finer mips are not loaded shows blurred, never missing.">Resident tail</span> alone. An Asset another load already claimed is skipped, so each is read and decoded once.</p>
+  <p class="key-idea">Four std threads take requests from one queue, each an <code>IoRequest</code>: a Chunk, a Far proxy, or mip streaming's mips. For a Chunk, a thread reads its Blob from the Cooked cache and every Mesh, Material and Texture Blob it names, through its Meshes' Materials to their Textures, and decodes each where it read it, into CPU memory, a Texture's <span class="concept" data-term="Resident tail" data-tip="The smallest mips of a texture, which stay in GPU memory for as long as the texture is loaded, so a texture whose finer mips are not loaded shows blurred, never missing.">Resident tail</span> alone. An Asset another load already claimed is skipped, so each is read and decoded once.</p>
+  <p>The queue keeps its requests by lane, then in the order requested: Chunk reads first, then mips, then Far proxies. A thread takes a Far proxy only while no Chunk read is taken, and only while fewer than <code>FAR_PROXY_READERS</code>, three, threads read one, so one thread is always free for a Chunk or a Texture's mips:</p>
+<pre class="code"><code>fn take(&amp;mut self) -&gt; Option&lt;IoRequest&gt; {
+    let entry = self.requests.first_entry()?;
+    let (lane, _) = *entry.key();
+    match lane {
+        Lane::Chunk =&gt; self.chunk_reads_taken += 1,
+        Lane::Mips =&gt; {}
+        Lane::FarProxy =&gt; {
+            if self.chunk_reads_taken &gt; 0 || self.far_proxy_reads_taken &gt;= FAR_PROXY_READERS {
+                return None;
+            }
+            self.far_proxy_reads_taken += 1;
+        }
+    }
+    Some(entry.remove())
+}</code></pre>
+  <p class="code-source"><code>QueuedRequests::take</code>, <code>src/streaming/io.rs</code>. A thread reports each read it finishes, which lets a waiting Far proxy go.</p>
   <p>The claimed set holds every Asset loaded into a pool, by any load, and not freed since, and every Asset decoded and not yet loaded. A thread claims an Asset before it reads it:</p>
 <pre class="code"><code>let mut seen = HashSet::new();
 let mut claim = |asset: AssetId| {
@@ -237,14 +257,31 @@ let mut claim = |asset: AssetId| {
             .insert(asset)
 };</code></pre>
   <p class="code-source"><code>decode_chunk</code>, <code>src/streaming/io.rs</code>.</p>
-  <p>The decoded Assets reach the main thread with their Chunk, and join one shared table there as soon as their Chunk's read comes back, before any Chunk loads. The main thread loads each finished Chunk into the pools through <code>DecodedReader</code>, which hands the pools a decoded Asset when the table holds it, and otherwise reads it from the Cooked cache on the main thread. A Chunk that needs an Asset another Chunk's read in flight claimed waits for it instead (<a href="#engine">below</a>), so that is the case of an Asset a failed read or a refused load left claimed. A Texture read there for a Chunk is decoded to its Resident tail alone, as the IO pool decodes it, so its finer mips come through mip streaming like any other Texture's; the spawn's reader decodes whole chains. That Chunk's decoded copy is then dropped when it comes. Every Asset the pools read, the spawn's included, joins the claimed set. One the pools free leaves it as it is freed, through <code>DecodedReader::forget</code>, before anything reads it again, so the next Chunk to name it has it read on the IO pool once more.</p>
-  <p>A Texture's finer mips are read later, when a Placement needs them: <a href="mip-streaming.html#requests">mip streaming</a> requests them on the same channel, and the threads read and decode just those levels. The threads touch no GPU object. The main thread writes what they decoded through the load's staging, as every load does (ADR 0017), and only it submits (ADR 0016).</p>
+  <p>A Far proxy is read as a Chunk that names its Mesh alone, with that Mesh's Material and Textures. Where mips stream, it is requested with the camera's position, and each Texture its Mesh samples is decoded down to the mip its distance from there needs, by the rule mip streaming applies to a drawn Placement, never coarser than its Resident tail; a Far proxy then loads and draws on one frame without first showing its tail:</p>
+<pre class="code"><code>let texture = match (far_proxy_camera, densest_uses.get(&amp;texture_id)) {
+    (
+        Some(camera),
+        Some(&amp;DensestUse {
+            texel_density,
+            bounds,
+        }),
+    ) =&gt; {
+        let transform = far_proxy_transform(coordinates);
+        CookedTexture::down_to_from_blob(&amp;blob, |side| {
+            placement_finest_mip_needed(camera, &amp;transform, bounds, texel_density, side)
+        })
+    }
+    _ =&gt; CookedTexture::resident_tail_from_blob(&amp;blob),
+};</code></pre>
+  <p class="code-source"><code>decode_chunk</code>. The densest use is the densest texel density at which any of the Mesh's Primitives samples the Texture, with the Mesh's bounds.</p>
+  <p>The decoded Assets reach the main thread with their read, and join one shared table there as soon as the read comes back, before any load. The main thread loads each finished read into the pools through <code>DecodedReader</code>, which hands the pools a decoded Asset when the table holds it, and otherwise reads it from the Cooked cache on the main thread. A Chunk that needs an Asset another Chunk's read in flight claimed waits for it instead (<a href="#engine">section 7</a>), so that is the case of an Asset a failed read or a refused load left claimed. A Texture read there for a load is decoded to its Resident tail alone, as the IO pool decodes a Chunk's, so its finer mips come through mip streaming like any other Texture's; the spawn's reader decodes whole chains. That load's decoded copy is then dropped when it comes. Every Asset the pools read, the spawn's included, joins the claimed set. One the pools free leaves it as it is freed, through <code>DecodedReader::forget</code>, before anything reads it again, so the next load to name it has it read on the IO pool once more.</p>
+  <p>A Texture's finer mips are read later, when a Placement needs them: <a href="mip-streaming.html">mip streaming</a> requests them on the same queue, and the threads read and decode just those levels. The threads touch no GPU object. The main thread writes what they decoded through the load's staging, as every load does (ADR 0017), and only it submits (ADR 0016).</p>
 </section>
 
 <section class="part prose" id="engine">
-  <div class="part-mark">7 &middot; <code>ChunkStreaming::update</code></div>
-  <h2>Settled frames and the loaded Chunks</h2>
-  <p class="key-idea">Each frame, the finished reads are loaded into the pools nearest the camera first, until the next would place more than the frame's Instances or write more than its load bytes into the load staging; the rest wait for a later frame. The streamer decides, and the World's <code>LoadedChunks</code> follows its decision. A capture's Settled wait loads nothing until every read in flight has come back, then all of them at once, in coordinate order and past the cap, so slot ranges and pool entries never depend on the threads' timing.</p>
+  <div class="part-mark">7 &middot; <code>ChunkStreaming::update</code> &middot; <code>FrameIo</code></div>
+  <h2>Loads, placements and the loaded Chunks</h2>
+  <p class="key-idea">Each frame, the finished reads are loaded into the pools nearest the camera first, at most <code>LOADS_PER_FRAME</code>, 3, a frame and within its load bytes; a load's new Meshes start their BLAS builds, and its Placements are placed in the first frame that finds every Mesh it names built and compacted, within the frame's placed Instances. The streamer sees a load finish when it is placed, and the World's <code>LoadedChunks</code> follows its decision. A capture's Settled wait loads nothing until every read in flight has come back, then all of them at once, in coordinate order and past every cap, and waits for their BLASes, so slot ranges and pool entries never depend on the threads' timing.</p>
 <pre class="code"><code>fn take_finished(&amp;mut self) -&gt; Option&lt;FinishedLoad&gt; {
     self.io.receive();
     for decoded in self.io.ready.values_mut().flatten() {
@@ -253,63 +290,67 @@ let mut claim = |asset: AssetId| {
     if self.settle &amp;&amp; self.io.in_flight &gt; 0 {
         return None;
     }</code></pre>
-  <p class="code-source"><code>FrameIo::take_finished</code>, <code>src/streaming/io.rs</code>. Finished reads wait in a map ordered by coordinates.</p>
-  <p>Each call takes the ready read nearest the camera, by the same distance the streamer measures, the lowest coordinates first among equals; a Settled wait takes the lowest coordinates. A Chunk that waits on a read is set aside for the frame, and the next nearest is taken:</p>
+  <p class="code-source"><code>FrameIo::take_finished</code>, <code>src/streaming/io.rs</code>. Finished reads wait in a map ordered by what they load, Chunks first, then by coordinates.</p>
+  <p>Each call loads ready reads until none fits, then places one load. The ready read it takes next is the one nearest the camera, by the same distance the streamer measures, the lowest coordinates first among equals; a Settled wait takes the lowest coordinates. A Chunk that waits on a read is set aside for the frame, and the next nearest is taken:</p>
 <pre class="code"><code>let (coordinates, decoded) = loop {
     let coordinates = self.next_ready()?;
-    let decoded = self.io.ready.remove(&amp;coordinates)?;
+    let decoded = self.io.ready.remove(&amp;(self.load, coordinates))?;
     match &amp;decoded {
         Ok(chunk) if !self.settle &amp;&amp; self.waits_on_a_read(chunk) =&gt; {
-            self.io.ready.insert(coordinates, decoded);
+            self.io.ready.insert((self.load, coordinates), decoded);
             self.waiting.insert(coordinates);
         }
         _ =&gt; break (coordinates, decoded),
     }
 };</code></pre>
-  <p class="code-source"><code>FrameIo::take_finished</code>. <code>next_ready</code> passes over the coordinates in <code>waiting</code>.</p>
-  <p>A Chunk waits when it needs an Asset that is neither in the pools nor decoded, and that a Chunk read still in flight, requested before the Chunk's own read came back, claimed and so may be decoding. A read requested later found the Asset claimed and skipped it, so the wait ends when those reads have all come back. <code>DecodedAssets::lacks</code> walks the Meshes and Materials its Placements name, which <code>decode_chunk</code> lists once each, through the Meshes' Materials to their Textures, as the load will; an Asset no load claimed counts as available, since no read will bring it. Without the wait, the Chunk that loaded first after the world's Fast travel read 16 to 42 such Assets on the main thread in six quiet runs, 2.8 to 7.9 ms of its frame, while their decoded copies were a frame away.</p>
-  <p>Before it loads, the Chunk must fit:</p>
-<pre class="code"><code>fn fits(&amp;mut self, chunk: &amp;CookedChunk) -&gt; anyhow::Result&lt;bool&gt; {
+  <p class="code-source"><code>FrameIo::load_next_ready</code>. <code>next_ready</code> passes over the coordinates in <code>waiting</code>.</p>
+  <p>A Chunk waits when it needs an Asset that is neither in the pools nor decoded, and that a Chunk read still in flight, requested before the Chunk's own read came back, claimed and so may be decoding. A read requested later found the Asset claimed and skipped it, so the wait ends when those reads have all come back. <code>DecodedAssets::lacks</code> walks the Meshes and Materials its Placements name, which <code>decode_chunk</code> lists once each, through the Meshes' Materials to their Textures, as the load will; an Asset no load claimed counts as available, since no read will bring it. Without the wait, the Chunk that loaded first after the world's Fast travel read 16 to 42 such Assets on the main thread, while their decoded copies were a frame away (<code>docs/performance.md</code>).</p>
+  <p>Before it loads, the read must fit:</p>
+<pre class="code"><code>fn fits(&amp;mut self, decoded: &amp;DecodedChunk) -&gt; anyhow::Result&lt;bool&gt; {
     if self.settle {
         return Ok(true);
     }
-    let instances = *self.placed_instances + chunk.placements.len();
-    if *self.placed_instances &gt; 0 &amp;&amp; instances &gt; self.instances_placed_per_frame {
+    if self.loads &gt;= self.loads_per_frame {
         return Ok(false);
     }
     if *self.written_bytes == 0 {
         return Ok(true);
     }
-    let bytes = self.most_written_bytes(chunk)?;
+    let bytes = self.most_written_bytes(decoded)?;
     Ok(*self.written_bytes + bytes &lt;= self.load_bytes_per_frame)
 }</code></pre>
-  <p class="code-source"><code>FrameIo::fits</code>. A Chunk that does not fit goes back to the ready map, and the frame loads nothing more.</p>
-  <p>Each Placement becomes an Instance, which prepare writes and the static TLAS takes as an entry change, both on the main thread, in the frame its Chunk loads. So the frame's Chunk loads place at most <code>INSTANCES_PLACED_PER_FRAME</code>, 131,072, Instances, counted from each Chunk's Placements; like the bytes, a Chunk that alone places more loads alone.</p>
-  <p><code>most_written_bytes</code> walks the Chunk's Placements as the load will: each Mesh the Mesh pool lacks, its Primitives' Materials and the Placements' own that the Material pool lacks, and their Textures it has not placed, each counted once at the bytes the pools write for it: <code>MeshPool::written_bytes</code> for a Mesh drawn and traced, <code>MaterialPool::WRITTEN_BYTES</code> for a Material, and <code>texture_written_bytes</code>, every mip the Texture holds, its Resident tail alone for one the IO pool decoded, with its rows padded to 256 bytes, for a Texture. An Asset the IO pool did not decode is read from the Cooked cache and left among the decoded ones, so the load reads it once. The sum is exact for a Chunk's Assets, and an upper bound where the Material pool holds back a Texture's finer mips or has no room for them; a debug build asserts that no load writes more. The cap is <code>RenderCapacities::load_bytes_per_frame</code>, what the frame staging's slots at their largest leave of the staging Budget, over the frames in flight and the one being written: 22,937,393 bytes from the checked-in Budgets.</p>
+  <p class="code-source"><code>FrameIo::fits</code>. A read that does not fit goes back to the ready map, and the frame loads nothing more.</p>
+  <p>The count is the frame's Chunk and Far proxy loads together, the Chunks' first, and a load the pools refuse counts among them: each load's sizing and pool writes take the main thread whatever it places or writes. <code>most_written_bytes</code> walks the load's Placements as the load will: each Mesh the Mesh pool lacks for the load's use, its Primitives' Materials and the Placements' own that the Material pool lacks, and their Textures it has not placed, each counted once at the bytes the pools write for it: <code>MeshPool::written_bytes</code> for a Mesh, at the use it is loaded for, drawn and traced or a Far proxy, <code>MaterialPool::WRITTEN_BYTES</code> for a Material, and <code>texture_written_bytes</code>, every mip the decoded Texture holds, with its rows padded to 256 bytes, for a Texture. An Asset the IO pool did not decode is read from the Cooked cache and left among the decoded ones, so the load reads it once. The sum is exact for a load's Assets, and an upper bound where the Material pool holds back a Texture's finer mips or has no room for them; a debug build asserts that no load writes more. The cap is <code>RenderCapacities::load_bytes_per_frame</code>, what the frame staging's slots at their largest leave of the staging Budget, over the frames in flight and the one being written: 26,640,177 bytes from the checked-in Budgets.</p>
+  <p>A load writes its Assets and starts its new Meshes' BLAS builds in its frame, with the builds deferred, and waits among the loads awaiting placement. Each frame the Mesh pool polls the device and takes each deferred BLAS a step, built, then compacted, and the loads whose Meshes are all ready are placed, in the order loaded:</p>
+<pre class="code"><code>fn place_next(&amp;mut self) -&gt; Option&lt;LoadedChunk&gt; {
+    let next = (self.awaiting_placement.iter())
+        .position(|chunk| self.settle || self.blases_ready(chunk))?;
+    let instances = *self.placed_instances + self.awaiting_placement[next].placements.len();
+    let past_cap = instances &gt; self.instances_placed_per_frame;
+    if !self.settle &amp;&amp; *self.placed_instances &gt; 0 &amp;&amp; past_cap {
+        return None;
+    }
+    *self.placed_instances = instances;
+    Some(self.awaiting_placement.remove(next))
+}</code></pre>
+  <p class="code-source"><code>FrameIo::place_next</code>. While settling, every load is placed, and the frame's upload waits for its BLASes.</p>
+  <p>A load whose Meshes are ready may be placed before an earlier one still waiting. A placed load is the <code>FinishedLoad</code> the streamer sees, so Late Chunks, the hold and the lead all count to placement. The cap, <code>INSTANCES_PLACED_PER_FRAME</code>, 131,072, counts each load's Placements; like the bytes, a load that alone places more is placed alone.</p>
+  <p>Each placed Placement becomes an Instance in its Chunk's slot range when prepare first sees the Chunk (<a href="prepare.html">Prepare</a>). A Chunk placed held, as most loads of a camera in travel are, writes Instances with no Mesh there, which the static TLAS takes no entry for. Its Placements' own Instances, and their entry changes, come in the frame it crosses into the Load radius, a frame that may load nothing, so the cap on placed Instances does not bound them: the world's traversal wrote up to 114,670 such Instances in one frame (<code>docs/performance.md</code>, 2026-11-11).</p>
 <pre class="code"><code>let frame = streamer.update(camera, teleported, &amp;mut frame_io);
 streamed.holding = frame.holding;
 streamed.late_chunks += frame.late_chunks;
 streamed.chunks_loaded += frame.loaded.len() as u32;
 streamed.chunks_not_loaded += frame.not_loaded.len() as u32;
 streamed.chunks_unloaded += frame.unloaded.len() as u32;
-keep_loaded_chunks(world, frame, finished, renderer);
-let mip_streaming = MipStreaming {
-    io,
-    priority: mips,
-    renderer,
-    settle,
-    load_bytes_per_frame: *load_bytes_per_frame,
-};
-let mips_settled = mip_streaming.stream(world, &amp;mut streamed);
-if !settle || (frame.settled &amp;&amp; mips_settled) {
-    return Ok(streamed);
-}
-if let Some(error) = error.take() {
-    return Err(error);
-}
-io.receive_all()?;</code></pre>
-  <p class="code-source"><code>ChunkStreaming::update</code>. After the Chunk loads, <a href="mip-streaming.html">mip streaming</a> applies the mips that arrived and requests those the loaded Chunks need; a Settled frame waits for its mip requests too. A window never settles, nor the bench after its counter frames: they draw what has loaded.</p>
-  <p>Around that pass, <code>ChunkStreaming::update</code> takes the camera's <code>teleported</code> and clears it, so a jump is an arrival for one frame alone, though one that <code>render_frames</code> placed on a frame it ran undrawn stays set until streaming next runs, and times a Fast travel's hold with the wall clock, from the jump to the frame the streamer stops holding:</p>
+let mut settled = frame.settled;
+let mut loaded_chunks = world.resource_mut::&lt;LoadedChunks&gt;();
+let chunks = &amp;mut loaded_chunks.bypass_change_detection().0;
+let (finished, pools) = (&amp;mut *frame_io.finished, &amp;mut *frame_io.pools);
+if keep_loaded_chunks(chunks, frame, &amp;[], finished, pools, MeshUse::DrawnAndTraced) {
+    loaded_chunks.set_changed();
+}</code></pre>
+  <p class="code-source"><code>ChunkStreaming::stream</code>. The Far proxies' streamer runs next on the same <code>FrameIo</code> (<a href="#far-proxies">section 8</a>), then <a href="mip-streaming.html">mip streaming</a> applies the mips that arrived and requests those the Placements need; a Settled frame waits for both streamers and its mip requests, receiving every read in flight and running again. A window never settles, nor the bench after its counter frames: they draw what has been placed.</p>
+  <p>Around that pass, <code>ChunkStreaming::update</code> takes the camera's <code>teleported</code> and clears it, so a jump is an arrival for one frame alone, though one that <code>render_frames</code> placed on a frame it ran undrawn stays set until streaming next runs, and times a Fast travel with the wall clock:</p>
 <pre class="code"><code>let teleported = std::mem::take(&amp;mut world.resource_mut::&lt;Camera&gt;().teleported);
 if teleported {
     self.fast_travel.jumped(Instant::now());
@@ -317,16 +358,17 @@ if teleported {
 let streamed = self.stream(world, renderer, settle, teleported);
 …
 self.fast_travel.time(Instant::now(), &amp;mut streamed);</code></pre>
-  <p class="code-source"><code>ChunkStreaming::update</code>. The State copies <code>holding</code> and <code>fast_travel_hold</code> into the frame's Frame stats; a jump whose Chunks are all loaded already reports its hold on its own frame.</p>
-  <p>A load the streamer drops, as the camera left its hold radius before it finished, gives back the pool users it counted. An unloaded Chunk leaves <code>LoadedChunks</code> and gives back its users too: one per Mesh and per Material its Placements name. An entry left with no user stays loaded until a load the pools refuse for want of room frees it, least recently used first, and a Material only once no loaded Mesh names it. Every loaded Chunk is then marked held or not from the streamer's held list:</p>
+  <p class="code-source"><code>ChunkStreaming::update</code>. The State copies <code>holding</code>, <code>fast_travel_hold</code>, <code>far_field_filling</code> and <code>far_field_fill</code> into the frame's Frame stats; a jump whose Chunks are all loaded already reports its hold on its own frame.</p>
+  <p>A load the streamer drops, as the camera left its hold radius before it was placed, gives back the pool users it counted, once its BLASes are ready and it is placed. An unloaded Chunk leaves <code>LoadedChunks</code> and gives back its users too: one per Mesh and per Material its Placements name. An entry left with no user stays loaded until a load the pools refuse for want of room frees it, least recently used first, and a Material only once no loaded Mesh names it. Every loaded Chunk is then marked held or not from the streamer's held list:</p>
 <pre class="code"><code>for chunk in chunks.iter_mut() {
-    let held = frame.held.binary_search(&amp;chunk.coordinates).is_ok();
+    let held = frame.held.binary_search(&amp;chunk.coordinates).is_ok()
+        || also_held.binary_search(&amp;chunk.coordinates).is_ok();
     changed |= chunk.held != held;
     chunk.held = held;
 }</code></pre>
-  <p class="code-source"><code>keep_loaded_chunks</code>. <code>LoadedChunks</code> is marked changed only when something changed, which is what prepare checks before it visits the Chunks.</p>
-  <p>Each Reference scene sets its Load radius. Every scene but the world holds all its Chunks from each frame of its camera path: 256 m for most, 1,024 m for <code>town</code> and 4,352 m for <code>far_coplanar</code>, whose farthest Chunks lie 842 m and 4,238 m from the camera. Their first frame requests every Chunk, and a capture's first Settled frame loads them all, in coordinate order, as their spawn did before they streamed.</p>
-  <p>In a dev launch, <code>ChunkStreaming</code> runs the launch's cook on each Chunk it requests, on the main thread, before the IO pool reads it. <code>render_frames</code> has it run that cook first, through <code>cook_ahead</code>, on every Chunk the streamer's <code>within_hold_radius</code> lists for the camera of each frame not drawn Settled, so the frames that stream find each Chunk checked already.</p>
+  <p class="code-source"><code>keep_loaded_chunks</code>. For the Chunks <code>also_held</code> is empty; the Far proxies' call passes the drawn Chunks there. <code>LoadedChunks</code> is marked changed only when something changed, which is what prepare checks before it visits the Chunks.</p>
+  <p>Each Reference scene sets its Load radius. Every scene but the world holds all its Chunks from each frame of its camera path: 256 m for most, 1,024 m for <code>town</code> and 4,352 m for <code>far_coplanar</code>. Their first frame requests every Chunk, and a capture's first Settled frame loads them all, in coordinate order, as their spawn did before they streamed.</p>
+  <p>In a dev launch, <code>ChunkStreaming</code> runs the launch's cook on each Chunk and Far proxy it requests, on the main thread, before the IO pool reads it. <code>render_frames</code> has it run that cook first, through <code>cook_ahead</code>, on every Chunk the streamer's <code>within_hold_radius</code> lists for the camera of each frame not drawn Settled, and every Far proxy the Far proxies' streamer lists, so the frames that stream find each one checked already.</p>
   <p>A load that fails is logged, and <code>load_cooked_chunk</code> gives back the pool users it counted of the Meshes and Materials it loaded before the failure, so the pools are as they were. While settling it fails the frame and names the sources the launch's cook found absent. Otherwise its <code>FinishedLoad</code> carries no Asset IDs, and the streamer lists the Chunk as not loaded and asks for it again a frame later, then, after each further failure in a row, twice as late, up to <code>LONGEST_RETRY_FRAMES</code>, 1,024 frames:</p>
 <pre class="code"><code>let Some(assets) = load.assets else {
     let (failures, retry_on) = self.failed.entry(load.coordinates).or_default();
@@ -339,10 +381,56 @@ self.fast_travel.time(Instant::now(), &amp;mut streamed);</code></pre>
   <p class="code-source"><code>ChunkStreamer::update</code>, <code>src/streaming/mod.rs</code>. A load that succeeds clears the Chunk's failures.</p>
 </section>
 
+<section class="part prose" id="far-proxies">
+  <div class="part-mark">8 &middot; <code>ChunkStreamer::of_far_proxies</code> &middot; <code>ResidentFarProxies</code> &middot; <code>FarGround</code></div>
+  <h2>Far proxies, the swap and the far ground</h2>
+  <p class="key-idea">A scene whose View distance passes its Load radius, the world at 2 km, runs a second Chunk streamer whose radius is the View distance: the same rule requests, holds and unloads a Far proxy per Chunk, into the World's <code>ResidentFarProxies</code>. A Resident Far proxy is held, so not drawn, exactly while its Chunk is drawn, so the two swap whole in one frame.</p>
+  <p>The Far proxies' streamer requests a Far proxy as its Chunk comes within the View distance and the lead, holds it to an edge past it, 2,256 m, and unloads it there. It runs after the Chunks' streamer, on the same <code>FrameIo</code>, so its loads share the frame's three loads, its load bytes and its placed Instances, after the Chunks', and a Fast travel's hold still waits for the Load radius alone. Each loads as a Chunk of one Placement, its Mesh at its Chunk's centre on the ground, loaded for the Far proxy use, its baked Material among the Material table's Far proxy Materials. Its Late Chunks are the <span class="concept" data-term="Late Far proxy" data-tip="A Far proxy that is not Resident while its Chunk is in the Far field: counted once, when its Chunk comes within the View distance before it has loaded, that is, before it was placed, which a streamed load does once its Mesh's BLAS is built and compacted.">Late Far proxies</span>; while its hold after an arrival lasts, and no load within the View distance fails, the Far field fills and none is late. A Settled frame waits for the Far proxies within the View distance too.</p>
+<pre class="code"><code>if let Some(far_proxies) = far_proxies {
+    let drawn_chunks = &amp;mut far_proxies.drawn_chunks;
+    drawn_chunks.clear();
+    let drawn = loaded_chunks.0.iter().filter(|chunk| !chunk.held);
+    drawn_chunks.extend(drawn.map(|chunk| chunk.coordinates));
+    drawn_chunks.sort_unstable();
+    frame_io.serve_far_proxies(&amp;mut far_proxies.awaiting_placement);
+    let frame = (far_proxies.streamer).update(camera, teleported, &amp;mut frame_io);
+    streamed.late_far_proxies += frame.late_chunks;
+    streamed.far_proxies_holding = Some(frame.holding);
+    settled &amp;= frame.settled;
+    let (finished, pools) = (&amp;mut *frame_io.finished, &amp;mut *frame_io.pools);
+    let mut resident = world.resource_mut::&lt;ResidentFarProxies&gt;();
+    let proxies = &amp;mut resident.bypass_change_detection().0;
+    let mesh_use = MeshUse::FarProxy;
+    if keep_loaded_chunks(proxies, frame, drawn_chunks, finished, pools, mesh_use) {
+        resident.set_changed();
+    }
+}</code></pre>
+  <p class="code-source"><code>ChunkStreaming::stream</code>, <code>src/streaming/io.rs</code>.</p>
+  <p>A Far proxy is held when its own streamer holds it, past the View distance, or when its Chunk is drawn: loaded, placed and within the Load radius. So it is drawn while its Chunk is within the View distance and not drawn: in the Far field, and within the Load radius while its Chunk is a Late Chunk. The swap lands on the frame the Chunk's Placements are placed, held or unloaded, in both directions, and prepare writes the two in that one frame (<a href="prepare.html">Prepare</a>); the lit pass draws Far proxies as ordinary Instances (<a href="lit-pass.html">The lit pass</a>), and rays trace them from the static TLAS (<a href="static-tlas.html#entries">The static TLAS</a>).</p>
+  <p>Mip streaming plans the mips of the drawn Far proxies as Placements, of those held past the View distance a lead ahead, and of those whose Chunk is drawn as replaced (<a href="mip-streaming.html">Mip streaming</a>). It requests the held Chunks' mips a lead ahead too, from where the camera will be after <code>LEAST_LEAD_FRAMES</code> at its closing rate, at most a Chunk edge on, so a Chunk or Far proxy that comes into view has its mips on the way.</p>
+  <p>The ground past the View distance is no Far proxy and is not streamed: <code>spawn_world</code> places one ground tile, untraced, scaled to reach 1,024 km from the world's middle and 0.5 m under the tiles, in the World's <code>FarGround</code>, a Chunk of one Placement that is never held and that prepare draws as it does a loaded Chunk. Chunks' and Far proxies' tiles lie over it and win the depth test.</p>
+  <p>A Fast travel's fill is timed beside its hold, from the end of its hold to the first frame on which the Far proxies' streamer no longer holds:</p>
+<pre class="code"><code>fn time(&amp;mut self, now: Instant, streamed: &amp;mut StreamedFrame) {
+    if !streamed.holding
+        &amp;&amp; let Some(jumped) = self.jumped.take()
+    {
+        streamed.fast_travel_hold = Some(now - jumped);
+        self.hold_ended = streamed.far_proxies_holding.map(|_| now);
+    }
+    if streamed.far_proxies_holding == Some(false)
+        &amp;&amp; let Some(hold_ended) = self.hold_ended.take()
+    {
+        streamed.far_field_fill = Some(now - hold_ended);
+    }
+    streamed.far_field_filling = self.hold_ended.is_some();
+}</code></pre>
+  <p class="code-source"><code>FastTravelClock::time</code>, <code>src/streaming/io.rs</code>. A scene with no Far field reports no fill.</p>
+</section>
+
 <section class="part prose" id="tests">
-  <div class="part-mark">8 &middot; <code>cargo test</code></div>
+  <div class="part-mark">9 &middot; <code>cargo test</code></div>
   <h2>How it is tested</h2>
-  <p class="key-idea">The streamer's tests drive it frame by frame along a scripted camera path, against a scripted IO whose loads finish a set number of frames after their request, and compare what it reports with values worked out by hand from the Chunk grid; none needs a GPU. One test flies the engine's camera over a Reference scene through the IO pool and the Settled wait.</p>
+  <p class="key-idea">The streamer's tests drive it frame by frame along a scripted camera path, against a scripted IO whose loads finish a set number of frames after their request, and compare what it reports with values worked out by hand from the Chunk grid; none needs a GPU. The IO pool's and <code>FrameIo</code>'s tests feed it reads by hand, through an IO pool without threads into pools that write nothing. The rest fly the engine's camera over a Reference scene on a headless adapter.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Test</th><th>What it pins</th></tr></thead>
@@ -358,13 +446,28 @@ self.fast_travel.time(Instant::now(), &amp;mut streamed);</code></pre>
       <tr><td><code>a_load_refused_partway_gives_back_the_users_it_counted</code></td><td>on a headless adapter, with room for two Materials, a Chunk refused at its third Material leaves its Mesh and Materials with the users they had before it</td></tr>
       <tr><td><code>a_load_finishing_past_the_hold_radius_is_dropped_and_one_in_flight_is_not_requested_again</code></td><td>loads that finish after a teleport took the camera away are dropped, neither loaded, held nor unloaded; back at the start, the Chunk still in flight is not requested again and loads when its first request finishes</td></tr>
       <tr><td><code>a_teleport_holds_until_the_last_chunk_in_the_load_radius_loads</code></td><td>the hold on the first frame and after a teleport, released on the frame its last Chunk, delayed 5 frames, loads; no Late Chunk</td></tr>
+      <tr><td><code>a_far_proxy_unread_as_its_chunk_arrives_is_late_once_unless_the_far_field_fills</code></td><td>loads of 200 frames flying east from an arrival: 3 Late Chunks, each once, for a Chunks' streamer; 0 for a Far proxies' streamer, whose arrival fills; 3 again once a load of the arrival keeps failing</td></tr>
+      <tr><td><code>the_worlds_paths_keep_its_far_proxies_within_their_materials_count_and_none_late</code></td><td>on the world's bench path and traversal, loads of 8 and of 300 frames: over 200 Far proxies Resident or in flight at most, never past the Material table's Far proxy count, and 0 Late Far proxies</td></tr>
       <tr><td><code>a_fast_travel_pauses_the_camera_path_until_its_hold_ends</code></td><td>on a headless adapter, through <code>render_frames</code>, <code>uv-grid</code>'s camera jumps 4 km from its one Chunk, then back, each jump marked <code>teleported</code>: the jump away holds no frame, the jump back holds at least one, and each reports its hold on the frame the hold ends</td></tr>
       <tr><td><code>a_frame_is_settled_when_every_chunk_it_requested_has_loaded</code></td><td>the frames that are not Settled flying east with loads of 6 frames: the first 6, and 6 from each of the two requests ahead, on frames 148 and 189, the second for the two Chunks 128 m off the camera's line, which close more slowly</td></tr>
       <tr><td><code>an_unload_reports_the_assets_it_was_the_last_loaded_user_of_in_order</code></td><td>a column unloading while held Chunks still name its rows' Materials reports only its Mesh; twelve Chunks unloading at once report their Meshes and Materials in the order their counts reach zero</td></tr>
       <tr><td><code>each_reference_scene_holds_every_chunk_within_its_load_radius</code></td><td>for every Reference scene but the world, every Chunk within its Load radius on each of a reference bench's 2,048 frames</td></tr>
-      <tr><td><code>streamed_loads_past_the_frames_instances_wait_in_priority_order</code></td><td>on a headless adapter, <code>texture-wall</code>'s four Chunks, read before any loads, under a cap of one Instance: each places more alone, so they arrive one a frame over four frames, nearest the camera first</td></tr>
+      <tr><td><code>loads_past_the_frames_count_wait_for_later_frames_nearest_first</code></td><td>nine reads back in one frame under a count of four: the four nearest load, then four, then one, nearest first</td></tr>
+      <tr><td><code>a_load_that_fails_counts_towards_its_frames_loads</code></td><td>the same nine with the nearest refused: it fails and three load beside it</td></tr>
+      <tr><td><code>a_settling_frame_loads_past_the_frames_count_in_coordinate_order</code></td><td>a settling frame loads all nine, past the count, in coordinate order</td></tr>
+      <tr><td><code>a_load_is_placed_once_its_blases_are_ready_and_dropped_if_its_chunk_left_meanwhile</code></td><td>four loads whose BLASes are not ready place nothing; a frame later, three of them in the order loaded, then four new ones ready at once; once the camera has left past the hold radius, the last two are placed for the streamer to drop, in no frame's loads</td></tr>
+      <tr><td><code>streamed_loads_past_the_frames_instances_wait_in_priority_order</code></td><td>on a headless adapter, <code>texture-wall</code>'s four Chunks under a cap of one Instance: each places more alone, so each is placed in a frame of its own once its BLAS is ready, in the order loaded, nearest the camera first</td></tr>
       <tr><td><code>streamed_loads_past_the_frames_load_bytes_wait_in_priority_order</code></td><td>on a headless adapter, <code>texture-wall</code>'s four Chunks, read before any loads, each writing about 2 KB of its own Materials: under a 3,000-byte cap they arrive one a frame over four frames, nearest the camera first, and no frame writes more than the cap</td></tr>
+      <tr><td><code>a_streamed_chunk_is_placed_once_its_blas_is_ready_and_shadowed_within_ten_frames</code></td><td>on a headless adapter, <code>shadows</code>' Chunk streamed into frames that do not settle: the frame that loads it places nothing and waits for no BLAS, a later one places it, and its shadow is traced within ten frames of that one</td></tr>
+      <tr><td><code>a_chunk_the_camera_left_before_its_blas_was_ready_is_not_placed_and_frees_its_users</code></td><td>on a headless adapter, the camera leaves <code>texture-wall</code> before its Chunks' BLAS can be ready: none is placed, and each gives back the user it counted of its Mesh</td></tr>
       <tr><td><code>a_chunk_loads_is_drawn_held_and_unloaded_as_the_camera_flies_past</code></td><td>on a headless adapter, <code>far_coplanar</code> with a Load radius of 0 m and Settled frames: over a Chunk, it alone loads and the GPU draws Instances; 300 m on, it is held and the 6 Chunks the jump closed on load, not the 2 beside it that it left; 772 m further, it and those 6 unload and 9 load; 2 Late Chunks, as the camera lands twice on a Chunk not loaded; the bench's <code>Counters</code> sum 16 loads, 7 unloads and every byte read</td></tr>
+      <tr><td><code>far_proxies_are_requested_after_the_chunks_and_released_an_edge_past_the_view_distance</code></td><td>a row of seven Chunks, Load radius 256 m, View distance 512 m: the first frame requests the three Chunks, then the five Far proxies, nearest first, each Far proxy read for the camera and no Chunk so; the hold ends with no Far proxy loaded; four Far proxies load in a frame, then the fifth; a jump three Chunks east unloads the two past the 768 m hold radius and holds [0, 0], 640 m off</td></tr>
+      <tr><td><code>the_far_fields_fill_is_timed_from_the_holds_end_to_the_last_far_proxy_within_the_view_distance</code></td><td>the same row: no hold or fill timed while the first arrival fills; after a jump, the hold timed on the frame both Chunks load and the fill on the frame the last Far proxy loads, two frames later, and nothing after</td></tr>
+      <tr><td><code>a_far_proxy_draws_exactly_while_its_chunk_does_not</code></td><td>on a headless adapter, <code>world</code> with a Load radius of 0 m: over one Chunk, it draws its Placements and the next its Far proxy, whose atlas is Resident from mip 0; arriving over the next, a Late Chunk, both draw their Far proxies; Settled, the next draws its Placements, with more Instances and triangles than its Far proxy and the same picture in over two pixels of three</td></tr>
+      <tr><td><code>requests_are_taken_chunks_first_then_mips_then_far_proxies</code></td><td>Chunk reads first, then mips, then Far proxies, each in the order requested; no Far proxy while a Chunk read is taken, and three at most at once; nothing once closed</td></tr>
+      <tr><td><code>a_far_proxy_read_for_a_camera_decodes_its_atlas_down_to_the_mip_its_distance_needs</code></td><td>a 2,048&sup2; BC7 atlas whose tail starts at mip 3, read for a camera 2.5 m off, from mip 1; 100 m off, and for no camera, its tail</td></tr>
+      <tr><td><code>a_wait_for_loads_finds_the_reads_taken_since_they_were_requested</code></td><td>a wait for loads fails when the IO pool holds none, and returns when it holds a read already taken but not loaded, as the second streamer of a frame leaves one</td></tr>
+      <tr><td><code>waiting_for_reads_with_none_in_flight_returns</code></td><td>a test's wait for reads returns at once when none is in flight</td></tr>
       <tr><td><code>an_asset_the_pools_freed_is_claimed_afresh_by_its_next_read</code></td><td>a freed Material leaves the claimed set, and its next read from the Cooked cache claims it again without waiting for a decoded copy</td></tr>
       <tr><td><code>a_chunk_lacks_an_asset_neither_available_nor_decoded</code></td><td>a Chunk naming a decoded Mesh whose decoded Material names an undecoded Texture lacks it, and not once it is decoded; a Placement's Material neither available nor decoded is lacked, a decoded one not; an available Material's Textures are not walked</td></tr>
       <tr><td><code>a_chunk_waits_only_on_the_reads_in_flight_when_its_own_came_back</code></td><td>two Chunk reads requested, the second back first: it has the first to wait on, still after a third is requested; once the first is back, the third alone is none of the second's, though it is the first's</td></tr>
@@ -375,63 +478,76 @@ self.fast_travel.time(Instant::now(), &amp;mut streamed);</code></pre>
 </section>
 
 <section class="part prose" id="cost">
-  <div class="part-mark">9 &middot; <code>update</code></div>
+  <div class="part-mark">10 &middot; <code>stream_chunks</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">One Baseline times streaming, the world's on the M4 Pro: every Reference scene but the world loads all its Chunks in its first frames, before a bench measures, while the world's 3,352 measured frames load 42 Chunks, none of them late, and unload 41, inside a CPU frame no field splits by stage. The update's cost grows with the Chunks it examines: the square around its request radius and the Chunks it has loaded. A first Settled frame costs the reads, decodes and pool loads of every Chunk.</p>
+  <p class="key-idea">Only the world streams within a measured window: every other Reference scene loads all its Chunks in its first frames, before a bench measures, so its <code>stream_chunks</code> is the update alone over Chunks that never change. The world's 3,352 frames on the M4 Pro load 42 Chunks, none late, unload 41, fill the Far field after the Fast travel with no Late Far proxy, and read 161 MB of Chunks, Far proxies and mips.</p>
   <div class="table-wrap">
   <table class="facts compact">
-    <thead><tr><th>Flying diagonally at 50 m/s, 3,600 frames</th><th class="n">Median, &micro;s</th><th class="n">p99, &micro;s</th></tr></thead>
+    <thead><tr><th><code>stream_chunks</code>, &micro;s</th><th class="n">Median</th><th class="n">p95</th><th class="n">p99</th><th class="n">Maximum</th></tr></thead>
     <tbody>
-      <tr class="focus"><td>Load radius 256 m over 40 &times; 40 Chunks</td><td class="n">0.29&ndash;0.33</td><td class="n">0.58&ndash;0.71</td></tr>
+      <tr class="focus"><td><code>world</code>, M4 Pro, Metal</td><td class="n">79.6</td><td class="n">728.0</td><td class="n">3,108.2</td><td class="n">7,156.5</td></tr>
+      <tr><td><code>far_coplanar</code>, M4 Pro, Metal</td><td class="n">14.5</td><td class="n">22.9</td><td class="n">27.3</td><td class="n">36.4</td></tr>
+      <tr><td><code>town</code>, M4 Pro, Metal</td><td class="n">2.2</td><td class="n">6.9</td><td class="n">11.0</td><td class="n">14.3</td></tr>
+      <tr><td><code>texture-wall</code>, M4 Pro, Metal</td><td class="n">0.5</td><td class="n">1.6</td><td class="n">6.4</td><td class="n">9.9</td></tr>
+      <tr><td><code>world</code>, lavapipe, Vulkan</td><td class="n">303.5</td><td class="n">3,315.6</td><td class="n">118,338.9</td><td class="n">118,338.9</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">Release build on the Apple M4 Pro: the update alone, in a test against the scripted IO with loads of 6 frames, five rounds while other sessions held the one-minute load average near 26, so the ranges may run high.</p>
-  <p>The work is the Chunks overlapping the widest request radius's square, clamped to the lowest and highest coordinates of the Game world's Chunks, each looked up in the Game world's set, plus every loaded Chunk for the hold radius and the held list. At 256 m that is 9 to 25 Chunks examined, and the loaded ones, at most the 20 to 23 within the hold radius. Its lists and sets are cleared each frame, not dropped, so they keep their capacity.</p>
+  <p class="note">The CPU stage per measured frame, from the Baselines at 62052fe8 (<code>cpu_time_microseconds</code>). lavapipe's <code>world</code> measures the bench's 64 counter frames only, one of which loads a Chunk. The RTX 2070 SUPER's Baselines were recorded at an older engine source, before the stage split and the Far field, and give no figure here; <code>far_coplanar</code>'s update examines all its Chunks every frame, as its Load radius spans them.</p>
   <div class="table-wrap">
   <table class="facts compact">
-    <thead><tr><th>First Settled frame, <code>stream_chunks</code></th><th class="n">Chunks</th><th class="n">Bytes read</th><th class="n">1 thread, &micro;s</th><th class="n">4 threads, &micro;s</th></tr></thead>
+    <thead><tr><th><code>world</code>, M4 Pro, Metal, 3,352 frames</th><th class="n">Value</th></tr></thead>
     <tbody>
-      <tr class="focus"><td><code>town</code></td><td class="n">16</td><td class="n">712,059</td><td class="n">18,494&ndash;22,586</td><td class="n">10,943&ndash;11,788</td></tr>
-      <tr><td><code>far_coplanar</code></td><td class="n">258</td><td class="n">38,420</td><td class="n">21,200&ndash;26,804</td><td class="n">9,535&ndash;10,496</td></tr>
-      <tr><td><code>texture-wall</code></td><td class="n">4</td><td class="n">14,993</td><td class="n">8,737&ndash;9,025</td><td class="n">3,572&ndash;3,938</td></tr>
+      <tr><td>Chunks loaded / unloaded</td><td class="n">42 / 41</td></tr>
+      <tr><td>Late Chunks / Late Far proxies</td><td class="n">0 / 0</td></tr>
+      <tr><td>Bytes read, Chunks, Far proxies and mips</td><td class="n">161,285,398</td></tr>
+      <tr><td>Pool entries freed</td><td class="n">1,126</td></tr>
+      <tr class="focus"><td>Fast travel's hold</td><td class="n">29.4 ms, 4 frames</td></tr>
+      <tr class="focus"><td>Far field's fill after it</td><td class="n">612.4 ms, 79 frames</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note">Release build on the Apple M4 Pro, from a warm file cache: the stage's wall time, which waits for the reads and loads every Chunk into the pools, three interleaved rounds while other sessions held the one-minute load average between 7 and 10.</p>
+  <p class="note">The Baseline's counters at 62052fe8.</p>
+  <p>The update's work is the Chunks overlapping the widest request radius's square, clamped to the Game world's bounds, each looked up in the Game world's set, plus every loaded Chunk for the hold radius and the held list, once for the Chunks and, in the world, once for the Far proxies over the View distance's square. At 256 m that is 9 to 25 Chunks examined, and the loaded ones, at most the 20 to 23 within the hold radius. Its lists and sets are cleared each frame, not dropped, so they keep their capacity. A loading frame adds each load's sizing and pool writes on the main thread, which <code>LOADS_PER_FRAME</code> bounds, and a placing frame prepare's Instances and the static TLAS's entry changes, which <code>INSTANCES_PLACED_PER_FRAME</code> bounds.</p>
 </section>
 
 <section class="part prose" id="why">
-  <div class="part-mark">10</div>
+  <div class="part-mark">11</div>
   <h2>Why this way</h2>
   <p><b>The nearest point.</b> The Load radius was chosen from a table that counts the Chunks whose nearest point lies within each radius, 7 to 9 at 256 m against 20 to 23 at 512 m, so the streamer measures the same way. Measured to a Chunk's middle instead, a Load radius of 256 m would leave unloaded a Chunk whose corner is 75 m from the camera.</p>
   <p><b>A hold radius one Chunk out.</b> OGRE's terrain paging holds pages to a larger radius than it loads them to, to stop thrashing when the camera moves back and forth across the loading border. The streamed world takes that form with the hold one Chunk, 256 m, beyond the Load radius; held Chunks are not drawn or traced, as at <code>town</code>'s density the static TLAS could not hold them.</p>
   <p><b>A lead toward each Chunk.</b> Funkhouser bounds where an observer can be in N frames by a sphere of radius N times its top speed, and suggests weighting it toward the direction of travel. The streamer weights it all the way: each Chunk's lead is its own closing rate times the lead's frames. With one request radius around the camera, the sphere alone, a 30-frame lead loaded four Chunks whose corners the world's diagonal passes outside the Load radius, and the world's bench 47 Chunks instead of 42; toward each Chunk, only those the camera reaches load. The sphere stays the better bound for a camera that turns: what a turn can miss is a Chunk within a few metres of the Load radius in the new direction, which a sphere a few frames wide would also have missed.</p>
-  <p><b>A floor under the slowest load.</b> Funkhouser's 1996 system prefetched up to 16 frames ahead, the count the floor takes, and OpenMW preloads the cells at the player's position predicted a second ahead by default, a fixed setting. A lead taken from the latest load alone dropped to two frames after every one-frame load, and the slow loads that settlements bring then landed after the camera arrived. A lead from past loads alone, the slowest or a high percentile, still misses the first slow load, which follows only fast ones. So the lead starts from a fixed count of frames and grows to the slowest load seen when loads outlast it, on slower IO or heavier content. Sixteen frames is over twice the slowest load the world's traversal has met on the M4 Pro, 7 frames at the bench's pace, and kept the traversal's peak GPU memory within the 1,020 to 1,177 MB the latest-load lead left. A 30-frame floor peaked at 1,356 MB in most traversals: Chunks ahead loaded while those behind were not yet past the hold radius, so more Textures were Resident at once, and Texture classes, created whole with every slice counted, opened one or two more of 88 MB. Predicting each Chunk's load from what it must read would need its Asset IDs before its read, which only the read gives.</p>
+  <p><b>A floor under the slowest load.</b> Funkhouser's 1996 system prefetched up to 16 frames ahead, the count the floor takes, and OpenMW preloads the cells at the player's position predicted a second ahead by default, a fixed setting. A lead taken from the latest load alone dropped to two frames after every one-frame load, and the slow loads that settlements bring then landed after the camera arrived. A lead from past loads alone, the slowest or a high percentile, still misses the first slow load, which follows only fast ones. So the lead starts from a fixed count of frames and grows to the slowest load seen when loads outlast it, on slower IO or heavier content. A 30-frame floor peaked higher in GPU memory in most traversals: Chunks ahead loaded while those behind were not yet past the hold radius, so more Textures were Resident at once. Predicting each Chunk's load from what it must read would need its Asset IDs before its read, which only the read gives.</p>
   <p><b>Frames, not seconds.</b> Speed and load time are both counted in frames, so their product is a distance whatever the frame rate, and the streamer reads no clock: the same camera path and the same IO give the same requests, which the tests and Settled captures both need.</p>
   <p><b>Decoding on the IO threads, four of them.</b> The survey left open whether the IO threads decode or hand each Blob to the compute pool. Run as a compute-pool task the IO thread waits on, decoding settled <code>town</code>, <code>far_coplanar</code> and <code>texture-wall</code> within 2% of the time two IO threads took, with a hop more per Blob, so it stays on the threads that read. Four threads settled them in 22 to 38% less time than two, as the survey's four-thread reads and decodes outran two; most of a small Blob's cost is its open, which threads overlap.</p>
+  <p><b>Lanes, and a thread kept from Far proxies.</b> A Far proxy read that decodes its atlas's mips is several MiB; in first-come order the destination's Chunk mips queued behind them after a Fast travel, and its hold took a frame more. Taking Chunk reads, then mips, first brought the Chunk mips back, and keeping Far proxies off one thread and out while a Chunk read is taken brought the hold back. Holding Far proxy reads until the hold ended gave back little of the hold and left the fill as it was, so they wait only for the Chunk reads taken.</p>
+  <p><b>A Far proxy's mips with its read.</b> Read as its tail alone, a Far proxy that loads and draws on one frame, as the Far field fills after a Fast travel, drew from its tail while its own mips were read a frame later: almost every late mip of the world's bench segment. Read down to the mip its distance needs, at the rule mip streaming applies to a drawn Placement, its first drawn frame has them.</p>
   <p><b>Loads in coordinate order while settling.</b> Slot ranges and pool entries follow the order Chunks load in, and the order Instances reach the GPU can change an image on the M4 Pro, so a Settled frame loads its Chunks only once all have come back, sorted. That is also the order the scenes loaded their Chunks in before they streamed, so their Goldens pass bit-exact.</p>
-  <p><b>A share of the staging Budget per frame.</b> ADR 0017 caps the bytes a frame writes into the load's <code>StagingBelt</code>, whose chunk size is only its allocation unit, at the staging Budget. A frame's belt lives until the GPU has run its copies, so the frames in flight and the one being written can hold three belts at once; a third of the Budget each keeps them within it together. The Reference scenes' Chunks write far less: at most 5,595,688 bytes in one frame, <code>uv-grid</code>'s first, so no scene's loads wait.</p>
-  <p><b>Sized before, not measured after.</b> A load cannot be undone once written into the belt, so a frame that only stopped after crossing the cap would cross it. Sizing each Chunk from its decoded Assets first keeps every frame under the cap but one: a Chunk that alone writes more than the cap loads with no other writes in its frame, rather than never.</p>
-  <p><b>Instances capped as well as bytes.</b> The bytes a Chunk writes say nothing of its Placements: after the world's Fast travel, nine Chunks that wrote about 2 MB between them came back from the IO pool in one frame and placed 262,212 Instances there, whose prepare, static TLAS entry changes and frame staging made that frame the bench's slowest, well past a 60 Hz period. Capped at 131,072 a frame, those loads spread over the hold's frames, and its slowest frame is faster in every round measured; the hold takes a frame or two more. <code>docs/performance.md</code> has the figures. The cap does not bind on the world's path at 50 m/s, whose frames load a Chunk or two.</p>
+  <p><b>A share of the staging Budget per frame.</b> ADR 0017 caps the bytes a frame writes into the load's <code>StagingBelt</code>, whose chunk size is only its allocation unit, at the staging Budget. A frame's belt lives until the GPU has run its copies, so the frames in flight and the one being written can hold three belts at once; a third of what the frame staging leaves each keeps them within it together.</p>
+  <p><b>Sized before, not measured after.</b> A load cannot be undone once written into the belt, so a frame that only stopped after crossing the cap would cross it. Sizing each load from its decoded Assets first keeps every frame under the cap but one: a load that alone writes more than the cap loads with no other writes in its frame, rather than never.</p>
+  <p><b>Loads capped by count.</b> Each load's sizing and pool writes take the main thread whatever it writes or places. Measured on the M4 Pro with loads of one Placement, each with a Mesh, a Material and two Textures of its own, a frame that loads costs a fixed 336 to 393 &micro;s and 95 to 115 &micro;s a load; the world's slowest frame reads 8.3 to 8.4 ms at 3 loads a frame, 12.1 to 12.4 ms at 8 and 12.4 to 13.1 ms at 16, so the count is 3 (<code>docs/performance.md</code>). The Far proxies share it rather than take a count of their own, which sets the fill's length.</p>
+  <p><b>Placed once the BLASes are ready.</b> A frame that loaded a Mesh rays trace used to wait on the GPU for its BLAS to build and compact: 3.73 to 3.83 ms a loading frame and 542 to 576 &micro;s a load on the probe above. Deferred, a load is placed 4 frames later by the median and the maximum of the probe's loads, and the Chunk counts as loaded from then, so nothing is ever drawn that rays cannot trace. A Settled frame keeps the wait, so captures, Goldens and the bench's counter frames are unchanged.</p>
+  <p><b>Instances capped as well as bytes.</b> The bytes a load writes say nothing of its Placements: after the world's Fast travel, nine Chunks that wrote about 2 MB between them placed 262,212 Instances in one frame, whose prepare, static TLAS entry changes and frame staging made that frame the bench's slowest, well past a 60 Hz period. Capped at 131,072 a frame, those placements spread over the hold's frames (<code>docs/performance.md</code>). The cap counts at placement, since loads made over several frames could otherwise all be placed in one.</p>
   <p><b>Tails on the main thread too.</b> Read whole, a Texture another Chunk claimed was written with every mip into the class of its whole chain: one Chunk of the world read 17 facade Textures of 2,048&sup2; that way and wrote 95 MB in one frame, opening the whole-chain classes. Read as the IO pool reads it, a tail is a fraction of the work, and mip streaming brings in the mips its Placements need.</p>
-  <p><b>Arrivals hold.</b> A teleport has no lead to cover it: Sunset Overdrive's streaming had to load all seven zones around a teleport's destination at once. The streamer holds instead, and does not count the arrival's Chunks as Late, so Late Chunks measure travel alone, and the hold is timed from the jump, so the wait an arrival costs is measured rather than lost among the frames after it.</p>
+  <p><b>A second streamer for the Far field.</b> The rule that requests, holds and unloads Chunks around the Load radius serves Far proxies around the View distance unchanged, lead, hold radius, retries and Settled report included, so a Far proxy is Resident before its Chunk comes within 2 km and the two never thrash at the edge. Holding a Far proxy while its Chunk is drawn, rather than dropping it, makes the swap one frame in both directions, and a Late Chunk keeps its proxy until it loads (ADR 0026).</p>
+  <p><b>Arrivals hold.</b> A teleport has no lead to cover it: Sunset Overdrive's streaming had to load all seven zones around a teleport's destination at once. The streamer holds instead, and does not count the arrival's Chunks as Late, so Late Chunks measure travel alone, and the hold is timed from the jump, so the wait an arrival costs is measured rather than lost among the frames after it. The Far field then fills over many frames, and its proxies are not counted late while it does, but the fill is timed.</p>
 </section>
 
 <section class="part prose" id="limits">
-  <div class="part-mark">11</div>
+  <div class="part-mark">12</div>
   <h2>Limits</h2>
-  <p><b>Only the world streams.</b> Every other Reference scene holds all its Chunks from every frame of its path. The world&#39;s camera flies at 50 m/s and Fast travels once, so its captures and its bench load the Chunks ahead of it and hold, undrawn, those it leaves past the Load radius, until they pass the hold radius and unload.</p>
-  <p><b>A Chunk past the cap loads alone.</b> A Chunk is not sized while the frame's loads have written nothing, so one that writes more than the frame's load bytes loads without other writes in its frame and crosses the cap; one that places more than the frame's Instances loads with no other Chunk.</p>
-  <p><b>Settled waits are uncapped.</b> A Settled frame, a capture's or one of the bench's up to the end of its counter frames, loads every Chunk it waited for in one frame, whatever their bytes.</p>
-  <p><b>Waiting reads count against no one.</b> A Chunk that waits is sized again each frame, and one the camera has left still takes its turn before it is dropped.</p>
+  <p><b>Only the world streams.</b> Every other Reference scene holds all its Chunks from every frame of its path. The world's camera flies at 50 m/s and Fast travels once, so its captures and its bench load the Chunks ahead of it and hold, undrawn, those it leaves past the Load radius, until they pass the hold radius and unload.</p>
+  <p><b>Held Chunks crossing the Load radius are uncapped.</b> A Chunk placed held writes its Placements' Instances, and the static TLAS its entry changes, on the frame it crosses into the Load radius, which no cap counts: up to 114,670 Instances in one frame of the traversal.</p>
+  <p><b>A load past the cap loads alone.</b> A load is not sized while the frame's loads have written nothing, so one that writes more than the frame's load bytes loads without other writes in its frame and crosses the cap; one that places more than the frame's Instances is placed with no other.</p>
+  <p><b>Settled waits are uncapped.</b> A Settled frame, a capture's or one of the bench's up to the end of its counter frames, loads and places every load it waited for in one frame, whatever their count, bytes and Instances, and waits on the GPU for their BLASes.</p>
+  <p><b>Waiting reads count against no one.</b> A Chunk that waits is sized again each frame, and one the camera has left still takes its turn before it is dropped; a load whose Chunk the camera left before its BLASes were ready holds its pool entries until they are.</p>
+  <p><b>The fill shares three loads a frame.</b> The Far proxies load after the Chunks, within the same count, so a Fast travel's fill takes 79 frames on the world's bench.</p>
   <p><b>Freed only for room, a few a frame.</b> An entry left with no user is freed only when a load is refused, and each pool frees at most <code>ENTRIES_FREED_PER_FRAME</code> a frame for Arena and Texture room; a full Material table frees one unused Material for each Material it loads, past that, as each free makes the one entry the load needs. A load still refused fails its Chunk, which is asked for again later.</p>
   <p><b>Main-thread reads after a failed read or a refusal.</b> An Asset claimed by a read that failed, or taken by a load the pools refused, stays claimed undecoded. A Chunk that needs it waits for the reads in flight when its own came back, then reads and decodes it on the main thread, a Texture to its Resident tail, and <code>bytes_read</code> does not count it.</p>
   <p><b>A wait on reads that did not claim.</b> A Chunk waits on every Chunk read requested before its own came back, not only the one that claimed what it lacks, since claims are not traced to their reads; it is examined again each frame until they come back.</p>
-  <p><b>A longer hold.</b> A Fast travel whose Chunks place more than the cap holds a frame more for each 131,072 Instances; the world's bench held for 5 or 6 frames against 3 or 4 uncapped.</p>
   <p><b>The slowest load stays.</b> The lead never shrinks, so one stalled load widens every request radius for the rest of the run, up to the hold radius, where requests lose the margin that stops thrashing. A load slower than the floor and every load before it still makes its Chunk late, as does a camera that turns toward a Chunk near the Load radius or speeds up during a load.</p>
   <p><b>No cancelled reads.</b> A request whose Chunk the camera leaves stays in flight until it finishes and is dropped.</p>
-  <p><b>Wide radii examine many Chunks.</b> The square around a radius that holds a whole scene, clamped to the Game world's bounds, is examined every frame, every Chunk of it looked up, whether or not anything moves.</p>
+  <p><b>Wide radii examine many Chunks.</b> The square around a radius that holds a whole scene, clamped to the Game world's bounds, is examined every frame, every Chunk of it looked up, whether or not anything moves; the world's Far proxies' streamer examines the 2,256 m square's Chunks every frame.</p>
 </section>
 
 <section class="part prose" id="sources">
@@ -450,10 +566,12 @@ self.fast_travel.time(Instant::now(), &amp;mut streamed);</code></pre>
     <dd>A teleport loading every zone around its destination at once. Registry key ruskin-2015-sunset-overdrive-teleport, as the survey cites it.</dd>
     <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/research/open-world-streaming-and-io.md">State of the art: open-world streaming and IO</a></dt>
     <dd>The survey behind the hold radius, the lead and the Load radius, with the table of Chunks per radius.</dd>
+    <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/adr/0026-the-far-field-draws-a-far-proxy-per-chunk.md">ADR 0026</a></dt>
+    <dd>The Far field: a Far proxy per Chunk within the View distance, the swap at the Load radius, and the ground past the View distance.</dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The streamer was written for the streamed world after its survey set the Load radius at 256 m and the hold radius one Chunk beyond it, before any scene loaded its Chunks through it. The IO pool then drove it: every scene's Chunks loaded through it, each scene with a Load radius of its own, and captures waited for Settled frames. Each frame's loads were then capped by the staging Budget, nearest the camera first, and the pools began freeing the entries no user held, for room, with the claimed set following their frees. Mip streaming then shared the IO pool, whose threads came to decode a Chunk's Textures to their Resident tails alone and read their finer mips on request. Then the camera's teleport flag reached the streamer, which had been told of none, so the world's Fast travel holds and its hold is timed. Last, the lead, which had followed the latest load around the camera, took the slowest load so far with a floor of 16 frames, toward each Chunk at the rate the camera closed on it, after the world's traversal found the first slow loads of each settlement late. Then a frame's loads were capped by the Instances they place as well, and a Texture read on the main thread for a Chunk was decoded to its tail, after the world's arrival frame and the frame a facade Chunk loaded both passed a 60 Hz period. Then a load came to wait for the reads in flight that claimed what it lacked, rather than read it on the main thread, after the arrival frame was split by step. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/streaming/</code>, <code>src/state.rs</code>, <code>src/capture/mod.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/scenes/world.rs</code>, <code>src/camera/mod.rs</code>, <code>src/stats/mod.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/assets/loader.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0016 and 0017 and the survey above, all at <code>main</code>'s 4e3a8793 with this change.</footer>
+  <p class="note">The streamer was written for the streamed world after its survey set the Load radius at 256 m and the hold radius one Chunk beyond it, before any scene loaded its Chunks through it. The IO pool then drove it: every scene's Chunks loaded through it, each scene with a Load radius of its own, and captures waited for Settled frames. Each frame's loads were then capped by the staging Budget, nearest the camera first, and the pools began freeing the entries no user held, for room, with the claimed set following their frees. Mip streaming then shared the IO pool, whose threads came to decode a Chunk's Textures to their Resident tails alone and read their finer mips on request. Then the camera's teleport flag reached the streamer, which had been told of none, so the world's Fast travel holds and its hold is timed. Last, the lead, which had followed the latest load around the camera, took the slowest load so far with a floor of 16 frames, toward each Chunk at the rate the camera closed on it, after the world's traversal found the first slow loads of each settlement late. Then a frame's loads were capped by the Instances they place as well, and a Texture read on the main thread for a Chunk was decoded to its tail, after the world's arrival frame and the frame a facade Chunk loaded both passed a 60 Hz period. On 2026-11-12 a load came to wait for the reads in flight that claimed what it lacked, rather than read it on the main thread, after the arrival frame was split by step. On 2026-11-14 a frame's loads were capped at three, and on 2026-11-15 a streamed load stopped waiting on the GPU for its BLASes, placed once they are ready, with the Instances' cap moved to placement. From 2026-11-16 a second streamer kept the world's Far proxies Resident within its 2 km View distance, counting the late ones; from 2026-11-18 they were drawn in place of the Chunks not drawn, swapping whole at the Load radius, over a ground reaching past the View distance. On 2026-11-20 held Chunks' and Far proxies' mips came to be requested a lead ahead, a Fast travel's Far field fill was timed beside its hold, and a Far proxy came to be read with its atlas down to the mip its distance needs, through IO lanes that take Chunk reads first. This page describes the mechanism as it is.</p>
+  <footer class="sources">Written from <code>src/streaming/</code>, <code>src/state.rs</code>, <code>src/capture/mod.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/scenes/world.rs</code>, <code>src/camera/mod.rs</code>, <code>src/stats/mod.rs</code>, <code>src/assets/cooked.rs</code>, <code>src/assets/loader.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/prepare.rs</code>, <code>src/render/acceleration_structures.rs</code>, the tests named above, the Baselines in <code>bench/baselines/</code>, <code>docs/performance.md</code>, <code>CONTEXT.md</code>, ADRs 0016, 0017 and 0026 and the survey above, all at <code>main</code> 62052fe8.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="cook-far-proxy.html">Previous: Far proxy cooking</a><a href="index.html">All field guides</a><a href="mip-streaming.html">Next: Mip streaming</a></nav>
