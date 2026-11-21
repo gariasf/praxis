@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; concept &middot; <code>src/assets/material.rs</code></div>
   <h1>Box filtering</h1>
   <p class="definition">Averaging what a pixel covers with equal weights is a box filter: the cooker's mips take the mean of each 2&times;2 box of texels, and the sampler's anisotropic filtering averages equal-weight probes along the pixel's footprint. A box's frequency response is a sinc, which never cuts cleanly at the Nyquist limit, so detail finer than a pixel leaks through as a small signed residue, and one sample per pixel of that residue beats into moir&eacute;.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 7b8009ee (2026-11-05). A concept the pages lean on; a change to how Praxis filters Textures, in the cooker or the samplers, rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="lit-pass.html#sampling">The lit pass</a>, <a href="cook-texture.html#mips">Texture cooking</a>. <b>Read first:</b> <a href="msaa.html#samples">MSAA</a>, for samples per pixel.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 53708600 (2026-11-21). A concept the pages lean on; a change to how Praxis filters Textures, in the cooker or the samplers, rewrites this page and moves the commit. <b>Pages that use it:</b> <a href="lit-pass.html#sampling">The lit pass</a>, <a href="cook-texture.html#mips">Texture cooking</a>, <a href="cook-far-proxy.html">Far proxy cooking</a>. <b>Read first:</b> <a href="msaa.html#samples">MSAA</a>, for samples per pixel.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">In the frame</h2>
     <dl>
@@ -250,6 +250,7 @@ fn downsample(&amp;self) -&gt; Level {
         }
     }</code></pre>
   <p class="code-source"><code>src/cook/texture.rs</code>, the head of <code>Level::reduce</code>. A cook test checks for the 188 (<a href="cook-texture.html#linear">Texture cooking</a>). A box in linear light is still a box: each mip removes detail finer than its texel with the same sinc, and the research note found the cooked mips within 0.49 steps of the exact mean.</p>
+  <p>A Far proxy's bake averages the same way. Each texel of its atlas is the mean, in linear light, of the 4&times;4 samples of it that a source covers, each sample reading the finest mip of the source's Textures whose texels are no smaller than it; that mean is a box one texel wide, and the atlas then cooks its mips by <code>Level::downsample</code> like any Texture (<a href="cook-far-proxy.html">Far proxy cooking</a>).</p>
   <p>The bench's supersampled reference is built the same way. <code>Aliasing::between</code> decodes the Golden's frame and the same frame at three times its width and height through the sRGB curve, averages each 3&times;3 block of the larger in linear light, and takes each pixel's error as the root mean square of its three channels' differences; <code>aliasing_rmse</code> is the root mean square of every pixel's error and <code>aliasing_p99</code> the 99th percentile pixel error, both in millionths, so they compare as integers.</p>
 </section>
 
@@ -312,20 +313,20 @@ box of w:        sinc(w/p)          &middot; cos(2&pi;c/p)</div>
       <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">32,960</td><td class="n">143,799</td></tr>
       <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">35,304</td><td class="n">145,354</td></tr>
       <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">35,459</td><td class="n">147,720</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">18,973</td><td class="n">35,784</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">20,044</td><td class="n">38,865</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">19,057</td><td class="n">36,832</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">20,043</td><td class="n">38,708</td></tr>
       <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">18,883</td><td class="n">35,523</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">10,958</td><td class="n">15,042</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">10,954</td><td class="n">15,100</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">12,038</td><td class="n">27,908</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">11,008</td><td class="n">15,023</td></tr>
       <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">11,001</td><td class="n">15,019</td></tr>
-      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">6,558</td><td class="n">33,364</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">9,340</td><td class="n">49,559</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">6,569</td><td class="n">33,476</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">9,352</td><td class="n">49,643</td></tr>
       <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">7,112</td><td class="n">35,657</td></tr>
-      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">5,078</td><td class="n">15,451</td></tr>
-      <tr><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">5,092</td><td class="n">15,431</td></tr>
+      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">5,254</td><td class="n">17,913</td></tr>
+      <tr><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">5,097</td><td class="n">15,455</td></tr>
       <tr><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">5,097</td><td class="n">15,455</td></tr>
-      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,221</td><td class="n">13,754</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">3,219</td><td class="n">13,744</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,222</td><td class="n">13,721</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">3,220</td><td class="n">13,718</td></tr>
       <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">3,220</td><td class="n">13,728</td></tr>
     </tbody>
   </table>
@@ -370,11 +371,11 @@ box of w:        sinc(w/p)          &middot; cos(2&pi;c/p)</div>
     <dt><a href="https://github.com/gariasf/praxis/blob/main/docs/research/minification-filtering.md">The research note on minification filtering</a></dt><dd>the exact reference, every candidate's measurement on the M4 Pro, and the options</dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The arcs were found during the third milestone's work on <code>minification</code>, in an exact reference that averages the checker over each pixel's footprint, so no step of the texture path was to blame. The sampler's probe counts, 16 for colour and 4 for data, were chosen earlier against a supersampled reference, where the reference's bias toward blur on glints was noticed. The candidate filters were then measured and left as options in the research note, no fix chosen, and the bench gained its aliasing counters so that a change of the image shows against its Baseline.</p>
-  <footer class="sources">Written from <code>src/cook/texture.rs</code>, <code>src/assets/material.rs</code>, <code>src/bench/mod.rs</code>, <code>tests/cook.rs</code>, the Baselines, <code>docs/research/minification-filtering.md</code>, ADRs 0008 and 0019, and the sources above, all at <code>main</code> 7b8009ee.</footer>
+  <p class="note">The arcs were found during the third milestone's work on <code>minification</code>, in an exact reference that averages the checker over each pixel's footprint, so no step of the texture path was to blame. The sampler's probe counts, 16 for colour and 4 for data, were chosen earlier against a supersampled reference, where the reference's bias toward blur on glints was noticed. The candidate filters were then measured and left as options in the research note, no fix chosen, and the bench gained its aliasing counters so that a change of the image shows against its Baseline. When the far field came, its Far proxies' bake took the same box, each atlas texel the mean of its samples in light, and the cooker's mips stayed as they were.</p>
+  <footer class="sources">Written from <code>src/cook/texture.rs</code>, <code>src/assets/material.rs</code>, <code>src/bench/mod.rs</code>, <code>tests/cook.rs</code>, <code>src/cook/far_proxy/bake.rs</code>, the Baselines, <code>docs/research/minification-filtering.md</code>, ADRs 0008 and 0019, and the sources above, all at <code>main</code> 53708600.</footer>
 </section>
 
-<nav class="series" aria-label="Praxis field guides"><a href="cook-texture.html">Previous: Texture cooking</a><a href="index.html">All field guides</a><a href="cook-chunk.html">Next: Chunk cooking</a></nav>
+<nav class="series" aria-label="Praxis field guides"><a href="cook-texture.html">Previous: Texture cooking</a><a href="index.html">All field guides</a><a href="cook-mesh.html">Next: Mesh cooking</a></nav>
 
 </div>
 </div>
