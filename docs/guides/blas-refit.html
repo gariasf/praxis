@@ -117,17 +117,17 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/blas_refit.rs</code></div>
   <h1>The BLAS refit</h1>
   <p class="definition">In the <code>crowd</code> scene's refit form, the step that brings each bent figure's <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU's search structure over one Mesh's triangles, which each Instance of a TLAS places. A ray walks the TLAS down to the BLASes it reaches and meets their triangles.">BLAS</span> to the shape the bend pass gave it, by refitting it in place through wgpu-hal on Metal, before the dynamic TLAS is built over it; its rebuild form does the same through wgpu as the oracle, and the shipping form, the shadow proxies, needs neither.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the refit rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="bend-pass.html">Bend Pass</a> for the shapes the refit follows, <a href="blas.html">BLAS</a> for how a Mesh's BLAS is built at load, <a href="dynamic-tlas.html">Dynamic TLAS</a> for the build that reads the refitted BLASes, <a href="waiting-on-the-gpu.html">Waiting on the GPU</a> for why Metal needs an explicit order here.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 62052fe8 (2026-11-21). A change to the refit rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="bend-pass.html">Bend Pass</a> for the shapes the refit follows, <a href="blas.html">BLAS</a> for how a Mesh's BLAS is built at load, <a href="dynamic-tlas.html">Dynamic TLAS</a> for the build that reads the refitted BLASes, <a href="waiting-on-the-gpu.html">Waiting on the GPU</a> for why Metal needs an explicit order here.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
-      <dt>Runs</dt><dd>With the <code>crowd_form</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> at <code>CrowdForm::Refit</code>, on Metal only, or <code>CrowdForm::Rebuild</code>, on any backend: in each frame that bent anything, in a submission of its own with the frame's commands up to the bend pass, before the dynamic TLAS's build. At the default, <code>CrowdForm::Proxies</code>, the Renderer has none.</dd>
-      <dt>Reads</dt><dd>Each <code>MeshUse::Refitted</code> Mesh's ranges of the vertex and index <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.">Arenas</span>, as its <code>MeshBlas</code> records them.</dd>
+      <dt>Runs</dt><dd>With the <code>crowd_form</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, the form the crowd scene's deforming meshes take in the TLAS, whether Textures hold back the mips finer than their Resident tails (residency), whether a frame waits for the static TLAS's worker, as captures do, and the LOD every Instance draws where one is forced, rather than the one selected for it. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> at <code>CrowdForm::Refit</code>, on Metal only, or <code>CrowdForm::Rebuild</code>, on any backend: in each frame that bent anything, in a submission of its own with the frame's commands up to the bend pass, before the dynamic TLAS's build. At the default, <code>CrowdForm::Proxies</code>, the Renderer has none.</dd>
+      <dt>Reads</dt><dd>Each <code>MeshUse::Refitted</code> Mesh's ranges of the vertex and index <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, LOD 0's indices, and every LOD's Meshlets with their vertices and triangles.">Arenas</span>, its vertices and its LOD 0's indices, as its <code>MeshBlas</code> records them.</dd>
       <dt>Writes</dt><dd>Each refitted BLAS, in place; in the refit form, one scratch region per BLAS and the marker's 4-byte result.</dd>
       <dt>Builds</dt><dd>Refit form: one update per refitted BLAS, all in one wgpu-hal call on a command buffer of its own, then a marker of one invocation, <code>mark_blas_refit</code>, in another. Rebuild form: one full build per BLAS through wgpu, recorded into the frame's head.</dd>
       <dt>Bind groups</dt><dd>The marker's group 3, <code>BLAS_REFIT_MARKERS</code>: the refits' scratch, read-only, and the result. The refits themselves bind nothing.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/blas_refit_marker.wgsl</code>, the module <code>BLAS_REFIT_MARKER</code>, built on Apple targets and in tests.</dd>
-      <dt>Counted</dt><dd><code>blas_refit</code> in GPU time, the refit form's on Metal; the CPU stage <code>blas_refit</code>, which <code>dynamic_tlas_cpu_microseconds</code> sums; the scratch and the marker's result in GPU memory; the refitted BLASes in the acceleration-structure estimate, at the uncompacted rate.</dd>
+      <dt>Counted</dt><dd><code>blas_refit</code> in GPU time, the refit form's on Metal; the CPU stage <code>blas_refit</code>, which <code>dynamic_tlas_cpu_microseconds</code> sums; in GPU memory, the scratch under <code>acceleration_structures</code> and the marker's result under <code>scene_and_pass_buffers</code>; the refitted BLASes under <code>acceleration_structures</code>, each at the size wgpu-hal gives for its build, never at the compacted fraction.</dd>
       <dt>Files</dt><dd><code>src/render/blas_refit.rs</code>, <code>src/assets/pools.rs</code>, <code>src/render/shaders/blas_refit_marker.wgsl</code></dd>
     </dl>
   </aside>
@@ -154,15 +154,15 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <p>A rebuild makes the tree again from the triangles, as if they were new. A refit, which Vulkan and wgpu call an update, keeps which triangles share a leaf and how the leaves group, and recomputes only the boxes, from the leaves up, around the triangles where they now are. It costs less to make and gives up four things, each of which the code holds to:</p>
   <p><b>The same triangles.</b> A refit repeats its build's description: the same buffers, offsets, counts, stride and formats. Only the positions in those ranges may change.</p>
   <p><b>Built to allow it, and never compacted.</b> A refitted Mesh's BLAS is built with <code>ALLOW_UPDATE</code>, in the one constant both the build and every refit read, and skips the compaction every other BLAS takes after its build.</p>
-  <p><b>Its index stream kept.</b> A bent Mesh loaded as <code>MeshUse::Drawn</code> keeps no index stream, since only a BLAS build reads one; a refitted one is traced, so it keeps its stream for every frame's refit.</p>
+  <p><b>Its index stream kept.</b> A bent Mesh loaded as <code>MeshUse::Drawn</code> keeps no index stream, since only a BLAS build reads one; a refitted one is traced, so it keeps its LOD 0's stream for every frame's refit. Its BLAS holds LOD 0 alone, as every BLAS does, whichever LOD the main pass draws from the Meshlets of every LOD it keeps (ADR 0020).</p>
   <p><b>A tree chosen for another shape.</b> The grouping was picked for the shape the BLAS was built in, the rest shape. As the triangles drift from it the boxes grow and overlap, and a ray tests more of them.</p>
 <pre class="code"><code>/// What a Mesh is loaded for: the main pass draws it from its Meshlets, rays
 /// trace it through its BLAS, or both.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum MeshUse {
     DrawnAndTraced,
     /// Drawn alone: a Mesh the GPU bends, whose BLAS, built from its rest
-    /// shape, would cast another shape's shadow.
+    /// shape, would cast another shape's shadow, or one that casts none.
     Drawn,
     /// Traced alone: a shadow proxy, which no pass draws, so it keeps no
     /// Meshlets and needs no Material.
@@ -170,6 +170,9 @@ pub enum MeshUse {
     /// Drawn and traced, a Mesh the GPU bends whose BLAS is updated each
     /// frame from its bent shape: built to allow updates, never compacted.
     Refitted,
+    /// Drawn and traced: a Far proxy's load, whose baked Material takes an
+    /// entry of the Material table's count for Far proxies.
+    FarProxy,
 }
 <span class="comment">// …</span>
 /// The flags a refitted Mesh's BLAS is built with, which its refits repeat.
@@ -185,17 +188,27 @@ pub struct MeshBlas {
     pub first_vertex: u32,
     pub first_index: u32,
 }</code></pre>
-  <p class="code-source"><code>MeshUse</code>, <code>REFITTED_BLAS_FLAGS</code> and <code>MeshBlas</code>, <code>src/assets/pools.rs</code>; the elision skips <code>MeshUse</code>'s two methods, whose <code>traced</code> is every use but <code>Drawn</code>.</p>
+  <p class="code-source"><code>MeshUse</code>, <code>REFITTED_BLAS_FLAGS</code> and <code>MeshBlas</code>, <code>src/assets/pools.rs</code>; the elision skips <code>MeshUse</code>'s three methods: <code>drawn</code>, every use but <code>Traced</code>; <code>traced</code>, every use but <code>Drawn</code>; and <code>shared</code>, which leaves <code>Drawn</code> and <code>Refitted</code> out.</p>
 <pre class="code"><code>let refitted = mesh_use == MeshUse::Refitted;
+let flags = if refitted {
+    REFITTED_BLAS_FLAGS
+} else {
+    wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+        | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION
+};
+let built_bytes = if mesh_use.traced() {
+    blas_bytes(&amp;self.device, &amp;self.vertex_arena.buffer, flags, &amp;geometry)
+} else {
+    0
+};
+…
+if !mesh_use.traced() {
+    return Ok(handle);
+}
 let blas = self.device.create_blas(
     &amp;wgpu::CreateBlasDescriptor {
         label: Some("Mesh BLAS"),
-        flags: if refitted {
-            REFITTED_BLAS_FLAGS
-        } else {
-            wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
-                | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION
-        },
+        flags,
         update_mode: wgpu::AccelerationStructureUpdateMode::Build,
     },
     wgpu::BlasGeometrySizeDescriptors::Triangles {
@@ -210,16 +223,32 @@ let mesh_blas = MeshBlas {
 };
 staging.build_blas(&amp;self.blas_build_entry(&amp;mesh_blas));
 
-…
-self.blases.push(Some(mesh_blas.blas.clone()));
+self.blases[index] = Some(mesh_blas.blas.clone());
 if refitted {
     self.refitted_blases.push(mesh_blas);
 } else {
-    …
+    self.awaiting_compaction.push(AwaitingCompaction {
+        …
+    });
 }
-…
-Some(handle)</code></pre>
-  <p class="code-source">Building a Mesh's BLAS at load, <code>MeshPool::load_for</code>. A refitted BLAS goes to <code>refitted_blases</code>, with the <code>MeshBlas</code> that records its build, instead of the compaction queue.</p>
+self.uncompacted_blas_bytes += built_bytes;
+self.charge_blases();
+Ok(handle)</code></pre>
+  <p class="code-source">Building a Mesh's BLAS at load, <code>MeshPool::load_for</code>. A refitted BLAS goes to <code>refitted_blases</code>, with the <code>MeshBlas</code> that records its build, instead of <code>awaiting_compaction</code>, so its bytes stay in <code>uncompacted_blas_bytes</code>: <code>charge_blases</code> counts them whole under <code>acceleration_structures</code>, at the size wgpu-hal gives for that build (<code>blas_bytes</code>), where a compacted BLAS counts at its adapter's estimated fraction.</p>
+  <p><b>A Mesh of its own, never freed.</b> Renderables share one Mesh pool entry per Asset ID only where <code>shared</code> says so; a refitted Mesh, like a bent one, is its Renderable's own, since the GPU writes its vertices, so each of the crowd's figures loads one. Unshared, it never joins the unused entries a refused load frees, and <code>MeshPool::free</code> refuses it outright, since the refit's scratch holds a region per refitted BLAS in load order:</p>
+<pre class="code"><code>pub fn free(&amp;mut self, handle: MeshHandle) {
+    let refitted = self.blas(handle).is_some_and(|blas| {
+        self.refitted_blases
+            .iter()
+            .any(|refitted| &amp;refitted.blas == blas)
+    });
+    if refitted {
+        tracing::warn!(?handle, "Mesh not freed: its BLAS is refitted");
+        return;
+    }
+    <span class="comment">// …</span>
+}</code></pre>
+  <p class="code-source"><code>MeshPool::free</code>, <code>src/assets/pools.rs</code>; the elision is the free itself: the Mesh's ranges go back to their Arenas, its BLAS is dropped, and its Handle finds nothing again.</p>
 </section>
 
 <section class="part prose" id="forms">
@@ -227,7 +256,8 @@ Some(handle)</code></pre>
   <h2>Three crowd forms</h2>
   <p class="key-idea">Which way the crowd's figures reach the TLAS is a Render switch with three values: <code>Proxies</code>, the default and what ships, where the figures have no BLAS; <code>Refit</code>, through wgpu-hal on Metal alone; and <code>Rebuild</code>, the same setup rebuilt through wgpu on any backend, the shapes a refit must match.</p>
 <pre class="code"><code>/// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR
-/// 0020): the forms M3's `crowd` scene measures for M8 to pick from.
+/// 0020): the proxies M8 builds on, and refit and its oracle, rebuild, kept
+/// behind the switch as the shapes' reference.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CrowdForm {
     /// The bent Meshes have no BLAS: rigid shadow proxies, one per bone,
@@ -395,10 +425,10 @@ pub fn rebuild_refitted_blases(&amp;self, encoder: &amp;mut wgpu::CommandEncoder
 </section>
 
 <section class="part prose" id="beneath">
-  <div class="part-mark">4 &middot; ADR 0007 &middot; wgpu 30.0.1</div>
+  <div class="part-mark">4 &middot; ADR 0007 &middot; wgpu 30.0.2</div>
   <h2>Beneath wgpu-core</h2>
   <p class="key-idea">wgpu-core, the layer beneath wgpu's safe API that validates, tracks and records barriers, builds every BLAS in full; wgpu-hal's Metal backend, beneath it, can refit. So the refit records straight into a wgpu-hal encoder, on a command buffer wgpu-core never sees.</p>
-  <p>wgpu's API has an update mode, but wgpu-core 30.0.1 logs "only rebuild implemented" for a BLAS asked to update and hands wgpu-hal a full build, whatever was asked (<code>wgpu-30-blas-rebuild-only</code>). wgpu-hal's Metal backend implements both modes, and for an update calls Metal's refit, from a source structure into a destination, which here are the same BLAS (<code>wgpu-30-metal-refit</code>). ADR 0007 allows exactly this: wgpu-hal only for a subsystem past wgpu's safe API.</p>
+  <p>wgpu's API has an update mode, but wgpu-core 30 logs "only rebuild implemented" for a BLAS asked to update and hands wgpu-hal a full build, whatever was asked (<code>wgpu-30-blas-rebuild-only</code>). wgpu-hal's Metal backend implements both modes, and for an update calls Metal's refit, from a source structure into a destination, which here are the same BLAS (<code>wgpu-30-metal-refit</code>). ADR 0007 allows exactly this: wgpu-hal only for a subsystem past wgpu's safe API.</p>
   <p><b>An encoder of its own.</b> <code>CommandEncoder::as_hal_mut</code> lends a wgpu command encoder's wgpu-hal encoder to a closure, on terms its docs set: the raw encoder is not destroyed by hand, the command buffer is not ended there but by wgpu's <code>finish</code>, and the wgpu encoder takes no other call while wgpu-hal records into it (<code>wgpu-30-as-hal-mut-safety</code>). wgpu-core panics on an encoder that mixes the two (<code>wgpu-30-mixed-encoding-panics</code>). So the refits get an encoder labelled "BLAS Refit Encoder", which only wgpu-hal ever records into.</p>
   <p><b>Guards and the snatch lock.</b> A refit needs several wgpu-hal objects at once: both Arenas, the scratch and every refitted BLAS. Each wgpu resource lends its object through <code>as_hal</code>, whose guard holds a read of its device's snatch lock, the lock that keeps a resource's raw object from being destroyed while it is read; in debug builds wgpu-core panics when a thread takes it twice. So the refit cannot hold the guards together. <code>unguarded</code> reads the object's address through each guard, lets the guard go, and keeps the reference:</p>
 <pre class="code"><code>/// The wgpu-hal object `guard` reads, kept past the guard: each guard
@@ -449,7 +479,7 @@ fn record_refits(
         }
     };
     if self.scratch.is_none() {
-        self.scratch = metal::scratch(device, mesh_pool);
+        self.scratch = metal::scratch(device, &amp;self.memory, mesh_pool);
     }
     let Some((scratch, offsets)) = &amp;self.scratch else {
         refuse("no scratch: an Arena is not Metal's");
@@ -702,6 +732,11 @@ pub(super) fn record(
     <tbody>
       <tr><td><code>refitted_blases_cast_the_shadows_rebuilt_ones_cast</code></td><td><code>tests/crowd.rs</code></td><td>on Metal, the last frame <code>praxis::capture</code> renders of <code>crowd</code> at 640&times;360 in the refit form, captured by four devices at once, each on its own thread, equals the rebuild form's in every pixel; off Metal, the refit form is refused as unavailable</td></tr>
       <tr><td><code>a_refitted_frame_times_its_submissions_apart_and_its_refit_from_the_bend</code></td><td><code>readback.rs</code></td><td>with spread submissions, <code>blas_refit</code> runs from the bend pass's end to the marker's start, and the frame sums the build, the bend-to-marker span and the rest; without a refit the refit reads zero</td></tr>
+      <tr><td><code>a_refitted_frame_with_a_build_times_three_submissions_apart</code>, <code>a_refitted_frame_without_a_build_times_its_refit_from_the_bend</code></td><td><code>readback.rs</code></td><td>every pass time, the frame, the gate and the lit pass's wait of a timed refit's frame, with and without the dynamic TLAS's build, with shadow rays and without</td></tr>
+      <tr><td><code>a_bent_frame_without_a_bracketed_build_spans_from_the_bend_pass</code></td><td><code>readback.rs</code></td><td>a refit that went untimed reads zero, and its frame's span from the bend pass holds the build, which is not added apart</td></tr>
+      <tr><td><code>a_mesh_loaded_twice_keeps_one_entry_unless_it_is_bent</code></td><td><code>src/assets/pools.rs</code></td><td>a Mesh loaded twice as <code>MeshUse::Refitted</code> takes two entries, one a Renderable, where the shared uses keep one</td></tr>
+      <tr><td><code>an_asset_loaded_twice_keeps_one_entry_and_a_bent_mesh_its_own</code></td><td><code>src/assets/loader.rs</code></td><td>the same through the loader: each <code>refitted_mesh</code> call loads a Mesh of its own</td></tr>
+      <tr><td><code>a_freed_meshs_index_takes_the_next_mesh_and_refuses_the_old_handle</code></td><td><code>src/assets/pools.rs</code></td><td>freeing a refitted Mesh is refused and logged, and the Mesh stays loaded</td></tr>
       <tr><td><code>every_run_counts_its_measured_frames_and_the_counter_frames</code></td><td><code>src/bench/mod.rs</code></td><td><code>dynamic_tlas_cpu_microseconds</code> sums the <code>BLAS_REFIT</code> stage with the build's recording and submit</td></tr>
       <tr><td><code>every_module_parses_and_validates</code></td><td><code>shader_tests.rs</code></td><td>the marker's module validates, on every platform, as every module does</td></tr>
       <tr><td><code>every_binding_is_visible_to_exactly_the_stages_that_use_it</code></td><td><code>shader_tests.rs</code></td><td>the marker's two bindings are visible to the compute stage that reads them</td></tr>
@@ -720,27 +755,27 @@ pub(super) fn record(
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>blas_refit</code></th><th class="n"><code>dynamic_tlas_build</code></th><th class="n">Dynamic TLAS CPU</th><th class="n">GPU frame</th></tr></thead>
     <tbody>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">0.0</td><td class="n">0.0</td><td class="n">343.7</td><td class="n">3,747.5</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">0.0</td><td class="n">159.4</td><td class="n">739.2</td><td class="n">2,169.8</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">0.0</td><td class="n">159.0</td><td class="n">950.9</td><td class="n">1,970.2</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">0.0</td><td class="n">0.0</td><td class="n">255.6</td><td class="n">3,380.0</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">0.0</td><td class="n">159.9</td><td class="n">749.5</td><td class="n">2,235.6</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">0.0</td><td class="n">162.1</td><td class="n">755.0</td><td class="n">1,976.8</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code>, <code>crowd.json</code>, at the commit above: <code>gpu_pass_microseconds.blas_refit</code>, <code>gpu_pass_microseconds.dynamic_tlas_build</code>, <code>dynamic_tlas_cpu_microseconds</code> and <code>gpu_frame_microseconds</code>. On the M4 Pro the build reads zero because the GPU stats count it from the end of the frame before's last pass, behind which it runs (<a href="dynamic-tlas.html">Dynamic TLAS</a>). <code>praxis compare</code> holds the build's median to the <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms, ADR 0019's gate, the dynamic TLAS's CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span>'s <code>dynamic_tlas_gpu_microseconds</code>, and the CPU figure, which in the refit form includes the <code>BLAS_REFIT</code> stage, to <code>dynamic_tlas_cpu_microseconds</code>; no Budget field holds <code>blas_refit</code>'s GPU time.</p>
-  <p>Memory is what the code sets. The refit form's own buffers are small; what it adds is its BLASes, which stay uncompacted, and the index streams it keeps. For <code>crowd</code>'s 100 figures of 5,120 triangles, on the M4 Pro's estimate, which a Metal adapter takes:</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code>, <code>crowd.json</code>, at the commit above: <code>gpu_pass_microseconds.blas_refit</code>, <code>gpu_pass_microseconds.dynamic_tlas_build</code>, <code>dynamic_tlas_cpu_microseconds</code> and <code>gpu_frame_microseconds</code>. On the M4 Pro the build reads zero because the GPU stats count it from the end of the frame before's last pass, behind which it runs (<a href="dynamic-tlas.html">Dynamic TLAS</a>). <code>praxis compare</code> holds the build's median to the <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms and ADR 0019's gate, each at its median and p99 (the CPU frame at its p95 too), the longest CPU and GPU frame, the dynamic TLAS's CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. The GPU memory Budget splits into one Budget per kind of GPU memory, such as the geometry Arenas, the texture pool and staging, each capping what that kind may hold, and the pools' capacities derive from them at device creation (ADRs 0013, 0017). Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span>'s <code>dynamic_tlas_gpu_microseconds</code>, and the CPU figure, which in the refit form includes the <code>BLAS_REFIT</code> stage, to <code>dynamic_tlas_cpu_microseconds</code>; no Budget field holds <code>blas_refit</code>'s GPU time.</p>
+  <p>Memory is what the code sets. The refit form's own buffers are small; what it adds is its BLASes, which stay uncompacted, and the index streams it keeps. GPU memory counts each refitted BLAS at the size wgpu-hal gives for its build, which no Baseline holds for this form; the rows below estimate it for <code>crowd</code>'s 100 figures of 5,120 triangles from the M4 Pro's bytes a triangle that <code>compacted_blas_fraction</code> divides:</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>What</th><th>Size</th><th class="n">Bytes</th></tr></thead>
     <tbody>
-      <tr><td>the refits' scratch, GPU memory</td><td>each BLAS's update scratch rounded up to 256, at least 256 in all</td><td class="n">&ge; 256</td></tr>
-      <tr><td>the marker's result, GPU memory</td><td>one <code>u32</code></td><td class="n">4</td></tr>
+      <tr><td>the refits' scratch, <code>acceleration_structures</code></td><td>each BLAS's update scratch rounded up to 256, at least 256 in all</td><td class="n">&ge; 256</td></tr>
+      <tr><td>the marker's result, <code>scene_and_pass_buffers</code></td><td>one <code>u32</code></td><td class="n">4</td></tr>
       <tr><td>the figures' BLASes, uncompacted, estimated</td><td>512,000 triangles &times; 94 bytes</td><td class="n">48,128,000</td></tr>
       <tr><td>the same, were they compacted</td><td>512,000 triangles &times; 45.5 bytes</td><td class="n">23,296,000</td></tr>
       <tr><td>the figures' index streams, index Arena in use</td><td>100 &times; 15,360 indices &times; 4</td><td class="n">6,144,000</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>BlasRefit::gpu_memory_bytes</code>; the M4 Pro's estimate in <code>src/render/acceleration_structures.rs</code> at the commit above; <code>MeshPool::load_for</code>. The index streams join <code>arena_bytes_in_use</code>, not GPU memory, which counts each Arena's whole buffer in every form.</p>
+  <p class="note"><code>metal::scratch</code> and <code>RefitMarker::new</code> in <code>src/render/blas_refit.rs</code>; the M4 Pro's 94 and 45.5 bytes a triangle in <code>compacted_blas_fraction</code>, <code>src/render/acceleration_structures.rs</code>; <code>MeshPool::load_for</code>. The index streams join <code>arena_bytes_in_use</code>, not GPU memory, which counts each Arena's whole buffer in every form; at the checked-in Budgets the index Arena is 130 thousandths of the geometry Arenas' 83,886,080 bytes (<code>ARENA_PER_MILLE</code>), 10,905,188 bytes, which the figures' streams fit.</p>
 </section>
 
 <section class="part prose" id="why">
@@ -749,14 +784,14 @@ pub(super) fn record(
   <p><b>Proxies ship; the refit stays as the reference.</b> ADR 0020 gives every shadow to a ray against the TLAS, so a deforming figure must reach the TLAS in its drawn shape, and the crowd's update, measured against its own Budget on the M4 Pro, decides how. Benched in four rounds alternating the forms (<code>docs/performance.md</code>, "The crowd's two forms"), the proxies' update, the dynamic TLAS's build over 1,600 proxies, fit both the GPU and the CPU halves of that Budget; in the refit form the refits alone took more than the whole GPU half, before the build. The proxies run on every backend through wgpu's safe API; the refit runs on Metal alone, through wgpu-hal and strict event sync. Their costs are the proxies' shapes, a little thinner than the figures', and 16 of the dynamic TLAS's entries per figure. ADR 0020 records the proxies as the default form, which skinning builds on, and the refit behind its Render switch, as the shapes' reference.</p>
   <p><b>A refit, not a rebuild per frame.</b> The world-design pre-mortem measured rebuilding a hundred 5,120-triangle BLASes at 65 to 78% of ADR 0013's whole GPU frame Budget. A refit recomputes only the boxes over a tree that is already built, which is why it was the form worth timing; the rebuild form stays as its oracle, since it reaches the same BLASes through the safe API.</p>
   <p><b>wgpu-hal, for one subsystem.</b> ADR 0007 keeps the engine on wgpu and allows wgpu-hal for a subsystem past its safe API. The refit is one: wgpu-core 30 never updates a BLAS. Keeping it to one unsafe block over one encoder, with its invariants listed, keeps the rest of the frame on the safe API.</p>
-  <p><b>A shared event, not a CPU wait.</b> Waiting on the CPU for the refits, as the load path waits for its compactions, would stall the main thread on the GPU in every frame. A staged event is queue-wide, which makes it delicate where several threads submit; under ADR 0016 only the main thread submits, so the staging and the submit that takes it are ordered by the code. The CPU wait stays as the fallback where Metal makes no shared event.</p>
+  <p><b>A shared event, not a CPU wait.</b> Waiting on the CPU for the refits, as a spawn's loads wait for their BLASes' builds and compactions, would stall the main thread on the GPU in every frame. A staged event is queue-wide, which makes it delicate where several threads submit; under ADR 0016 only the main thread submits, so the staging and the submit that takes it are ordered by the code. The CPU wait stays as the fallback where Metal makes no shared event.</p>
   <p><b>A marker that reads the scratch.</b> Metal times a pass at its encoder's ends, writes nothing for an empty pass, and runs a pass that names nothing the timed work writes beside it. The scratch is the one resource every refit names, so a marker that reads it is ordered after all of them, at the cost of one invocation (<code>docs/performance.md</code>, "Bracketing on Metal", found the same for the dynamic TLAS's markers).</p>
 </section>
 
 <section class="part prose" id="limits">
   <div class="part-mark">11</div>
   <h2>Limits</h2>
-  <p><b>Metal only, against wgpu 30.0.1.</b> The refit form refuses every other backend. It relies on wgpu-hal's Metal internals at the pinned version: the update mode, retained command buffers, staged events and strict event sync; a wgpu bump re-checks each invariant against its sources.</p>
+  <p><b>Metal only, against wgpu 30.0.2.</b> The refit form refuses every other backend. It relies on wgpu-hal's Metal internals at the pinned version: the update mode, retained command buffers, staged events and strict event sync; a wgpu bump re-checks each invariant against its sources.</p>
   <p><b>The same triangles, a tree for the rest shape.</b> A refit keeps its build's topology, and the tree was chosen for the upright rest shape; the further the triangles drift, the more boxes a ray tests. A refitted BLAS is never compacted.</p>
   <p><b>The BLASes the first refit finds.</b> The scratch is sized at the first refit for the refitted BLASes loaded then; one loaded later is not refitted, and the refusal is logged once.</p>
   <p><b>Strict for the queue's lifetime.</b> Once an <code>Order</code> turns strict event sync on, every later command buffer on the queue waits on the relay, and every submit adds one.</p>
@@ -767,7 +802,7 @@ pub(super) fn record(
 <section class="part prose" id="sources">
   <div class="part-mark">Sources</div>
   <h2>Sources</h2>
-  <p class="note">Primary sources the refit rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites. wgpu's are pinned to 30.0.1, the version the lockfile pins.</p>
+  <p class="note">Primary sources the refit rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites. wgpu's are pinned to 30.0.1, the tag the registry cites; the lockfile pins 30.0.2, with wgpu-core vendored under <code>vendor/wgpu-core</code> carrying one upstream commit in <code>command/ray_tracing.rs</code>, and each quote below holds there.</p>
   <dl class="reading">
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L1106-L1126">wgpu-core 30.0.1, command/ray_tracing.rs, map_blas</a></dt><dd>every BLAS build is a full build; <code>wgpu-30-blas-rebuild-only</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-hal/src/metal/command.rs#L1855-L1873">wgpu-hal 30.0.1, metal/command.rs, build_acceleration_structures</a></dt><dd>an update refits; <code>wgpu-30-metal-refit</code></dd>
@@ -790,7 +825,7 @@ pub(super) fn record(
   </dl>
   <h3>History</h3>
   <p class="note">The refit form arrived in the third milestone, in two steps after the crowd scene and its shadow proxies: first the switch, the refit through wgpu-hal, its order on Metal and the capture test against the rebuild; then the marker that times it and the bench flag for both forms. Benched on the M4 Pro, the proxies' update fit the crowd's Budget and the refits alone did not, and the owner chose the proxies as the form skinning builds on, keeping the refit behind its Render switch as the shapes' reference, as ADR 0020 records. The Metal ordering gap it closes was found at load, in BLAS builds and compaction, which <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a> and <a href="metal-quirks.html#hazards">Metal quirks</a> describe; the crowd scene itself is on <a href="reference-scenes.html#crowd">The Reference scenes</a>. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/render/blas_refit.rs</code>, <code>src/render/shaders/blas_refit_marker.wgsl</code>, <code>src/render/renderer.rs</code>, <code>readback.rs</code>, <code>bind_groups.rs</code>, <code>acceleration_structures.rs</code>, <code>src/assets/pools.rs</code>, <code>src/assets/loader.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/state.rs</code>, <code>src/bench/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0007, 0013, 0016 and 0020, <code>docs/research/world-design-pre-mortem.md</code>, <code>docs/performance.md</code>, the committed Baselines, the wgpu, wgpu-core and wgpu-hal 30.0.1 sources, and the sources above, all at <code>main</code> fbae12f4.</footer>
+  <footer class="sources">Written from <code>src/render/blas_refit.rs</code>, <code>src/render/shaders/blas_refit_marker.wgsl</code>, <code>src/render/renderer.rs</code>, <code>readback.rs</code>, <code>bind_groups.rs</code>, <code>acceleration_structures.rs</code>, <code>src/stats/gpu_memory.rs</code>, <code>src/assets/pools.rs</code>, <code>src/assets/loader.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/state.rs</code>, <code>src/bench/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0007, 0013, 0016 and 0020, <code>docs/research/world-design-pre-mortem.md</code>, <code>docs/performance.md</code>, the committed Baselines, the wgpu and wgpu-hal 30.0.2 sources and the vendored wgpu-core, and the sources above, all at <code>main</code> 62052fe8.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="bend-pass.html">Previous: The bend pass</a><a href="index.html">All field guides</a><a href="culling-pass.html">Next: The culling pass</a></nav>
