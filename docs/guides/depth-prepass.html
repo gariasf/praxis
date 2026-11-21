@@ -116,32 +116,35 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/main_pass.rs</code></div>
   <h1>The depth pre-pass</h1>
-  <p class="definition">The render pass that draws phase one of the culling pass's frame's draw into the 4x <a href="msaa.html">MSAA</a> depth target, cleared to 0 and kept by <code>Greater</code> under reverse Z, before anything is shaded, so the depth pyramid can reduce it and the lit pass can shade only what it kept; with shadow rays on it writes each sample's <span class="concept" data-term="Surface normals" data-tip="Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.">surface normals</span> beside its depth, and phase two's depth pass draws phase two's Instances the same way once the pyramid has tested them.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at b3d764b4 (2026-11-04). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="msaa.html">MSAA</a> for samples and fragments, <a href="culling-pass.html">The culling pass</a> for the frame's draw the GPU builds and its two phases.</p>
+  <p class="definition">The render pass that draws phase one of the culling pass's frame's draw into the 4x <a href="msaa.html">MSAA</a> depth target, cleared to 0 and kept by <code>Greater</code> under reverse Z, before anything is shaded, so the depth pyramid can reduce it and the lit pass can shade only what it kept; it draws <span class="concept" data-term="Thin Primitive" data-tip="A Primitive declared a tube of a given radius, drawn a pixel wide where it would be narrower, whose shadow ends where it would fall between a pixel and half a pixel wide.">Thin Primitives</span> and Instances smaller than a pixel a pixel wide, through pipelines of their own that write the samples their coverage keeps as <code>sample_mask</code>; with shadow rays on it writes each sample's <span class="concept" data-term="Surface normals" data-tip="Two normals per sample of the depth target, its triangle's own and the one interpolated over the triangle, which the depth passes write with shadow rays on and the shadow mask pass reads. Where they disagree near a light's terminator, the triangle can turn from a light the interpolated normal faces.">surface normals</span> beside its depth, and phase two's depth pass draws phase two's Instances the same way once the pyramid has tested them.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 62052fe8 (2026-11-21). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="msaa.html">MSAA</a> for samples and fragments, <a href="culling-pass.html">The culling pass</a> for the frame's draw the GPU builds, its two phases, and which Instances it lists for the pipelines of their own or leaves out.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
-      <dt>Runs</dt><dd>Every frame: after phase one of the culling pass and the Froxel pass, before the depth pyramid pass. Phase two's depth pass runs with the <code>shadow_rays</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> on, as Praxis ships: after phase two of the culling pass, before the shadow mask pass. With it off, the lit pass draws phase two's depth.</dd>
-      <dt>Reads</dt><dd>The frame's draw: its packed indices as the index buffer and the indirect arguments of the phase's draw; the Meshlet records, the Instances, the Meshlets and the vertex Arena, from which the vertex shader pulls each vertex; the camera.</dd>
-      <dt>Writes</dt><dd>The depth target, <code>Depth32Float</code> at 4x MSAA: the pre-pass clears it to 0 and stores it, phase two's depth pass loads and stores it. With shadow rays on, the surface normals, <code>Rgba8Unorm</code> at 4x MSAA, cleared and loaded alike.</dd>
-      <dt>Draws</dt><dd>One <code>draw_indexed_indirect</code> per pass, at the phase's offset in the frame's draw.</dd>
-      <dt>Bind groups</dt><dd>The groups its vertex stage sees: group 0, the frame, for the camera; group 2, the scene geometry; group 3, the main pass inputs, for the Meshlet records. Its fragment stage reads no bind group.</dd>
-      <dt>Shader</dt><dd><code>src/render/shaders/main.wgsl</code>: <code>vs_depth_prepass</code> with no fragment stage, or with shadow rays on <code>vs_depth_normals</code> and <code>fs_surface_normals</code>.</dd>
-      <dt>Counted</dt><dd><code>depth_prepass</code> and <code>phase_two_depth_pass</code> in GPU time; the pre-pass inside ADR 0019's gate, which is measured with shadow rays off, when phase two's depth is the lit pass's; their draws in <code>draw_calls</code>; the depth target and the surface normals in GPU memory.</dd>
+      <dt>Runs</dt><dd>Every frame: after phase one of the culling pass and the Froxel pass, before the depth pyramid pass. Phase two's depth pass runs with the <code>shadow_rays</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, the form the crowd scene's deforming meshes take in the TLAS, whether Textures hold back the mips finer than their Resident tails (residency), whether a frame waits for the static TLAS's worker, as captures do, and the LOD every Instance draws where one is forced, rather than the one selected for it. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> on, as Praxis ships: after phase two of the culling pass, before the shadow mask pass. With it off, the lit pass draws phase two's depth.</dd>
+      <dt>Reads</dt><dd>The frame's draw: its packed indices as the index buffer, and the indirect arguments of the phase's draw and of the phase's draw of its Thin Primitives and small Instances; the Meshlet records, the Instances, the Meshes' bounds, the Meshlets with each one's Thin Primitive radius, the Meshlet vertex Arena and the vertex Arena, from which the vertex shader pulls each vertex; the camera, with what a pixel spans a metre from it.</dd>
+      <dt>Writes</dt><dd>The depth target, <code>Depth32Float</code> at 4x MSAA: the pre-pass clears it to 0 and stores it, phase two's depth pass loads and stores it. With shadow rays on, the surface normals, <code>Rgba8Unorm</code> at 4x MSAA, cleared and loaded alike. A fragment of a Thin Primitive or a small Instance writes both only at the samples its coverage keeps.</dd>
+      <dt>Draws</dt><dd>Two <code>draw_indexed_indirect</code> per pass: the phase's draw, at its offset in the frame's draw, then the phase's Thin Primitives and small Instances, at <code>PHASE_ONE_THIN_DRAW_OFFSET</code> or <code>PHASE_TWO_THIN_DRAW_OFFSET</code>.</dd>
+      <dt>Bind groups</dt><dd>The groups its vertex stage sees: group 0, the frame, for the camera; group 2, the scene geometry; group 3, the main pass inputs, for the Meshlet records. Its fragment stages read no bind group.</dd>
+      <dt>Shader</dt><dd><code>src/render/shaders/main.wgsl</code>, in the module <code>MAIN</code>, which wgpu compiles without bounding its loops: <code>vs_depth_prepass</code> with no fragment stage, or with shadow rays on <code>vs_depth_normals</code> and <code>fs_surface_normals</code>; for Thin Primitives and small Instances, <code>vs_thin</code> with <code>fs_thin_depth</code>, or with shadow rays on <code>fs_thin_surface_normals</code>.</dd>
+      <dt>Counted</dt><dd><code>depth_prepass</code> and <code>phase_two_depth_pass</code> in GPU time, each with both its draws; the pre-pass inside ADR 0019's gate, which is measured with shadow rays off, when phase two's depth is the lit pass's; their draws in <code>draw_calls</code>; the depth target and the surface normals in GPU memory, under <code>render_targets</code>.</dd>
       <dt>Files</dt><dd><code>src/render/main_pass.rs</code>, <code>src/render/targets.rs</code>, <code>src/render/shaders/main.wgsl</code></dd>
     </dl>
   </aside>
   <nav class="toc" aria-label="Sections">
     <a href="#frame">1 &middot; Where it sits</a>
     <a href="#vertices">2 &middot; One draw, its vertices pulled</a>
-    <a href="#depth">3 &middot; Reverse Z</a>
-    <a href="#normals">4 &middot; The surface normals</a>
-    <a href="#flat">5 &middot; The flat input</a>
-    <a href="#phase-two">6 &middot; Phase two's depth</a>
-    <a href="#tests">7 &middot; How it is tested</a>
-    <a href="#cost">8 &middot; What it costs</a>
-    <a href="#why">9 &middot; Why this way</a>
-    <a href="#limits">10 &middot; Limits</a>
+    <a href="#widening">3 &middot; A pixel wide</a>
+    <a href="#depth">4 &middot; Reverse Z</a>
+    <a href="#sample-mask">5 &middot; The samples coverage keeps</a>
+    <a href="#zero-coverage">6 &middot; No sample, no draw</a>
+    <a href="#normals">7 &middot; The surface normals</a>
+    <a href="#flat">8 &middot; The flat input</a>
+    <a href="#phase-two">9 &middot; Phase two's depth</a>
+    <a href="#tests">10 &middot; How it is tested</a>
+    <a href="#cost">11 &middot; What it costs</a>
+    <a href="#why">12 &middot; Why this way</a>
+    <a href="#limits">13 &middot; Limits</a>
     <a href="#sources">Sources</a>
   </nav>
 </header>
@@ -154,7 +157,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <ol class="pass-order">
     <li>dynamic TLAS build</li><li>bend pass</li><li>culling, phase one</li><li>Froxel pass</li><li class="focus">depth pre-pass</li><li>depth pyramid pass</li><li>culling, phase two</li><li class="focus">phase two's depth pass</li><li>shadow mask pass</li><li>lit pass</li><li>tonemapping pass</li>
   </ol>
-  <p>Phase one of the culling pass draws the <span class="concept" data-term="Instance" data-tip="One Renderable's or Placement's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one, or in its Chunk's range of slots while the Chunk is loaded.">Instances</span> in view that were visible the frame before. The pre-pass draws them into depth; the depth pyramid pass reduces that depth to the farthest over each share of the screen; phase two tests every other Instance in view against the pyramid and draws what it does not hide. One function records both depth passes, differing in the attachment's load, the draw's offset and whether the surface normals are cleared.</p>
+  <p>Phase one of the culling pass draws the <span class="concept" data-term="Instance" data-tip="One Renderable's or Placement's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one, or in its Chunk's range of slots while the Chunk is loaded.">Instances</span> in view that were visible the frame before. The pre-pass draws them into depth; the depth pyramid pass reduces that depth to the farthest over each share of the screen; phase two tests every other Instance in view against the pyramid and draws what it does not hide. One function records both depth passes, differing in the attachment's load, the draws' offsets and whether the surface normals are cleared. Each pass draws twice: the phase's ordinary geometry, then its Thin Primitives and small Instances through a pipeline of their own.</p>
 <pre class="code"><code>let (label, depth_attachment, clears_surface_normals, draw_offset) = match phase {
     CullingPhase::One =&gt; (DEPTH_PREPASS, render_targets.depth_attachment(), true, 0),
     CullingPhase::Two =&gt; (
@@ -187,15 +190,33 @@ self.bind(
         .copied()
         .filter(|&amp;(definition, _)| definition.visible_to(wgpu::ShaderStages::VERTEX)),
 );
-depth_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, draw_offset);</code></pre>
+depth_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, draw_offset);
+let thin_draw_offset = match phase {
+    CullingPhase::One =&gt; PHASE_ONE_THIN_DRAW_OFFSET,
+    CullingPhase::Two =&gt; PHASE_TWO_THIN_DRAW_OFFSET,
+};
+depth_pass.set_pipeline(&amp;self.thin_depth_prepass_pipeline);
+depth_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, thin_draw_offset);</code></pre>
   <p class="code-source"><code>MainPass::record_depth_pass</code>, <code>src/render/main_pass.rs</code>.</p>
-  <p>The depth pipeline's layout keeps only the bind groups its vertex stage sees, since its fragment stage reads none: the Materials' group, which the fragment stage alone reads, is left out of the layout and not set. With shadow rays off the pipeline has no fragment stage at all.</p>
+  <p>The depth pipelines' layout keeps only the bind groups their vertex stage sees, since their fragment stages read none: the Materials' group, which the lit pass's fragment stage alone reads, is left out of the layout and not set. The second draw sets only its pipeline: both pipelines share the layout, so the groups and the index buffer set for the first stay bound. With shadow rays off the ordinary depth pipeline has no fragment stage at all.</p>
+  <p>Every pipeline of the main pass comes from one shader module, <code>MAIN</code>, which <code>MainPass::new</code> compiles with <code>create_with_unbounded_loops</code>: every runtime check wgpu inserts stays on but the one that bounds each loop.</p>
+<pre class="code"><code>let runtime_checks = wgpu::ShaderRuntimeChecks {
+    force_loop_bounding: false,
+    ..wgpu::ShaderRuntimeChecks::checked()
+};
+// SAFETY: without loop bounding a backend compiler may take an
+// infinite loop for unreachable code [ref:wgpu-types-30-loop-bounding],
+// so the module holds none: each loop of its parts ends whatever its
+// buffers hold, which `shader_tests` checks.
+unsafe { device.create_shader_module_trusted(self.descriptor(capacities), runtime_checks) }</code></pre>
+  <p class="code-source"><code>ShaderModule::create_with_unbounded_loops</code>, <code>src/render/shaders/mod.rs</code>.</p>
+  <p>The depth passes' stages hold no loop, so for them nothing changes; the loops of the module are the lit pass's. The function refuses a module outside <code>LOOPS_UNBOUNDED</code>, whose parts a test reads loop by loop.</p>
 </section>
 
 <section class="part prose" id="vertices">
   <div class="part-mark">2 &middot; <code>vertex_output</code> &middot; <code>src/render/shaders/main.wgsl</code></div>
   <h2>One draw, its vertices pulled</h2>
-  <p class="key-idea">The draw has no vertex buffers. Each index the culling pass wrote packs a Meshlet record above its low bits and a vertex of that Meshlet below them; the vertex shader reads the record for the Instance, the <span class="concept" data-term="Meshlet" data-tip="A small group of one Primitive's triangles, bounded in vertex and triangle count, that the GPU draws as a unit; culling tests the Instance's Mesh bounds, not the Meshlet's (ADR 0019).">Meshlet</span> and the Material, and pulls the vertex from the vertex Arena.</p>
+  <p class="key-idea">The draw has no vertex buffers. Each index the culling pass wrote packs a Meshlet record above its low bits and a vertex of that Meshlet below them; the vertex shader reads the record for the Instance, the <span class="concept" data-term="Meshlet" data-tip="A small group of one Primitive's triangles in one LOD, bounded in vertex and triangle count, that the GPU draws as a unit; culling tests the Instance's Mesh bounds, not the Meshlet's (ADR 0019).">Meshlet</span> and the Material, and pulls the vertex from the vertex Arena.</p>
 <pre class="code"><code>fn vertex_output(packed_index: u32) -&gt; VertexOutput {
     var out: VertexOutput;
     // The frame's draw has no base vertex, so the vertex index is the packed
@@ -216,11 +237,115 @@ depth_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, draw_offset);</cod
     out.clip_position = camera.view_proj * vec4&lt;f32&gt;(position, 1.0);</code></pre>
   <p class="code-source"><code>vertex_output</code>, <code>main.wgsl</code>, to the clip position; the rest of it fills what the lit pass reads.</p>
   <p><code>unpack_index</code> splits the index at <code>MESHLET_VERTEX_BITS</code>, which Rust declares from the cooker's limit of 64 vertices a Meshlet. Since the record is in every index, triangles of different Meshlets or Instances never share an index, even where their positions coincide. The position is composed relative to the camera from the Instance's <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.">Anchor</span> and offset and the camera's (ADR 0014), so no World position reaches the GPU in f32, and the view-projection matrix holds no translation.</p>
-  <p>All three entry points of the main pass that place vertices call this one function, and declare the clip position <code>@invariant</code>, so the depth passes and the lit pass compute each vertex's depth by the same expressions and the lit pass's <code>Equal</code> test meets exactly the depth kept here. <code>vs_depth_prepass</code> returns only that position; <code>vs_depth_normals</code> also passes on the position, normal and Material ID the fragment stage below reads.</p>
+  <p>Every vertex entry point of the main pass calls this one function and declares the clip position <code>@invariant</code>, so the depth passes and the lit pass compute each vertex's depth by the same expressions and the lit pass's <code>Equal</code> test meets exactly the depth kept here. <code>vs_depth_prepass</code> returns only that position; <code>vs_depth_normals</code> also passes on the position, normal and Material ID the fragment stage of section 7 reads; <code>vs_thin</code>, below, moves the vertex before it returns it.</p>
+</section>
+
+<section class="part prose" id="widening">
+  <div class="part-mark">3 &middot; <code>vs_thin</code> &middot; ADR 0027</div>
+  <h2>A pixel wide</h2>
+  <p class="key-idea">Geometry narrower than a pixel falls between the samples of 4x MSAA and breaks into dots and dashes. A Thin Primitive and a small Instance are instead moved out in the vertex stage until they draw a pixel wide, and their true size is kept as a coverage that decides how many samples each fragment keeps.</p>
+  <p>The culling pass lists apart, in each phase, every Meshlet of a Thin Primitive and every Meshlet of an Instance whose Mesh bounds cover under a pixel's area, a small Instance; a Mesh with a Thin Primitive is never small, and keeps that rule alone. Which it lists, and in what order, is on <a href="culling-pass.html">The culling pass</a>. Each pipeline of the main pass has a twin that draws them, the depth pipelines' with the vertex stage <code>vs_thin</code>:</p>
+<pre class="code"><code>let thin_depth_prepass_pipeline = if switches.shadow_rays {
+    depth_pipeline(
+        "Thin Depth Pre-pass Pipeline",
+        "vs_thin",
+        depth_fragment("fs_thin_surface_normals", &amp;surface_normals_target),
+    )
+} else {
+    depth_pipeline(
+        "Thin Depth Pre-pass Pipeline",
+        "vs_thin",
+        depth_fragment("fs_thin_depth", &amp;[]),
+    )
+};</code></pre>
+  <p class="code-source"><code>MainPass::new</code>, <code>src/render/main_pass.rs</code>. The two lit pass pipelines' twins run <code>vs_thin</code> too, with <code>fs_thin_depth</code> and <code>fs_thin_main</code>.</p>
+  <p>Every twin runs the same vertex stage, so the lit pass meets at depth equal the depths the depth passes kept, as for ordinary geometry. It starts from <code>vertex_output</code> and adds the inputs the fragment stages need:</p>
+<pre class="code"><code>struct ThinVertexOutput {
+    @builtin(position) @invariant clip_position: vec4&lt;f32&gt;,
+    @location(0) camera_relative_position: vec3&lt;f32&gt;,
+    @location(1) normal: vec3&lt;f32&gt;,
+    @location(2) uv: vec2&lt;f32&gt;,
+    @location(3) @interpolate(flat) material_id: u32,
+    @location(4) tangent_world: vec4&lt;f32&gt;,
+    @location(5) @interpolate(flat) radius_metres: f32,
+    // At the centroid: read outside its triangle, a tube past its end distance would keep a sample.
+    @location(6) @interpolate(perspective, centroid) pixel_metres: f32,
+    @location(7) @interpolate(flat) instance_coverage: f32,
+}</code></pre>
+  <p class="code-source"><code>ThinVertexOutput</code>, <code>main.wgsl</code>.</p>
+  <h3>A Thin Primitive: out from the centre line</h3>
+  <p>Each Meshlet carries its Primitive's Thin Primitive radius in the Meshlet table, 0 for any other Primitive. A vertex of a tube lies the radius out from its centre line along its normal, so the centre lies the radius back along it. What a pixel spans there, <code>pixel_size_per_metre</code> times the view depth, sets the radius the tube draws at, and the vertex moves out along the same line to it:</p>
+<pre class="code"><code>@vertex
+fn vs_thin(@builtin(vertex_index) packed_index: u32) -&gt; ThinVertexOutput {
+    var out = vertex_output(packed_index);
+    let index = unpack_index(packed_index);
+    let record = meshlet_records[index.record];
+    let meshlet = meshlets[record.meshlet];
+    let instance = instances[record.instance_slot];
+    var radius_metres = 0.0;
+    var pixel_metres = 0.0;
+    var instance_coverage = 1.0;
+    if meshlet.thin_radius_metres &gt; 0.0 {
+        let normal =
+            decode_vertex(vertices[meshlet_vertices[meshlet.first_vertex + index.vertex]]).tangent_frame.normal;
+        let radial = instance.rotation_scale * (normal * meshlet.thin_radius_metres);
+        radius_metres = length(radial);
+        let centre = out.camera_relative_position - radial;
+        pixel_metres = camera.pixel_size_per_metre * (camera.view_proj * vec4&lt;f32&gt;(centre, 1.0)).w;
+        // At or behind the camera's plane a pixel spans nothing: the vertex stays.
+        if pixel_metres &gt; 0.0 &amp;&amp; radius_metres &gt; 0.0 {
+            let drawn_radius_metres = thin_drawn_radius(radius_metres, pixel_metres);
+            out.camera_relative_position = centre + radial * (drawn_radius_metres / radius_metres);
+            out.clip_position = camera.view_proj * vec4&lt;f32&gt;(out.camera_relative_position, 1.0);
+        }</code></pre>
+<pre class="code"><code>// A tube of three faces seen along a face is this share of its diameter wide.
+const THIN_NARROWEST_VIEW: f32 = 0.75;
+
+fn thin_drawn_radius(radius_metres: f32, pixel_metres: f32) -&gt; f32 {
+    return max(radius_metres, 0.5 * pixel_metres / THIN_NARROWEST_VIEW);
+}</code></pre>
+  <p class="code-source"><code>vs_thin</code>, <code>main.wgsl</code>, its first branch; <code>thin_drawn_radius</code>, <code>common.wgsl</code>.</p>
+  <p>A tube of three faces seen along a face spans 0.75 of its diameter, so a tube drawn at half a pixel over 0.75 is a pixel wide in its narrowest view and a third wider than a pixel across. Every tube takes that share whatever its faces, so a tube of six faces draws a little wider than it needs. A tube already wider than that keeps its radius and does not move. A vertex at or behind the camera's plane, where a pixel spans nothing, stays where it is.</p>
+  <h3>A small Instance: out from its bounds' centre</h3>
+  <p>Any other vertex is of a Mesh with no Thin Primitive. Its Instance's coverage is the share of a pixel's area its Mesh bounds cover, and its vertices move out from the bounds' centre, across the view only, by the scale that brings that share to a whole pixel:</p>
+<pre class="code"><code>} else {
+    let stored_min = meshes[instance.mesh].bounds_min;
+    let stored_max = meshes[instance.mesh].bounds_max;
+    let bounds_min = vec3&lt;f32&gt;(stored_min[0], stored_min[1], stored_min[2]);
+    let bounds_max = vec3&lt;f32&gt;(stored_max[0], stored_max[1], stored_max[2]);
+    let bounds_centre = camera_relative_position(
+        instance.anchor,
+        instance.offset,
+        camera.anchor,
+        camera.offset,
+        instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
+    );
+    instance_coverage = small_instance_coverage(
+        bounds_centre,
+        instance.rotation_scale,
+        0.5 * (bounds_max - bounds_min),
+        (camera.view_proj * vec4&lt;f32&gt;(bounds_centre, 1.0)).w,
+        camera.pixel_size_per_metre
+    );
+    // Across the view only: each vertex keeps its depth, as the culling pass's box does.
+    let view_axis = vec3&lt;f32&gt;(camera.view_proj[0].w, camera.view_proj[1].w, camera.view_proj[2].w);
+    let from_centre = out.camera_relative_position - bounds_centre;
+    let along_view = view_axis * (dot(from_centre, view_axis) / max(dot(view_axis, view_axis), 1e-30));
+    out.camera_relative_position = bounds_centre + along_view
+        + (from_centre - along_view) * small_instance_scale(instance_coverage);
+    out.clip_position = camera.view_proj * vec4&lt;f32&gt;(out.camera_relative_position, 1.0);
+}</code></pre>
+<pre class="code"><code>// Under an eighth of coverage no sample is kept, so the scale stops there.
+fn small_instance_scale(coverage: f32) -&gt; f32 {
+    return inverseSqrt(clamp(coverage, 0.125, 1.0));
+}</code></pre>
+  <p class="code-source"><code>vs_thin</code>, <code>main.wgsl</code>, its second branch; <code>small_instance_scale</code>, <code>common.wgsl</code>.</p>
+  <p><code>small_instance_coverage</code> sums the areas the bounds' faces present to the camera, projected one metre along the view axis, over a pixel's area there, first order in the bounds' size over their distance. It takes the larger of that and the square of the bounds' sphere's diameter over a square four pixels wide, <code>SMALL_INSTANCE_WIDEST_PIXELS</code>, so an Instance whose bounds' sphere draws four pixels wide counts as covering a pixel and a long sliver is not stretched. Coverage of a whole pixel or more, or bounds at or behind the camera's plane, read as 1, and the vertex keeps its place: the scale is then 1. The scale is the inverse square root of the coverage, since it widens the bounds along both axes across the view, and it stops at an eighth of coverage, under which no sample is kept. Each vertex keeps its distance along the view axis, as the culling pass's box does when it tests the widened bounds.</p>
+  <p>The coverage leaves the vertex stage as <code>instance_coverage</code>, flat, the same for every fragment of the Instance; a Thin Primitive's leaves as its radius, flat, and what a pixel spans at its centre line, interpolated.</p>
 </section>
 
 <section class="part prose" id="depth">
-  <div class="part-mark">3 &middot; <code>src/render/targets.rs</code> &middot; ADR 0015</div>
+  <div class="part-mark">4 &middot; <code>src/render/targets.rs</code> &middot; ADR 0015</div>
   <h2>Reverse Z: cleared to 0, nearer is greater</h2>
   <p class="key-idea">Depth is reversed with an infinite far plane: the far plane is 0, the near plane 1, and a sample keeps the greatest depth. A float's precision is densest near 0, which reverse Z puts at the distance, where a perspective projection needs it.</p>
 <pre class="code"><code>pub fn depth_stencil_state() -&gt; wgpu::DepthStencilState {
@@ -243,28 +368,81 @@ depth_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, draw_offset);</cod
     }
 }</code></pre>
   <p class="code-source"><code>depth_stencil_state</code> and <code>RenderTargets::depth_attachment</code>, <code>src/render/targets.rs</code>.</p>
-  <p>The projection puts the near distance in clip z and the view depth in clip w, so a stored depth is the near distance over the view depth: 1 at the near plane, falling toward 0 with distance, never reaching it. With a 0.1 m near plane in <code>Depth32Float</code>, standard depth resolves 2.4 m at 2 km and reversed depth with no far plane 0.15 mm (ADR 0015). A sample nothing covers keeps the clear value, 0, which every later pass reads as background. The same direction runs through the frame: the depth pyramid keeps the minimum, the farthest; the shadow mask pass takes a pixel's nearest sample as its greatest depth.</p>
+  <p>The projection puts the near distance in clip z and the view depth in clip w, so a stored depth is the near distance over the view depth: 1 at the near plane, falling toward 0 with distance, never reaching it. With a 0.1 m near plane in <code>Depth32Float</code>, standard depth resolves 2.4 m at 2 km and reversed depth with no far plane 0.15 mm (ADR 0015). A sample nothing covers keeps the clear value, 0, which every later pass reads as background. The same direction runs through the frame: the depth pyramid keeps the minimum, the farthest; the shadow mask pass takes a pixel's nearest sample as its greatest depth. Every depth pipeline, the twins included, uses this state, so a widened vertex is tested and kept like any other.</p>
+</section>
+
+<section class="part prose" id="sample-mask">
+  <div class="part-mark">5 &middot; <code>fs_thin_depth</code> &middot; <code>fs_thin_surface_normals</code> &middot; ADR 0027</div>
+  <h2>The samples coverage keeps</h2>
+  <p class="key-idea">A fragment drawn wider than its geometry keeps only as many of the pixel's four samples as its coverage, rounded to the nearest, and says so by writing <code>sample_mask</code>: the depth passes' twins write it, so only the kept samples take the fragment's depth, and the lit pass meets those depths. The samples kept follow from the count alone, so every fragment of a pixel keeps the same ones.</p>
+<pre class="code"><code>// The mask depends on the count alone: every fragment of a pixel must keep the same samples.
+fn thin_kept_samples(coverage: f32) -&gt; u32 {
+    let count = u32(saturate(coverage) * 4.0 + 0.5);
+    return (0xfb910u &gt;&gt; (4u * count)) &amp; 15u;
+}</code></pre>
+  <p class="code-source"><code>thin_kept_samples</code>, <code>common.wgsl</code>.</p>
+  <p>4x MSAA holds five coverage levels. The count is the coverage times four, rounded to the nearest, so none below an eighth, one from an eighth, two from three eighths, three from five eighths and four from seven eighths. The constant <code>0xfb910u</code> holds a mask per count, four bits each: none; sample 0; samples 0 and 3; samples 0, 1 and 3; all four. Sample 0 comes first, then 3, 1 and 2. No dither, no pattern across pixels and no state across frames choose them, so two faces of one tube over a pixel keep the same samples, and a still camera keeps the same image.</p>
+<pre class="code"><code>// The samples of a pixel's four that a fragment of a Thin Primitive keeps:
+// the tube's true width over the width it draws, of them, to the nearest;
+// any other fragment keeps its Instance's coverage of them. The depth passes
+// write them, and the lit pass shades what covers them. The radius is a flat
+// input, which keeps the M4 Pro from merging the fragments of triangles that
+// share indices (ADR 0019).
+fn thin_fragment_samples(in: ThinVertexOutput) -&gt; u32 {
+    let width_share = in.radius_metres / thin_drawn_radius(in.radius_metres, max(in.pixel_metres, 1e-9));
+    return thin_kept_samples(select(in.instance_coverage, width_share, in.radius_metres &gt; 0.0));
+}
+
+@fragment
+fn fs_thin_depth(in: ThinVertexOutput) -&gt; @builtin(sample_mask) u32 {
+    return thin_fragment_samples(in);
+}
+
+struct ThinSurfaceNormals {
+    @location(0) normals: vec4&lt;f32&gt;,
+    @builtin(sample_mask) kept_samples: u32,
+}
+
+@fragment
+fn fs_thin_surface_normals(in: ThinVertexOutput) -&gt; ThinSurfaceNormals {
+    return ThinSurfaceNormals(
+        surface_normals(in.camera_relative_position, in.normal, in.material_id),
+        thin_fragment_samples(in)
+    );
+}</code></pre>
+  <p class="code-source"><code>thin_fragment_samples</code>, <code>fs_thin_depth</code> and <code>fs_thin_surface_normals</code>, <code>main.wgsl</code>.</p>
+  <p>A Thin Primitive's coverage is the tube's true width over the width it draws: its radius over the drawn radius, worked out again in the fragment from the radius and what a pixel spans. A tube wide enough not to be widened has coverage 1 and keeps every sample it covers. A small Instance's coverage is its Instance's. The written mask is ANDed with the samples the triangle covers, so a fragment keeps a sample only where it is both covered and chosen.</p>
+  <p>What a pixel spans, <code>pixel_metres</code>, is interpolated at the centroid, a point inside the triangle's covered samples. Read at the pixel's centre, which can lie outside the triangle, it could fall below every vertex's value, and a tube just past the distance where it keeps no sample would keep one.</p>
+  <p>With shadow rays off the thin depth pipeline runs <code>fs_thin_depth</code>, which writes only the mask; with them on, <code>fs_thin_surface_normals</code> writes the mask and the surface normals of section 7 together, so the normals land in the kept samples alone. No pipeline of the main pass enables alpha-to-coverage: a pipeline that writes <code>sample_mask</code> may not, and the one multisample state every pipeline shares sets <code>alpha_to_coverage_enabled</code> to false. How the lit pass draws the same fragments at depth equal and shades the samples they keep is on <a href="lit-pass.html">The lit pass</a>.</p>
+</section>
+
+<section class="part prose" id="zero-coverage">
+  <div class="part-mark">6 &middot; <code>thin_kept_samples</code> &middot; ADR 0027</div>
+  <h2>No sample, no draw</h2>
+  <p class="key-idea">Coverage under an eighth rounds to no sample. A fragment that keeps none writes no depth and no normals, and with culling on the culling pass leaves an Instance that would keep none out of the frame's draw altogether, so the depth passes never rasterise it.</p>
+  <p>In the depth passes the rule needs no branch: <code>thin_kept_samples</code> returns 0, the written mask keeps no sample, and the fragment leaves the depth target and the surface normals as they were. So a tube under a sixth of a pixel wide, whose drawn width is a third more than a pixel, and a small Instance under an eighth of a pixel's area draw nothing into depth, whether or not they are drawn.</p>
+  <p>With the <code>culling</code> Render switch on, as Praxis ships, the culling pass works out the same coverage from the camera and the Instance and leaves out of the frame's draw a small Instance whose coverage rounds to no sample, and an Instance of a Mesh that is all Thin Primitives once its widest tube keeps no sample at the bounds' nearest depth. The tests and where they sit among the culling pass's others are on <a href="culling-pass.html">The culling pass</a>. With it off, every such Instance is drawn and writes nothing.</p>
+  <p>The lit pass's twin draws at depth equal, and another fragment's depth can equal a fragment's own at a sample it does not keep, so there a fragment that keeps no sample is discarded and writes no colour.</p>
 </section>
 
 <section class="part prose" id="normals">
-  <div class="part-mark">4 &middot; <code>fs_surface_normals</code></div>
+  <div class="part-mark">7 &middot; <code>surface_normals</code></div>
   <h2>The surface normals</h2>
   <p class="key-idea">The depth passes already rasterise every triangle the shadow mask pass will trace from. With shadow rays on they also write, for each sample, the triangle's own normal and the normal interpolated over it, so the mask knows what the triangle was rather than guessing it from neighbouring depths.</p>
-<pre class="code"><code>@fragment
-fn fs_surface_normals(in: DepthNormalsOutput) -&gt; @location(0) vec4&lt;f32&gt; {
-    let crossed = cross(dpdx(in.camera_relative_position), dpdy(in.camera_relative_position));
+<pre class="code"><code>fn surface_normals(camera_relative_position: vec3&lt;f32&gt;, normal: vec3&lt;f32&gt;, material_id: u32) -&gt; vec4&lt;f32&gt; {
+    let crossed = cross(dpdx(camera_relative_position), dpdy(camera_relative_position));
     let crossed_length_squared = dot(crossed, crossed);
-    let toward_camera = -normalize(in.camera_relative_position);
+    let toward_camera = -normalize(camera_relative_position);
     let unit_crossed = crossed * inverseSqrt(crossed_length_squared);
     let triangle_normal = select(
         toward_camera,
         select(unit_crossed, -unit_crossed, dot(unit_crossed, toward_camera) &lt; 0.0),
         crossed_length_squared &gt; 0.0
     );
-    let normal_length_squared = dot(in.normal, in.normal);
+    let normal_length_squared = dot(normal, normal);
     let interpolated_normal = select(
         triangle_normal,
-        in.normal * inverseSqrt(normal_length_squared),
+        normal * inverseSqrt(normal_length_squared),
         normal_length_squared &gt; 0.0
     );
     let encoded_normals = vec4&lt;f32&gt;(octahedral_encode(triangle_normal), octahedral_encode(interpolated_normal))
@@ -272,10 +450,15 @@ fn fs_surface_normals(in: DepthNormalsOutput) -&gt; @location(0) vec4&lt;f32&gt;
     // Reads the flat input, so the stage has one the compiler cannot drop,
     // to no effect: Material IDs index the Material table, far below
     // NO_MATERIAL - 1.
-    return select(encoded_normals, vec4&lt;f32&gt;(0.0), in.material_id == NO_MATERIAL - 1u);
+    return select(encoded_normals, vec4&lt;f32&gt;(0.0), material_id == NO_MATERIAL - 1u);
+}
+
+@fragment
+fn fs_surface_normals(in: DepthNormalsOutput) -&gt; @location(0) vec4&lt;f32&gt; {
+    return surface_normals(in.camera_relative_position, in.normal, in.material_id);
 }</code></pre>
-  <p class="code-source"><code>fs_surface_normals</code>, <code>main.wgsl</code>.</p>
-  <p><b>The triangle's normal.</b> Across a triangle the camera-relative position changes linearly in the triangle's plane, so its screen-space derivatives are two vectors in that plane and their cross product is its normal. Where a 2&times;2 quad overhangs the triangle's edge, the pixels outside run as helper invocations of the same triangle, so even at an edge the derivatives belong to it. The cross product's sign depends on how the triangle lies on screen, so it is flipped to face the camera, the side the sample shows; a triangle seen exactly edge-on spans no plane on screen and takes the direction toward the camera. Neither case gives a NaN.</p>
+  <p class="code-source"><code>surface_normals</code> and <code>fs_surface_normals</code>, <code>main.wgsl</code>; <code>fs_thin_surface_normals</code> calls the same function.</p>
+  <p><b>The triangle's normal.</b> Across a triangle the camera-relative position changes linearly in the triangle's plane, so its screen-space derivatives are two vectors in that plane and their cross product is its normal. Where a 2&times;2 quad overhangs the triangle's edge, the pixels outside run as helper invocations of the same triangle, so even at an edge the derivatives belong to it. The cross product's sign depends on how the triangle lies on screen, so it is flipped to face the camera, the side the sample shows; a triangle seen exactly edge-on spans no plane on screen and takes the direction toward the camera. Neither case gives a NaN. For a widened triangle the position is the widened one, so the normal is that of the triangle as drawn.</p>
   <p><b>The interpolated normal.</b> The vertex normals, turned by the Instance's normal matrix and interpolated over the triangle, then normalised: the lit pass's normal before its normal map. One that interpolates to zero length takes the triangle's. The shadow mask reads no Textures, so normal maps play no part in it.</p>
   <p><b>Octahedral, 8 bits a coordinate.</b> A unit vector has two degrees of freedom. Projected onto the octahedron |x| + |y| + |z| = 1, with the lower half folded over the upper, every direction lands in the square [&minus;1, 1]&sup2; with nearly even precision:</p>
 <pre class="code"><code>fn octahedral_encode(direction: vec3&lt;f32&gt;) -&gt; vec2&lt;f32&gt; {
@@ -285,13 +468,13 @@ fn fs_surface_normals(in: DepthNormalsOutput) -&gt; @location(0) vec4&lt;f32&gt;
 }</code></pre>
   <p class="code-source"><code>octahedral_encode</code>, <code>common.wgsl</code>; the shadow mask pass decodes with <code>octahedral_decode</code> beside it.</p>
   <p>Each coordinate is mapped from [&minus;1, 1] to [0, 1] for the <code>Rgba8Unorm</code> target: the triangle normal in red and green, the interpolated one in blue and alpha, 4 bytes a sample. Decoded, each lies within 0.95&deg; of the normal it encodes where the store rounds to the nearest step, as Metal's does; Vulkan only recommends that rounding and may round to either neighbour, which about doubles the error, and the shadow mask pass's margins are sized for both.</p>
-  <p>Under 4x MSAA the fragment shader runs once per pixel per triangle and its output lands in every sample that triangle covers, so both normals are values at the pixel's centre, credited to each sample of the triangle. The pre-pass clears the target, phase two's depth pass loads it, and both store it for the shadow mask pass. With shadow rays off the depth pipeline writes depth alone and the target is not written, though the targets module creates it either way.</p>
+  <p>Under 4x MSAA the fragment shader runs once per pixel per triangle and its output lands in every sample that triangle covers, or for a twin every sample it keeps, so both normals are values at the pixel's centre, credited to each such sample. The pre-pass clears the target, phase two's depth pass loads it, and both store it for the shadow mask pass. With shadow rays off the depth pipelines write depth alone and the target is not written, though the targets module creates it either way.</p>
 </section>
 
 <section class="part prose" id="flat">
-  <div class="part-mark">5 &middot; <code>DepthNormalsOutput</code> &middot; ADR 0019</div>
+  <div class="part-mark">8 &middot; <code>DepthNormalsOutput</code> &middot; ADR 0019</div>
   <h2>The flat input: each sample credited to its own triangle</h2>
-  <p class="key-idea">On the Apple M4 Pro, a fragment stage that reads no flat input can have the fragments of neighbouring triangles that share indices merged in a pixel, one triangle's inputs written into both's samples. The depth passes and the lit pass must agree on which triangle each sample shows, so both read a flat input.</p>
+  <p class="key-idea">On the Apple M4 Pro, a fragment stage that reads no flat input can have the fragments of neighbouring triangles that share indices merged in a pixel, one triangle's inputs written into both's samples. The depth passes and the lit pass must agree on which triangle each sample shows, so every fragment stage of them reads a flat input.</p>
 <pre class="code"><code>struct DepthNormalsOutput {
     @builtin(position) @invariant clip_position: vec4&lt;f32&gt;,
     @location(0) camera_relative_position: vec3&lt;f32&gt;,
@@ -299,28 +482,34 @@ fn fs_surface_normals(in: DepthNormalsOutput) -&gt; @location(0) vec4&lt;f32&gt;
     @location(2) @interpolate(flat) material_id: u32,
 }</code></pre>
   <p class="code-source"><code>main.wgsl</code>.</p>
-  <p>The lit pass reads its flat Material ID to find its Material, so its fragments are never merged. Before the depth passes read one, their fragments could be: at a sample beside a shared edge, the normals could come from one triangle while the lit pass shaded the other there, at the same depth, so it passed the <code>Equal</code> test. Across a crease the first may turn from a light the second faces, and the mask hid a light the shading called lit. Which fragments merge depends on what the draw holds, so culling on and off gave <code>town</code> images that differed at a few pixels, which is how it was found.</p>
-  <p>An input a shader never reads can be dropped by the compiler, and the stage then reads no flat input after all. So <code>fs_surface_normals</code> compares the Material ID with <code>NO_MATERIAL</code> &minus; 1, the largest u32 but one: Material IDs index the Material table, far smaller, so the comparison never holds and the normals pass through unchanged, but the compiler cannot bound a value read from a vertex output and keeps the read. What merging is, and how it was measured, is on <a href="metal-quirks.html#merging">Metal quirks</a>.</p>
+  <p>The lit pass reads its flat Material ID to find its Material, so its fragments are never merged. If the depth passes read none, theirs could be: at a sample beside a shared edge, the normals could come from one triangle while the lit pass shaded the other there, at the same depth, so it passed the <code>Equal</code> test. Across a crease the first may turn from a light the second faces, and the mask would hide a light the shading calls lit. Which fragments merge depends on what the draw holds, so culling on and off would give <code>town</code> images that differ at a few pixels.</p>
+  <p>An input a shader never reads can be dropped by the compiler, and the stage then reads no flat input after all. So <code>surface_normals</code> compares the Material ID with <code>NO_MATERIAL</code> &minus; 1, the largest u32 but one: Material IDs index the Material table, far smaller, so the comparison never holds and the normals pass through unchanged, but the compiler cannot bound a value read from a vertex output and keeps the read. The twins need no such comparison: <code>thin_fragment_samples</code> reads the flat radius, and the flat coverage, for every fragment, and a fragment stage that writes <code>sample_mask</code> reads a flat input as ADR 0027 requires. What merging is, and how it was measured, is on <a href="metal-quirks.html#merging">Metal quirks</a>.</p>
 </section>
 
 <section class="part prose" id="phase-two">
-  <div class="part-mark">6 &middot; <code>PHASE_TWO_DEPTH_PASS</code> &middot; <code>fs_depth</code></div>
+  <div class="part-mark">9 &middot; <code>PHASE_TWO_DEPTH_PASS</code> &middot; <code>fs_depth</code></div>
   <h2>Phase two's depth</h2>
   <p class="key-idea">Phase two's Instances are missing from the depth the pre-pass kept, and the lit pass shades only at depth equal. With shadow rays on they are drawn into depth in a pass of their own, so the shadow mask pass sees every surface; with them off, the lit pass draws them into depth just before it shades.</p>
-  <p>With shadow rays on, phase two's depth pass is the same pipeline as the pre-pass, recorded at <code>PHASE_TWO_DRAW_OFFSET</code> in the frame's draw, loading the depth target and the surface normals and storing both for the shadow mask pass. It costs one more load and store of the 4x depth each frame, even when phase two draws nothing, as in a scene where nothing moves into view.</p>
-  <p>With shadow rays off, no compute pass reads depth before the lit pass, so the lit pass draws phase two's depth inside its own render pass first, with the pre-pass's vertex stage and a fragment stage that writes nothing:</p>
+  <p>With shadow rays on, phase two's depth pass is the same function and the same pipelines as the pre-pass, recorded at <code>PHASE_TWO_DRAW_OFFSET</code> and <code>PHASE_TWO_THIN_DRAW_OFFSET</code> in the frame's draw, loading the depth target and the surface normals and storing both for the shadow mask pass. It costs one more load and store of the 4x depth each frame, even when phase two draws nothing, as in a scene where nothing moves into view.</p>
+  <p>With shadow rays off, no compute pass reads depth before the lit pass, so the lit pass draws phase two's depth inside its own render pass first, with the pre-pass's vertex stages and fragment stages that write no colour:</p>
+<pre class="code"><code>if !self.shadow_rays {
+    lit_pass.set_pipeline(&amp;self.lit_pass_depth_pipeline);
+    lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, PHASE_TWO_DRAW_OFFSET);
+    lit_pass.set_pipeline(&amp;self.thin_lit_pass_depth_pipeline);
+    lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, PHASE_TWO_THIN_DRAW_OFFSET);
+}</code></pre>
 <pre class="code"><code>// With shadow rays off, the lit pass draws phase two's Instances into depth
 // before it shades, with this and `vs_depth_prepass`: it writes no colour.
 @fragment
 fn fs_depth() {}</code></pre>
-  <p class="code-source"><code>main.wgsl</code>. Every pipeline the lit pass sets names its colour target, so this one names the HDR format and a write mask of nothing.</p>
-  <p>Without that draw, an Instance phase two adds fails depth equal and shows the background. The lit pass's depth is then discarded at its end, so the extra load and store never happen.</p>
+  <p class="code-source"><code>MainPass::record_lit_pass</code>, <code>main_pass.rs</code>; <code>fs_depth</code>, <code>main.wgsl</code>. Every pipeline the lit pass sets names its colour target, so these name the HDR format and a write mask of nothing; the twin's fragment stage is <code>fs_thin_depth</code>, which writes the samples its coverage keeps, as in the depth passes.</p>
+  <p>Without those draws, an Instance phase two adds fails depth equal and shows the background. The lit pass's depth is then discarded at its end, unless the light count pass needs it, so the extra load and store never happen.</p>
 </section>
 
 <section class="part prose" id="tests">
-  <div class="part-mark">7 &middot; <code>cargo test</code></div>
+  <div class="part-mark">10 &middot; <code>cargo test</code></div>
   <h2>How it is tested</h2>
-  <p class="key-idea">The depth convention is checked as text across the tree and as an image by a Golden; the depth the pass keeps is read back sample by sample by the passes that read it; the normals' encoding has an oracle; and the flat-input rule is held by the culled-against-unculled comparison and by a coverage harness on the M4 Pro.</p>
+  <p class="key-idea">The depth convention is checked as text across the tree and as an image by a Golden; the depth the pass keeps is read back sample by sample, for ordinary, thin and small geometry; the widening, the rounding and the normals' encoding have oracles; the flat-input rule is held by the culled-against-unculled comparison and by a coverage harness on the M4 Pro; and the module's loops are read for an end.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
@@ -330,10 +519,18 @@ fn fs_depth() {}</code></pre>
       <tr><td>the Goldens, culled against unculled</td><td><code>tests/goldens.rs</code></td><td><code>town</code>'s frames match with culling on and off to <code>HARDWARE_UNCULLED_PIXELS</code>, 0 on a hardware driver: removing the flat read makes them differ</td></tr>
       <tr><td><code>each_depth_pyramid_texel_holds_the_minimum_depth_of_its_share_of_the_screen</code></td><td><code>depth_pyramid_pass.rs</code></td><td>triangles drawn into the 4x depth as the pre-pass draws them, cleared to 0 and passing <code>Greater</code>, read back at every sample</td></tr>
       <tr><td><code>each_depth_sample_lies_where_the_pass_rebuilds_it</code></td><td><code>shadow_mask_pass.rs</code></td><td>a sloped triangle's depth at every sample lies on its plane at the standard sample locations</td></tr>
+      <tr><td><code>a_thin_primitive_draws_a_pixel_wide_where_it_is_narrower</code></td><td><code>shader_function_tests.rs</code></td><td><code>thin_drawn_radius</code>: a radius kept where the tube is wide enough, and half a pixel over 0.75 where it is not</td></tr>
+      <tr><td><code>a_thin_primitive_keeps_the_samples_nearest_its_coverage</code></td><td><code>shader_function_tests.rs</code></td><td><code>thin_kept_samples</code>: no sample under an eighth, the count's steps at three, five and seven eighths, the samples 0, 3, 1, 2 in that order, and coverage over 1 keeping four</td></tr>
+      <tr><td><code>a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one</code></td><td><code>shader_function_tests.rs</code></td><td><code>small_instance_coverage</code>, <code>small_instance_scale</code> and the samples kept, for bounds ahead and aside, turned, scaled and sheared, a sliver whose sphere spans four pixels, and bounds behind the camera</td></tr>
+      <tr><td><code>a_thin_primitive_a_quarter_of_a_pixel_wide_keeps_one_sample_of_four_along_its_length</code></td><td><code>renderer.rs</code></td><td>in every column a tube crosses, depth is written at a pixel's sample 0 alone, and the lit pass shades that pixel; one 0.7 of a pixel wide keeps two samples in each column</td></tr>
+      <tr><td><code>a_thin_primitive_above_the_target_is_drawn_where_its_widening_reaches_it</code></td><td><code>renderer.rs</code></td><td>a tube's widening draws past its Mesh bounds and is kept there</td></tr>
+      <tr><td><code>a_thin_primitive_that_keeps_no_sample_is_not_drawn</code></td><td><code>renderer.rs</code></td><td>a tube 0.18 of a pixel wide keeps one sample and its six triangles are drawn; one 0.15 wide keeps none and none is drawn</td></tr>
+      <tr><td><code>an_instance_narrower_than_a_pixel_draws_a_pixel_wide_and_keeps_its_areas_share_of_samples</code></td><td><code>renderer.rs</code></td><td>a square a pixel wide keeps its pixel's four samples; one &radic;&frac12; of a pixel wide keeps samples 0 and 3, one half a pixel wide sample 0, and one 0.3 wide none, and is not drawn</td></tr>
       <tr><td><code>octahedral_coordinates_decode_to_the_unit_vector_they_encode</code></td><td><code>shader_function_tests.rs</code></td><td>the axes, the fold and a Fibonacci lattice, back within 0.95&deg; after rounding to 8 bits</td></tr>
       <tr><td><code>an_instance_entering_the_view_is_drawn_by_phase_two_in_the_frame_it_enters</code></td><td><code>renderer.rs</code></td><td>an Instance phase two draws reaches depth before the lit pass shades it, and the image is the one culling off draws</td></tr>
       <tr><td><code>a_draw_of_whole_index_sharing_groups_keeps_every_sample</code></td><td><code>coverage_tests.rs</code></td><td>on the M4 Pro, a draw of whole index-sharing groups loses no sample to merging</td></tr>
-      <tr><td><code>doubling_the_instances_doubles_instances_and_triangles_drawn_not_draw_calls</code></td><td><code>renderer.rs</code></td><td>one indirect draw per pass, whatever the Instances</td></tr>
+      <tr><td><code>doubling_the_instances_doubles_instances_and_triangles_drawn_not_draw_calls</code></td><td><code>renderer.rs</code></td><td>two indirect draws in each depth pass, whatever the Instances</td></tr>
+      <tr><td><code>every_loop_wgpu_leaves_unbounded_ends</code></td><td><code>shader_tests.rs</code></td><td>every loop of the parts of <code>LOOPS_UNBOUNDED</code> is counted or pinned by its text; <code>a_loop_whose_text_does_not_end_it_fails</code> proves the check fails</td></tr>
     </tbody>
   </table>
   </div>
@@ -341,51 +538,54 @@ fn fs_depth() {}</code></pre>
 </section>
 
 <section class="part prose" id="cost">
-  <div class="part-mark">8 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
+  <div class="part-mark">11 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">The pre-pass's time follows the triangles phase one draws: <code>town</code>'s, with millions of triangles a frame, is an order of magnitude above the small scenes', which read nearly the same time whatever they draw. Phase two's depth pass draws little in these scenes and costs little but its load and store.</p>
-  <p>Medians in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, from frames with shadow rays on; ADR 0019's gate from frames with them off, when the pre-pass sits inside it and the lit pass draws phase two's depth. On Metal a pass's timestamps can include time spent waiting on the pass before.</p>
+  <p class="key-idea">The pre-pass's time follows the triangles phase one draws: on each adapter, <code>town</code>'s, with millions of triangles a frame, is several times any other scene's, and the small scenes read nearly the same time whatever they draw. Phase two's depth pass draws little in these scenes and costs little but its load and store. The twins draw inside both passes and have no time of their own.</p>
+  <p>Medians in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12. A commit re-records one when it changes a timing the Baseline held or its Harness version; a commit that changes only its counters does not, and starts no line on its Series.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, <code>world</code> over 3,352; the passes from frames with shadow rays on, ADR 0019's gate from frames with them off, when the pre-pass sits inside it and the lit pass draws phase two's depth. On Metal a pass's timestamps can include time spent waiting on the pass before.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>depth_prepass</code></th><th class="n"><code>phase_two_depth_pass</code></th><th class="n">Gate, rays off</th><th class="n">Triangles drawn</th></tr></thead>
     <tbody>
-      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">171.7</td><td class="n">11.9</td><td class="n">849.5</td><td class="n">2,210</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">122.1</td><td class="n">2.4</td><td class="n">672.9</td><td class="n">2,210</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">135.6</td><td class="n">0.4</td><td class="n">750.5</td><td class="n">2,210</td></tr>
-      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">238.9</td><td class="n">12.2</td><td class="n">1,210.1</td><td class="n">256,938</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">135.2</td><td class="n">2.4</td><td class="n">865.1</td><td class="n">256,938</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">133.7</td><td class="n">0.4</td><td class="n">908.4</td><td class="n">256,938</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">164.2</td><td class="n">12.1</td><td class="n">773.8</td><td class="n">22,080</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">53.2</td><td class="n">2.4</td><td class="n">548.0</td><td class="n">22,080</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">50.2</td><td class="n">0.4</td><td class="n">571.4</td><td class="n">22,080</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">165.2</td><td class="n">12.1</td><td class="n">818.2</td><td class="n">7,774</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">55.3</td><td class="n">2.4</td><td class="n">565.2</td><td class="n">7,774</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">55.2</td><td class="n">0.4</td><td class="n">595.9</td><td class="n">7,774</td></tr>
-      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">158.8</td><td class="n">12.0</td><td class="n">763.0</td><td class="n">2</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">46.2</td><td class="n">2.4</td><td class="n">537.6</td><td class="n">2</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">45.1</td><td class="n">0.4</td><td class="n">563.1</td><td class="n">2</td></tr>
-      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">159.5</td><td class="n">12.0</td><td class="n">835.2</td><td class="n">2</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">83.0</td><td class="n">2.4</td><td class="n">634.8</td><td class="n">2</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">93.1</td><td class="n">0.4</td><td class="n">720.9</td><td class="n">2</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">164.2</td><td class="n">12.0</td><td class="n">677.2</td><td class="n">4</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">216.7</td><td class="n">2.4</td><td class="n">715.6</td><td class="n">4</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">225.2</td><td class="n">0.4</td><td class="n">870.4</td><td class="n">4</td></tr>
-      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">159.9</td><td class="n">12.0</td><td class="n">642.6</td><td class="n">11,040</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">27.2</td><td class="n">2.4</td><td class="n">422.4</td><td class="n">11,040</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">24.6</td><td class="n">0.4</td><td class="n">448.5</td><td class="n">11,040</td></tr>
-      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">398.6</td><td class="n">16.7</td><td class="n">14,109.0</td><td class="n">200</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">50.6</td><td class="n">2.4</td><td class="n">513.6</td><td class="n">200</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">52.5</td><td class="n">0.4</td><td class="n">558.9</td><td class="n">200</td></tr>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">384.0</td><td class="n">12.3</td><td class="n">1,297.0</td><td class="n">512,002</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">179.9</td><td class="n">2.4</td><td class="n">840.5</td><td class="n">512,002</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">182.8</td><td class="n">0.4</td><td class="n">924.8</td><td class="n">512,002</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">2,156.0</td><td class="n">56.3</td><td class="n">8,612.1</td><td class="n">5,552,214</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,082.6</td><td class="n">8.2</td><td class="n">4,991.8</td><td class="n">5,552,214</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,138.7</td><td class="n">8.3</td><td class="n">5,306.9</td><td class="n">5,552,214</td></tr>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">167.7</td><td class="n">12.0</td><td class="n">879.4</td><td class="n">2,210</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">122.9</td><td class="n">2.4</td><td class="n">686.5</td><td class="n">2,210</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">133.1</td><td class="n">0.4</td><td class="n">749.6</td><td class="n">2,210</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">237.9</td><td class="n">12.0</td><td class="n">1,243.8</td><td class="n">256,938</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">135.3</td><td class="n">2.5</td><td class="n">870.7</td><td class="n">256,938</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">133.7</td><td class="n">0.4</td><td class="n">909.3</td><td class="n">256,938</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">165.0</td><td class="n">12.0</td><td class="n">792.7</td><td class="n">22,080</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">53.1</td><td class="n">2.4</td><td class="n">546.6</td><td class="n">22,080</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">50.7</td><td class="n">0.4</td><td class="n">576.9</td><td class="n">22,080</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">163.1</td><td class="n">12.1</td><td class="n">839.8</td><td class="n">7,774</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">55.0</td><td class="n">2.4</td><td class="n">570.2</td><td class="n">7,774</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">53.2</td><td class="n">0.4</td><td class="n">599.7</td><td class="n">7,774</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">157.4</td><td class="n">11.9</td><td class="n">780.2</td><td class="n">2</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">48.8</td><td class="n">2.4</td><td class="n">541.0</td><td class="n">2</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">42.6</td><td class="n">0.4</td><td class="n">567.1</td><td class="n">2</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">160.4</td><td class="n">11.9</td><td class="n">857.0</td><td class="n">2</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">84.0</td><td class="n">2.4</td><td class="n">639.2</td><td class="n">2</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">91.1</td><td class="n">0.4</td><td class="n">726.4</td><td class="n">2</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">163.2</td><td class="n">12.0</td><td class="n">738.0</td><td class="n">2,832</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">254.0</td><td class="n">2.4</td><td class="n">863.0</td><td class="n">2,832</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">269.6</td><td class="n">0.4</td><td class="n">958.2</td><td class="n">2,832</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">159.6</td><td class="n">11.7</td><td class="n">648.1</td><td class="n">7,725</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">27.1</td><td class="n">2.4</td><td class="n">422.9</td><td class="n">11,040</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">24.6</td><td class="n">0.4</td><td class="n">450.7</td><td class="n">11,040</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">159.4</td><td class="n">11.9</td><td class="n">623.2</td><td class="n">200</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">51.1</td><td class="n">2.4</td><td class="n">454.7</td><td class="n">200</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">50.6</td><td class="n">0.4</td><td class="n">490.9</td><td class="n">200</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">190.2</td><td class="n">12.1</td><td class="n">843.4</td><td class="n">68,922</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">178.1</td><td class="n">2.4</td><td class="n">844.2</td><td class="n">512,002</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">180.7</td><td class="n">0.4</td><td class="n">928.4</td><td class="n">512,002</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">1,607.1</td><td class="n">51.8</td><td class="n">6,891.7</td><td class="n">2,713,433</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">1,057.1</td><td class="n">8.2</td><td class="n">4,972.3</td><td class="n">5,552,306</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">1,111.8</td><td class="n">8.2</td><td class="n">5,273.4</td><td class="n">5,552,306</td></tr>
+      <tr><td><code>world</code></td><td>Apple M4 Pro, Metal</td><td class="n">298.5</td><td class="n">72.7</td><td class="n">1,573.5</td><td class="n">187,206</td></tr>
+      <tr><td><code>world</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">370.7</td><td class="n">6.3</td><td class="n">1,081.9</td><td class="n">135,236</td></tr>
+      <tr><td><code>world</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">366.6</td><td class="n">6.5</td><td class="n">1,218.5</td><td class="n">135,236</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. Triangles drawn is the median frame's count, a counter rather than a time.</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above: <code>gpu_pass_microseconds</code>, <code>gate_microseconds</code> and <code>triangles_drawn</code>. Rows compare within an adapter, not across: the M4 Pro's Baselines were recorded from 2026-11-16 to 2026-11-20, with the widening and the drops this page describes, and the RTX 2070 SUPER's, on Vulkan and on DX12, from 2026-11-07 to 2026-11-09, from an earlier engine source that selected no LOD and drew no Thin Primitive, so their triangles and times are of that pass and say nothing of the twins. Triangles drawn is the median over the counted frames, a counter rather than a time.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Target</th><th>Format</th><th class="n">Bytes per pixel</th></tr></thead>
@@ -395,25 +595,31 @@ fn fs_depth() {}</code></pre>
     </tbody>
   </table>
   </div>
-  <p class="note">58,982,400 bytes each at 2560&times;1440. The surface normals are created whether or not shadow rays are on.</p>
+  <p class="note">58,982,400 bytes each at 2560&times;1440, counted under <code>render_targets</code>. The surface normals are created whether or not shadow rays are on. The twins add no target.</p>
 </section>
 
 <section class="part prose" id="why">
-  <div class="part-mark">9 &middot; ADRs 0014, 0015, 0019, 0021</div>
+  <div class="part-mark">12 &middot; ADRs 0008, 0014, 0015, 0019, 0021, 0027</div>
   <h2>Why this way</h2>
   <p><b>A depth pre-pass at all.</b> ADR 0019's option A: the pre-pass seeds the Hi-Z pyramid phase two culls against and the lit pass's depth-equal test, so the lit pass shades each covered sample's visible triangle once and nothing behind it. The culling pass writes the frame's draw in slot order, not front to back, so without depth first the lit pass would shade surfaces later hidden; the pre-pass restores front-to-back cost at the price of rasterising the frame's triangles twice.</p>
-  <p><b>The GPU builds the draw.</b> Recording a draw per Primitive of each Instance on the CPU grows with the Instances, and <code>town</code> holds about a quarter of a million. The culling pass writes one index buffer with each phase's indirect arguments beside it, drawn with one <code>draw_indexed_indirect</code> per pass, one native call on every backend, since wgpu's Metal backend has no count draws and runs multi-draw as a CPU loop (ADR 0019).</p>
+  <p><b>The GPU builds the draw.</b> Recording a draw per Primitive of each Instance on the CPU grows with the Instances, and <code>town</code> holds about a quarter of a million. The culling pass writes one index buffer with each draw's indirect arguments beside it, drawn with one <code>draw_indexed_indirect</code> per pipeline and phase, one native call on every backend, since wgpu's Metal backend has no count draws and runs multi-draw as a CPU loop (ADR 0019).</p>
   <p><b>Reverse Z with no far plane.</b> The view reaches 2 km; reversed <code>Depth32Float</code> resolves sub-millimetre depth there where standard depth resolves metres, and needs no far plane at all (ADR 0015).</p>
   <p><b>4x MSAA depth.</b> Thin geometry, such as <code>town</code>'s wires, needs coverage tested at more than one place per pixel in every frame, since ADR 0008 lets nothing average frames, and a post-process filter cannot rebuild what no sample saw; 4x is the Apple9 GPU family's maximum (ADR 0019, <a href="msaa.html">MSAA</a>).</p>
+  <p><b>Coverage as a written <code>sample_mask</code>, not alpha-to-coverage.</b> Which samples a given alpha keeps is the platform's choice, so two machines would draw two images, and a pipeline that enables alpha-to-coverage may not also write <code>sample_mask</code>, which the same passes need (ADR 0027).</p>
+  <p><b>Rounded, not dithered.</b> A dither between the five levels gives the right mean coverage at any width, as a stipple that crawls under a moving camera; the owner flew <code>town</code> with both and chose rounding. Alpha blending, as phone-wire antialiasing fades the line it widens, would be continuous at any distance but needs a sorted transparent pass the engine does not have yet, and accumulating coverage over frames is excluded by ADR 0008 (ADR 0027).</p>
+  <p><b>Pipelines of their own.</b> On the M4 Pro a <code>sample_mask</code> output in the pipelines every Instance draws through cost <code>town</code>'s frame as much as a <code>discard</code> there, in proportion to the indices drawn through stages that write it, while a second pipeline and draw a pass cost nothing measurable; so only the geometry that needs the mask draws through stages that write it. The twins draw every frame, since any Instance can be small (ADR 0027).</p>
   <p><b>Normals written here, not rebuilt from depth.</b> The shadow mask pass runs before the lit pass, so the lit pass cannot write them, and depth alone gives at best each sample's plane, guessed from neighbours that at an edge belong to other triangles. Of the options measured on <code>town</code>, writing the triangle's normal and the interpolated one per sample, and starting a ray inside the surface where the triangle turns from a light the interpolated normal faces, was chosen over moving the ray's origin by the shading normals, which needs the triangle's vertices, and over an offset estimated from the depth's curvature, which is approximate. Two normals at 8 bits a coordinate fill the 4 bytes a sample one normal at 16 bits would have; ADR 0019's amendment records the target and its cost.</p>
-  <p><b>A flat read, not another draw.</b> Of the ways to make the depth passes credit each sample to the lit pass's triangle, reading a flat input costs nothing measurable and matches the measurement that a fragment stage reading one is never merged. Drawing the normals in one draw of both phases at depth equal would cost about another geometry pass, and no specification promises identical fragments from different fragment shaders anyway; writing them in the lit pass's own draw is impossible, as the mask is traced before it; a triangle ID per sample, as a visibility buffer stores, is exact by construction and stays the fallback should another GPU merge regardless. WGSL's <code>@invariant</code> and Metal's preserved invariance cover the position alone, which already made depth equal.</p>
-  <p><b>Phase two's depth in its own pass, with rays.</b> The mask must see every surface the lit pass will shade before the lit pass runs, so phase two's depth cannot wait for it; with rays off nothing needs it sooner, and drawing it inside the lit pass saves a load and store of the 4x depth.</p>
+  <p><b>A flat read, not another draw.</b> Of the ways to make the depth passes credit each sample to the lit pass's triangle, reading a flat input costs nothing measurable and matches the measurement that a fragment stage reading one is never merged. Drawing the normals in one draw of both phases at depth equal would cost about another geometry pass, and no specification promises identical fragments from different fragment shaders anyway; writing them in the lit pass's own draw is impossible, as the mask is traced before it; a triangle ID per sample, as a visibility buffer stores, is exact by construction and stays the fallback should another GPU merge regardless. WGSL's <code>@invariant</code> and Metal's preserved invariance cover the position alone, which already made depth equal (ADR 0019).</p>
+  <p><b>Phase two's depth in its own pass, with rays.</b> The mask must see every surface the lit pass will shade before the lit pass runs, so phase two's depth cannot wait for it; with rays off nothing needs it sooner, and drawing it inside the lit pass saves a load and store of the 4x depth (ADR 0019).</p>
+  <p><b>Loops left unbounded.</b> wgpu bounds every loop of a module unless told the module holds no infinite loop, and on <code>town</code> the bound cost ADR 0019's gate measurable time on the M4 Pro; the depth passes' stages hold no loop. The module keeps wgpu's other checks, bounds checks among them, and a test reads its loops so that none can run forever whatever its buffers hold.</p>
 </section>
 
 <section class="part prose" id="limits">
-  <div class="part-mark">10</div>
+  <div class="part-mark">13</div>
   <h2>Limits</h2>
-  <p><b>Twice through the triangles.</b> Every triangle of phase one is rasterised here and again in the lit pass, which on <code>town</code> is what breaches ADR 0019's gate; the lever every option shares is fewer triangles, which LOD will bring.</p>
+  <p><b>Twice through the triangles.</b> Every triangle of phase one is rasterised here and again in the lit pass. The lever every option shares is fewer triangles: LOD selection and the drops at zero coverage take many off <code>town</code>, and its gate is still over its Budget on the M4 Pro.</p>
+  <p><b>Five levels.</b> 4x MSAA holds five coverage levels, so the contrast along a Thin Primitive steps by a quarter as it narrows and ends at an eighth of coverage; a tube ends where it is a sixth of a pixel wide. A tapered tube keeps its taper as it widens, so the coverage at its ends is off by up to the quarter the cook tolerates. Every tube takes three faces' share of its diameter, so one of more faces draws wider than it needs.</p>
+  <p><b>A small Instance's steadiness.</b> It keeps its mean coverage whatever its Mesh, since the samples it keeps fall by the area it gains, but how steadily it keeps them from frame to frame follows how much of its bounds its Mesh fills (ADR 0027).</p>
   <p><b>Merging measured on one GPU.</b> Only the M4 Pro was measured. Another Apple GPU, or a later macOS, may merge under other conditions or regardless of a flat input; the culled-against-unculled check on Metal would show it, and a triangle ID per sample is the way out.</p>
   <p><b>Normals at the pixel's centre.</b> The normals written into a sample are the triangle's values at the pixel's centre, not at the sample, and quantised to within about a degree; the shadow mask pass's margins absorb both.</p>
   <p><b>Edge-on triangles.</b> A triangle seen exactly edge-on records the direction toward the camera as its normal, not its own.</p>
@@ -426,6 +632,8 @@ fn fs_depth() {}</code></pre>
   <p class="note">Primary sources the pass rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites.</p>
   <dl class="reading">
     <dt><a href="https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=9">Metal Feature Set Tables, render targets</a></dt><dd>4x MSAA the Apple9 family's maximum sample count; <code>metal-feature-set-tables-msaa-max</code></dd>
+    <dt><a href="https://github.com/gpuweb/gpuweb/blob/10be35c70d7bfc37e0557f2d0e38ec42742aba63/spec/index.bs#L8792-L8794">WebGPU specification, validating a render pipeline</a></dt><dd>a pipeline whose fragment stage writes <code>sample_mask</code> may not enable alpha-to-coverage; <code>webgpu-alpha-to-coverage-sample-mask</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-types/src/shader.rs#L26-L31">wgpu-types 30.0.2, <code>ShaderRuntimeChecks::force_loop_bounding</code></a></dt><dd>without loop bounding the caller must ensure no shader holds an infinite loop; <code>wgpu-types-30-loop-bounding</code></dd>
     <dt><a href="https://www.microsoft.com/en-us/research/?p=159994">Fatahalian et al., Reducing Shading on GPUs using Quad-Fragment Merging, SIGGRAPH 2010</a></dt><dd>the merging of neighbouring triangles' fragments the M4 Pro's behaviour resembles</dd>
     <dt><a href="https://github.com/KhronosGroup/Vulkan-Docs/blob/a8b088a3fae12c8575407ea90c7c09bd653db923/chapters/primsrast.adoc#L721-L750">Vulkan specification, Standard Sample Locations</a></dt><dd>the four sample positions the depth is stored at; <code>vulkan-standard-sample-locations</code></dd>
     <dt><a href="https://www.w3.org/TR/WGSL/#invariant-attr">WGSL: the invariant attribute</a></dt><dd>a position computed alike in two pipelines is the same, which depth equal relies on</dd>
@@ -434,8 +642,8 @@ fn fs_depth() {}</code></pre>
     <dt><a href="https://doi.org/10.1007/978-1-4842-7185-8_4">Hanika, Hacking the Shadow Terminator, Ray Tracing Gems II ch. 4, 2021</a></dt><dd>the alternative the surface normals replaced, which moves a ray's origin by the shading normals and needs the triangle's vertices</dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The pre-pass took its present form in the third milestone. It began as a depth-only pass over a draw the CPU recorded per Primitive; it came to draw the culling pass's frame's draw, then only phase one's, phase two's depth following first inside the lit pass and, once the shadow mask pass needed it, in a pass of its own; with shadow rays it gained the surface normals, and then the flat read that keeps them credited to the lit pass's triangle. The merging, its measurement and the alternatives are on <a href="metal-quirks.html#merging">Metal quirks</a>; this page describes the pass as it is.</p>
-  <footer class="sources">Written from <code>src/render/main_pass.rs</code>, <code>src/render/shaders/main.wgsl</code>, <code>common.wgsl</code>, <code>src/render/targets.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/bind_groups.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0008, 0014, 0015, 0019 and 0021, the committed Baselines, and the sources above, all at <code>main</code> b3d764b4.</footer>
+  <p class="note">The pre-pass began as a depth-only pass over a draw the CPU recorded per Primitive; it came to draw the culling pass's frame's draw, then only phase one's, phase two's depth following first inside the lit pass and, once the shadow mask pass needed it, in a pass of its own; with shadow rays it gained the surface normals, and then the flat read that keeps them credited to the lit pass's triangle, which gave it its form in the third milestone. In the fifth it gained pipelines of their own for Thin Primitives and then small Instances, which draw them a pixel wide and write the samples their coverage keeps, and leave nothing in depth below an eighth of coverage; its shader module came to be compiled without wgpu's loop bounding. The merging, its measurement and the alternatives are on <a href="metal-quirks.html#merging">Metal quirks</a>; this page describes the pass as it is.</p>
+  <footer class="sources">Written from <code>src/render/main_pass.rs</code>, <code>src/render/shaders/main.wgsl</code>, <code>common.wgsl</code>, <code>src/render/shaders/mod.rs</code>, <code>src/render/targets.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/bind_groups.rs</code>, <code>src/render/culling_pass.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0008, 0014, 0015, 0019, 0021 and 0027, the committed Baselines, and the sources above, all at <code>main</code> 62052fe8.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="froxel-pass.html">Previous: The Froxel pass</a><a href="index.html">All field guides</a><a href="depth-pyramid-pass.html">Next: The depth pyramid pass</a></nav>
