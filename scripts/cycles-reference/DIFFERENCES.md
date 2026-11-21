@@ -9,7 +9,8 @@ Deviations; the rest, where the code should not match the literature and
 why, is `docs/audit/deviations.md`.
 
 Each crop is praxis | Cycles | difference, cut by `compare.py crop` from a
-gallery (`scripts/gallery.sh` with `PRAXIS_BLENDER` set), at 2x. The
+gallery (`scripts/gallery.sh` with `PRAXIS_BLENDER` set), at 2x unless its
+caption names another scale. The
 difference is praxis's capture dimmed to a quarter, red where praxis is
 brighter and blue where Cycles is, at four times the channel that differs
 most. A difference of an 8-bit step or so everywhere is praxis's dither, which the Cycles image does not carry,
@@ -81,6 +82,30 @@ hundreds. Shows as one-pixel lines along silhouettes, and along wires and
 other geometry thinner than a pixel, whose coverage four samples quantise.
 
 ![Town's wires and window edges](differences/msaa-edges.png)
+
+## A Thin Primitive shaded at its kept samples
+
+Tag: `deliberate until ADR 0027's widening of Thin Primitives is superseded`.
+
+A Thin Primitive narrower than a pixel draws a pixel wide and keeps its true
+width's share of the four samples, to the nearest quarter (ADR 0027). Each
+kept sample takes the radiance of the triangle of the widened tube that
+covers it, shaded at the pixel's centre. A tube a quarter of a pixel wide
+keeps one sample, the pixel's top one, so its whole share is one face.
+Cycles averages the true sliver: the lit face, the faces turned away, and the
+tube's shadow on the surface behind it, which praxis ends at that width. As a
+tube slants across the sample's row, the point that covers the sample moves
+from one face to the next, so its line brightens and darkens along its
+length, steps where the triangle that covers the sample changes, and can lie
+a row below the line Cycles draws. Shows on `town`'s roof railings in the
+sun: at frame 900 a top rail a quarter of a pixel wide reaches 95 (mean of
+RGB, 8-bit) against the roof's 78, where Cycles holds 64 on the row it
+draws the rail in.
+At twenty times the size, where the rail is five pixels wide, its sunlit
+face agrees with Cycles' within seven 8-bit steps all along, and its faces
+turned from the sun are brighter by the ambient light without visibility.
+
+![Town's top rail at frame 900, at 8x: praxis's line brightens where its one kept sample meets the sunlit face](differences/thin-primitive-kept-samples.png)
 
 ## A coarser LOD against the source Mesh
 
