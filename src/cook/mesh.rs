@@ -785,7 +785,7 @@ pub(crate) mod tests {
             ("railing-post", &[Some(0.025)]),
             ("top-rail", &[Some(0.025)]),
             ("aerial", &[Some(0.025), Some(0.015)]),
-            ("lamp", &[Some(0.075), Some(0.04), None]),
+            ("lamp", &[Some(0.075), Some(0.04)]),
             ("utility-pole", &[Some(0.115), Some(0.07)]),
         ];
         for (name, thin_radii) in thin_radii_by_mesh {
@@ -992,7 +992,7 @@ pub(crate) mod tests {
     #[test]
     fn the_reference_scenes_meshes_cook_to_the_same_blobs_on_every_machine() {
         const BLOBS_SHA256: &str =
-            "f277cb20eae77bc605ef6c4e0ecfd8792ce8ff8e405cef3da2de2f51fc6d9c6d";
+            "a34f18a84ad9d729079298ca8ceb1cb434e3987a9e786baf63dd29b6f277ae63";
         let committed_gltf_meshes = reference_gltf_meshes()
             .into_iter()
             .filter(|(path, _)| path.starts_with("assets/NormalTangentTest/"));
