@@ -2324,6 +2324,12 @@ mod tests {
                 });
             }
         });
+        // A thread's first wait in `block_on` boxes its cached parker's mutex and condvar on
+        // macOS [ref:futures-lite-2.6.1-block-on-caches-a-parker] [ref:parking-2.2.1-park-locks-and-waits]
+        // [ref:std-1.96.0-pthread-mutex-boxed-on-first-use] [ref:std-1.96.0-pthread-condvar-boxed-on-first-use].
+        bevy_tasks::block_on(compute_pool.spawn(async {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }));
         let main_thread_id = std::thread::current().id();
         let slow_on_the_main_thread = || {
             if std::thread::current().id() == main_thread_id {
