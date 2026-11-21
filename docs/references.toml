@@ -11315,3 +11315,947 @@ url = "https://github.com/dimforge/rapier/blob/475caa3ff4646fd9a796b67d14116256f
 section = "Rapier (commit 475caa3, 2026-10-10), crates/rapier3d-f64/Cargo.toml (L2, L27)"
 quote = '''name = "rapier3d-f64" [...] default = ["dim3", "f64", "std", "block-solver"]'''
 checked = 2026-11-21
+
+["losasso-2004-geometry-clipmaps-idea"]
+url = "https://hhoppe.com/geomclipmap.pdf#page=1"
+section = "Losasso and Hoppe, 'Geometry Clipmaps: Terrain Rendering Using Nested Regular Grids', SIGGRAPH 2004 (author's copy, headed 'SIGGRAPH 2004 Submission'); abstract p.1, section 1 p.2, section 6.2 p.4"
+quote = '''We introduce the geometry clipmap, which caches the terrain in a set of nested regular grids centered about the viewer. The grids are stored as vertex buffers in fast video memory, and are incrementally refilled as the viewpoint moves. [...] avoid T-junctions by stitching the level boundaries using [...] To both eliminate the gaps and provide temporal continuity, we morph the geometry near the outer boundary of each [...] but instead tracks the continuous viewer position.'''
+checked = 2026-11-21
+
+["losasso-2004-geometry-clipmaps-cost"]
+url = "https://hhoppe.com/geomclipmap.pdf#page=6"
+section = "Losasso and Hoppe, SIGGRAPH 2004 (author's copy); section 9 Results, 'Rendering rate' and 'Space requirement', pp.6-7"
+quote = '''we obtain 120 frames/sec with frustum culling, at a rendering rate of 59 M∆/sec. (With 4× framebuffer multisampling, it drops to 95 frames/sec.) [...] In practice, our system maintains a nearly uniform rate of 60 frames/sec. [...] overall memory use is about 375 MB, or only 0.02 bytes/sample.'''
+cost = '''Figure 8 shows these terrains rendered into a window of size 640×480 pixels, with a field-of-view of 90°. We used a PC with a 3.0 GHz Pentium4 CPU, 1 GB system memory, and an ATI Radeon 9800XT GPU with 256MB video memory. [...] we obtain 120 frames/sec with frustum culling, at a rendering rate of 59 M∆/sec. (With 4× framebuffer multisampling, it drops to 95 frames/sec.)'''
+checked = 2026-11-21
+
+["strugar-2010-cdlod-cost"]
+url = "https://github.com/fstrugar/CDLOD/blob/ea8195b335c1d542627a6af048e44326d75cb1ef/cdlod_paper_latest.pdf"
+section = "Strugar, 'Continuous Distance-Dependent Level of Detail for Rendering Heightmaps (CDLOD)', 11 July 2010; Introduction p.3, section on morphing p.7, 'GPU performance' and Table 2 p.12"
+quote = '''The CDLOD technique inherently avoids these problems because the algorithm used to transition between LOD levels completely transforms the mesh of a higher level into the lower detailed one before the actual swap occurs. [...] Morph operation is performed in the vertex shader'''
+cost = '''The performance bottleneck on the GPU is either the vertex texture fetch cost (used for displacement of terrain vertices), or the triangle rasterization and pixel shader cost. [...] Measurements were performed on a Core2 Duo 3.16Ghz system, except for the NVidia ION, which uses a 1.66 GHz Atom 330 CPU. [...] NVidia ION NVidia 8800GT ATI 5870 [...] 640x480 1024x768 1680x1050 640x480 1024x768 1680x1050 1024x768 1680x1050 1920x1200 [...] califmt. 380k 85 75 56 760 707 567 1629 1364 1253 [...] hawaii 446k 78 60 53 690 638 520 1455 1364 1198'''
+checked = 2026-11-21
+
+["strugar-2010-cdlod-limits"]
+url = "https://raw.githubusercontent.com/fstrugar/CDLOD/ea8195b335c1d542627a6af048e44326d75cb1ef/cdlod_paper_latest.pdf#page=9"
+section = "Filip Strugar, CDLOD paper, 2010, 'Granularity issues' p. 9, 'Comparison' p. 11, 'CPU performance' p. 12 (the paper has no section titled limitations)"
+quote = '''Since the LOD works in three dimensions, this problem will be enhanced when using extremely rough terrain with large height differences: thus, different settings might be required for each dataset. [...] these LOD transition problems can appear in the form of seams between LOD levels. [...] On the downside, there is a small added memory cost required for the quadtree storage. [...] the algorithm is inherently GPU-limited in almost all scenarios.'''
+checked = 2026-11-21
+
+["dupuy-2020-cbt-method"]
+url = "https://onrendering.com/data/papers/cbt/ConcurrentBinaryTrees.pdf#page=15"
+section = "Dupuy, 'Concurrent Binary Trees (with application to longest edge bisection)', Proc. ACM Comput. Graph. Interact. Tech. 3(2) (HPG 2020), article 21 (author's copy); section 5.1 p.11, section 5.3 pp.15-16 (PDF pages)"
+quote = '''tessellations, i.e., free of T-junctions, whenever it is constrained so as to guarantee that no neighboring triangles differ by more than one subdivision level [...] Our terrain renderer is written in C++ and GLSL450 shaders. [...] We then decide to split or merge each triangle so as to avoid sub-pixel rasterization. [...] Once the update pipeline complete, we invoke a vertex shader via an indirect command for each leaf node in the CBT. [...] Note that our approach allows for only single-subdivision-depth alterations per triangle and per iteration. This turns out to work well in practice, even for fast camera movements.'''
+checked = 2026-11-21
+
+["dupuy-2020-cbt-cost-limits"]
+url = "https://onrendering.com/data/papers/cbt/ConcurrentBinaryTrees.pdf#page=16"
+section = "Dupuy, HPG 2020 (author's copy); section 3.3 'Memory Layout' p.7, section 5.3 pp.15-16 with 'Performances' and Table 1 (PDF pages)"
+quote = '''We represent the triangulated square as a CBT of maximum depth D = 27 [...] Our approach allows us to render a 52-km-wide terrain at 6-meter precision without relying on uniformly tessellated triangles, and down to 0.1-meter precision otherwise. [...] Note that although CBTs grow exponentially in size, they remain quite compact at moderate depths, as, e.g., a CBT of maximum depth D = 16 requires simply 32 KiB of memory.'''
+cost = '''Our terrain implementation takes less than five milliseconds to render at full-HD resolution on an NVIDIA RTX 2080 GPU. [...] the overhead caused by our CBT update pipeline is largely dominated by the sum-reduction kernel, which takes 1.484ms. As for the rendering kernel, we evaluate that the use of a CBT adds an overhead of 0.277ms. [...] Table 1. GPU timings on an NVIDIA RTX 2080 averaged over 100 frames.'''
+checked = 2026-11-21
+
+["deliot-2021-unity-cbt-terrain"]
+url = "https://advances.realtimerendering.com/s2021/Siggraph21%20Terrain%20Tessellation.pdf#page=55"
+section = "Deliot, Dupuy, Rijnen and Yao (Unity Technologies), 'Experimenting with Concurrent Binary Trees for Large Scale Terrain Rendering', SIGGRAPH 2021 Advances in Real-Time Rendering in Games; speaker notes of slides 2, 7, 48, 51, 53, 55, 60, 62"
+quote = '''As a disclaimer, the content we are about to share is work in progress, and it is not a final product. [...] An important thing to note is that we don’t rely on tessellation shaders at all. Rather, this geometry is only generated with compute and vertex shaders using an algorithm called Longest Edge Bisection [...] It should be easily extendable to other render pipelines as long as they have compute shader and indirect draw capabilities. [...] Memory usage is 64mb. [...] The maximum resolution we get on the ground for the subdivision is about 6 meters. This isn’t detailed enough for a game [...] So instead of rendering just one triangle for every leaf node, we further render 256 triangles, which we refer to as meshlets [...] We want to improve the overall responsiveness of the system when the camera moves due to the limitation of doing only one level of subdivision every frame.'''
+cost = '''Please notice that we’ve only done our profiling on PC environment as we are in early prototyping stage. [...] On a middle tier hardware we measured 5.78 milliseconds for the first 4 passes, which are the most expensive. [...] We measured a 14.5 times boost on the same hardware. Now it takes less than half a millisecond on a 4 year old graphics card'''
+checked = 2026-11-21
+
+["benyoub-2024-cbt-large-scale-method"]
+url = "https://arxiv.org/pdf/2407.02215#page=1"
+section = "Benyoub and Dupuy (Intel), 'Concurrent Binary Trees for Large-Scale Game Components', Proc. ACM Comput. Graph. Interact. Tech. 7(3) (HPG 2024), arXiv:2407.02215v1; abstract p.1, section 1 p.2, section 3.3 pp.11-12, section 4.2 p.15. (The brief names Deliot et al. as authors; the paper's authors are Benyoub and Dupuy.)"
+quote = '''Second, we alleviate a limitation that restricted the triangulations to low subdivision levels. We do so by using the CBT as a memory pool manager rather than an implicit encoding of the triangulation as done originally. [...] clipmaps [Asirvatham and Hoppe 2005; Losasso and Hoppe 2004] coupled with static meshes for large vistas [Epic 2023] are hard to balance because they depend on the viewing altitude, [...] Each incremental update consists in iterating over each bisector in parallel. In turn, these bisectors can either be refined or decimated once. [...] we make our decision by decompressing the vertices of the bisector via Algorithm 2 and making sure its screen-space area matches a user-defined value. [...] we reach subdivision depths of up to 64 (as we use 64-bit integers to encode bisector indexes; deeper levels can be achieved with larger integers) with a memory pool of 128k elements'''
+checked = 2026-11-21
+
+["benyoub-2024-cbt-large-scale-cost"]
+url = "https://arxiv.org/pdf/2407.02215#page=15"
+section = "Benyoub and Dupuy, HPG 2024, arXiv:2407.02215v1; Table 3 and section 4.2 'Absolute Timings', 'Memory Consumption', 'Performances Against the Original CBT Implementation', p.15"
+quote = '''This makes a total of 7 MiB of memory (which can be deduced from Table 2) to handle planetary-scale triangulations. [...] in practice the adaptive triangulation produces at most 128k triangles for every viewing conditions we have tried [...] On our test hardware, such a computation runs in 0.4ms, which alone is four times slower than our entire update time as reported in Table 3.'''
+cost = '''update 0.1 0.084 0.085 render 1.745 1.863 0.1 Table 3. Performances for various geometries on an AMD 6800 XT GPU. Timings are given in milliseconds. [...] We benchmarked our test scenes on an AMD 6800 XT, which we chose to mimic a console-level GPU. [...] our incremental update is very fast to evaluate, taking less than 0.1ms per frame.'''
+checked = 2026-11-21
+
+["benyoub-2024-cbt-course-slides"]
+url = "https://advances.realtimerendering.com/s2024/content/Intel/large_scale_cbt_slides_siggraph_advances_2024.pdf#page=154"
+section = "Benyoub and Dupuy (Intel), course slides on 'Concurrent Binary Trees for Large-Scale Game Components', SIGGRAPH 2024 Advances in Real-Time Rendering in Games; speaker notes of slides 18, 30, 50, 154, 155, 158 and the caption on slide 154"
+quote = '''which runs at 250+FPS on a PS5 level hardware at full HD resolution. [...] This prevents the use of LOD systems like Nanite, which requires the full resolution mesh as input. [...] Naively bisecting a triangle would produce a T-junction, which would result in cracks in the final surface. [...] The method is compatible with real-time hardware ray tracing and given that the number of primitives remains quite “low”, we’re able to get something decent even by doing a full rebuild every frame of the tlas and blas'''
+cost = '''Rendered at 1920x1080 - CBT 128K [...] the AMD 6650 XT which is roughly equivalent to a PS5 [...] less than 0.2ms on a hardware equivalent to a PS5'''
+checked = 2026-11-21
+
+["englert-2020-mesh-shader-terrain"]
+url = "https://history.siggraph.org/learning/using-mesh-shaders-for-continuous-level-of-detail-terrain-rendering-by-englert/"
+section = "Englert (Tinman 3D), 'Using Mesh Shaders for Continuous Level-of-Detail Terrain Rendering', SIGGRAPH 2020 Talks, DOI 10.1145/3388767.3407391; abstract only, as reproduced by the ACM SIGGRAPH History Archives entry"
+quote = '''We show how mesh shader and inline ray-tracing features of DirectX 12 Ultimate can be used to remedy those disadvantages.'''
+checked = 2026-11-21
+
+["thonat-2021-tfdm-custom-intersection-vs-triangles"]
+url = "https://perso.telecom-paristech.fr/boubek/papers/TFDM/TFDM.pdf#page=12"
+section = "Thonat, Beaune, Sun, Carr, Boubekeur, 'Tessellation-Free Displacement Mapping for Ray Tracing', ACM TOG 40(6) (SIGGRAPH Asia 2021), section 7: hardware on PDF p. 10, Table 3 on p. 11, the comparison text on p. 12, 'Fixed Function Hardware Support' on p. 13."
+quote = '''achieves very high run time performance, being two orders of mag- [...] nitude faster on average than our method. However, as shown in [...] as the D-BVH traversal uses an intersection shader which operates [...] on generic compute shaders. This partially explains the large per- [...] formance gap we see relative to pre-tessellation methods. A future'''
+cost = '''Alien Sphere 0.9k 2k 4×8 0.9 GB 103 Mr/s 1.3 s 88 ms 34 MB 1.8 Mr/s 0.054 ms [...] using a RTX 2080 Max-Q GPU with 8 GB of memory and an i7-9750H'''
+checked = 2026-11-21
+
+["thonat-2023-rmip-custom-intersection-vs-triangles"]
+url = "https://perso.telecom-paristech.fr/boubek/papers/RMIP/RMIP.pdf#page=7"
+section = "Thonat, Georgiev, Beaune, Boubekeur, 'RMIP: Displacement ray-tracing via inversion and oblong bounding', SIGGRAPH Asia 2023 Conference Papers, section 6 (p. 7), section 7 (p. 7) and Table 1 (p. 9). Author's version."
+quote = '''ray-tracing frameworks through custom geometry. It requires a [...] bounding box for each custom primitive—per bounding prism in [...] our case, and a custom intersection program—our hybrid traversal. [...] Limitations & future work. When using displacement maps with [...] moderate resolution or limited tiling, and keeping the displacement [...] content static, then combining pre-tessellation, pre-displacement, [...] and hardware ray tracing remains the method of choice, even if ac-'''
+cost = '''Alien Sphere 0.9k 2k 6×8 21Mb 56ms ×186 ×91 ×0.048 ×2.7 ×1.3 ×3.4 ×30 ×2.7 [...] Desert Tire 9k 4k × 3 252 , 6 × 1 256Mb 606ms ×10 ×1151 ×0.012 ×6.5 ×0.32 ×11 ×7.6 ×9.6 [...] with a 16-core AMD Ryzen 9 5950X CPU and an NVIDIA RTX 3080'''
+checked = 2026-11-21
+
+["nvidia-2025-displacement-micromap-archived"]
+url = "https://github.com/NVIDIAGameWorks/Displacement-MicroMap-SDK/blob/bf41d657fa40c7b1ad0d1ff3767e18e45b93fc4d/README.md#L1"
+section = "NVIDIAGameWorks/Displacement-MicroMap-SDK, README.md lines 1-9 at commit bf41d657 (2025-02-12, 'readme: archive notice'); documentation, read, not run."
+quote = '''This project has been archived and is no longer maintained. The vulkan [...] extension `VK_NV_displacement_micromap` is no longer available. [...] We recommend exploring [**NVIDIA RTX Mega'''
+checked = 2026-11-21
+
+["moore-2018-far-cry-5-gpu-patch-pipeline"]
+url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=54"
+section = "Moore (Ubisoft), 'Terrain Rendering in 'Far Cry 5'', GDC 2018, slides with speaker notes; PDF pages 31, 38, 43, 53, 54, 62, 141"
+quote = '''But we realized that we could move almost all of the work in this diagram to the GPU. Only the initial streaming logic needs to be handled by the CPU. [...] We fill it using a compute shader that iterates through the LOD levels. [...] In Far Cry we do this based on distance from one or more cameras. [...] It’s simply a buffer containing a list of terrain patches that we want to actually render in a single instanced draw call. The buffer is accompanied with an IndirectArgs buffer to drive the draw call. [...] Each node is divided into 8x8 patches And as I mentioned the patches can be rendered as 16*16 vertex grids. [...] • Frustum cull • Occlusion buffer cull • Back face cull • Calculate and pack LOD transitions into the patch data'''
+cost = '''Total cost of GPU pipeline processing without rendering is ~0.1ms each frame. [...] Our typical frame cost for G-Buffer terrain is around 1.5-2ms'''
+checked = 2026-11-21
+
+["moore-2018-far-cry-5-lod-stitching"]
+url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=65"
+section = "Moore (Ubisoft), 'Terrain Rendering in 'Far Cry 5'', GDC 2018, slides with speaker notes; PDF pages 49, 61, 64, 65, 70"
+quote = '''Each frame we completely fill an 8-bit texture containing the terrain LOD at each sector of the world. [...] This is 16 bits: 4 bits each for the 4 sides describing the (clamped positive) LOD delta. [...] Where two patches from different quad tree LODs we need to ensure that all of the vertices are stitched so that we can’t see seams between the patches. [...] In the vertex shader we can simply morph the vertices at the edge of a patch to the nearest vertex at the required subdivision level. Here we see a drop of a single LOD, so we weld each pair of vertices. [...] Here we see a drop of a two LODs, so we weld four vertices at a time.'''
+checked = 2026-11-21
+
+["moore-2018-far-cry-5-holes"]
+url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=74"
+section = "Moore (Ubisoft), 'Terrain Rendering in 'Far Cry 5'', GDC 2018, slides with speaker notes; PDF pages 73-76"
+quote = '''Holes are needed around opening to caves/bunkers. We store terrain holes in 1 bit alpha in our BC1 atlas albedo map. [...] We can cull vertices in the vertex shader using the trick of returning NaN in the projected position. Outputting NaN for projection position is not specifically documented in graphics APIs but all GPU hardware seems to support this. [...] A culled vertex will cull all connected triangles. [...] This makes for a hole resolution that can only be half of the terrain resolution. But our level designers are OK with 1 meter holes in their half meter terrain.'''
+checked = 2026-11-21
+
+["moore-2018-far-cry-5-cliffs-and-near-displacement"]
+url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=117"
+section = "Moore (Ubisoft), 'Terrain Rendering in 'Far Cry 5'', GDC 2018, slides with speaker notes; PDF pages 14, 17, 104, 114, 117, 119, 120, 122"
+quote = '''We author terrain information at half meter resolution. [...] Heightmap (R16_UNORM, 129x129) [...] These are ordinary decals that render into the virtual texture. But they also have a matching simple mesh that we will use to give shape to the terrain. [...] This approach is a substitute for terrain tessellation displacement mapping. We implemented that approach too but rejected it due to cost. [...] Far Cry 5 added a procedural cliff pipeline that adds unique cliff geometry to the world. The pipeline creates mesh in areas that it detects as cliff, and we render these meshes. It adds shape and variety and helps reduce a little the “height map” feel. [...] The unique geometry has only vertex position and normal and so is quite lightweight. [...] So we use the same shader/terrain textures etc.'''
+checked = 2026-11-21
+
+["moore-2018-far-cry-5-always-resident-root-payload"]
+url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=17"
+section = "Moore, 'Terrain Rendering in Far Cry 5', GDC 2018, PDF pp. 17, 22 and 80 (speaker notes)."
+quote = '''Heightmap (R16_UNORM, 129x129) [...] World space normal map (we can assume positive z and also pack smoothness and specular occlusion) (BC3, 132x132) [...] Baked albedo map (BC1, 132x132) [...] But we use 6 levels in the Far Cry 5 quad tree. [...] Far shading can be handled directly and cheaply using the albedo/normal of the quad tree payload.'''
+checked = 2026-11-21
+
+["werle-2017-wildlands-terrain"]
+url = "https://666uille.files.wordpress.com/2017/03/gdc2017_ghostreconwildlands_terrainandtechnologytools-onlinevideos1.pdf#page=35"
+section = "Werlé and Martinez (Ubisoft), 'Ghost Recon Wildlands: Terrain and Technology Tools' (title per the file name), GDC 2017, slides with speaker notes, a copy on a personal WordPress host (not GDC Vault); PDF pages 19, 34, 35, 38, 58, 64"
+quote = '''the pixel ratio can go up to 10 texels per cm and 1 triangle every 2 cm. [...] It will be used as an albedo map when rendering the distant patches. [...] Everything is then cut into tiles, and compressed into a quadtree. This simple structure was very convenient for LOD generations, and patch culling. Each node of the quadtree has a small payload that can be streamed in or out by the loading thread depending on the culling result and the distance to the camera. [...] Each material also embed a displacement map. Tesselation based displacement helped us to get the « next gen » look that we were looking for while developing the prototype. Since we had very promising results we were willing to invest a lot of GPU time in it. [...] Since our terrain renderer use tesselation and displays a lot of tiny triangles'''
+cost = '''I wanted to end this part of the talk by giving some performance stats on xbox one. Those are averages and are heavily view depend but we can say that everything fits in less that 8ms on the GPU side most of the time.'''
+checked = 2026-11-21
+
+["widmark-2012-battlefield-3-terrain-mesh"]
+url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/gdc12-terrain-in-battlefield3.pdf#page=62"
+section = "Widmark (DICE), 'Terrain in Battlefield 3: A modern, complete and scalable system', GDC 2012, slide text (no speaker notes in the PDF); slides 4, 54, 62, 63, 64"
+quote = '''Mesh procedurally generated at runtime [...] Rendered in patches of 16x16 triangle pairs [...] Vertex shader texture fetch is too slow [...] A job analyze mesh quadtree and detect LOD switch edges • Edges are stitched by index permutations – Vertices are unchanged [...] Displacement mapping from heightfield – No additional memory needs (heightfield used as normal map) – Tries to maintain a constant screen-space triangle width Straightforward hull and domain shaders [...] CLOD to smooth most streaming LOD transitions'''
+checked = 2026-11-21
+
+["etienne-2023-call-of-duty-terrain-geometry"]
+url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=5"
+section = "Etienne (High Moon Studios / Activision), 'Large-Scale Terrain Rendering in Call of Duty' (the course index's title; the slides read 'Large Scale Terrain Rendering'), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, slides with notes; slides 4, 5, 28, 63"
+quote = '''At each node, we store vertex & index buffers that must be loaded before the node can be rendered. [...] At the lowest level, the terrain patches use procedural vertices with all vertices placed on a regular grid. At the branches, we run our meshes through a mesh simplifier. [...] The mesh simplifier outputs 2 floats per vertex, an X & Y. The Z is reconstructed by sampling the height map. [...] Vertices are interpolated towards their low-resolution counter part, as the camera moves away from the mesh. [...] When the camera is sufficiently far away from the mesh, and all vertices have collapsed to the lower resolution mesh, we switch to the lower resolution mesh. [...] During the opaque pass, terrain is deferred rendered using a full screen quad. [...] That would create cracks in the ground and artists would often have to place meshes to hide them'''
+checked = 2026-11-21
+
+["etienne-2023-call-of-duty-holes-displacement"]
+url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=44"
+section = "Etienne (High Moon Studios / Activision), 'Large-Scale Terrain Rendering in Call of Duty' (the course index's title; the slides read 'Large Scale Terrain Rendering'), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, slides with notes; slides 6, 44, 59, 67"
+quote = '''It is also used to make holes in the ground for caves, or to place buildings instead of terrain. [...] The cutout texture map is very memory efficient. It requires only 1 bit per vertex. [...] On platforms that have GPU Tessellation & Displacement enabled, we also use virtual texturing to store displacements. [...] Note that displacements don’t affect collision, which means they cannot be too big, otherwise this will start causing noticeable issues. [...] Parallax mapping isn’t supported by our terrain technology though, but we see no reason why not.'''
+cost = '''it takes about 1ms to uncompress a 68x68 page on PS4'''
+checked = 2026-11-21
+
+["hooker-2021-call-of-duty-mesh-lod"]
+url = "https://research.activision.com/publications/2021/09/boots-on-the-ground--the-terrain-of-call-of-duty"
+section = "Hooker (Treyarch / Activision), 'Boots on the Ground: The Terrain of Call of Duty', GDC 2021; deck at https://www.activision.com/cdn/research/GDC21_Terrain_of_CoD.pptx, slides 19-23, 28, 84 (slide text and notes)"
+quote = '''We use mesh LODs instead of a regular grid. [...] LOD tiles are stored in a quad-tree [...] 2x2 tiles swap for the next LOD up which is the same triangle count, reducing density by ¼. [...] Regular grid clip-map LODs require a lot of triangles to maintain shape. This is 170,000 triangles [...] This is 50,000 triangles and the same visual quality. [...] Higher LODs morph to lower LODs before transition [...] Low-LOD morph-to position included [...] Decals support displacement as they are part of the terrain which uses tessellation and displacement.'''
+checked = 2026-11-21
+
+["lengyel-2010-voxel-terrain-dissertation"]
+url = "https://transvoxel.org/Lengyel-VoxelTerrain.pdf#page=94"
+section = "Lengyel, 'Voxel-Based Terrain for Real-Time Virtual Simulations', PhD dissertation, University of California at Davis, 2010; chapter 1 (PDF pp.9-10), section 6.1 'Geomorphing' (PDF p.94), chapter 7 (PDF p.99)"
+quote = '''can be no caves, overhangs, arches, or any other kind of feature that would prevent the terrain surface from being a continuous function [...] algorithms used to extract the terrain surface from a voxel map produce far greater numbers of vertices and triangles when compared to conventional two-dimensional terrain. [...] levels of detail can still be quite visible as the camera moves through a scene. [...] an extra 12 bytes per vertex can be too costly, especially on platforms such as game consoles where memory is limited. [...] full content of this dissertation has been implemented and deployed in the C4 Engine, a multi-platform computer game engine'''
+checked = 2026-11-21
+
+["tatarchuk-2006-parallax-occlusion-mapping"]
+url = "https://advances.realtimerendering.com/s2006/Chapter5-Parallax_Occlusion_Mapping_for_detailed_surface_rendering.pdf#page=16"
+section = "Tatarchuk (ATI Research), 'Practical Parallax Occlusion Mapping with Approximate Soft Shadows for Detailed Surface Rendering', chapter 5 of the SIGGRAPH 2006 course 'Advanced Real-Time Rendering in 3D Graphics and Games'; abstract (PDF p.2), section 5.6 (PDF p.15), section 5.6.1 (PDF pp.16-17)"
+quote = '''This chapter presents a per-pixel ray tracing algorithm with dynamic lighting of surfaces in real-time on the GPU. [...] cobblestone sidewalk using this technique (using sampling range from 8 to 40 samples per pixel) [...] Parallax occlusion mapping is a sampling-based algorithm at its core, and as such, it can exhibit aliasing. [...] Another limitation of our technique is the lack of detailed silhouettes, betraying the low resolution geometry actually rendered with our method.'''
+cost = '''(fps > 15fps on ATI Radeon X1600 XL rendering at 1600x1200 resolution)'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-mesh-defaults"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/Code/Source/TerrainRenderer/TerrainMeshManager.h#L56"
+section = "o3de/o3de at b6122815be0e, `Gems/Terrain/Code/Source/TerrainRenderer/TerrainMeshManager.h`, fragments start at L56, L57, L58, L59; read, not run"
+quote = '''float m_renderDistance = 4096.0f; [...] float m_firstLodDistance = 128.0f; [...] bool m_clodEnabled = true; [...] float m_clodDistance = 16.0f;'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-morph"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/Assets/Shaders/Terrain/TerrainCommon.azsli#L71"
+section = "o3de/o3de at b6122815be0e, `Gems/Terrain/Assets/Shaders/Terrain/TerrainCommon.azsli`, fragments start at L71, L73, L75; read, not run"
+quote = '''float clodBlend = saturate(clodDistance * TerrainSrg::m_meshData.m_rcpClodDistance * patchData.m_rcpLodLevel); [...] worldPosition.z = lerp(lodHeight, height, clodBlend); [...] normal = float3(lerp(input.m_lodXYNormal, input.m_xyNormal, clodBlend), 0.0);'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-holes"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/Assets/Shaders/Terrain/TerrainCommon.azsli#L58"
+section = "o3de/o3de at b6122815be0e, `Gems/Terrain/Assets/Shaders/Terrain/TerrainCommon.azsli`, fragments start at L58, L59; read, not run"
+quote = '''// 1.0 means there is no height data at this vertex, so output a NaN to remove this vertex. [...] position = 1.0 / 0.0;'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-ray-tracing-lods"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/Code/Source/TerrainRenderer/TerrainMeshManager.cpp#L530"
+section = "o3de/o3de at b6122815be0e, `Gems/Terrain/Code/Source/TerrainRenderer/TerrainMeshManager.cpp`, fragments start at L530, L1279, L1317, L1332, L1381; read, not run"
+quote = '''sector.m_rtData = AZStd::make_unique<RtSector>(); [...] newRayTraceItems.push_back({ &sector, 0, lodLevel }); [...] newRayTraceItems.push_back({ &sector, i + 1u, lodLevel }); [...] // Compare the sorted new list to the old list to figure out which ray traced sectors need to be [...] addMesh(*newIt, newMeshGroup);'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-ray-tracing-vertices"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/Code/Source/TerrainRenderer/TerrainMeshManager.cpp#L386"
+section = "o3de/o3de at b6122815be0e, `Gems/Terrain/Code/Source/TerrainRenderer/TerrainMeshManager.cpp`, fragments start at L386, L447, L854, L883, L902; read, not run"
+quote = '''// The position for a BLAS supports only R32G32B32_FLOAT or R16G16B16A16_FLOAT, but the normal could be octahedron - encoded with [...] meshGroup.m_mesh.m_nonUniformScale = AZ::Vector3(xyScale, xyScale, m_worldHeightBounds.m_max - m_worldHeightBounds.m_min); [...] // While heightsNormals is in the exact format the terrain shader expects for optimum efficiency, for [...] heightNormal.m_height == NoTerrainVertexHeight ? [...] // If the mesh is currently visible, it must be removed and re-added to update its data.'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-clipmap-config"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/Code/Source/TerrainRenderer/TerrainClipmapManager.h#L38"
+section = "o3de/o3de at b6122815be0e, `Gems/Terrain/Code/Source/TerrainRenderer/TerrainClipmapManager.h`, fragments start at L38, L46, L50, L53, L58, L59, L64, L65, L87; read, not run"
+quote = '''static constexpr uint32_t MacroClipmapStackSizeMax = 16; [...] ClipmapSize2048 = 2048u [...] bool m_clipmapEnabled = false; [...] ClipmapSize m_clipmapSize = ClipmapSize1024; [...] float m_macroClipmapMaxRenderRadius = 2048.0f; [...] float m_detailClipmapMaxRenderRadius = 256.0f; [...] float m_macroClipmapMaxResolution = 2.0f; [...] float m_detailClipmapMaxResolution = 2048.0f; [...] uint32_t m_clipmapBlendSize = 256;'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-clipmap-update"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/Code/Source/TerrainRenderer/TerrainClipmapManager.cpp#L473"
+section = "o3de/o3de at b6122815be0e, `Gems/Terrain/Code/Source/TerrainRenderer/TerrainClipmapManager.cpp`, fragments start at L473, L480, L510, L516, L591, L651; read, not run"
+quote = '''imageDesc.m_format = AZ::RHI::Format::R8G8B8A8_UNORM; [...] imageDesc.m_format = AZ::RHI::Format::R16G16_SNORM; [...] imageDesc.m_format = AZ::RHI::Format::R16_FLOAT; [...] imageDesc.m_format = AZ::RHI::Format::R8_UNORM; [...] // First time update will run through the whole clipmap [...] ClipmapBoundsRegionList updateRegionList = clipmapBounds.UpdateCenter(currentViewPosition);'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-material-blend"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/Assets/Shaders/Terrain/TerrainDetailHelpers.azsli#L56"
+section = "o3de/o3de at b6122815be0e, `Gems/Terrain/Assets/Shaders/Terrain/TerrainDetailHelpers.azsli`, fragments start at L56, L343, L346, L365, L391; read, not run"
+quote = '''option bool o_terrainUseHeightBasedBlending = true; [...] Populates a DetailSurface with material data gathered form the 4 nearest samples to detailMaterialIdUv. [...] Each sample can have two different detail materials defined with a blend value to determine their relative contribution. [...] // Using Load() to gather the nearest 4 samples (Gather4() isn't used because of precision issues with uvs). [...] // If any sample has no materials, give up.'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-query-point"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Code/Framework/AzFramework/AzFramework/Terrain/TerrainDataRequestBus.h#L178"
+section = "o3de/o3de at b6122815be0e, `Code/Framework/AzFramework/AzFramework/Terrain/TerrainDataRequestBus.h`, fragments start at L178, L179, L180, L201, L214, L222, L231, L242; read, not run"
+quote = '''BILINEAR, //! Get the value at the requested location, using terrain sample grid to bilinear filter between sample grid points. [...] CLAMP, //! Clamp the input point to the terrain sample grid, then get the height at the given grid location. [...] EXACT, //! Directly get the value at the location, regardless of terrain sample grid density. [...] virtual bool TerrainAreaExistsInBounds(const AZ::Aabb& bounds) const = 0; [...] virtual bool GetIsHole(const AZ::Vector3& position, Sampler sampleFilter = Sampler::BILINEAR) const = 0; [...] const AZ::Vector3& position, Sampler sampleFilter = Sampler::BILINEAR, bool* terrainExistsPtr = nullptr) const = 0; [...] virtual SurfaceData::SurfaceTagWeight GetMaxSurfaceWeight( [...] SurfaceData::SurfaceTagWeightList& outSurfaceWeights,'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-query-batch"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Code/Framework/AzFramework/AzFramework/Terrain/TerrainDataRequestBus.h#L153"
+section = "o3de/o3de at b6122815be0e, `Code/Framework/AzFramework/AzFramework/Terrain/TerrainDataRequestBus.h`, fragments start at L153, L295, L306, L316, L320, L332; read, not run"
+quote = '''static constexpr int32_t MinPositionsPerJobDefault = 8; [...] virtual void QueryList(const AZStd::span<const AZ::Vector3>& inPositions, [...] virtual void QueryRegion( [...] virtual RenderGeometry::RayResult GetClosestIntersection(const RenderGeometry::RayRequest& ray) const = 0; [...] virtual AZStd::shared_ptr<TerrainJobContext> QueryListAsync( [...] virtual AZStd::shared_ptr<TerrainJobContext> QueryRegionAsync('''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-raycast"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/Code/Source/TerrainRaycast/TerrainRaycastContext.cpp#L20"
+section = "o3de/o3de at b6122815be0e, `Gems/Terrain/Code/Source/TerrainRaycast/TerrainRaycastContext.cpp`, fragments start at L20, L40, L203, L213, L218; read, not run"
+quote = '''// Convenience function to get the terrain height values at each corner of an AABB, triangulate them, [...] // splitting using the top-left -> bottom-right diagonal so to match [...] // Walk through each grid square in the terrain that intersects the XY coordinates of the line. [...] // Note - this could be optimized to be 2x faster by adding some code to keep track of the terrain heights [...] // Intersection found. Replace the triangle normal from the hit with a higher-quality normal calculated'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-collider"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/Code/Source/Components/TerrainPhysicsColliderComponent.cpp#L317"
+section = "o3de/o3de at b6122815be0e, `Gems/Terrain/Code/Source/Components/TerrainPhysicsColliderComponent.cpp`, fragments start at L317, L347, L486, L504, L618; read, not run"
+quote = '''// We currently don't support rotation of terrain heightfields. [...] // We can use the "EXACT" sampler here because our query points are guaranteed to be aligned with terrain grid points. [...] // Any heights that fall outside the range of our bounding box will get turned into holes. [...] point.m_quadMeshType = terrainExists ? Physics::QuadMeshType::SubdivideUpperLeftToBottomRight : Physics::QuadMeshType::Hole; [...] gridResolution, &AzFramework::Terrain::TerrainDataRequests::GetTerrainHeightQueryResolution);'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-mesher"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/src/terrain_3d_mesher.cpp#L19"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `src/terrain_3d_mesher.cpp`, fragments start at L19, L21, L25, L29, L52, L119, L121; read, not run"
+quote = '''// # 0 TILE - mesh_size x mesh_size tiles [...] // # 1 EDGE_A - 2 by (mesh_size * 4 + 8) strips to bridge LOD transitions along +-Z axis [...] // # 3 FILL_A - 4 by mesh_size [...] // # 5 STANDARD_TRIM_A - 2 by (mesh_size * 4 + 2) strips for LOD0 +-Z axis edge [...] vertices.push_back(Vector3(x, 0.f, y)); // bottom-left [...] for (int level = 0; level < _lods + _tessellation_level; level++) { [...] // 12 Tiles LOD1+, 16 for LOD0'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-mesh-defaults"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/src/terrain_3d.h#L64"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `src/terrain_3d.h`, fragments start at L64, L80, L81, L82, L83; read, not run"
+quote = '''RegionSize _region_size = SIZE_256; [...] int _mesh_lods = 7; [...] int _tessellation_level = 0; [...] int _mesh_size = 48; [...] real_t _vertex_spacing = 1.0f;'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-geomorph"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/src/shaders/main.glsl#L195"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `src/shaders/main.glsl`, fragments start at L195, L198, L199, L201, L211, L240; read, not run"
+quote = '''// Geomorph vertex across clipmap LODs, set end and start for linear height interpolate [...] float max_xz = max(abs(v_vertex.x - _target_pos.x), abs(v_vertex.z - _target_pos.z)); [...] float vertex_lerp = smoothstep(0.0, 1.0, (max_xz * inv_scale - _mesh_size - 4.0) / (_mesh_size - 4.0)); [...] // For LOD0 morph from a regular grid to an alternating grid to align with LOD1+ [...] v_vertex.xz -= shift * scale * vertex_lerp; [...] h = mix(texelFetch(_height_maps, coord_a, 0).r, texelFetch(_height_maps, coord_b, 0).r, vertex_lerp);'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-limits"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/tips.md#L10"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `doc/docs/tips.md`, fragments start at L10, L11, L12, L16, L23; read, not run"
+quote = '''If you want tunnels or caves though you need to add your own meshes or use [Zylann's Voxel Terrain](https://github.com/Zylann/godot_voxel). [...] Currently painting occurs on the CPU in C++. [...] | Holes | Holes work for both visual and collision. [...] | Streaming | There is no streaming built in to Godot. Region Streaming is [in progress](https://github.com/TokisanGames/Terrain3D/pull/675). [...] | Lightmaps | Not possible. There is no static mesh, nor UV2 channel to bake lightmaps on to.'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-normals"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/shader_design.md#L71"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `doc/docs/shader_design.md`, fragments start at L71, L76, L80; read, not run"
+quote = '''It's worth noting that as this is calculated from screen space derivatives, it is independent of screen resolution. [...] Clipmap terrain vertices are farther apart at lower LODs, causing certain things like normals to look strange when viewed in the distance. Because of this, we calculate normals by taking derivatives from the heightmap in `fragment()`. [...] Doing this saves 3-4MB VRAM per region (sized at 1024) instead of pre-generating a normal map and passing it to the shader.'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-control-map"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/controlmap_format.md#L4"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `doc/docs/controlmap_format.md`, fragments start at L4, L10, L11, L12, L13, L14, L16; read, not run"
+quote = '''The control map defines how the terrain is textured using unsigned, 32-bit integer data. [...] | Base texture id | 0-31 | 5 | 32-28 | [...] | Overlay texture id | 0-31 | 5 | 27-23 | [...] | Texture blend | 0-255 | 8 | 22-15 | [...] | UV angle | 0-15 | 4 | 14-11 | [...] | UV scale | 0-7 | 3 | 10-8 | [...] | Hole: 0 terrain, 1 hole | 0-1 | 1 | 3 |'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-blend-cost"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/shader_design.md#L97"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `doc/docs/shader_design.md`, fragments start at L97, L122, L137; read, not run"
+quote = '''The textures at each vertex are looked up and accumulated, the weight for each lookup is modified by the texture height value, sharpness, and potentially the world normal. [...] * Terrain3D uses 5-20 lookups per pixel depending on terrain distance: [...] * Terrain3D - Only 2 textures can stored in a vertex. However pixels are interpolated between the 4 adjacent vertices, so can easily blend between up to 4 textures based on painted blend value, height textures, and material settings.'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-detiling"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/src/shaders/main.glsl#L68"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `src/shaders/main.glsl`, fragments start at L68, L296, L322, L323, L332; read, not run"
+quote = '''uniform vec2 _texture_detile_array[32]; [...] // Control map rotation. Must be applied seperatley from detiling to maintain UV continuity. [...] vec2 uv_center = floor(fma(i_pos, vec2(id_scale), vec2(0.5))); [...] vec2 id_detile = fma(random(uv_center), 2.0, -1.0) * _texture_detile_array[id] * TAU; [...] // Align derivatives for correct anisotropic filtering'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-slope-projection"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/src/shaders/projection.glsl#L6"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `src/shaders/projection.glsl`, fragments start at L6, L9; read, not run"
+quote = '''if (i_normal.y <= 0.7071067811865475) { // sqrt(0.5) [...] // Fast 45 degree snapping https://iquilezles.org/articles/noatan/'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-displacement"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/displacement.md#L4"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `doc/docs/displacement.md`, fragments start at L4, L17, L49, L56; read, not run"
+quote = '''This will subdivide the clipmap mesh, greatly increasing the vertex density around the camera. This feature is compatible with all platforms, including mobile and web, however it does come with a potentially significant performance cost. [...] increasing `Tessellation Level` from 0 (disabled, default) up to 6 [...] Setting this 1.0 would mean a maximum of + 0.5m, and -0.5m deviation from the collision mesh. [...] To calculate displacement, an atlas texture buffer is created via a viewport and canvas_item shader. This buffer updates only when the terrain mesh moves to save on computational cost.'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-collision-shape"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/src/terrain_3d_collision.cpp#L48"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `src/terrain_3d_collision.cpp`, fragments start at L48, L101, L197, L246, L258, L555, L556; read, not run"
+quote = '''real_t height = data->get_modified_height(p_position + Vector2i(x, z)); [...] Ref<HeightMapShape3D> hshape = shape->get_shape(); [...] hshape_size = _terrain->get_region_size() + 1; [...] // Snap descaled position to a _shape_size grid (eg. multiples of 16) [...] int grid_width = _radius * 2 / _shape_size; // 64*2/16 = 8 [...] ADD_PROPERTY(PropertyInfo(Variant::INT, "shape_size", PROPERTY_HINT_RANGE, "8,64,8"), "set_shape_size", "get_shape_size"); [...] ADD_PROPERTY(PropertyInfo(Variant::INT, "radius", PROPERTY_HINT_RANGE, "16,256,16"), "set_radius", "get_radius");'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-collision-holes"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/src/terrain_3d_data.cpp#L731"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `src/terrain_3d_data.cpp`, fragments start at L731, L745, L750, L751; read, not run"
+quote = '''// Otherwise, bilinearly interpolate 4 surrounding vertices [...] // Returns height modified by world background region blend, ground level [...] if (is_hole(control)) { [...] return NAN;'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-queries"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/src/terrain_3d_data.h#L153"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `src/terrain_3d_data.h`, fragments start at L153, L154, L157, L169, L175, L308; read, not run"
+quote = '''real_t get_height(const Vector3 &p_global_position) const; [...] real_t get_surface_height(const Vector3 &p_global_position) const; [...] Vector3 get_normal(const Vector3 &p_global_position) const; [...] Vector3 get_texture_id(const Vector3 &p_global_position) const; [...] bool get_control_hole(const Vector3 &p_global_position) const; [...] return get_pixel(TYPE_HEIGHT, p_global_position).r;'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-world-background"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/shader_design.md#L43"
+section = "TokisanGames/Terrain3D at 629bbd65526b, `doc/docs/shader_design.md`, fragments start at L43, L49; read, not run"
+quote = '''The CPU has already created flat mesh components that make up the clipmap mesh, and collision shapes with heights. The vertex shader adjusts the mesh to match the collision shape defined by the heightmap. [...] If the optional world noise is enabled, it generates fractal brownian noise which can be used as background hills outside of your regions. It's a visual only effect, can be costly at high octaves, and does not generate collision.'''
+checked = 2026-11-21
+
+["bevy-terrain-5a88daf-refine"]
+url = "https://github.com/kurtkuehnert/bevy_terrain/blob/5a88daf4a4199e0d33d960141ff3be9a1147fbf8/src/shaders/tiling_prepass/refine_tiles.wgsl#L21"
+section = "kurtkuehnert/bevy_terrain at 5a88daf4a419, `src/shaders/tiling_prepass/refine_tiles.wgsl`, fragments start at L21, L29, L33, L42; read, not run"
+quote = '''return view_distance < view_config.subdivision_distance / tile_count(tile.lod); [...] temporary_tiles[child_index()] = TileCoordinate(tile.side, child_lod, child_xy); [...] @compute @workgroup_size(64, 1, 1) [...] final_tiles[final_index()] = tile;'''
+checked = 2026-11-21
+
+["bevy-terrain-5a88daf-morph"]
+url = "https://github.com/kurtkuehnert/bevy_terrain/blob/5a88daf4a4199e0d33d960141ff3be9a1147fbf8/src/shaders/functions.wgsl#L37"
+section = "kurtkuehnert/bevy_terrain at 5a88daf4a419, `src/shaders/functions.wgsl`, fragments start at L37, L40, L42, L45, L65; read, not run"
+quote = '''// Morphing more than one layer at once is not possible, since the approximate view distance for vertices that [...] let even_uv = vec2<f32>(vec2<u32>(coordinate.uv * view_config.grid_size) & vec2<u32>(~1u)) / view_config.grid_size; [...] let target_lod = log2(2.0 * view_config.morph_distance / view_distance); [...] return Coordinate(coordinate.side, coordinate.lod, coordinate.xy, mix(coordinate.uv, even_uv, ratio)); [...] // use first and last indices of the rows twice, to form degenerate triangles'''
+checked = 2026-11-21
+
+["bevy-terrain-5a88daf-height-query"]
+url = "https://github.com/kurtkuehnert/bevy_terrain/blob/5a88daf4a4199e0d33d960141ff3be9a1147fbf8/src/terrain_data/mod.rs#L62"
+section = "kurtkuehnert/bevy_terrain at 5a88daf4a419, `src/terrain_data/mod.rs`, fragments start at L62, L92, L267, L271, L297; read, not run"
+quote = '''AttachmentFormat::R16 => TextureFormat::R16Unorm, [...] /// The overlapping border size around the tile, used to prevent sampling artifacts. [...] pub fn sample_attachment( [...] sample_world_position: DVec3, [...] pub fn sample_height('''
+checked = 2026-11-21
+
+["bevy-terrain-5a88daf-limits"]
+url = "https://github.com/kurtkuehnert/bevy_terrain/blob/5a88daf4a4199e0d33d960141ff3be9a1147fbf8/docs/implementation.md#L62"
+section = "kurtkuehnert/bevy_terrain at 5a88daf4a419, `docs/implementation.md`, fragments start at L62, L121, L135, L136, L141, L143; read, not run"
+quote = '''Currently, the prepass is pretty inefficient, because the shader occupancy is very low (the prepass is still plenty [...] The biggest issue is that adjacent tiles do not line up perfectly due to missing texture information at the border. [...] Currently, I load all tiles inside the `load_distance` around the viewer. [...] There is no prioritization or load balancing. [...] Additionally, the plugin panics if the tile atlas is out of indices (i.e. the maximum amount of tiles is [...] This is unacceptable in production use.'''
+checked = 2026-11-21
+
+["kuehnert-2022-thesis-measurements"]
+url = "https://github.com/kurtkuehnert/terrain_renderer/blob/95aee685b74398793577904bcdf72f71883e5c2a/Thesis.pdf#page=55"
+section = "Kurt Kühnert, 'Methods for Automated Creation and Efficient Visualisation of Large-Scale Terrains based on Real Height-Map Data', bachelor thesis, Chemnitz University of Technology, November 2022; chapter 6 intro (printed p. 47, PDF p. 55), section 6.3 (printed pp. 51-52, PDF pp. 59-60)"
+quote = '''All performance measurements were taken on an Apple M1 chip equipped with 16 GB of memory. [...] A single frame was recorded and measured for each configuration, using the Apple Xcode Profiler. [...] small amount of work done in the prepass, the execution time is mostly limited by the compute shader dispatch overhead and not by its actual algorithm.'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-terrain-virtual-texture"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiTerrain.cpp#L1883"
+section = "Wicked Engine, `WickedEngine/wiTerrain.cpp` L20-L37 (limits), L1883 (resolution per chunk), L1941-L2036 (`UpdateVirtualTexturesCPU`); read, not run"
+quote = '''// On Apple Metal API the sparse texture doesn't seem to work with block compression aliasing, so use this mode as workaround: [...] const uint32_t max_virtual_resolution = 65536u; [...] const uint32_t atlas_physical_width = 16384u; [...] const uint32_t required_resolution = dist < 2 ? max_virtual_resolution : min_virtual_resolution; [...] // Process GPU allocation requests from last frame: [...] // GPU writes allocation requests by virtualTextureTileAllocateCS.hlsl compute shader [...] // Last two tiles (last non-packed and packed mips) always kept resident: [...] // Sort them by unused frame counts, this will make them be given out in least recently used (LRU) order:'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-terrain-physics"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiTerrain.cpp#L941"
+section = "Wicked Engine, `WickedEngine/wiTerrain.cpp` L877-L899, L941, L1117-L1123, L1263-L1281 and `wiTerrain.h` L297, L330-L336; read, not run"
+quote = '''// Start the generation on a background thread and keep it running until the next frame [...] modifier->Apply(world_pos, height); [...] float generation_time_budget_milliseconds = 8; // after this much time, the generation thread will start to exit. [...] int physics_generation = 3; [...] if (dist < physics_generation) [...] newrigidbody.shape = RigidBodyPhysicsComponent::HEIGHTFIELD; [...] // Precompute the physics shape on the job pool, because'''
+checked = 2026-11-21
+
+["ogre-next-c13fa29-terra-shadow"]
+url = "https://github.com/OGRECave/ogre-next/blob/c13fa29e69b5f4deb9ef88f145fda239273f88c0/Samples/Media/2.0/scripts/materials/Tutorial_Terrain/GLSL/TerraShadowGenerator.glsl#L66"
+section = "OGRE-Next, `Samples/Media/2.0/scripts/materials/Tutorial_Terrain/GLSL/TerraShadowGenerator.glsl`, `calcShadow` L66-L95 and `main` L97-L135; read, not run"
+quote = '''prevHeight.y = prevHeight.y * 0.985 - heightDelta; //Used for the penumbra region [...] float shadowValue = smoothstep( prevHeight.y, prevHeight.x, currHeight + 0.001 ); [...] //We store shadow's height in 10 bits, but the actual heightmap is in 16 bits. [...] imageStore( shadowMap, xyPos, vec4( shadowValue, roundedHeight.y, invHeightLength, 1.0 ) ); [...] for( int i=0; i<numIterations; ++i )'''
+checked = 2026-11-21
+
+["ogre-next-c13fa29-terra-shadow-update"]
+url = "https://github.com/OGRECave/ogre-next/blob/c13fa29e69b5f4deb9ef88f145fda239273f88c0/Samples/2.0/Tutorials/Tutorial_Terrain/src/Terra/Terra.cpp#L580"
+section = "OGRE-Next, `Samples/2.0/Tutorials/Tutorial_Terrain/src/Terra/Terra.cpp`, `Terra::update` L580-L588; read, not run"
+quote = '''void Terra::update( const Vector3 &lightDir, float lightEpsilon ) [...] if( lightCosAngleChange <= ( 1.0f - lightEpsilon ) ) [...] m_shadowMapper->updateShadowMap( toYUp( lightDir ), m_xzDimensions, m_height );'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-terrain-hex-biplanar"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/data/shaders/common_terrain.hlsl#L34"
+section = "Spartan Engine, `data/shaders/common_terrain.hlsl`, constants L34-L97, hex tiling L472-L641, biplanar L643-L696; read, not run"
+quote = '''// hex tiling, mikkelsen jcgt 2022 [...] // three anisotropic taps per layer, far hills fill the screen so the lattice has to die off before [...] static const float terrain_hex_distance = 1200.0f; [...] // quilez biplanar, only the two dominant axes are fetched, which is what removes the vertical [...] static const float terrain_biplanar_threshold = 0.55f; [...] // samplegrad without hardware af picks the mip from the stretched axis, so grazing ground [...] static const float terrain_detail_distance = 140.0f;'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-terrain-height-blend"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/data/shaders/common_terrain.hlsl#L1042"
+section = "Spartan Engine, `data/shaders/common_terrain.hlsl`, layer resolve L1019-L1075; read, not run"
+quote = '''// wobble each cutoff so the fade is not a geometric circle around the camera [...] // mix by pick weight, height only nips the interface up close [...] // a hard height gate painted the sawtooth and flickered with taa [...] float height_mod = lerp(1.0f, sample.height + 0.5f, contrast);'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-erosion"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/world/TerrainSystem.cpp#L52"
+section = "Spartan Engine, `source/world/TerrainSystem.cpp`, `erosion_settings` L50-L96, `hydraulic_erosion` L449-L756, `ApplyErosion` L1106-L1215; read, not run"
+quote = '''// hydraulic, droplet model after musgrave 1989, mei 2007 and beyer 2015 [...] float droplets_per_cell = 2.0f; [...] uint32_t droplet_lifetime = 48; [...] // thermal, talus angle of repose, steep because one cell already averages a wide [...] uint32_t thermal_steps = 6; [...] // hydraulic and thermal are interleaved so valleys and screes co-evolve [...] uint32_t passes = 3; [...] float budget_relief = 0.03f;'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-erosion-determinism"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/world/TerrainSystem.cpp#L490"
+section = "Spartan Engine, `source/world/TerrainSystem.cpp` L490-L511, L735, L1162; read, not run"
+quote = '''// fixed chunks with private delta buffers, no shared writes, result independent of thread count [...] mt19937 rng(seed + chunk * 2654435761u + 1u); [...] uniform_real_distribution<float> unit(0.0f, 1.0f); [...] // chunks are summed in a fixed order per cell, so the merge is deterministic too [...] uint32_t seed = width * 3000017u + height * 41u + 11111u;'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-terrain-physics"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/world/components/Terrain.cpp#L3797"
+section = "Spartan Engine, `source/world/components/Terrain.cpp`, generate L3797-L3849, save L3652, `BuildTileMesh` L4024-L4041, `RefreshPhysics` L9612-L9652; `Terrain.h` L616-L618; read, not run"
+quote = '''// try loading from cache in the world resource directory [...] // 4. apply erosion, keeping what it moved so the texturing can key off it [...] // This file stores the eroded heightfield. Prepared tiles and placement have [...] // lod simplification and meshlet building dominate terrain generation, every tile is [...] // one static grid per tile, physx samples the heights directly so there is nothing to cook and [...] physics->SetBodyType(BodyType::Heightfield); [...] uint32_t m_tile_count = 16; [...] uint32_t m_scale = 25;'''
+checked = 2026-11-21
+
+["fyrox-1.0.0-terrain-queries"]
+url = "https://github.com/FyroxEngine/Fyrox/blob/a4907aa547d14e9582c98d1208f24d4a34dcdd63/fyrox-impl/src/scene/terrain/mod.rs#L1740"
+section = "Fyrox, `fyrox-impl/src/scene/terrain/mod.rs` L1022-L1023, L1422-L1427, L1633, L1728, L1740, L1957-L1968; read, not run"
+quote = '''/// Holes are cut into terrain by removing faces, so each pixel represents one face. [...] pub fn get_hole_mask(&self, position: Vector2<i32>) -> Option<u8> { [...] pub fn get_height(&self, position: Vector2<i32>) -> Option<f32> { [...] pub fn project(&self, p: Vector3<f32>) -> Option<Vector2<f32>> { [...] pub fn raycast<const DIM: usize>( [...] /// This method isn't well optimized, it could be optimized 2-5x times. This is a TODO for now. [...] /// Subtracting 1 from each dimension is necessary because the height map data of chunks overlaps by one pixel'''
+checked = 2026-11-21
+
+["godot-voxel-1.7-lod-fade"]
+url = "https://github.com/Zylann/godot_voxel/blob/2ac9f5f8a8219bf499314cc0fad54ffc47df908f/doc/source/smooth_terrain.md#L528"
+section = "godot_voxel, `doc/source/smooth_terrain.md`, 'Transvoxel' L101-L108 and 'LOD fading' L526-L573"
+quote = '''Transvoxel uses special meshes to stitch blocks of different level of detail. However the seams may still be visible as occasional sharp little steps. [...] When a "parent" mesh subdivides into higher-resolution "child" meshes, they can be both rendered at the same time for a brief period of time, while the parent fades out and the children fade in, and vice-versa. [...] By default it is `0`, which makes it inactive. [...] float h = get_hash(SCREEN_UV); [...] This will discard such that pixels of the two meshes will be complementary without overlap. [...] Shadow maps still create self-shadowing in cases the faded meshes are far enough from each other.'''
+checked = 2026-11-21
+
+["godot-voxel-1.7-sdf"]
+url = "https://github.com/Zylann/godot_voxel/blob/2ac9f5f8a8219bf499314cc0fad54ffc47df908f/doc/source/smooth_terrain.md#L4"
+section = "godot_voxel, `doc/source/smooth_terrain.md`, 'Signed distance fields' L4-L82"
+quote = '''It is possible to work with smooth-looking terrains, using signed distance fields and `VoxelMesherTransvoxel`. [...] So in practice, it is not required to deal with exact SDF. [...] Instead, it uses either 8-bit or 16-bit integers, which are interpreted as fixed-point decimal numbers.'''
+checked = 2026-11-21
+
+["libcbt-2d5439a-parallel-update"]
+url = "https://github.com/jdupuy/libcbt/blob/2d5439a4b2129b3bb4ef8fdddf6a60f169973362/README.md#L35"
+section = "libcbt, `README.md` L12, L35, L70, L78; `cbt.h` header comment L1 and, outside the header comment, L137-L143 and L417-L427; read, not run"
+quote = '''Once this depth chosen, it can not be changed throughout the lifetime of the CBT instance. [...] The main advantage of CBTs is their ability to update their topology in parallel. [...] In order to process the operations in parallel, you can provide a custom callback that will be executed in parallel within an OpenMP parallel for loop. [...] Internally, the CBT uses a compact binary heap data-structure, i.e., a 1D array. [...] The GLSL folder provides a GLSL implementation of the library. An HLSL port of the library would also be welcome. [...] cbt.h - public domain library for building binary trees in parallel [...] return 1LL << (treeMaxDepth - 1);'''
+checked = 2026-11-21
+
+["torque3d-9521d43-terrain-lod-skirts"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/terrain/terrCell.cpp#L1004"
+section = "Torque3D, `Engine/source/terrain/terrCell.cpp`, constants L47-L52, skirts L154 and L496, `TerrCell::cullCells` L966-L1018; `terrData.cpp` L205, L1318; read, not run"
+quote = '''const U32 TerrCell::smMinCellSize = 64; [...] // Now add indices for the 'skirts'. [...] const F32 skirtDepth = mSize / smMinCellSize * mTerrain->getSquareSize(); [...] // Lod based on screen error... [...] F32 errorMeters = ( cell->mSize / smMinCellSize ) * mTerrain->getSquareSize(); [...] U32 errorPixels = mCeil( state->projectRadius( dist, errorMeters ) ); [...] if ( errorPixels < screenError ) [...] mScreenError( 16 ), [...] addField( "screenError", TypeS32, Offset( mScreenError, TerrainBlock ), "Not yet implemented." );'''
+checked = 2026-11-21
+
+["torque3d-9521d43-terrain-base-texture"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/terrain/terrRender.cpp#L611"
+section = "Torque3D, `Engine/source/terrain/terrRender.cpp`, `_updateBaseTexture` L324-L485, render L528-L537 and L603-L622; `terrData.cpp` L198, L1151; read, not run"
+quote = '''// If the layer texture is dirty or we lost the base [...] // texture then regenerate it. [...] U32 baseTexSize = getNextPow2( mBaseTexSize ); [...] F32 radiusSq = mSquared( ( mMaxDetailDistance + bounds.radius ) * smDetailScale ); [...] // If this cell is near enough to get detail textures then [...] // simple base only material. [...] mBaseTexSize( 1024 ), [...] basePath.setFileName( basePath.getFileName() + "_basetex" );'''
+checked = 2026-11-21
+
+["lumix-8ce5ab5-terrain-rings"]
+url = "https://github.com/nem0/LumixEngine/blob/8ce5ab5680e5b72edec118452b79512b7780719b/data/shaders/terrain.hlsl#L42"
+section = "Lumix Engine, `data/shaders/terrain.hlsl`, `mainVS` L40-L71; `src/renderer/pipeline.cpp` L1711-L1759; read, not run"
+quote = '''int2 ij = u_from_to.xy + int2((vertex_id >> 1), instance_id + (vertex_id & 1)); [...] npos.xz = (ij & mask) * u_cell_size; [...] rel = saturate(abs(rel - 0.5) * 10 - 4); [...] v.xz = lerp(v.xz, npos.xz, rel.yx); [...] // TODO indexed rendering [...] stream.bindVertexBuffer(0, gpu::INVALID_BUFFER, 0, 0); [...] draw_rect(from, IVec2(to.x, prev_from_to.y)); [...] if (from.x <= 0 && from.y <= 0 && to.x * s >= hm_size.x && to.y * s >= hm_size.y) break;'''
+checked = 2026-11-21
+
+["lumix-8ce5ab5-terrain-texturing"]
+url = "https://github.com/nem0/LumixEngine/blob/8ce5ab5680e5b72edec118452b79512b7780719b/data/shaders/terrain.hlsl#L166"
+section = "Lumix Engine, `data/shaders/terrain.hlsl`, `textureNoTile` L104-L125 and `getSurface` L132-L215; read, not run"
+quote = '''//@texture_slot "Satellite", "engine/textures/white.tga" [...] //@uniform "Detail distance", "float", 50 [...] int4 indices = int4(float4(splat00.x, splat01.x, splat10.x, splat11.x) * 255.0 + 0.5); [...] float t = saturate((dist2 - blend_start_sqr) / 10000); [...] // blend between detail and satellite [...] surface.albedo = sampleBindless(LinearSamplerClamp, material.t_satellite, input.uv).rgb; [...] surface.motion = computeStaticObjectMotionVector(input.pos_ws);'''
+checked = 2026-11-21
+
+["hterrain-49887ff-texturing"]
+url = "https://github.com/Zylann/godot_heightmap_plugin/blob/49887ff956f02263d9013006fa1994d34643a199/addons/zylann.hterrain/doc/docs/index.md#L359"
+section = "HTerrain, `addons/zylann.hterrain/doc/docs/index.md`, 'Shader types' L357-L421"
+quote = '''The `CLASSIC4` shader is a simple splatmap technique, where R, G, B, A match the weight of 4 respective textures. [...] `CLASSIC4_LITE`: simpler shader with less features. It only requires albedo textures. [...] It allows to support up to 16 textures at once, and can blend up to 4 in the same pixel. It dynamically chooses the 4 most-representative textures to blend them. [...] This allows to paint up to 256 different textures, however it introduces an important constraint: you cannot blend more than 3 textures at a given pixel. [...] So for a given texture, all textures that have an index separated by a multiple of 3 from this texture will not always be able to blend with it.'''
+cost = '''One downside is performance: it is about twice slower than `CLASSIC4` (on an nVidia 1060, a fullscreen `CLASSIC4` is 0.8 ms, while `MULTISPLAT16` is 1.8 ms).'''
+checked = 2026-11-21
+
+["hterrain-49887ff-collision"]
+url = "https://github.com/Zylann/godot_heightmap_plugin/blob/49887ff956f02263d9013006fa1994d34643a199/addons/zylann.hterrain/doc/docs/index.md#L166"
+section = "HTerrain, `addons/zylann.hterrain/doc/docs/index.md`, 'Collisions' L127-L144, 'Holes' L155, 'Level of detail' L166-L178"
+quote = '''Heightmap-based terrains usually implement collisions directly using the heightmap, which saves a lot of computations compared to a classic mesh collider. [...] This is why the collider update is manual, because copying the heightmap results in an expensive operation. [...] At the moment, this brush uses the alpha channel of the color map to store where the holes are. [...] Care is also taken to make sure transitions between LODs are seamless, so if you toggle wireframe rendering in the editor you can see variants of the same meshes being used depending on which LOD their neighbors are using. [...] LOD only works around one main camera'''
+checked = 2026-11-21
+
+["tevs-2008-maximum-mipmaps-cost"]
+url = "http://web.archive.org/web/20240420045131/http://www.tevs.eu/files/i3d08.pdf#page=6"
+section = "Tevs, Ihrke, Seidel, I3D 2008, Table 1 (precomputation, p. 3) and Table 5 (frame rates, p. 6); section 3.1 names the machine."
+quote = '''map resolutions, screen resolution is 1024 × 768. Maximum [...] 40962 9 n.a. 49 77 [...] 10242 56 227 75 90'''
+cost = '''40962 7.52ms n.a. n.a. [...] 10242 1.20ms ≥ 8 hours ≥ 12 min [...] Core Opteron 2.6 GHz, equiped with a Geforce 8800 Ultra. As a'''
+checked = 2026-11-21
+
+["dick-2009-terrain-raycasting"]
+url = "https://www.cs.cit.tum.de/fileadmin/w00cfj/cg/Research/Publications/2009/GPU_Ray-Casting/EG09AreasTerrain.pdf#page=2"
+section = "Dick, Krüger, Westermann, 'GPU Ray-Casting for Scalable Terrain Rendering', Eurographics 2009 Areas Papers, Figure 1 caption (p. 2), section 1 (p. 2) and section 5 (p. 6)."
+quote = '''Figure 1: A textured DEM of Vorarlberg, Austria (56 km × 85 km) is rendered on a 1920 × 1080 view port using our method. [...] tions. Since the maximum mipmap for a tile’s height field [...] is built on the GPU once a tile becomes visible, maximum [...] mipmaps do not require any additional information to be [...] serve a speedup of about 5 compared to an unoptimized ray-'''
+cost = '''view port, an average frame rate of about 30 fps is achieved at a geometric screen-space error of below one pixel. [...] GeForce GTX 280 graphics card with 1024 MB of local'''
+checked = 2026-11-21
+
+["jung-2020-terrain-soft-shadows-maximum-mipmaps"]
+url = "https://arxiv.org/pdf/2005.06671#page=1"
+section = "Jung, Schrempp, Son, 'Optimally Fast Soft Shadows on Curved Terrain with Dynamic Programming and Maximum Mipmaps', arXiv:2005.06671v1 (preprint, 2020), abstract (p. 1) and section 6.3 (pp. 9-10)."
+quote = '''We present a simple, novel method of efficiently ren- [...] dering ray cast soft shadows on curved terrain by us- [...] ing dynamic programming and maximum mipmaps [...] with more than 200% speed up over uniform ray [...] hardware ray tracing acceleration. To add support'''
+cost = '''Figure 13a shows that mean frame times are 5.4 ms [...] CPU, 16GB RAM, and NVIDIA GTX 970M graph- [...] 1920×1080 internal display with vsync and MSAA'''
+checked = 2026-11-21
+
+["nvidia-2022-rtx-best-practices-triangles"]
+url = "https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/"
+section = "NVIDIA Technical Blog, 'Best Practices for Using NVIDIA RTX Ray Tracing (Updated)', dated Jul 25, 2022, acceleration-structure section."
+quote = '''Use triangle geometries when possible. Hardware excels in performing ray-triangle intersections. Ray-box intersections are accelerated too, but you get the most out of the hardware when tracing against triangle geometries.'''
+checked = 2026-11-21
+
+["kuenlin-2024-snowdrop-terrain-marched-after-bvh"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Kuenlin_Quentin_Raytracing_In_Snowdrop.pdf#page=4"
+section = "Kuenlin, 'Raytracing in Snowdrop: An Optimized Lighting Pipeline for Consoles', GDC 2024 Advanced Graphics Summit, PDF p. 4 'Raytracing world' (speaker notes), p. 27 'Raytraced GI: World space tracing' (flowchart box) and p. 61 'Performance: Raytraced GI'."
+quote = '''> Terrain is ray marched separately and can use textures, hence why you can see [...] > Objects in the rt world uses lower LOD than the rasterized world, typically LOD1 or [...] Trace into BVH [...] then March onto terrain [...] (using trace hit as maxT)'''
+cost = '''Pass Xbox Series X @1440p Xbox Series S @960p* RTX 4080 @2160p [...] WS TRACE 0.568ms [18%] 0.062ms [02%] 0.183ms [07%] [...] RTGI traced at ¼ resolution'''
+checked = 2026-11-21
+
+["shyshkovtsov-2019-metro-exodus-terrain-heightmap-in-raygen"]
+url = "https://developer.download.nvidia.com/video/gputechconf/gtc/2019/presentation/s9985-exploring-ray-traced-future-in-metro-exodus.pdf#page=33"
+section = "Shyshkovtsov, Karmalsky, Archard (4A Games), Zhdan (NVIDIA), 'Exploring Raytraced Future in Metro Exodus', GDC/GTC 2019 (session s9985), PDF p. 33 'Raytracing: Real rays!' and p. 73 'Performance'."
+quote = '''Ray-marches terrain’s heightmap inside the "raygen" shader [...] Limit ray distance if intersection is found [...] Almost free here (if done carefully) due to GPU latency hiding'''
+cost = '''RTX 2080 at 2560x1440 [...] Raytracing 1 to 3 ms 2 to 6 ms'''
+checked = 2026-11-21
+
+["brenham-2022-far-cry-6-terrain-clipmap-in-tlas"]
+url = "https://gpuopen.com/gdc-presentations/2022/GDC_Performant_Reflective_Beauty_Hybrid_Ray_Traced_Reflections_In_Far_Cry_6.pdf#page=70"
+section = "Brenham (Ubisoft Toronto) and Szlachtycz (AMD), 'Performant Reflective Beauty: Hybrid Raytraced Reflections with Far Cry 6', GDC 2022, PDF pp. 70-71 'BVH traversal cost'."
+quote = '''Rays that miss geometry still pay the [...] traversal cost for the TLAS hierarchy [...] Far Cry 6 limits the objects that are in the TLAS to only a radius around the player • Terrain clip mapped is contained with a longer range • BLAS objects are at a lower LOD, less nodes to traverse to get to triangles'''
+checked = 2026-11-21
+
+["leblanc-2025-ac-shadows-terrain-patches-in-bvh"]
+url = "https://www.realtimerendering.com/advances/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=28"
+section = "LeBlanc and Conte (Ubisoft Montréal), 'Ray tracing the world of Assassin's Creed Shadows', SIGGRAPH 2025 Advances in Real-Time Rendering in Games, PDF pp. 28, 30 and 34 with speaker notes; statistics on PDF p. 126 (printed slide number 129)."
+quote = '''Terrain loaded dynamically around player [...] We use low LODs as much as possible without incurring visible artefacts. [...] World Space texture atlas for terrain [...] We also update the terrain around the camera. The terrain is different from the rest of the geometry. It is split into patches and has its own texture atlases.'''
+cost = '''300 MB BLAS Data [...] 20 MB TLAS Data [...] Those numbers were taking on an Xbox Series X.'''
+checked = 2026-11-21
+
+["wright-2022-lumen-landscape-heightfield-software-tracing"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=33"
+section = "Wright, Narkowicz, Kelly, 'Lumen: Real-time Global Illumination in Unreal Engine 5', SIGGRAPH 2022 Advances, software ray tracing part, slides 'Overview' (PDF p. 33), 'Heightfields' (p. 37) and the global distance field slide (p. 40), speaker notes."
+quote = '''On a high level we have two basic primitives - a distance field per mesh and a heightfield per Landscape component. [...] On the top level, heightfield instances are handled the same way as mesh distance field instances, reusing culling and traversal code. [...] Bottom level is different, as per instance instead of a 3d distance field, we raymarch a 2d heightfield and try to find a zero crossing. After finding two samples, where one is above and the other is below heightfield, we linearly interpolate between them to approximate the final hit [...] The global distance field merges all mesh distance fields and heightfields into a set of clipmaps centered around the camera.'''
+checked = 2026-11-21
+
+["wright-2022-lumen-far-field-proxies-in-one-tlas"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=118"
+section = "Wright, Narkowicz, Kelly, SIGGRAPH 2022 Advances, hardware ray tracing part (Kelly), slides 'Dealing with Instance and Geometric Complexity', 'Tracing with Far-Field' and 'The Matrix Awakens - UE5 demo' (PDF pp. 118-124, speaker notes)."
+quote = '''We found that limiting trace distance to [...] 200 meters was ultimately required to hit our goal. [...] Under the HLOD system, meshes are both simplified and merged together, creating amalgamations for geometry in the distance. [...] We reverse the order of operations for shadow rays that do not require ordered traversal. We choose to do this because the far-field representation contains fewer instances and less geometry than the near-field. And this makes far-field faster to traverse. [...] Our early experiments with overlaying the far-field representation revealed a show-stopping 44% penalty to all near-field traversal costs. [...] A proper solution would be to support multiple top-level acceleration structures'''
+cost = '''PS5, 1080p [...] Near-Field 1.65 ms 2.37 ms 1.77 ms [...] Far-Field N/A 1.04 ms 0.60 ms'''
+checked = 2026-11-21
+
+["sloan-2000-interactive-horizon-mapping"]
+url = "https://www.ppsloan.org/publications/bs.pdf#page=1"
+section = "Sloan and Cohen, 'Interactive Horizon Mapping', Eurographics Rendering Workshop 2000, sections 1 and 3 (pp. 1-2). Author's copy."
+quote = '''The idea behind horizon mapping is to precompute limited visibility from each point on a surface. In particular, the angle to the horizon is encoded in a discrete number of directions to represent at what height something becomes visible from that direction (i.e., pass over the horizon). [...] coarsely - 8 sample directions, (N, NE, E, etc.) in both our work and in [7].'''
+checked = 2026-11-21
+
+["fritsch-2025-horizon-map-limits-and-artefacts"]
+url = "https://diglib.eg.org/bitstream/handle/10.2312/hpg20251171/hpg20251171.pdf#page=3"
+section = "Fritsch et al., HPG 2025, sections 1-2 (pp. 2-3), 3.2-3.3 (pp. 4-5), 4.2-4.3 (pp. 8-9), Table 3."
+quote = '''By restricting the geometry to surfaces described by heightmaps, [...] information required to compute soft shadows for a position on the [...] terrain is available locally and hence it works well with tile based [...] dering, the Sun elevation is mapped into this space and compared [...] This texture is then accessed in the shader for terrain render- [...] While this method inherently applies a low-pass filter to the hori- [...] spatial subsampling produces noticeable artifacts at the base and [...] approach and the teardrop shapes rendered by our approach. How-'''
+cost = '''On the notebook system, the medium preset at about 4.1ms (2.8ms [...] overhead over no horizon mapping) is best suited when targetting [...] We render the scene at a window resolution of 1920x1080 pixels. [...] GPU NVIDIA RTX 2050 NVIDIA RTX 4090'''
+checked = 2026-11-21
+
+["gollent-2014-witcher-3-terrain-shadows-clipmap"]
+url = "https://media.gdcvault.com/GDC2014/Presentations/Gollent_Marcin_Landscape_Creation_and.pdf#page=39"
+section = "Gollent, 'Landscape Creation and Rendering in REDengine 3', GDC 2014, slides 'Terrain shadows clipmap', 'Terrain shadows algorithm' and 'Terrain – memory footprint' (PDF pp. 39, 40 and 42); the GDC Vault media host's copy, the same text as a Wayback snapshot of the older Vault host (http://web.archive.org/web/20200503045604/http://twvideo01.ubm-us.net/o1/vault/GDC2014/Presentations/Gollent_Marcin_Landscape_Creation_and.pdf)."
+quote = '''● Store maximum height that’s in shadow ● Update when streaming clipmap or changing time of day ● Has to be tightly coupled with clipmap computations to avoid shadows shimmering ● Allow a few huge meshes to cast terrain shadows [...] 1. Lay down terrain depth - sun perspective 2. Render to the slices of shadows clipmap [...] o For i=0 to n // n=13 works just fine [...] o Store the last z component value in the terrain shadow map'''
+cost = '''5 clipmap levels, 1024x1024 window size [...] • shadow map = 10 MB +10 for meshes casting terrain shadows'''
+checked = 2026-11-21
+
+["bauer-2019-rdr2-terrain-shadow-map"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Bauer (Rockstar North), 'Creating the Atmospheric World of Red Dead Redemption 2: A Complete and Integrated Solution', SIGGRAPH 2019 Advances in Real-Time Rendering, slide 34 'Visibility: Terrain Shadow Map' and its notes, slide 57 'Performance' notes."
+quote = '''Raymarch across terrain height map [...] 128x128 RG16F [...] We get terrain shadows by raymarching a terrain heightmap along the sun/moon direction and storing both intersection height as well as ray length. [...] We then compare the sample position height with the one from the terrain shadow map do determine visibility. [...] The ray length is used in this comparison to adjust the difference threshold which reduces harsh edges and approximates soft shadows. [...] implement temporal refinement for the terrain shadow map, since directional light shadows don’t change rapidly in regular gameplay.'''
+cost = '''Measured on PS4'''
+checked = 2026-11-21
+
+["bloom-2000-splatting"]
+url = "http://www.cbloom.com/3d/techdocs/splatting.txt"
+section = "Charles Bloom, 'Terrain Texture Compositing by Blending in the Frame-Buffer (aka 'Splatting' Textures)', Nov 2, 2000, sections Introduction and Basic Splatting"
+quote = '''Splatting is a technique for texturing a terrain using high resolution localized tiling textures which transition nonlinearly. [...] For each chunk, find the set of textures that influence it. [...] Rendering the chunk consists of laying down several overlapping splats. [...] I generate a texture containing the alpha values. [...] at a resolution of 2x2 per element (so this is a 64x64 texture)'''
+cost = '''In practice, I found my renderer to be fill-rate limited on GeForce2 GTS.'''
+checked = 2026-11-21
+
+["bloom-2000-base-texture-fade"]
+url = "http://www.cbloom.com/3d/techdocs/splatting.txt"
+section = "Bloom, 2000, section 'Enhanced Splatting : 1. The Base Pass and Fade-Out'"
+quote = '''As a precomputation pass, I generate this base texture, which has 4x4 texels per land element [...] I have a 128x128 base texture for each splat chunk [...] the base texture has the right color to match what's over it [...] we can make the splats fade out (just like detail textures do), and turn them off beyond a given distance. I use a distance of 100-200 meters [...] put the alpha fade-out in the mips of the alpha map'''
+checked = 2026-11-21
+
+["bloom-2000-chunk-seams"]
+url = "http://www.cbloom.com/3d/techdocs/splatting.txt"
+section = "Bloom, 2000, sections 'Enhanced Splatting : 1. The Base Pass and Fade-Out' and 'Basic Splatting'"
+quote = '''there will be seams at the chunk boundaries due to bilinear filtering problems. This can be fixed the usual way, by duplicating the pixels along the boundary and making the uv's start half a pixel into the texture (instead of at 0,0). [...] you must find a way to absolutely order your splats'''
+checked = 2026-11-21
+
+["mishkinis-2013-height-blend"]
+url = "https://www.gamedeveloper.com/programming/advanced-terrain-texture-splatting"
+section = "Andrey Mishkinis, 'Advanced Terrain Texture Splatting', Game Developer (Gamasutra) featured blog, July 16, 2013, whole article"
+quote = '''Sand doesn't stick to stones, instead it falls down and fills cracks between them, leaving tops of stones pure. [...] for each texture we need the depth map [...] To use it we just sum depth map and opacity map. [...] To smooth result we will take several pixels in depth instead of one and blend them.'''
+checked = 2026-11-21
+
+["wildlands-2017-materials-per-pixel"]
+url = "https://666uille.files.wordpress.com/2017/03/gdc2017_ghostreconwildlands_terrainandtechnologytools-onlinevideos1.pdf#page=39"
+section = "Guillaume Werlé and Benoit Martinez, 'Ghost Recon Wildlands: Terrain and Technology Tools' (title per the file name), GDC 2017, a copy on a personal WordPress host (not GDC Vault), speaker notes on PDF pages 39, 40, 44, 45, 51"
+quote = '''Most of the terrain renderers that I’ve seen use 4 materials at the same time [...] at the end of the production we had total of 143 unique materials on the terrain. [...] We cached the 32 nearest materials around the player in a texture array. [...] An indirection table is then used to convert from the global splatting index to the local cache index. [...] We do this again 3x with bilinear interpolation to have nice transitions between all the materials. [...] To avoid stretching we used biplanar projection for the slopes. [...] Now approximatly 80% of the terrain fetch 4 materials instead of 12.'''
+checked = 2026-11-21
+
+["wildlands-2017-virtual-texture"]
+url = "https://666uille.files.wordpress.com/2017/03/gdc2017_ghostreconwildlands_terrainandtechnologytools-onlinevideos1.pdf#page=56"
+section = "Werlé and Martinez, GDC 2017, speaker notes on PDF pages 46, 56, 59, 61, 62, 63, 64"
+quote = '''The first shader version that was visually satisfying was also very costly in term of performance. [...] This would greatly reduce the required amount of texture fetch by precomputing the material blending and all the decals projections in an atlas. [...] we bound an additionnal 3D texture as a render target during the gbuffer pass [...] the virtual texture displays a pixel ratio of 10 texels per cm [...] compressed on the fly using the Async Compute pipeline [...] The virtual texture update had to be time sliced across several frames [...] a bit more of 200MB are required to store the atlas when runing the game in 1080p. This budget is increased to 1GB when running in native 4k.'''
+cost = '''I wanted to end this part of the talk by giving some performance stats on xbox one. [...] everything fits in less that 8ms on the GPU side most of the time [...] Those 8 ms doesn’t include the BC compression since it’s running for free in parallel.'''
+checked = 2026-11-21
+
+["farcry5-2018-splat-shading"]
+url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=79"
+section = "Moore (surname per the brief; the notes carry no name), 'Terrain Rendering in Far Cry 5' (title per the file name), GDC 2018, speaker notes on PDF pages 79, 80, 81, 83"
+quote = '''Splat map (R8_UNORM, 65x65) [...] The splat map uses a palette of 256 materials, though on Far Cry 5 we actually have ~150 terrain materials. [...] only 32 of each detail texture type can be loaded into memory at once (for ~70MB of memory) [...] So we need to read not 1, but 4 surrounding material samples. We blend the 4 results in the shader using bilinear coefficients modified by the material heights. This means that each terrain pixel needs to sample 16 textures to calculate the final material result.'''
+checked = 2026-11-21
+
+["farcry5-2018-virtual-texture-cache"]
+url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=84"
+section = "Moore, GDC 2018, speaker notes on PDF pages 4, 84, 86, 88, 141"
+quote = '''We save some performance by caching the results into a virtual texture. Our virtual texture system for terrain is described in the Far Cry 4 Adaptive Virtual Texture presentation at GDC 2015. [...] This gives us the full terrain material sample in 4 texture samples. [...] The UAV is 1/8 the size of the full render target to keep the CPU read back cost low. We jitter the screen space sample position over 64 frames to ensure that we collect all of the rendered page IDs over time.'''
+cost = '''Our target budget was around 2ms GPU for full screen terrain. [...] Our typical frame cost for G-Buffer terrain is around 1.5-2ms'''
+checked = 2026-11-21
+
+["farcry5-2018-cliffs-dual-scale-stochastic"]
+url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=95"
+section = "Moore, GDC 2018, speaker notes on PDF pages 95, 96, 100, 102, 104, 105, 106, 107, 110, 112"
+quote = '''Naively this would take 48 texture samples. [...] cliffs can be seen a long way from the player. That can make texture tiling is obvious. [...] We would need to blending the results of 2 different scales. [...] That’s 96 texture samples! [...] We are trading maths for noise. [...] Screen space noise was unstable under camera motion. World space noise was stable, but aliased. [...] It is quite stable AND it doesn’t alias. [...] Still the result was too noisy. [...] This reduces the number of texture samples to 8. [...] This reduces the number of texture samples to 12. [...] Any noise we see for this technique is concentrated in areas where materials change.'''
+checked = 2026-11-21
+
+["farcry5-2018-near-far-blend"]
+url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=124"
+section = "Moore, GDC 2018, speaker notes on PDF pages 80, 124"
+quote = '''Far shading can be handled directly and cheaply using the albedo/normal of the quad tree payload. [...] So we have seen that we use 5 main shading flavors: [...] Because we need to blend between these approaches this give us a total of 31 shader variations.'''
+checked = 2026-11-21
+
+["farcry5-2018-mesh-terrain-blend"]
+url = "https://media.gdcvault.com/gdc2018/presentations/TerrainRenderingFarCry5.pdf#page=115"
+section = "Moore, GDC 2018, speaker notes on PDF pages 115, 122, 143, 146"
+quote = '''Then the pixel shader samples the terrain virtual texture which contains the decal. The result blends seamlessly into the terrain because the decal is already alpha blended into the virtual texture. [...] we can guarantee that the shading is coherent between heightmap and cliff mesh [...] What is the terrain albedo/normal/smoothness/etc.? [...] Using our terrain sampling we can blend the vertices to the terrain height. We can also blend to the terrain color to help embed the rocks better into the scene.'''
+checked = 2026-11-21
+
+["witcher3-2014-control-map"]
+url = "https://media.gdcvault.com/GDC2014/Presentations/Gollent_Marcin_Landscape_Creation_and.pdf#page=17"
+section = "Marcin Gollent, 'Landscape Creation and Rendering in REDengine 3', GDC 2014, slides on PDF pages 17, 18, 33"
+quote = '''More radical approach - paint with two freely picked textures [...] 16 bit control-map [...] 0-4 overlay texture index [...] 5-9 background texture index [...] 10-12 UV scale (7 scale values) [...] 13-15 Slope threshold (7 threshold values) [...] Compute slope angle of the background material (world space texture normal) [...] No triplanar mapping for overlay texture [...] Choose which planes contribute ( prefer branching over texture fetches ) [...] Tighten the blend zone as much as possible without introducing glitches'''
+checked = 2026-11-21
+
+["witcher3-2014-colour-clipmap"]
+url = "https://media.gdcvault.com/GDC2014/Presentations/Gollent_Marcin_Landscape_Creation_and.pdf#page=42"
+section = "Gollent, GDC 2014, slides on PDF pages 8, 9, 42"
+quote = '''46x46 tiles, 512x512 each [...] color (32 bit, reduced resolution [...] 5 clipmap levels, 1024x1024 window size [...] color map = 12 MB'''
+checked = 2026-11-21
+
+["cod-2023-ompv"]
+url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=7"
+section = "Stephane Etienne (High Moon Studios), 'Large-Scale Terrain Rendering in Call of Duty' (title per the course index, saved as sources/advances-s2023-index.txt), SIGGRAPH 2023 Advances in Real-Time Rendering in Games, slides and notes on PDF pages 2, 7, 8, 9, 11. This is the talk at the brief's URL; 'Boots on the Ground' is a different talk (JT Hooker, GDC 2021) that these notes cite, quoted under its own entry (hooker-2021-call-of-duty-mesh-lod)"
+quote = '''In his GDC 2021 presentation called “Boots on the Ground”, JT presented the super terrain technology at the time of Call of Duty Cold War. [...] We only supported 32 terrain layers [...] there was nothing to prevent all 32 layers from being used to shade a single pixel [...] OMPV uses an index map, here shown in red, that holds a single byte per pixel and a color map [...] Up to 256 layers [...] the shader code gathers index & colors at the 4 surrounding vertices [...] instead of sampling the same material 4 times, we will be sampling that material only once [...] We then blend all layers using the reveal maps that artists authored [...] we distort UVs using a global 256x256 distortion map'''
+checked = 2026-11-21
+
+["cod-2023-index-map-mips"]
+url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=64"
+section = "Etienne, 'Large-Scale Terrain Rendering in Call of Duty', SIGGRAPH 2023 Advances, notes on PDF page 64"
+quote = '''Because the index map cannot be interpolated, as each value is quite literally a terrain layer index, we use point sampling to generate the lower resolution mips [...] Since a pixel of the index map is meant to work with only the corresponding pixel of the color map, we also point sample the color map'''
+checked = 2026-11-21
+
+["cod-2023-avt"]
+url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=19"
+section = "Etienne, 'Large-Scale Terrain Rendering in Call of Duty', SIGGRAPH 2023 Advances, slides and notes on PDF pages 19, 28, 29, 35, 42, 45"
+quote = '''25 pixels/inch (10 pixels/cm) [...] World is sliced in 210*210 feet sectors (64*64 meter) [...] During the opaque pass, terrain is deferred rendered using a full screen quad. [...] The feedback buffer is read back by the CPU 3 frames later. [...] On low-end mobile hardware, that never exceeds 4 pages but on high-end PCs, this goes up to 20 pages per frame. [...] Our physical textures have 2 mips. This is required for bilinear texture interpolation. [...] Our physical pages have 4 pixel borders. This is required for 8X anisotropic filtering to work. [...] In Ultra setting, the physical texture is 42 by 42 pages.'''
+checked = 2026-11-21
+
+["cod-2023-vt-latency"]
+url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=33"
+section = "Etienne, 'Large-Scale Terrain Rendering in Call of Duty', SIGGRAPH 2023 Advances, 'Battle Against Low-Rez VT', notes on PDF pages 33, 34"
+quote = '''it is still possible to see low resolution VT from time to time [...] it will take a few frames for new pages to be added to the cache. This can be quite noticeable. [...] on hardware that have slow storage devices, it could take several seconds to load the required mips [...] the camera effectively outruns the VT and the entire terrain looks like a PS1 game [...] We found that it is better to composite the page as soon as it is requested, but mark it low-rez.'''
+checked = 2026-11-21
+
+["cod-2023-tile-hiding-vista-uvs"]
+url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=12"
+section = "Etienne, 'Large-Scale Terrain Rendering in Call of Duty', SIGGRAPH 2023 Advances, 'Tile Hiding' and 'Vista UVs', notes on PDF pages 12, 13, 66"
+quote = '''At every vertex, we compute a random rotation based on the world position of that vertex. [...] shading a pixel will require sampling the grass material 4 times, each time using different Uvs. [...] We sample albedo & normal again to compute the macro contribution. [...] We lerp between regular contribution and macro contribution using camera distance to compute final contribution. [...] With virtual texturing, the use of the camera distance is problematic, since VT has no concept of camera. [...] It creates a discontinuity in the mip chain of the VT pages'''
+checked = 2026-11-21
+
+["cod-2023-offline-baked-mips"]
+url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=46"
+section = "Etienne, 'Large-Scale Terrain Rendering in Call of Duty', SIGGRAPH 2023 Advances, 'Offline Baked Virtual Texture', notes on PDF page 46"
+quote = '''VT pages for the top 6 levels of the mip chain are baked offline. [...] at a distance, offline baked pages is what the GPU would want to use anyway [...] we don’t need to stream terrain layers & decals for terrain surfaces that are sufficiently far away'''
+checked = 2026-11-21
+
+["cod-2023-skirts"]
+url = "https://advances.realtimerendering.com/s2023/Etienne(ATVI)-Large%20Scale%20Terrain%20Rendering%20with%20notes%20(Advances%202023).pdf#page=60"
+section = "Etienne, 'Large-Scale Terrain Rendering in Call of Duty', SIGGRAPH 2023 Advances, 'Skirts' and 'Clutter Tinting', notes on PDF pages 60, 61"
+quote = '''Skirts allow meshes to seamlessly blend with the terrain. [...] the vertex height is altered to make them match the terrain height [...] when shading meshes, we can sample from the virtual texture as a function of how close to the terrain the pixel is [...] We use a lower resolution VT when color tinting, to get an average color.'''
+checked = 2026-11-21
+
+["bf3-2012-vt-issues"]
+url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/gdc12-terrain-in-battlefield3.pdf#page=37"
+section = "Widmark, GDC 2012, the three 'Virtual texture issues' slides, PDF pages 37, 38, 39"
+quote = '''Blurriness (consoles have too small tile pool) [...] Runtime texture compression quality [...] GPU tile compositing cost offset some of the gain [...] Limited hardware filtering support [...] Expensive software and/or lower-quality filtering [...] Compositing latency [...] Tile compositing render target memory usage [...] Detail shader splatting fills in to required [...] We now have two shader splatting methods [...] Typically 50m-100m [...] Updating indirection maps is expensive [...] 4-6 64x64 maps with mips [...] Update only dirty areas'''
+cost = '''~0.25ms/frame on Xenon'''
+checked = 2026-11-21
+
+["farcry4-2015-avt-filtering"]
+url = "https://media.gdcvault.com/gdc2015/presentations/Chen_Ka_AdaptiveVirtualTexture.pdf#page=40"
+section = "Chen, GDC 2015, slides on PDF pages 40, 41, 42"
+quote = '''Support 8x anisotropic in Far Cry 4 [...] Texels in neighbor pages are not adjacent in world [...] This could cause color bleeding [...] Solution: Add 4 texels border to physical [...] Physical texture page: 264 x 264 [...] Can support 8x anisotropic filtering [...] Only bilinear filtering [...] See seams where mip level is changing [...] Far Cry 4 Solution: software trilinear filtering [...] Fetch virtual textures twice with mip(x) and mip(x+1) [...] 25% more cache memory'''
+checked = 2026-11-21
+
+["farcry4-2015-avt-cost"]
+url = "https://media.gdcvault.com/gdc2015/presentations/Chen_Ka_AdaptiveVirtualTexture.pdf#page=48"
+section = "Chen, GDC 2015, performance and memory tables, PDF pages 48, 49"
+quote = '''Static scene 0.2 ms 0.1 ms [...] Dynamic scene 0.5 – 1 ms 0.5 – 1 ms [...] Memory 0.4 MB 16 MB 202 MB 220 MB'''
+cost = '''Performance CPU GPU (PS4) (rendering thread) Static scene 0.2 ms 0.1 ms [...] Dynamic scene 0.5 – 1 ms 0.5 – 1 ms'''
+checked = 2026-11-21
+
+["farcry4-2015-vista-terrain"]
+url = "https://media.gdcvault.com/gdc2015/presentations/Chen_Ka_AdaptiveVirtualTexture.pdf#page=8"
+section = "Chen, GDC 2015, 'Far Cry 4 Terrain' slide, PDF page 8"
+quote = '''Far terrain(Vista terrain > 300 meters away): [...] Offline baked geometry and textures'''
+checked = 2026-11-21
+
+["vanwaveren-2012-anisotropy-borders"]
+url = "https://mrelusive.com/publications/papers/Software-Virtual-Textures.pdf#page=10"
+section = "J.M.P. van Waveren, 'Software Virtual Textures', id Software, February 25th 2012, texture filtering section (PDF pages 9-12) and page-size discussion (PDF page 18)"
+quote = '''Implementations of virtual textures in software, without special graphics hardware support, are also not able to transparently support tri-linear filtering. [...] Hardware accelerated anisotropic filtering can be supported if the page border is wider than 1 texel. As such, a 4-texel border is typically used around each physical page. [...] allows for reasonable quality anisotropic filtering with a maximum anisotropy up to 8. [...] the anisotropic footprint is still bounded to a single physical texture page when the maximum anisotropy is less-equal to twice the border width. [...] using a maximum anisotropy of 4 and a page table texture lookup biased with a constant negative 2 typically results in a reasonable trade [...] the border required for proper texture filtering winds up costing approximately 12% in additional texels'''
+checked = 2026-11-21
+
+["heitz-neyret-2018-cost"]
+url = "https://hal.inria.fr/hal-01824773/document#page=18"
+section = "Eric Heitz and Fabrice Neyret, 'High-Performance By-Example Noise using a Histogram-Preserving Blending Operator', Proc. ACM Comput. Graph. Interact. Tech. 1(2) (HPG 2018), abstract (PDF page 2), Figure 2 (PDF page 3), section 6 (PDF pages 18, 21). Read from the web.archive.org snapshot https://web.archive.org/web/20220803220935/https://hal.inria.fr/hal-01824773/document (HAL itself returned a bot wall)"
+quote = '''our result: 3 texture fetches + 1 look-up-table fetch per pixel [...] it takes 0.29 ms per frame. This is because we have additional computation and a dependent look-up fetch.'''
+cost = '''All of the timings are given for rendering a full-screen quad on an NVIDIA GeForce GTX 980 at 1920 × 1080 resolution. [...] memory: 295 KB, performance: 0.29 ms at 1920×1080 on a GeForce GTX 980 [...] memory: 197 KB, performance: 0.11 ms at 1920×1080 on a GeForce GTX 980'''
+checked = 2026-11-21
+
+["heitz-neyret-2018-limits-filtering"]
+url = "https://hal.inria.fr/hal-01824773/document#page=17"
+section = "Heitz and Neyret, HPG 2018, sections 5.3, 5.4 (PDF pages 16, 17), failure cases (PDF page 24), conclusion (PDF page 25). Snapshot as above"
+quote = '''we assume that the input is stationary at the scale of a tile [...] anisotropic filtering like a conventional texture [...] we compute the derivatives of uv before adding the random offsets and we pass them explicitly to the texture2DGrad function [...] Our method does not produce plausible results if the input presents a strong pattern-like organization or, worse, repetition. [...] the bilinear interpolation pattern can be visible at high magnification as with a conventional texture [...] since triplanar mapping already fetches the input three times, the overhead of using our blending operator is only the final look-up table fetch'''
+checked = 2026-11-21
+
+["deliot-heitz-2019-cost"]
+url = "https://eheitzresearch.wordpress.com/738-2/"
+section = "Thomas Deliot and Eric Heitz, 'Procedural Stochastic Textures by Tiling and Blending', GPU Zen 2 (2019), authors' preprint linked from that page (https://drive.google.com/open?id=1QecekuuyWgw68HU9tg6ENfrCTCVIjm6l), section 1.7 and Table 1.1 (PDF page 20), section 1.8 (PDF page 23)"
+quote = '''On average, it is 4-5 times costlier, which makes sense since we fetch the input 3 times, use one additional look-up table fetch and use a few additional operations. [...] 10242 DXT1 699KB ≤1KB 0.039ms 0.182ms [...] 20482 DXT1 2796KB ≤1KB 0.046ms 0.207ms [...] is about four times the cost of a classic texture repeated tiling'''
+cost = '''We measured the performance by rendering a full-screen quad at 1920 × 1080 resolution on a GeForce GTX 980. [...] 10242 RGB8 4194KB 4KB 0.052ms 0.200ms'''
+checked = 2026-11-21
+
+["burley-2019-histogram-blending"]
+url = "https://jcgt.org/published/0008/04/02/paper.pdf#page=3"
+section = "Brent Burley, 'On Histogram-Preserving Blending for Randomized Texture Tiling', JCGT 8(4), 2019, Figure 1 caption and abstract (PDF page 1), introduction (PDF page 3), section 7 and Table 1 (PDF pages 20, 21)"
+quote = '''Our implementation is per-channel and avoids lengthy precomputation. [...] how histogram-preserving blending can be performed using 1D LUTs which can be trivially built on texture load [...] Per-channel histogram preservation is sufficient for most textures, but some will produce unwanted colorations [...] we found that textures with strong structure can exhibit ghosting artifacts [...] We have found that for most textures a value of γ = 4 works well'''
+cost = '''Table 1. Timing breakdown for generating a 4Kx4K image from a 256x256 input texture (using 24 core Xeon @ 3.0GHz). [...] Total (RGB) 75'''
+checked = 2026-11-21
+
+["mikkelsen-2022-hex-tiling"]
+url = "https://jcgt.org/published/0011/03/05/paper.pdf#page=3"
+section = "Morten S. Mikkelsen, 'Practical Real-Time Hex-Tiling', JCGT 11(2), 2022, abstract (PDF page 1), sections 1-3 (PDF pages 3, 5), section 4 (PDF page 6)"
+quote = '''In our adaptation we omit histogram preservation and replace it with a novel blending method that allows us to sample the original source texture. [...] we are using γ = 7 and β = 0.6 [...] For textures of color there is a trade-off in quality when observed side by side [...] When choosing the parameter r, this is a compromise between preserving contrast and not making the hexagonal boundaries noticeable.'''
+checked = 2026-11-21
+
+["mikkelsen-hextile-demo-licence-and-notes"]
+url = "https://github.com/mmikk/hextile-demo/blob/43c3ed7e18e1e4539fa9323f72d5e2a65147ebb3/README.md#L24"
+section = "mmikk/hextile-demo at commit 43c3ed7e18e1e4539fa9323f72d5e2a65147ebb3, README.md, read, not run; LICENSE at the same commit"
+quote = '''hex-tiling as planar/triplanar projection on large levels you should look at hextiling_rws.h which [...] provides a special variant to maintain fractional precision as we move far away from the center of absolute world space. [...] must align "well" with the Z axis (0,0,1) or the tilt will appear very clearly in the lit result. [...] Good alignment is achieved when the normal map corresponds to a tiling height map.'''
+checked = 2026-11-21
+
+["frostbite-2007-wang-tiles"]
+url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/chapter5-andersson-terrain-rendering-in-frostbite.pdf#page=5"
+section = "Andersson, SIGGRAPH 2007 course chapter 5, section 5.2.2 (PDF page 5)"
+quote = '''most would require multi-pass rendering into cached textures for real-time usage or can be expensive and difficult to mipmap correctly (such as GPU Wang Tiles in [Wei 03])'''
+checked = 2026-11-21
+
+["quilez-texture-repetition"]
+url = "https://iquilezles.org/articles/texturerepetition/"
+section = "Inigo Quilez, 'texture repetition' (article, author's site; the text dates itself 'As of 2015'), Techniques 1-3"
+quote = '''sample the texture with the offset and orientation mentioned above at four texture tiles, and blend between them [...] the per-tile hash function might alias at high minification factors. For example, if this technique is used to texture a huge terrain [...] the drawback is the algorithm samples the texture 9 times [...] Technique 3, which is only two texture fetches'''
+checked = 2026-11-21
+
+["fajardo-2023-stochastic-texture-filtering"]
+url = "https://arxiv.org/abs/2305.05810"
+section = "Marcos Fajardo, Bartlomiej Wronski, Marco Salvi, Matt Pharr, 'Stochastic Texture Filtering', arXiv:2305.05810v2, 15 May 2023, section 5.2 'Real-time Rendering' (PDF pages 6-8) and section 6 (PDF page 10). Quote checked against the reading-order extraction"
+quote = '''Since it is a weighted average of three values, we can evaluate it stochastically [...] managed using temporal filtering algorithms like DLSS, or by employing moderate pixel sampling rates. [...] For real-time rendering, we used DLSS to perform temporal [...] minor flickering and ghosting artifacts remain'''
+cost = '''stochastic triplanar mapping, and performance is 7.9× better compared to fully-deterministic filtering [...] All performance measurements were taken using an NVIDIA RTX 4090 GPU. [...] All images and performance measurements in this section were taken at 4K (3840 × 2160) resolution.'''
+checked = 2026-11-21
+
+["geiss-2007-triplanar"]
+url = "https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-1-generating-complex-procedural-terrains-using-gpu"
+section = "Ryan Geiss, 'Generating Complex Procedural Terrains Using the GPU', GPU Gems 3 (2007), chapter 1, section 1.5 'Texturing and Shading'"
+quote = '''A simple way to resolve this is to use triplanar texturing, or three different planar projections, one along each of the three primary axes (x, y, and z). [...] A blending range of roughly 10 to 20 degrees tends to work well [...] we need to make sure the tangent basis is generated from the normal separately for each projection [...] The sample fetches the color values and bump vectors for each of the three planar projections and then blends them together based on the normal.'''
+checked = 2026-11-21
+
+["quilez-biplanar"]
+url = "https://iquilezles.org/articles/biplanar/"
+section = "Inigo Quilez, 'biplanar mapping' (article, author's site), sections Intro and Biplanar mapping"
+quote = '''uses only two texture fetches rather than three, at the cost of some extra arithmetic [...] pick the two most relevant of the three canonical projections and work with them while completely disregarding the third one [...] we can avoid the discontinuities by taking the gradients of "p" before we do the axis selection [...] this height remapping removes the discontinuity but narrows the blending areas considerably'''
+checked = 2026-11-21
+
+["frostbite-2007-atlas-padding"]
+url = "https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/chapter5-andersson-terrain-rendering-in-frostbite.pdf#page=10"
+section = "Andersson, SIGGRAPH 2007 course chapter 5, sparse mask textures (PDF page 10)"
+quote = '''care must be taken to pad the borders of the tiles to prevent filtering artifacts in the edges when bilinear filtering is used [...] a texture array can be used instead of an atlas and then bilinear filtering automatically works correctly without any extra padding'''
+checked = 2026-11-21
+
+["jolt-5.7.0-heightfield-shape"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Collision/Shape/HeightFieldShape.h#L50"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Collision/Shape/HeightFieldShape.h (L22-23, L50-51, L88-104, L113-115): the height field shape's settings and class comment; read, not run"
+quote = '''Create a height field shape of inSampleCount * inSampleCount vertices. [...] The height field is a surface defined by: inOffset + inScale * (x, inSamples[y * inSampleCount + x], y). [...] The heightfield is divided in blocks of mBlockSize * mBlockSize * 2 triangles and the acceleration structure culls blocks only, [...] How many bits per sample to use to compress the height field. Can be in the range [1, 16]. [...] Note that each sample is compressed relative to the min/max value of its block of mBlockSize * mBlockSize samples so the effective precision is higher. [...] constexpr float cNoCollisionValue = FLT_MAX; [...] An array of (mSampleCount - 1)^2 material indices. [...] A height field shape. Cannot be used as a dynamic object. [...] If you're using HeightFieldShape and are querying data while modifying the shape you'll have a race condition.'''
+checked = 2026-11-21
+
+["jolt-5.7.0-heightfield-queries"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Collision/Shape/HeightFieldShape.h#L193"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Collision/Shape/HeightFieldShape.h (L159, L193-197, L218, L231, L255): queries and edits on the shape; read, not run"
+quote = '''virtual Vec3 GetSurfaceNormal(const SubShapeID &inSubShapeID, Vec3Arg inLocalSurfacePosition) const override; [...] Projects inLocalPosition (a point in the space of the shape) along the Y axis onto the surface and returns it in outSurfacePosition. [...] When there is no surface position (because of a hole or because the point is outside the heightfield) the function will return false. [...] void GetHeights(uint inX, uint inY, uint inSizeX, uint inSizeY, float *outHeights, intptr_t inHeightsStride) const; [...] @return True if the material indices were set, false if the total number of materials exceeded 256'''
+checked = 2026-11-21
+
+["physx-5.13.0-heightfield-sample"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/physx/include/geometry/PxHeightFieldSample.h#L46"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac), physx/include/geometry/PxHeightFieldFlag.h (L25-40) and PxHeightFieldSample.h (L26, L46-63): the sample format, holes and the diagonal flag; read, not run; Apache-2.0"
+quote = '''Height field height data is 16 bit signed integers, followed by triangle materials. [...] Next, two one byte material indices, with the high bit of each byte reserved for special use. [...] The high bit of material0 is the tess-flag. [...] eHOLE = 127 //!< A material indicating that the triangle should be treated as a hole in the mesh. [...] If the flag is set, the diagonal of the quad will run from this sample to the opposite vertex; if not, [...] it will run between the other two vertices'''
+checked = 2026-11-21
+
+["parry-0.31.1-heightfield"]
+url = "https://github.com/dimforge/parry/blob/3383f51cbbe9af70565427e7a66c605e1557c1fc/src/shape/heightfield3.rs#L24"
+section = "parry v0.31.1 (dimforge/parry, commit 3383f51), src/shape/heightfield3.rs (L24-30), src/math/mod.rs (L5-7) and Cargo.toml (L19): cell status flags, the scalar type, the licence; read, not run"
+quote = '''/// If this bit is set, the concerned heightfield cell is subdivided using a Z pattern. const ZIGZAG_SUBDIVISION = 0b00000001; [...] /// If this bit is set, the leftmost triangle of the concerned heightfield cell is removed. [...] pub use f64 as Real; [...] license = "Apache-2.0"'''
+checked = 2026-11-21
+
+["godot-4.7.2-heightmap-shape"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/doc/classes/HeightMapShape3D.xml#L8"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), doc/classes/HeightMapShape3D.xml (L8-9): the class description"
+quote = '''Internally, each grid square is divided into two triangles. [...] Due to the nature of the heightmap, it cannot be used to model overhangs or caves, which would require multiple vertices at the same vertical location. Holes can be punched through the collision by assigning [constant @GDScript.NAN] to the height of the desired vertices (this is supported in both GodotPhysics3D and Jolt Physics). You could then insert meshes with their own separate collision to provide overhangs, caves, and so on.'''
+checked = 2026-11-21
+
+["ue-5.9-landscape-heightmap-format"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/landscape-technical-guide-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Landscape Technical Guide, heightmap format and import file types; documentation only"
+quote = '''Unreal Engine calculates your heightmap's height by using values between -256 and 255.992, stored with 16-bit precision. [...] 16-bit grayscale PNG [...] 16-bit grayscale r16 [...] Heightmap data can also be imported using the .raw format using a separate JSON file.'''
+checked = 2026-11-21
+
+["ue-5.9-landscape-collision-mip"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/landscape-collision-guide-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Landscape Collision Guide, Collision Mip Level and Simple Collision Mip Level; documentation only"
+quote = '''Setting Collision Mip Level to 0, the default, will give you a very accurate Landscape collision at the expense of memory. Setting this value to 5, the maximum setting, will make the Landscape collision cheaper, but the accuracy of the collision will suffer. [...] For most cases, you will want to leave the Collision Mip Level at 0 and then use 1 or 2 for the Simple Collision Mip Level.'''
+checked = 2026-11-21
+
+["ue-5.9-ray-tracing-landscape"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/ray-tracing-performance-guide-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Ray Tracing Performance Guide, geometry that rebuilds every frame and Far Field; documentation only"
+quote = '''Geometry types which rebuild every frame include: [...] Landscape is rebuilt to support its continuously morphing level of detail (LOD) [...] Ray Tracing supports a Far Field representation that extends Lumen Global Illumination and Reflections, and Megalights to one kilometer from the camera by default. The Far Field makes use of Hierarchical Level of Detail (HLOD) meshes generated by World Partition by default. [...] Reduce the landscape update frequency'''
+checked = 2026-11-21
+
+["ue-5.9-mesh-partition-transformers"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/mesh-partition-definition-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Mesh Partition Definition (Experimental), Collision, Far Field and Static Mesh Transformers; documentation only"
+quote = '''Learn to use this Experimental feature, but use caution when shipping with it. [...] The Collision Transformer enables and defines the generation of collision geometry which is decoupled from the visual mesh. [...] The Far Field Transformer enables and defines a special mesh generation which is used for Lumen’s internal representation for far field. [...] The Static Mesh Transformer also has the option to add skirts to the geometry to prevent seams or cracks in some situation. [...] The Static Mesh Transformer builds a static mesh per partition unit and, for each LOD slot, runs an attribute-aware simplifier on a copy of the source geometry.'''
+checked = 2026-11-21
+
+["ue-5.9-mesh-terrain-attributes"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/mesh-terrain-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Mesh Terrain (Experimental), compiled sections and vertex attributes; documentation only"
+quote = '''Compiled sections are for runtime only and are decoupled from the editor preview sections. [...] Attributes that live on the mesh partition vertices and get baked to a texture 2D array for compiled sections.'''
+checked = 2026-11-21
+
+["ue-5.9-runtime-virtual-texture"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/runtime-virtual-texturing-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Runtime Virtual Texturing; documentation only"
+quote = '''The RVT caches shading data over large areas, making them a good fit for Landscape shading that uses decal-like materials and splines that are well suited to conform to the terrain. [...] Because RVT content is effectively a shading cache, it isn't fully updated on every frame, meaning that the objects rendered to it are expected to have their mobility be Static. [...] In this situation, it's more efficient to bake and stream the low resolution mips of an RVT.'''
+checked = 2026-11-21
+
+["ue-5.9-landscape-layer-blend"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/landscape-materials-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Landscape Materials, Layer Blend types and weightmaps; documentation only"
+quote = '''Implements a weighted blend between all LB Weight Blend layers. This type is not order dependent. [...] This is the same as LB Weight Blend, but also adds detail to the transition between layers based on a height map. [...] If a Landscape component does not use a specific layer, the subtree of nodes connected to the layer is discarded. [...] a new weightmap texture will be added every 4 target layers (1 target layer per channel of an RGB8 texture)'''
+checked = 2026-11-21
+
+["ue-5.9-nanite-landscape"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/using-nanite-with-landscapes-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Using Nanite with Landscapes; documentation only"
+quote = '''Nanite Landscapes stream on top of the existing Landscape data streaming since both Nanite and non-Nanite data are necessary at runtime. [...] This means twice the amount of data is streamed. [...] At large distances this can introduce seam artifacts, which appear as tiny holes through the landscape. These are usually small enough to be corrected by temporal anti-aliasing.'''
+checked = 2026-11-21
+
+["unity-6000.0-terrain-sample-height"]
+url = "https://docs.unity.com/en-us/engine/6000.0/script-reference/unityengine/terrain/sampleheight"
+section = "Unity 6000.0 scripting reference, Terrain.SampleHeight; with TerrainData.GetInterpolatedHeight (same reference); documentation only"
+quote = '''Samples the height at the given position defined in world space, relative to the Terrain space. [...] public float SampleHeight(Vector3 worldPosition) [...] This method automatically clamps the world position to the Terrain boundaries.'''
+checked = 2026-11-21
+
+["unity-6000.0-terrain-holes"]
+url = "https://docs.unity.com/en-us/engine/6000.0/manual/creating-environments/script-terrain/terrain-tools/terrain-paint-holes"
+section = "Unity 6000.0 manual, Paint Holes; documentation only"
+quote = '''Internally, Unity uses a Texture to define the opacity mask for a Terrain surface. [...] Terrain holes work with lighting, physics, and NavMesh baking. [...] To support physics Colliders, the resolution of the hole's mask Texture is equal to the resolution of the Terrain's heightmap - 1.'''
+checked = 2026-11-21
+
+["unity-6000.0-terrain-layers-per-pass"]
+url = "https://docs.unity.com/en-us/engine/6000.0/manual/creating-environments/script-terrain/class-terrain-layer"
+section = "Unity 6000.0 manual, Terrain Layers; documentation only"
+quote = '''If your Project uses the Universal Render Pipeline (URP) or Built-in Render Pipeline, you can use four Terrain Layers per Texture pass, with no limit on the number of passes. [...] each pass increases the time spent rendering the Terrain. [...] If your Project uses the High Definition Render Pipeline (HDRP), you can add up to eight Terrain Layers per Terrain tile, and the system renders them in a single pass.'''
+checked = 2026-11-21
+
+["unity-6000.0-terrain-heightmap-raw"]
+url = "https://docs.unity.com/en-us/engine/6000.0/manual/creating-environments/script-terrain/terrain-heightmaps"
+section = "Unity 6000.0 manual, Working with Heightmaps; documentation only"
+quote = '''A RAW file uses a 16-bit grayscale format that's compatible with most image and landscape editors.'''
+checked = 2026-11-21
+
+["unity-6000.0-terrain-base-map"]
+url = "https://docs.unity.com/en-us/engine/6000.0/manual/creating-environments/script-terrain/terrain-other-settings"
+section = "Unity 6000.0 manual, Terrain settings (Other Settings); documentation only"
+quote = '''| Pixel Error | Simplifies the generated terrain to optimize rendering. [...] | Base Map Dist. | The maximum distance to render textures in full resolution. Beyond this distance, a lower resolution composite image is used.'''
+checked = 2026-11-21
+
+["unity-hdrp-17.0-ray-tracing-limits"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/ray-tracing-introduction.html"
+section = "Unity HDRP 17.0.4 manual, Introduction to ray tracing, incompatible features; documentation only"
+quote = '''Ray tracing in HDRP isn't compatible with the following features. [...] Multi-sample anti-aliasing (MSAA). [...] Per-pixel displacement techniques such as parallax occlusion mapping, depth offset, and non-terrain height maps. [...] The detail meshes and trees in the Terrain system.'''
+checked = 2026-11-21
+
+["flax-docs-terrain-collision-holes"]
+url = "https://docs.flaxengine.com/manual/terrain/collision.html"
+section = "Flax Engine manual, Terrain: Collision page and Holes page (https://docs.flaxengine.com/manual/terrain/holes.html), FlaxDocs commit 401d5cf, manual/terrain/collision.md and holes.md; documentation only"
+quote = '''Terrain uses heightfield collider per terain patch. You can specify the Collision LOD that can be used to reduce collision quality but improve simulation performance due to lower resolution of the heightfield. [...] Holes mask is stored in the terrain patch heightmap texture as invalid normals. [...] Terrain collision cooking samples the heightmap and produces holes in the collider shape to keep visual and physical appearance in pair.'''
+checked = 2026-11-21
+["galin-2019-terrain-modeling-review"]
+url = "https://www.cs.purdue.edu/homes/bbenes/papers/Galin19CGF.pdf#page=1"
+section = "Galin, Guérin, Peytavie, Cordonnier, Cani, Benes and Gain, A Review of Digital Terrain Modeling, Computer Graphics Forum 38(2), Eurographics 2019 state-of-the-art report, doi 10.1111/cgf.13657: abstract (p. 1), §2.1 Elevation models and §2.2 Volumetric models (pp. 2-3), §4.2 on hydraulic erosion (p. 12); an author's copy"
+quote = '''organized according to three categories: procedural modeling, physically-based simulation of erosion and land formation processes, and example-based methods driven by scanned terrain data. [...] Such a definition restricts modeling to terrains without overhangs, arches, or caves. [...] Voxels offer a way to describe volumetric terrains, but at a high memory cost because of their explicit spatial enumeration. [...] Mei et al. [MDH07] demonstrated the effectiveness of parallel methods and achieved interactive feedback.'''
+checked = 2026-11-21
+
+["schott-2023-stream-power-erosion-code"]
+url = "https://github.com/H-Schott/StreamPowerErosion/blob/8a0c017fe2e599c74a19c3766b1d93d428e9d451/README.md#L3"
+section = "H-Schott/StreamPowerErosion (commit 8a0c017, 2026-09-17), README.md (L3, L7) and LICENSE (L1): the release code of Schott, Paris, Fournier, Guérin and Galin, Large-scale Terrain Authoring through Interactive Erosion Simulation, ACM Transactions on Graphics 42(5), 2023, doi 10.1145/3592787; the paper itself was not obtained"
+quote = '''This is the release code for the paper *Large-scale terrain authoring through interactive erosion simulation*, to be published in Transactions on Graphics. [...] The user paints an **uplift** map, which specifies the local elevation speed of the ground. Fluvial erosion is continuously simulated through the **Stream Power Equation** from geomorphology.'''
+checked = 2026-11-21
+
+["schott-2024-multi-scale-erosion-code"]
+url = "https://github.com/H-Schott/MultiScaleErosion/blob/907ffcb410f4d98ec14e54f209bf4b07a5ed6804/README.md#L3"
+section = "H-Schott/MultiScaleErosion (commit 907ffcb, 2026-11-05), README.md (L3, L17, L28, L30) and LICENSE (L1, MIT): the release code of Schott, Galin, Guérin, Peytavie and Paris, Terrain Amplification using Multi-scale Erosion, ACM Transactions on Graphics 43(4), 2024, doi 10.1145/3658200; the paper itself was not obtained"
+quote = '''This is the release code for the paper *Terrain Amplification using Multi-scale Erosion*, to be published in Transactions on Graphics. [...] Requires at least OpenGl 4.3 for compute shaders. [...] erosion -> thermal -> deposition [...] Alternating this sequence with the x2 upsampling gives great amplification results.'''
+checked = 2026-11-21
+
+["goslin-2025-terrain-diffusion"]
+url = "https://arxiv.org/pdf/2512.08309v3"
+section = "Goslin, Terrain Diffusion: A Diffusion-Based Successor to Perlin Noise in Infinite, Real-Time Terrain Generation, arXiv:2512.08309v3 (11 January 2026), a preprint: abstract, Results, Discussion"
+quote = '''seamless infinite extent, seed-consistency, and constant-time random access [...] would traverse a 512×512 tile at 90 m resolution in about 84 seconds. [...] procedural noise retains decisive advantages in speed, interpretability, and zero-data requirements'''
+cost = '''Latency experiments use a single NVIDIA RTX 3090 Ti GPU. [...] our setup time of 1.72 seconds and steady-state generation time of 0.66 seconds remain highly practical.'''
+checked = 2026-11-21
+
+["gltf-5b00b91-extension-registry"]
+url = "https://github.com/KhronosGroup/glTF/blob/5b00b913b74c8f0260c64578b98a09ef2dde0b41/extensions/README.md#L8"
+section = "KhronosGroup/glTF (commit 5b00b91, 2026-11-20), extensions/README.md, the lists under Ratified Khronos Extensions (L8), In-progress Khronos and Multi-Vendor Extensions and Projects (L42), Multi-Vendor Extensions (L81) and Vendor Extensions (L89): no entry names a height field, an elevation raster or terrain"
+quote = '''## Ratified Khronos Extensions [...] * [KHR_mesh_quantization](2.0/Khronos/KHR_mesh_quantization/README.md) [...] ## Vendor Extensions'''
+checked = 2026-11-21
