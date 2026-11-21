@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/tonemapping_pass.rs</code></div>
   <h1>The tonemapping pass</h1>
   <p class="definition">The frame's last timed pass: one triangle over the target that reads each pixel's exposed colour from the <a href="hdr-target.html">HDR target</a>, undoes the resolve's weighting, maps it through GT7's tone curve to display colour, encodes it as sRGB in the shader and adds two steps of triangular blue-noise dither before the 8-bit target rounds it.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="hdr-target.html">The HDR target</a> for what the pass reads, <a href="light-units.html">Light units</a> for the light units and the EV100 exposure that set where mid-grey lands.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 62052fe8 (2026-11-21). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="hdr-target.html">The HDR target</a> for what the pass reads, <a href="light-units.html">Light units</a> for the light units and the EV100 exposure that set where mid-grey lands.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -127,7 +127,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Draws</dt><dd>One triangle of three vertices from <code>vs_full_screen</code>, with no vertex buffer, shaded by <code>fs_tonemap</code>.</dd>
       <dt>Bind groups</dt><dd>Group 3, tonemapping input: the HDR target and the dither mask, rebuilt by <code>bind_render_targets</code> after every resize.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/tonemapping.wgsl</code>, assembled after the HDR, GT7 and display parts: <code>hdr.wgsl</code>, <code>gt7.wgsl</code>, <code>display.wgsl</code>.</dd>
-      <dt>Counted</dt><dd><code>tonemapping_pass</code> in GPU time; the dither mask's 4,096 bytes in GPU memory.</dd>
+      <dt>Counted</dt><dd><code>tonemapping_pass</code> in GPU time; the dither mask's 4,096 bytes in GPU memory, under the scene and pass buffers' kind.</dd>
       <dt>Files</dt><dd><code>src/render/tonemapping_pass.rs</code>, <code>src/render/shaders/tonemapping.wgsl</code>, <code>src/render/shaders/display.wgsl</code>, <code>src/render/shaders/gt7.wgsl</code></dd>
     </dl>
   </aside>
@@ -167,7 +167,7 @@ fn fs_tonemap(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @location(0) v
 }</code></pre>
   <p class="code-source"><code>tonemapping.wgsl</code>.</p>
   <p>The four steps follow in order: <code>resolve_unweighted</code> turns the resolved texel back into exposed colour (<a href="hdr-target.html#unweighted">The HDR target</a>); <code>tonemap</code> maps exposed colour to display-linear colour in [0,&nbsp;1]; <code>srgb_encode</code> turns that into the encoded values a display expects; and the dither adds noise of up to one 8-bit step either way, which the target's rounding to 8 bits then resolves.</p>
-  <p><code>TonemappingPass::new</code> checks, in debug builds, that the target format is not sRGB, since the shader encodes and an sRGB view would encode again. It creates the pipeline, the dither mask and the bind group that reads the HDR target; <code>bind_render_targets</code> builds that group again whenever a resize creates the targets again.</p>
+  <p><code>TonemappingPass::new</code> checks, in debug builds, that the target format is not sRGB, since the shader encodes and an sRGB view would encode again. It creates the pipeline from the module assembled with the Renderer's capacities, the dither mask through the GPU memory ledger, which counts it where it is created, and the bind group that reads the HDR target; <code>bind_render_targets</code> builds that group again whenever a resize creates the targets again.</p>
 </section>
 
 <section class="part prose" id="wrap">
@@ -319,43 +319,46 @@ const DITHER_MASK: &amp;[u8; (DITHER_MASK_SIDE * DITHER_MASK_SIDE) as usize] =
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>tonemapping_pass</code></th><th class="n">GPU frame</th></tr></thead>
     <tbody>
-      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">319.5</td><td class="n">4,094.7</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">184.4</td><td class="n">2,338.8</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">188.7</td><td class="n">2,341.4</td></tr>
-      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">322.2</td><td class="n">6,689.1</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">192.5</td><td class="n">2,736.3</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">191.0</td><td class="n">2,717.7</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">322.1</td><td class="n">3,851.5</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">192.7</td><td class="n">1,692.5</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">190.8</td><td class="n">1,611.1</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">319.5</td><td class="n">3,664.5</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">187.6</td><td class="n">1,680.2</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">190.9</td><td class="n">1,639.2</td></tr>
-      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">322.3</td><td class="n">2,917.0</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">196.6</td><td class="n">1,747.0</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">190.5</td><td class="n">1,685.5</td></tr>
-      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">322.2</td><td class="n">3,003.5</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">188.4</td><td class="n">1,846.3</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">192.5</td><td class="n">1,819.8</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">319.6</td><td class="n">2,598.5</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">187.3</td><td class="n">1,594.7</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">190.5</td><td class="n">1,622.2</td></tr>
-      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">322.5</td><td class="n">2,917.3</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">187.5</td><td class="n">1,424.8</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">192.5</td><td class="n">1,110.5</td></tr>
-      <tr class="focus"><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">811.2</td><td class="n">15,975.0</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">186.2</td><td class="n">1,207.2</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">190.2</td><td class="n">1,095.3</td></tr>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">319.7</td><td class="n">3,747.5</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">186.3</td><td class="n">2,169.8</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">190.9</td><td class="n">1,970.2</td></tr>
-      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">324.7</td><td class="n">19,935.0</td></tr>
-      <tr><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">188.0</td><td class="n">9,395.0</td></tr>
-      <tr><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">195.8</td><td class="n">9,279.4</td></tr>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">318.6</td><td class="n">4,164.4</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">184.3</td><td class="n">2,419.0</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">190.5</td><td class="n">2,353.1</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">321.2</td><td class="n">6,733.5</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">192.5</td><td class="n">2,740.9</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">192.5</td><td class="n">2,727.7</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">318.5</td><td class="n">3,950.0</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">191.9</td><td class="n">1,718.9</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">192.5</td><td class="n">1,617.7</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">318.6</td><td class="n">3,723.8</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">187.3</td><td class="n">1,741.8</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">192.5</td><td class="n">1,644.5</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">321.4</td><td class="n">2,938.2</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">196.6</td><td class="n">1,748.8</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">192.5</td><td class="n">1,692.4</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">318.5</td><td class="n">3,009.4</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">188.4</td><td class="n">1,941.1</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">194.6</td><td class="n">1,828.0</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">321.5</td><td class="n">2,638.6</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">186.0</td><td class="n">1,809.3</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">192.5</td><td class="n">1,732.6</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">319.1</td><td class="n">2,966.7</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">186.1</td><td class="n">1,435.8</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">191.5</td><td class="n">1,107.5</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">321.5</td><td class="n">2,308.7</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">186.3</td><td class="n">1,226.1</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">191.4</td><td class="n">1,098.8</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">322.7</td><td class="n">3,380.0</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">187.1</td><td class="n">2,235.6</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">192.5</td><td class="n">1,976.8</td></tr>
+      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">324.3</td><td class="n">19,123.8</td></tr>
+      <tr><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">187.8</td><td class="n">9,686.6</td></tr>
+      <tr><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">195.7</td><td class="n">9,281.7</td></tr>
+      <tr><td><code>world</code></td><td>Apple M4 Pro, Metal</td><td class="n">367.9</td><td class="n">6,033.7</td></tr>
+      <tr><td><code>world</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">184.5</td><td class="n">3,060.7</td></tr>
+      <tr><td><code>world</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">190.5</td><td class="n">2,819.1</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. <code>texture-wall</code>'s reading on the Apple M4 Pro is the exception and not this pass's work: on Metal a pass's timestamps can share time with the passes around it, and that scene's frame is set by its bound textures.</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. <code>world</code>'s reading on the Apple M4 Pro sits above the rest though the pass does the same work there: on Metal a pass's timestamps can share time with the passes around it. The RTX 2070 SUPER's were recorded from an earlier engine source than the M4 Pro's, so a row of one adapter is no ratio of the other's.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Per pixel</th><th>Format</th><th class="n">Bytes</th></tr></thead>
@@ -404,8 +407,8 @@ const DITHER_MASK: &amp;[u8; (DITHER_MASK_SIDE * DITHER_MASK_SIDE) as usize] =
     <dt><a href="https://hajim.rochester.edu/ece/sites/zduan/teaching/ece472/reading/Lipshitz_1992.pdf#page=18">Lipshitz, Wannamaker and Vanderkooy, Quantization and Dither: A Theoretical Survey, 1992</a></dt><dd>triangular dither of two steps peak to peak removes noise modulation with the least added noise; <code>lipshitz-1992-triangular-dither</code></dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The pass came with the move to photometric light in the third milestone, in steps measured against each other: a clamp-only pass over a new fp16 target, then the weighted resolve, GT7, the shader's own sRGB encoding and the dither, after a survey of operators, targets, dithers, displays and bloom chose each. The volumes that narrated each step, with its measurements, the operator sweep and the live demos, are retired: this page, <a href="hdr-target.html">The HDR target</a> and <a href="light-units.html">Light units</a> describe the chain as it is.</p>
-  <footer class="sources">Written from <code>src/render/tonemapping_pass.rs</code>, <code>src/render/shaders/tonemapping.wgsl</code>, <code>gt7.wgsl</code>, <code>display.wgsl</code>, <code>hdr.wgsl</code>, <code>src/render/shaders/mod.rs</code>, <code>src/gpu/mod.rs</code>, the tests named above, ADRs 0008, 0018, 0021 and 0023, the committed Baselines, and the sources above, all at <code>main</code> fbae12f4.</footer>
+  <p class="note">The pass came with the move to photometric light in the third milestone, in steps measured against each other: a clamp-only pass over a new fp16 target, then the weighted resolve, GT7, the shader's own sRGB encoding and the dither, after a survey of operators, targets, dithers, displays and bloom chose each. Since then its dither mask is counted where it is created, and its module is assembled with the Renderer's capacities, as every module is. The volumes that narrated each step, with its measurements, the operator sweep and the live demos, are retired: this page, <a href="hdr-target.html">The HDR target</a> and <a href="light-units.html">Light units</a> describe the chain as it is.</p>
+  <footer class="sources">Written from <code>src/render/tonemapping_pass.rs</code>, <code>src/render/shaders/tonemapping.wgsl</code>, <code>gt7.wgsl</code>, <code>display.wgsl</code>, <code>hdr.wgsl</code>, <code>src/render/shaders/mod.rs</code>, <code>src/gpu/mod.rs</code>, the tests named above, ADRs 0008, 0018, 0021 and 0023, the committed Baselines, and the sources above, all at <code>main</code> 62052fe8.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="hdr-target.html">Previous: The HDR target</a><a href="index.html">All field guides</a><a href="frame-stats.html">Next: Frame stats</a></nav>

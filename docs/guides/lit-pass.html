@@ -116,17 +116,17 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/main_pass.rs</code></div>
   <h1>The lit pass</h1>
-  <p class="definition">The render pass that shades the frame's draw, both culling phases' <span class="concept" data-term="Instance" data-tip="One Renderable's or Placement's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one, or in its Chunk's range of slots while the Chunk is loaded.">Instances</span>, at depth equal into the 4x <a href="msaa.html">MSAA</a> colour, once per pixel for each triangle that covers a sample: it sums glTF 2.0's metallic-roughness BRDF over the pixel's directional lights and its <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxel</span>'s point lights, each unless the <span class="concept" data-term="Shadow mask" data-tip="A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. Where the pixel's other samples show another surface, a second set of bits holds the farthest one's, and each fragment reads the set of the surface it shades. Where the bit of one of the first seven directional lights at the nearest surface differs from a 4-neighbour's, a shadow edge, or where the nearest sample turns from that light while another of the surface's samples faces it, that light is traced again from each other sample that shows the surface, and the fragment shades it by the share of its samples that see it. Where the nearest sample turns from a point light that another of the surface's samples faces, the surface's bit is that sample's ray's verdict. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.">shadow mask</span> hides it, adds the ambient term and the emissive, and resolves the exposed colour into the HDR target.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 98564b94 (2026-11-06). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="msaa.html">MSAA</a> for samples, fragments and the resolve, <a href="depth-prepass.html">The depth pre-pass</a> for the depth this pass tests against and the vertices it pulls, <a href="shadow-mask.html">The shadow mask pass</a> for the bits it reads.</p>
+  <p class="definition">The render pass that shades the frame's draw, both culling phases' <span class="concept" data-term="Instance" data-tip="One Renderable's or Placement's data on the GPU: its World transform, as an Anchor plus an f32 offset, its Mesh, and the Material ID that overrides its Mesh's Materials, if any, in a slot of the Instance buffer that the Renderable keeps while it is one, or in its Chunk's range of slots while the Chunk is loaded.">Instances</span>, at depth equal into the 4x <a href="msaa.html">MSAA</a> colour, once per pixel for each triangle that covers a sample: it sums glTF 2.0's metallic-roughness BRDF over the pixel's directional lights and its <span class="concept" data-term="Froxel" data-tip="A cell of the view frustum, bounded in screen space and depth, that holds the list of lights reaching it.">Froxel</span>'s point lights, each unless the <span class="concept" data-term="Shadow mask" data-tip="A bit per light at each pixel, set where that light is hidden from the surface the pixel's nearest sample shows, by the surface itself where its interpolated normal turns from that light or by what its shadow ray finds, in the order the lit pass sums the pixel's lights, up to 59 of them. Where the pixel's other samples show another surface, a second set of bits holds the farthest one's, and each fragment reads the set of the surface it shades. Where the bit of one of the first seven directional lights at the nearest surface differs from a 4-neighbour's, a shadow edge, or where the nearest sample turns from that light while another of the surface's samples faces it, that light is traced again from each other sample that shows the surface, and the fragment shades it by the share of its samples that see it. Where the nearest sample turns from a point light that another of the surface's samples faces, the surface's bit is that sample's ray's verdict. A compute pass traces it from the depth target and the Surface normals; the lit pass reads it.">shadow mask</span> hides it, adds the ambient term and the emissive, and resolves the exposed colour into the HDR target. <span class="concept" data-term="Thin Primitive" data-tip="A Primitive declared a tube of a given radius, drawn a pixel wide where it would be narrower, whose shadow ends where it would fall between a pixel and half a pixel wide.">Thin Primitives</span> and small Instances, which the depth passes drew a pixel wide, it shades through twin pipelines, in only the samples the depth passes kept for them.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 62052fe8 (2026-11-21). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="msaa.html">MSAA</a> for samples, fragments and the resolve, <a href="depth-prepass.html">The depth pre-pass</a> for the depth this pass tests against and the vertices it pulls, <a href="shadow-mask.html">The shadow mask pass</a> for the bits it reads.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
       <dt>Runs</dt><dd>Every frame: after the shadow mask pass with the <code>shadow_rays</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> on, as Praxis ships, or after phase two of the culling pass with it off; before the tonemapping pass.</dd>
       <dt>Reads</dt><dd>The frame's draw, its packed indices and the indirect arguments of each phase; the depth target, loaded and tested for equality; the camera, the light uniform, the light buffer and each Froxel's list; the Materials, each Channel's Textures and the two samplers; the scene geometry; the Meshlet records, the shadow mask and the shadow mask samples; per fragment, the <code>sample_mask</code> built-in, the samples it covers.</dd>
       <dt>Writes</dt><dd>The 4x multisampled colour, a transient <code>Rgba16Float</code> attachment cleared to the background, resolved at the pass's end into the HDR target. The depth target is discarded, unless the <code>count_point_lights</code> Render switch keeps it for the light count pass.</dd>
-      <dt>Draws</dt><dd>One <code>draw_indexed_indirect</code> of both phases at depth equal; with shadow rays off, one of phase two into depth before it.</dd>
+      <dt>Draws</dt><dd>Three <code>draw_indexed_indirect</code> calls at depth equal: both phases' draw through the lit pipeline, then each phase's Thin Primitives and small Instances through its twin. With shadow rays off, two before them into depth: phase two's draw and its Thin Primitives and small Instances.</dd>
       <dt>Bind groups</dt><dd>Group 0, the frame; group 1, the Materials; group 2, the scene geometry; group 3, the main pass inputs.</dd>
-      <dt>Shader</dt><dd><code>src/render/shaders/main.wgsl</code>, entry points <code>vs_main</code> and <code>fs_main</code>, assembled after the common, Froxel grid, HDR and shading parts; the <code>SHADOW_RAYS</code> and <code>FROXEL_LIGHTS</code> pipeline constants come from the Render switches.</dd>
+      <dt>Shader</dt><dd><code>src/render/shaders/main.wgsl</code>, entry points <code>vs_main</code> and <code>fs_main</code>, and <code>vs_thin</code> and <code>fs_thin_main</code> for the twin, assembled after the common, Froxel grid, HDR and shading parts and created with every runtime check of wgpu's but loop bounding; the <code>SHADOW_RAYS</code> and <code>FROXEL_LIGHTS</code> pipeline constants come from the Render switches.</dd>
       <dt>Counted</dt><dd><code>lit_pass</code> in GPU time, and the end of ADR 0019's gate; its draws in <code>draw_calls</code>; the HDR target and the multisampled colour in GPU memory.</dd>
       <dt>Files</dt><dd><code>src/render/main_pass.rs</code>, <code>src/render/shaders/main.wgsl</code>, <code>src/render/shaders/shading.wgsl</code></dd>
     </dl>
@@ -134,6 +134,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <nav class="toc" aria-label="Sections">
     <a href="#frame">1 &middot; Where it sits</a>
     <a href="#fragments">2 &middot; A fragment per triangle per pixel</a>
+    <a href="#thin">2a &middot; The twin: kept samples</a>
     <a href="#sampling">3 &middot; Sampling the Material</a>
     <a href="#normal">4 &middot; The shading normal</a>
     <a href="#specular">5 &middot; Roughness widened per pixel</a>
@@ -156,7 +157,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <ol class="pass-order">
     <li>dynamic TLAS build</li><li>bend pass</li><li>culling, phase one</li><li>Froxel pass</li><li>depth pre-pass</li><li>depth pyramid pass</li><li>culling, phase two</li><li>phase two's depth pass</li><li class="warm">shadow mask pass</li><li class="focus">lit pass</li><li>tonemapping pass</li>
   </ol>
-  <p>The depth pre-pass draws phase one's Instances into depth, phase two's depth pass the rest, and the shadow mask pass traces from that depth. With shadow rays off neither of the last two runs, so the lit pass draws phase two's Instances into depth itself, with the depth pre-pass's vertex stage and a fragment stage that writes nothing, and then shades.</p>
+  <p>The depth pre-pass draws phase one's Instances into depth, phase two's depth pass the rest, and the shadow mask pass traces from that depth. With shadow rays off neither of the last two runs, so the lit pass draws phase two's Instances into depth itself, with the depth pre-pass's vertex stage and a fragment stage that writes nothing, and then shades. Each draw is followed by the Thin Primitives and small Instances of its phases, which the culling pass lists apart, in slot order, at their own offsets of the frame's draw, and which draw through twin pipelines (section 2a).</p>
 <pre class="code"><code>let mut lit_pass = encoder.begin_render_pass(&amp;wgpu::RenderPassDescriptor {
     label: Some(LIT_PASS),
     color_attachments: &amp;[
@@ -172,9 +173,14 @@ self.bind(&amp;mut lit_pass, bind_groups.iter().copied());
 if !self.shadow_rays {
     lit_pass.set_pipeline(&amp;self.lit_pass_depth_pipeline);
     lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, PHASE_TWO_DRAW_OFFSET);
+    lit_pass.set_pipeline(&amp;self.thin_lit_pass_depth_pipeline);
+    lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, PHASE_TWO_THIN_DRAW_OFFSET);
 }
 lit_pass.set_pipeline(&amp;self.lit_pipeline);
-lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, 0);</code></pre>
+lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, 0);
+lit_pass.set_pipeline(&amp;self.thin_lit_pipeline);
+lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, PHASE_ONE_THIN_DRAW_OFFSET);
+lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, PHASE_TWO_THIN_DRAW_OFFSET);</code></pre>
   <p class="code-source"><code>MainPass::record_lit_pass</code>, <code>src/render/main_pass.rs</code>.</p>
   <p>The colour attachment is the 4x multisampled colour, cleared to the frame's background, which <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span> carries from the scene's Environment, exposed, clamped and weighted as the shader treats what it draws (section 8). Its samples are discarded and it resolves into the HDR target as the pass ends, so where the adapter allows, as Metal does on Apple GPUs, it is memoryless: it never leaves tile memory. The depth attachment is loaded, and discarded at the end: a pass that writes depth and stores it writes the whole 4x target back, a measurable cost at 1440p on the M4 Pro, so the depth is kept only for the light count pass, which the <code>count_point_lights</code> switch turns on and Praxis ships without.</p>
   <p>The lit pipeline's depth state passes <code>Equal</code> and writes nothing; every pipeline of the main pass rasterises alike, with back faces culled and counter-clockwise fronts, so each sample meets exactly the depth the depth passes kept there.</p>
@@ -186,14 +192,20 @@ lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, 0);</code></pre>
     }
 }</code></pre>
   <p class="code-source"><code>depth_equal_state</code>, <code>src/render/targets.rs</code>; <code>depth_stencil_state</code> is the depth passes' reverse-Z <code>Greater</code>.</p>
-  <p>The pipeline is created with the Render switches' pipeline constants, so with shadow rays off the shader's <code>SHADOW_RAYS</code> branch reads nothing from the mask, and with the <code>froxel_lights</code> switch off its <code>FROXEL_LIGHTS</code> branch sums every point light: brute force, the reference the Froxel lists must match.</p>
+  <p>The pipeline is created with the Render switches' pipeline constants, so with shadow rays off the shader's <code>SHADOW_RAYS</code> branch reads nothing from the mask, and with the <code>froxel_lights</code> switch off its <code>FROXEL_LIGHTS</code> branch sums every point light: brute force, the reference the Froxel lists must match. The twin lit pipeline is the same descriptor with <code>vs_thin</code> and <code>fs_thin_main</code> as its entry points.</p>
+  <p>The module is created by <code>create_with_unbounded_loops</code>: every runtime check of wgpu's stays on but loop bounding, which wgpu-types lets a caller turn off only if no loop of the module can run forever, since a backend compiler may treat an infinite loop as unreachable code. Each loop of the module's parts is therefore counted, by a counter its header declares, compares with <code>&lt;</code> and steps by <code>++</code>, and its body never writes, or is pinned by its text in <code>shader_tests</code> with the reason it ends: the one here is <code>froxel_mask_bit</code>'s binary search, whose midpoint <code>low + (high - low) / 2u</code> lies in <code>low..high</code> without wrapping, so either branch shrinks the interval.</p>
+<pre class="code"><code>let runtime_checks = wgpu::ShaderRuntimeChecks {
+    force_loop_bounding: false,
+    ..wgpu::ShaderRuntimeChecks::checked()
+};</code></pre>
+  <p class="code-source"><code>ShaderModule::create_with_unbounded_loops</code>, <code>src/render/shaders/mod.rs</code>, which refuses a module outside <code>LOOPS_UNBOUNDED</code>: the main and culling modules.</p>
 </section>
 
 <section class="part prose" id="fragments">
   <div class="part-mark">2 &middot; <code>VertexOutput</code> &middot; <code>vs_main</code></div>
   <h2>A fragment per triangle per pixel, at depth equal</h2>
   <p class="key-idea">The rasteriser tests coverage and depth at each of a pixel's four samples, but the fragment shader runs once per pixel for each triangle that covers any of them, and its colour lands in the samples that triangle covers. A pixel inside a triangle is shaded once; an edge pixel once per triangle.</p>
-  <p><code>vs_main</code> is the depth passes' vertex work, unchanged: it unpacks the frame's draw's index into a Meshlet record and a vertex, pulls the vertex from the vertex Arena and places it camera-relative (<a href="depth-prepass.html#vertices">The depth pre-pass</a>). The lit pass keeps all of its output, where the depth passes keep the position, or the position, normal and Material ID.</p>
+  <p><code>vs_main</code> is the depth passes' vertex work, unchanged: it unpacks the frame's draw's index into a Meshlet record and a vertex, pulls the vertex from the vertex Arena and places it camera-relative (<a href="depth-prepass.html">The depth pre-pass</a>). The lit pass keeps all of its output, where the depth passes keep the position, or the position, normal and Material ID.</p>
 <pre class="code"><code>struct VertexOutput {
     // Invariant in both passes, which compute it alike, so the lit pass's
     // depth-equal test meets exactly the depths the pre-pass kept.
@@ -205,12 +217,40 @@ lit_pass.draw_indexed_indirect(&amp;self.frame_draw_buffer, 0);</code></pre>
     @location(4) tangent_world: vec4&lt;f32&gt;, // xyz = world tangent, w = bitangent sign
 }</code></pre>
   <p class="code-source"><code>main.wgsl</code>.</p>
-  <p>The position is <code>@invariant</code>: WGSL then requires it to be computed the same way wherever the same expressions compute it, which is what lets an <code>Equal</code> test meet the depth another pipeline wrote. The Material ID is flat: every fragment of a triangle reads the value one vertex wrote. Reading any flat input also keeps the Apple M4 Pro from merging the fragments of neighbouring triangles that share indices, so every sample is shaded as the triangle that covers it, and the depth passes read one for the same reason (<a href="depth-prepass.html#flat">The depth pre-pass</a>).</p>
-  <p><code>fs_main</code> takes the samples its fragment covers as <code>sample_mask</code>, kept to the pixel's four. It needs them only to choose which shadow mask surface it shades (section 7).</p>
+  <p>The position is <code>@invariant</code>: WGSL then requires it to be computed the same way wherever the same expressions compute it, which is what lets an <code>Equal</code> test meet the depth another pipeline wrote. The Material ID is flat: every fragment of a triangle reads the value one vertex wrote. Reading any flat input also keeps the Apple M4 Pro from merging the fragments of neighbouring triangles that share indices, so every sample is shaded as the triangle that covers it, and the depth passes read one for the same reason (<a href="depth-prepass.html">The depth pre-pass</a>).</p>
+<pre class="code"><code>@fragment
+fn fs_main(in: VertexOutput, @builtin(sample_mask) covered_samples: u32) -&gt; @location(0) vec4&lt;f32&gt; {
+    return lit(in, covered_samples);
+}</code></pre>
+  <p class="code-source"><code>main.wgsl</code>.</p>
+  <p><code>fs_main</code> takes the samples its fragment covers as <code>sample_mask</code> and hands them to <code>lit</code>, the shading both lit pipelines share, which keeps them to the pixel's four. It needs them only to choose which shadow mask surface it shades and, at a shadow edge, the share of them each directional light reaches (section 7).</p>
+  <p>A <span class="concept" data-term="Far proxy" data-tip="A Mesh cooked per Chunk, drawn in place of the Chunk's Placements while the Chunk is within the View distance and not drawn, outside the Load radius or a Late Chunk within it: the Chunk's static Placements merged, with a Material baked for it and the Chunk's ground tiles (ADR 0026).">Far proxy</span>, and the ground laid past the View distance, reach this pass as ordinary Instances of the frame's draw, in slots prepare gives them: the lit pass shades them as it shades any other, and which is drawn, a Chunk or its Far proxy, is the <a href="chunk-streamer.html">Chunk streamer</a>'s to decide. A Far proxy holds no Thin Primitive, so the twin's tubes end at the Load radius.</p>
+</section>
+
+<section class="part prose" id="thin">
+  <div class="part-mark">2a &middot; <code>vs_thin</code> &middot; <code>fs_thin_main</code> &middot; ADR 0027</div>
+  <h2>The twin: shading the samples the depth passes kept</h2>
+  <p class="key-idea">A Thin Primitive or a small Instance is drawn a pixel wide by moving its vertices, and stands for part of each pixel it reaches by the samples its fragments keep. The depth passes write those samples as <code>sample_mask</code>, so only they hold its depth. The lit pass draws the same triangles again, through the same vertex stage, and shades only the samples it covers that its own fragment keeps.</p>
+  <p>Each pipeline of the main pass has a twin for this geometry, and only the twins run <code>vs_thin</code>, so no other geometry pays for a written mask. <code>vs_thin</code> moves a Thin Primitive's vertex out from its tube's centre line until the tube draws a pixel wide, or a small Instance's out from the centre of its Mesh bounds, across the view, until they cover a pixel's area, and passes the inputs the fragment works its coverage from. How the widening and the coverage are worked out, and the five levels a fragment keeps, sample 0 first, then 3, 1 and 2, are on <a href="depth-prepass.html">The depth pre-pass</a>; the lit pass needs only that it runs the same stage, so its <code>@invariant</code> position meets the depths the depth passes kept, and the same <code>thin_fragment_samples</code>.</p>
+<pre class="code"><code>// Its triangle may reach samples the depth passes did not keep. One that
+// keeps none writes nothing: another fragment's depth may equal its own.
+@fragment
+fn fs_thin_main(in: ThinVertexOutput, @builtin(sample_mask) covered_samples: u32) -&gt; @location(0) vec4&lt;f32&gt; {
+    let vertex =
+        VertexOutput(in.clip_position, in.camera_relative_position, in.normal, in.uv, in.material_id, in.tangent_world);
+    let kept_samples = covered_samples &amp; thin_fragment_samples(in);
+    if kept_samples == 0u {
+        discard;
+    }
+    return lit(vertex, kept_samples);
+}</code></pre>
+  <p class="code-source"><code>main.wgsl</code>.</p>
+  <p>The fragment's <code>sample_mask</code> input is the samples its triangle covers. Its colour lands in those that pass the depth-equal test, the samples whose depth the depth passes kept for it; ANDed with the samples it keeps, the input names those samples to <code>lit</code>, which chooses the shadow mask surface and the directional lights' share from them. A fragment that keeps none of what it covers is discarded: another fragment's depth may equal its own at those samples, and it would write its colour over that one's. The kept samples then stand in for the covered ones in <code>lit</code>, so a tube that keeps sample 0 of a pixel reads the shadow mask surface and the directional lights' share at that sample, and the resolve averages its colour in by a quarter.</p>
+  <p>The tube's radius and the Instance's coverage are flat inputs, which every fragment stage of the twins reads, so the M4 Pro merges none of their fragments; the lit pipeline's own flat Material ID does the same for the rest (section 2).</p>
 </section>
 
 <section class="part prose" id="sampling">
-  <div class="part-mark">3 &middot; <code>fs_main</code> &middot; <code>src/assets/material.rs</code></div>
+  <div class="part-mark">3 &middot; <code>lit</code> &middot; <code>src/assets/material.rs</code></div>
   <h2>Sampling the Material</h2>
   <p class="key-idea">Every Texture is sampled before anything else, so no sample runs under non-uniform control flow. The colour <span class="concept" data-term="Channel" data-tip="One texture role of a Material: albedo, normal, metallic-roughness, occlusion or emissive. Albedo and emissive are the colour Channels, encoded sRGB; normal, metallic-roughness and occlusion are the data Channels, encoded linear. Each kind has its own sampler.">Channels</span> are sampled at 16x anisotropy, the data Channels at 4x.</p>
 <pre class="code"><code>let material = materials[in.material_id];
@@ -241,7 +281,7 @@ let emissive = textureSample(
 ).rgb;
 let normal_sample =
     textureSample(normal_textures[normal_class_and_slice.x], data_sampler, in.uv, normal_class_and_slice.y).rg;</code></pre>
-  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>; <code>layer_class_and_slice</code> is in <code>common.wgsl</code>.</p>
+  <p class="code-source"><code>lit</code>, <code>main.wgsl</code>; <code>layer_class_and_slice</code> is in <code>common.wgsl</code>.</p>
   <p>The Material ID indexes the Material table; the Material's <code>layers</code> name, for each Channel, the <span class="concept" data-term="Layer" data-tip="One numbered texture within a Channel: its Texture class and its slice of that class&#39;s texture array. Layer 0 of every Channel is a neutral default, so a Material without that Channel has no effect.">Layer</span> to sample. <code>layer_class_and_slice</code> splits it into its <span class="concept" data-term="Texture class" data-tip="The Textures of one Channel that share a shape (size, mip count and format), held in one texture array whose slice count is fixed when the class opens. A full class&#39;s shape opens another class.">Texture class</span>, which indexes that Channel's binding array of texture arrays, and its slice of that class's array, so the bind group holds an array per class rather than a texture per Texture. Layer 0 of every Channel is a neutral default, so a Material without a Channel samples a Texture that changes nothing. <code>textureSample</code> picks its mip from the screen-space derivatives of the UV, which exist only while every invocation of the 2&times;2 quad runs the same code; sampling first keeps that true by construction, which naga does not check.</p>
   <p>The Material bind group holds one sampler per kind of Channel, both trilinear and repeating:</p>
 <pre class="code"><code>const COLOUR_ANISOTROPY: u16 = 16;
@@ -268,7 +308,7 @@ level &lambda; = log<sub>2</sub>(max(P<sub>x</sub>, P<sub>y</sub>) / N)</div>
 </section>
 
 <section class="part prose" id="normal">
-  <div class="part-mark">4 &middot; <code>fs_main</code> &middot; <code>tangent_space_normal</code></div>
+  <div class="part-mark">4 &middot; <code>lit</code> &middot; <code>tangent_space_normal</code></div>
   <h2>The shading normal</h2>
   <p class="key-idea">The normal map's texel is a direction in the triangle's tangent frame, rebuilt from two stored coordinates; the frame is re-orthogonalised per fragment, since interpolation bends the tangent off the normal.</p>
 <pre class="code"><code>let geometric_normal = normalize(in.normal);
@@ -281,7 +321,7 @@ let tangent_to_world = mat3x3&lt;f32&gt;(tangent, bitangent, geometric_normal);
 let normal = normalize(
     tangent_to_world * tangent_space_normal(normal_sample, material.metallic_roughness.z)
 );</code></pre>
-  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>.</p>
+  <p class="code-source"><code>lit</code>, <code>main.wgsl</code>.</p>
   <p>The vertex shader carries the tangent through the Instance's rotation-scale and the normal through its normal matrix, the inverse-transpose, since only normals need it. Gram-Schmidt removes from the interpolated tangent its part along the normal; the bitangent is rebuilt with the sign glTF stores in the tangent's fourth component. A cooked normal Texture holds only x and y, in BC5's two channels; <code>tangent_space_normal</code> rebuilds z as the positive root of x&sup2; + y&sup2; + z&sup2; = 1, zero where block error carries x and y past the unit circle, and scales x and y by the Material's normal scale, as glTF's normal Texture defines it. glTF normalises last, which the lit pass does once the frame has turned the normal into World space.</p>
 </section>
 
@@ -298,7 +338,7 @@ let normal = normalize(
     dpdx(normal),
     dpdy(normal)
 );</code></pre>
-  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>: the shading normal's screen-space derivatives, taken after the normal map and before any branching on lights.</p>
+  <p class="code-source"><code>lit</code>, <code>main.wgsl</code>: the shading normal's screen-space derivatives, taken after the normal map and before any branching on lights.</p>
   <p><code>dpdx</code> and <code>dpdy</code> are differences between horizontal and vertical neighbours of the 2&times;2 quad the GPU shades in. The lit pass shades once per pixel under 4x MSAA, not per sample, so the neighbours are a pixel apart and the derivatives are per pixel, the footprint the filter assumes. They count the mesh's curvature and the normal map's detail together, since they difference the normal after the map.</p>
   <p>In slope space a Beckmann lobe is a Gaussian of variance &alpha;&sup2;/2 per axis, and averaging one Gaussian over another adds their variances, so a lobe filtered by the pixel's spread of normals is, near enough, one whose &alpha;&sup2; grows by that spread. Tokuyoshi and Kaplanyan's isotropic filter, their eq. (4), models the pixel as a Gaussian of standard deviation &sigma; = 0.5 pixels and caps what it adds at &kappa;:</p>
   <div class="formula">&alpha;&#772;&sup2; = &alpha;&sup2; + min(2&sigma;&sup2; (|&part;n/&part;x|&sup2; + |&part;n/&part;y|&sup2;), &kappa;)    &sigma;&sup2; = 0.25, &kappa; = 0.18
@@ -388,7 +428,7 @@ return diffuse_share * surface.base_color + specular_fresnel * specular;</code><
 </section>
 
 <section class="part prose" id="lights">
-  <div class="part-mark">7 &middot; <code>fs_main</code> &middot; <code>point_light_luminance</code></div>
+  <div class="part-mark">7 &middot; <code>lit</code> &middot; <code>point_light_luminance</code></div>
   <h2>The lights</h2>
   <p class="key-idea">The directional lights come first in the light buffer, then the point lights; a pixel sums every directional light and the point lights its Froxel lists, in light order, each dimmed by the share of it the shadow mask hides.</p>
   <h3>Which surface's shadows</h3>
@@ -400,7 +440,7 @@ return diffuse_share * surface.base_color + specular_fresnel * specular;</code><
     mask = textureLoad(shadow_mask, pixel, select(1u, 0u, nearest_surface), 0).rg;
     sample_verdicts = samples &gt;&gt; SAMPLE_COUNT;
 }</code></pre>
-  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>.</p>
+  <p class="code-source"><code>lit</code>, <code>main.wgsl</code>.</p>
   <h3>Directional lights</h3>
   <p>The first directional light is shaded whether or not the light buffer holds one: a branch around it slowed the lit pass on the M4 Pro, so without one its illuminance is zero and a fixed direction keeps the term finite. Each directional light's illuminance is its colour times its lux, times one minus <code>directional_hidden_share</code>; its direction is the negated <code>offset</code> its entry holds.</p>
   <h3>Point lights</h3>
@@ -426,7 +466,7 @@ return diffuse_share * surface.base_color + specular_fresnel * specular;</code><
         point.range
     );
 }</code></pre>
-  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>.</p>
+  <p class="code-source"><code>lit</code>, <code>main.wgsl</code>.</p>
   <p>A point light's position reaches the GPU as an <span class="concept" data-term="Anchor" data-tip="The integer coordinates of the 64 m grid cell that holds a World position. The GPU receives the position as its Anchor plus an f32 offset from the cell's corner, never as one f32 position.">Anchor</span> plus an offset, which <code>point_light_position</code> composes relative to the camera (ADR 0014). Its intensity is its colour times its candela. A point light emits over a sphere of directions, so the illuminance on a surface facing it falls as the inverse square of the distance, inside KHR_lights_punctual's range window, which falls to exactly 0 at the light's range and stays there, so a Froxel that leaves the light off its list drops nothing it would add:</p>
   <div class="formula">attenuation = max(min(1 &minus; (d / r)<sup>4</sup>, 1), 0) / d&sup2;</div>
 <pre class="code"><code>fn point_light_attenuation(distance_squared: f32, range: f32) -&gt; f32 {
@@ -452,7 +492,7 @@ return reflected_luminance(surface, normal, view_direction, light_direction, ill
 // stores it (ADR 0023), weighted for the resolve.
 let exposed = min(luminance * camera.exposure, vec3&lt;f32&gt;(LARGEST_HALF));
 return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
-  <p class="code-source"><code>fs_main</code>, <code>main.wgsl</code>.</p>
+  <p class="code-source"><code>lit</code>, <code>main.wgsl</code>.</p>
   <p><b>Ambient.</b> The scene's Environment gives a constant ambient illuminance E, in lux, which prepare copies into the light uniform each frame. <code>ambient_luminance</code> returns E/&pi; times the base colour, darkened by occlusion, which glTF applies to indirect light only. Under the same luminance from every direction, the illuminance is &pi; times it, so E/&pi; is the surroundings' luminance, and the base colour is about what a white-lit dielectric's diffuse lobe, or a metal's specular one, reflects of it. Metals take it too, as the irradiance probes it stands in for, ADR 0020's, will light rough specular reflection.</p>
   <p><b>Exposure.</b> <code>camera.exposure</code> is the scale the scene's EV100 sets. Exposing here, in f32, keeps a sun glint at the roughness floor, many stops past fp16's largest value in absolute units, within what the target can hold; the clamp to <code>LARGEST_HALF</code>, 65504, keeps any backend from storing infinity.</p>
   <p><b>The weight.</b> <code>resolve_weighted</code> divides the colour by one plus its luminance. The resolve averages the four samples as stored, and the tonemapping pass undoes the weight, so the result is the samples' average weighted by 1/(1 + luminance): one glinting sample no longer whitens its whole pixel. The resolve and its proof are on <a href="msaa.html#resolve">MSAA</a>. The alpha written is the base colour's, which no blending reads yet.</p>
@@ -482,7 +522,12 @@ return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
       <tr><td><code>each_primitive_draws_with_its_own_material_unless_its_instance_overrides_it</code></td><td><code>renderer.rs</code></td><td>the Material ID the Meshlet record carries</td></tr>
       <tr><td><code>nine_point_lights_each_light_the_surface_under_them</code></td><td><code>renderer.rs</code></td><td>lit through Froxel lists, the image brute force draws</td></tr>
       <tr><td><code>an_edge_pixel_resolves_between_a_shadowed_surface_and_a_lit_one</code></td><td><code>renderer.rs</code></td><td>each fragment of an edge pixel reads its own surface's word</td></tr>
+      <tr><td><code>a_thin_primitive_a_quarter_of_a_pixel_wide_keeps_one_sample_of_four_along_its_length</code></td><td><code>renderer.rs</code></td><td>a tube a quarter of a pixel wide holds depth at one sample of each pixel it crosses and the lit pass shades that pixel; one 0.7 of a pixel wide keeps two</td></tr>
+      <tr><td><code>an_instance_narrower_than_a_pixel_draws_a_pixel_wide_and_keeps_its_areas_share_of_samples</code></td><td><code>renderer.rs</code></td><td>a small Instance drawn a pixel wide keeps its area's share of the four samples, and none under an eighth</td></tr>
+      <tr><td><code>a_thin_primitive_keeps_the_samples_nearest_its_coverage</code></td><td><code>shader_function_tests.rs</code></td><td>the samples <code>thin_kept_samples</code> keeps at twelve coverages: the count to the nearest, none under an eighth, sample 0 first, then 3, 1 and 2</td></tr>
       <tr><td><code>every_binding_is_visible_to_exactly_the_stages_that_use_it</code></td><td><code>shader_tests.rs</code></td><td>each binding the pass's module declares reaches the entry points that use it, and no others</td></tr>
+      <tr><td><code>every_loop_wgpu_leaves_unbounded_ends</code></td><td><code>shader_tests.rs</code></td><td>each loop of the main and culling modules is counted or pinned, the binary search among the pinned</td></tr>
+      <tr><td><code>a_loop_whose_text_does_not_end_it_fails</code></td><td><code>shader_tests.rs</code></td><td>the loop check refuses an uncounted loop, a counter its body writes, a block comment and a pinned loop no part holds</td></tr>
       <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td>every <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scene</span>'s frame matches its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>, and <code>town</code> renders the same culled and unculled</td></tr>
     </tbody>
   </table>
@@ -499,43 +544,46 @@ return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>lit_pass</code></th><th class="n">Gate, rays off</th><th class="n">GPU frame</th></tr></thead>
     <tbody>
-      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">514.0</td><td class="n">849.5</td><td class="n">4,120.1</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">395.3</td><td class="n">672.9</td><td class="n">2,338.8</td></tr>
-      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">428.0</td><td class="n">750.5</td><td class="n">2,341.4</td></tr>
-      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">807.6</td><td class="n">1,215.0</td><td class="n">6,687.7</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">481.3</td><td class="n">865.1</td><td class="n">2,736.3</td></tr>
-      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">501.8</td><td class="n">908.4</td><td class="n">2,717.7</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">475.4</td><td class="n">776.9</td><td class="n">3,871.0</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">289.5</td><td class="n">548.0</td><td class="n">1,692.5</td></tr>
-      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">288.3</td><td class="n">571.4</td><td class="n">1,611.1</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">487.3</td><td class="n">820.8</td><td class="n">3,683.6</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">305.7</td><td class="n">565.2</td><td class="n">1,680.2</td></tr>
-      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">309.2</td><td class="n">595.9</td><td class="n">1,639.2</td></tr>
-      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">455.2</td><td class="n">764.9</td><td class="n">2,933.0</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">288.2</td><td class="n">537.6</td><td class="n">1,747.0</td></tr>
-      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">288.6</td><td class="n">563.1</td><td class="n">1,685.5</td></tr>
-      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">531.7</td><td class="n">847.0</td><td class="n">3,006.1</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">387.1</td><td class="n">634.8</td><td class="n">1,846.3</td></tr>
-      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">405.4</td><td class="n">720.9</td><td class="n">1,819.8</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">372.0</td><td class="n">715.6</td><td class="n">2,609.6</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">306.9</td><td class="n">715.6</td><td class="n">1,594.7</td></tr>
-      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">417.5</td><td class="n">870.4</td><td class="n">1,622.2</td></tr>
-      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">340.4</td><td class="n">647.5</td><td class="n">2,928.0</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">183.2</td><td class="n">422.4</td><td class="n">1,424.8</td></tr>
-      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">168.8</td><td class="n">448.5</td><td class="n">1,110.5</td></tr>
-      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">319.4</td><td class="n">618.3</td><td class="n">2,301.2</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">199.4</td><td class="n">513.6</td><td class="n">1,207.2</td></tr>
-      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">196.7</td><td class="n">558.9</td><td class="n">1,095.3</td></tr>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">716.1</td><td class="n">1,252.2</td><td class="n">3,754.9</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">423.9</td><td class="n">840.5</td><td class="n">2,169.8</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">464.9</td><td class="n">924.8</td><td class="n">1,970.2</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,762.6</td><td class="n">8,612.1</td><td class="n">19,935.0</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">2,995.3</td><td class="n">4,991.8</td><td class="n">9,395.0</td></tr>
-      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">3,248.1</td><td class="n">5,306.9</td><td class="n">9,279.4</td></tr>
+      <tr><td><code>shadows</code></td><td>Apple M4 Pro, Metal</td><td class="n">522.2</td><td class="n">879.4</td><td class="n">4,164.4</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">393.9</td><td class="n">686.5</td><td class="n">2,419.0</td></tr>
+      <tr><td><code>shadows</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">431.8</td><td class="n">749.6</td><td class="n">2,353.1</td></tr>
+      <tr><td><code>helmet</code></td><td>Apple M4 Pro, Metal</td><td class="n">751.5</td><td class="n">1,243.8</td><td class="n">6,733.5</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">481.7</td><td class="n">870.7</td><td class="n">2,740.9</td></tr>
+      <tr><td><code>helmet</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">504.0</td><td class="n">909.3</td><td class="n">2,727.7</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>Apple M4 Pro, Metal</td><td class="n">470.7</td><td class="n">792.7</td><td class="n">3,950.0</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">286.7</td><td class="n">546.6</td><td class="n">1,718.9</td></tr>
+      <tr><td><code>pbr-sweep</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">288.8</td><td class="n">576.9</td><td class="n">1,617.7</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>Apple M4 Pro, Metal</td><td class="n">484.0</td><td class="n">839.8</td><td class="n">3,723.8</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">304.6</td><td class="n">570.2</td><td class="n">1,741.8</td></tr>
+      <tr><td><code>normal-tangent</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">309.6</td><td class="n">599.7</td><td class="n">1,644.5</td></tr>
+      <tr><td><code>uv-grid</code></td><td>Apple M4 Pro, Metal</td><td class="n">455.8</td><td class="n">780.2</td><td class="n">2,938.2</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">287.4</td><td class="n">541.0</td><td class="n">1,748.8</td></tr>
+      <tr><td><code>uv-grid</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">289.0</td><td class="n">567.1</td><td class="n">1,692.4</td></tr>
+      <tr><td><code>minification</code></td><td>Apple M4 Pro, Metal</td><td class="n">533.4</td><td class="n">857.0</td><td class="n">3,009.4</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">387.1</td><td class="n">639.2</td><td class="n">1,941.1</td></tr>
+      <tr><td><code>minification</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">406.9</td><td class="n">726.4</td><td class="n">1,828.0</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>Apple M4 Pro, Metal</td><td class="n">386.5</td><td class="n">738.0</td><td class="n">2,638.6</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">418.7</td><td class="n">863.0</td><td class="n">1,809.3</td></tr>
+      <tr><td><code>far-coplanar</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">469.0</td><td class="n">958.2</td><td class="n">1,732.6</td></tr>
+      <tr><td><code>orrery</code></td><td>Apple M4 Pro, Metal</td><td class="n">334.3</td><td class="n">648.1</td><td class="n">2,966.7</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">180.5</td><td class="n">422.9</td><td class="n">1,435.8</td></tr>
+      <tr><td><code>orrery</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">168.6</td><td class="n">450.7</td><td class="n">1,107.5</td></tr>
+      <tr><td><code>texture-wall</code></td><td>Apple M4 Pro, Metal</td><td class="n">314.2</td><td class="n">623.2</td><td class="n">2,308.7</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">196.6</td><td class="n">454.7</td><td class="n">1,226.1</td></tr>
+      <tr><td><code>texture-wall</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">198.3</td><td class="n">490.9</td><td class="n">1,098.8</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">492.2</td><td class="n">843.4</td><td class="n">3,380.0</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">426.0</td><td class="n">844.2</td><td class="n">2,235.6</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">469.0</td><td class="n">928.4</td><td class="n">1,976.8</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">3,523.2</td><td class="n">6,891.7</td><td class="n">19,123.8</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">2,981.0</td><td class="n">4,972.3</td><td class="n">9,686.6</td></tr>
+      <tr class="focus"><td><code>town</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">3,264.4</td><td class="n">5,273.4</td><td class="n">9,281.7</td></tr>
+      <tr><td><code>world</code></td><td>Apple M4 Pro, Metal</td><td class="n">662.1</td><td class="n">1,573.5</td><td class="n">6,033.7</td></tr>
+      <tr><td><code>world</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">409.6</td><td class="n">1,081.9</td><td class="n">3,060.7</td></tr>
+      <tr><td><code>world</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">454.7</td><td class="n">1,218.5</td><td class="n">2,819.1</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. One gate on the reference machine, the Apple M4 Pro, is over its <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms, ADR 0019&#39;s gate, the dynamic TLAS&#39;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span>: <code>town</code>'s, set by the triangles it draws.</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code> at the commit above. The RTX 2070 SUPER's were recorded from an earlier engine source than the M4 Pro's, before the twins drew, so a row of one adapter is no ratio of the other's. One gate on the reference machine, the Apple M4 Pro, is over its <span class="concept" data-term="Budget" data-tip="A numeric limit on one metric of a Reference scene that a change must not regress: CPU frame ms, GPU frame ms, ADR 0019&#39;s gate, the dynamic TLAS&#39;s CPU and GPU ms, and GPU memory; one on Input latency is planned, once it is measured. Counters such as draw calls and bytes uploaded are held to their Baselines instead.">Budget</span>: <code>town</code>'s, set by the triangles it draws.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Target</th><th>Format</th><th class="n">Bytes per pixel</th></tr></thead>
@@ -560,6 +608,8 @@ return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
   <p><b>The first directional light without a branch.</b> An <code>if</code> on the light count around the first light's term cost the M4 Pro's main pass 10 to 12% (<code>docs/performance.md</code>); computing a light of zero illuminance is cheaper than skipping it.</p>
   <p><b>Shadows read, not traced.</b> The lit pass first traced its shadow rays inline. A ray query in the fragment shader held registers across the whole shading loop and cost the pass time on the M4 Pro even where it never ran, so the rays moved to the shadow mask pass, a compute pass before this one, and the lit pass reads a bit per light (ADR 0019, ADR 0020).</p>
   <p><b>The weighted resolve.</b> The hardware's resolve is a box average, so one glinting sample of exposed HDR outweighs three dark ones and the tone-mapped pixel goes white. Weighting by 1/(1 + luminance) before the resolve and undoing it after makes the hardware's average a weighted one at the cost of a division per pixel (<a href="msaa.html#resolve">MSAA</a>).</p>
+  <p><b>Twins for partial coverage, and no alpha-to-coverage.</b> ADR 0027 puts partial coverage in a <code>sample_mask</code> the depth passes write and the lit pass meets at depth equal. Alpha-to-coverage leaves which samples an alpha keeps to the platform, so two machines would draw two images, and a pipeline that enables it may not write <code>sample_mask</code>. On the M4 Pro a written mask in the pipelines every Instance draws through cost as much as a <code>discard</code> there, following the share of indices drawn through the stages that write it, while a second pipeline and draw in a pass cost nothing; so only the twins carry it, and the culling pass lists their geometry apart.</p>
+  <p><b>Loops left unbounded by wgpu.</b> wgpu bounds every loop of a module by default, so that a backend compiler cannot treat an infinite loop as unreachable; the main module's loops all end whatever its buffers hold, which a test reads from their text, so the bound only costs time, and it measurably lengthened ADR 0019's gate on <code>town</code> on the M4 Pro. Bounds checks and every other runtime check stay on.</p>
   <p><b>Photometric units and a constant ambient.</b> Lights, ambient and background are in glTF's units, lux and candela and cd/m&sup2;, with exposure an EV100 per scene (ADR 0023). The ambient term is a constant per scene until ADR 0020's irradiance probes replace it.</p>
 </section>
 
@@ -572,6 +622,7 @@ return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
   <p><b>The footprint's length.</b> Up to an anisotropy of 4, a data probe's mip matches the footprint's width, and the cooked roughness sees only the spread across it. The spread along the length now reaches roughness too, through the shading normal's screen-space derivatives that <code>specular_antialiased_roughness</code> widens it by (<a href="#specular">section 5</a>). What the derivatives cannot see is detail finer than a pixel along the length that the averaged normal no longer carries.</p>
   <p><b>Shading once per pixel.</b> Within a triangle, a pixel is shaded at one point; what varies faster across it than the widening models, such as a texture's own sub-pixel detail, is the mips' and the samplers' to filter.</p>
   <p><b>The weighted resolve's bias.</b> A highlight smaller than a sample loses energy: its sample counts for less than its quarter of the pixel. Blends in the weighted space darken half-covered edges between very different luminances, which transparency will have to reckon with.</p>
+  <p><b>A kept sample shades at the pixel's centre.</b> A twin's fragment that keeps one sample of four is still shaded at one point, with its inputs interpolated at the pixel's centre, which a tube drawn wider than it is may lie off; only where its colour lands follows the kept samples.</p>
   <p><b>No transparency yet.</b> The pass writes opaque colour; the sorted transparent pass ADR 0019 plans, sharing the Froxel lists and the depth, does not exist.</p>
   <p><b>A constant ambient.</b> Every surface receives the same indirect light, open sky or not, until the irradiance probes.</p>
 </section>
@@ -595,10 +646,12 @@ return vec4&lt;f32&gt;(resolve_weighted(exposed), surface.opacity);</code></pre>
     <dt><a href="https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.709-6-201506-I!!PDF-E.pdf#page=6">ITU-R BT.709-6</a></dt><dd>the luma weights the resolve's luminance takes; <code>bt709-6-luma</code></dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L2318-L2328">wgpu-core 30.0.1, sampler creation</a></dt><dd>a sampler's anisotropy clamped to 1 on an adapter without <code>ANISOTROPIC_FILTERING</code>; <code>wgpu-core-30-anisotropy-clamp</code></dd>
     <dt><a href="https://vidimce.org/publications/sbaa/sbaa_i3d2012.pdf">Salvi and Vidim&#269;e, Surface Based Anti-Aliasing, I3D 2012</a></dt><dd>each of a pixel's few surfaces shaded once, which the choice of mask layer follows; <code>salvi-2012-sbaa-surfaces</code></dd>
+    <dt><a href="https://github.com/gpuweb/gpuweb/blob/10be35c70d7bfc37e0557f2d0e38ec42742aba63/spec/index.bs#L8792-L8794">WebGPU specification source, validating GPURenderPipelineDescriptor</a></dt><dd>a pipeline whose fragment stage writes <code>sample_mask</code> may not enable alpha-to-coverage; <code>webgpu-alpha-to-coverage-sample-mask</code></dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-types/src/shader.rs#L26-L31">wgpu-types 30.0.2, ShaderRuntimeChecks::force_loop_bounding</a></dt><dd>a module created without loop bounding must hold no infinite loop, which a backend compiler may treat as unreachable; <code>wgpu-types-30-loop-bounding</code></dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The lit pass took its present shading in the third milestone. Its BRDF was rewritten from Appendix B, term by term with an oracle each, in place of a tutorial's constants and approximate terms; it then resolved exposed colour into an HDR target, summed point lights from Froxel lists rather than a fixed four, traced its shadows inline and handed them to the shadow mask pass, picked a mask layer per fragment and a share per directional light at shadow edges, settled its two samplers on a supersampled reference, and widened roughness by the normal's derivatives with D computed through |N &times; H|&sup2;. The volume that narrated each step, with its measurements and images, is retired; this page describes the pass as it is, and <a href="light-units.html">Light units</a> the units its luminance is in.</p>
-  <footer class="sources">Written from <code>src/render/main_pass.rs</code>, <code>src/render/shaders/main.wgsl</code>, <code>shading.wgsl</code>, <code>hdr.wgsl</code>, <code>src/render/targets.rs</code>, <code>src/assets/material.rs</code>, <code>src/render/bind_groups.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0008, 0014, 0017, 0019, 0020, 0021 and 0023, the committed Baselines, and the sources above, all at <code>main</code> b3d764b4. The helmet crop is from an earlier before-and-after gallery at 2560&times;1440 on the Apple M4 Pro.</footer>
+  <p class="note">The lit pass took its present shading in the third milestone. Its BRDF was rewritten from Appendix B, term by term with an oracle each, in place of a tutorial's constants and approximate terms; it then resolved exposed colour into an HDR target, summed point lights from Froxel lists rather than a fixed four, traced its shadows inline and handed them to the shadow mask pass, picked a mask layer per fragment and a share per directional light at shadow edges, settled its two samplers on a supersampled reference, and widened roughness by the normal's derivatives with D computed through |N &times; H|&sup2;; its Textures moved into texture arrays per Texture class. The fifth milestone gave it twin pipelines for Thin Primitives and small Instances, whose fragments shade only the samples the depth passes kept, and compiled its module without wgpu's loop bounding once a test could show every loop ends. The volume that narrated each step, with its measurements and images, is retired; this page describes the pass as it is, and <a href="light-units.html">Light units</a> the units its luminance is in.</p>
+  <footer class="sources">Written from <code>src/render/main_pass.rs</code>, <code>src/render/shaders/main.wgsl</code>, <code>shading.wgsl</code>, <code>common.wgsl</code>, <code>hdr.wgsl</code>, <code>src/render/shaders/mod.rs</code>, <code>src/render/targets.rs</code>, <code>src/assets/material.rs</code>, <code>src/render/bind_groups.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0008, 0014, 0017, 0019, 0020, 0021, 0023, 0026 and 0027, the committed Baselines, and the sources above, all at <code>main</code> 62052fe8. The helmet crop is from an earlier before-and-after gallery at 2560&times;1440 on the Apple M4 Pro.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="shadow-mask.html">Previous: The shadow mask pass</a><a href="index.html">All field guides</a><a href="hdr-target.html">Next: The HDR target</a></nav>
