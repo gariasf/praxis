@@ -7987,4 +7987,219 @@ checked = 2026-11-21
 url = "https://developer.nvidia.com/orca"
 section = "NVIDIA ORCA: Open Research Content Archive"
 quote = '''Note: This is a legacy SDK. Developers may download and continue to use, but it is no longer supported. [...] ORCA assets are in FBX format, available for use in any rendering system.'''
+
+["unity-6000.6.10f1-released"]
+url = "https://unity.com/releases/editor/whats-new/6000.6.10f1"
+section = "Unity Technologies, Unity 6000.6.10f1 release page, title and release date; the newest release unity.com/releases/editor/whats-new listed on 2026-11-21"
+quote = '''Unity 6000.6.10f1 [...] Released on Nov 19, 2026'''
+checked = 2026-11-21
+
+["unity-6-release-support"]
+url = "https://unity.com/releases"
+section = "Unity Technologies, Unity 6 release support, Long-term support (LTS) and the FAQ on Update releases, read 2026-11-21"
+quote = '''Unity 6.3 LTS is supported until December 2027, while Unity 6.0 LTS is supported through October 2026. [...] Update releases are production-ready and get the same QA testing and level of support as an LTS.'''
+checked = 2026-11-21
+
+["unity-beta-program-6000.7.0b10"]
+url = "https://unity.com/releases/editor/beta"
+section = "Unity Technologies, Unity Beta Program, What to expect from a Beta; Latest Beta Release, as the page stood on 2026-11-21"
+quote = '''The Beta phase starts after all major features are added and a quality baseline is set. [...] Latest Beta Release [...] Unity 6000.7.0b10'''
+checked = 2026-11-21
+
+["unity-alpha-program-7000.0.0a20"]
+url = "https://unity.com/releases/editor/alpha"
+section = "Unity Technologies, Unity Alpha Program, What to expect from an Alpha; Latest Alpha Release, as the page stood on 2026-11-21"
+quote = '''During the Alpha program, you'll get very early access to new features, though they may be less stable than final versions. [...] Latest Alpha Release [...] Unity 7000.0.0a20'''
+checked = 2026-11-21
+
+["unity-7-press-release-timing"]
+url = "https://unity.com/news/unity-7-roadmap-revealed-at-unite-seoul"
+section = "Unity Technologies, press release, Unity 7 Roadmap Revealed at Unite Seoul, dated 2026-07-21, first paragraph and the release schedule"
+quote = '''Today at Unite Seoul, Unity (NYSE: U) announced plans for Unity 7, the next generation authoring platform for developing, deploying, and growing games. [...] Unity 7 will enter early Beta testing in December, with the Full Release scheduled for Q1 2027.'''
+checked = 2026-11-21
+
+["unity-7-faq"]
+url = "https://unity.com/releases/unity-7"
+section = "Unity Technologies, Unity 7 product page, Frequently asked questions: What is Unity 7?; When is Unity 7 coming out?, read 2026-11-21"
+quote = '''Unity 7 is the next major version of the Unity Editor and runtime. It's built on a new foundation we've been delivering incrementally across the Unity 6.x releases [...] Unity 7 is coming early 2027.'''
+checked = 2026-11-21
+
+["unity-seoul-2026-surface-cache-gi"]
+url = "https://unity.com/blog/unite-seoul-keynote-2026-recap"
+section = "Smith (Unity Technologies), Unite Seoul 2026 Keynote Recap: Announcing Unity 7, 2026-07-21, Graphics: Surface Cache GI"
+quote = '''The headline new feature here is Surface Cache GI, a first look at fully dynamic global illumination built for the Universal Render Pipeline (URP). [...] It's designed to scale from high-end PCs with hardware ray tracing down to mobile [...] All three are previewable in the 6.7 alpha today and will reach broad availability with Unity 6.7 LTS.'''
+checked = 2026-11-21
+
+["unity-seoul-2026-neural-texture-compression"]
+url = "https://unity.com/blog/unite-seoul-keynote-2026-recap"
+section = "Smith (Unity Technologies), Unite Seoul 2026 Keynote Recap: Announcing Unity 7, 2026-07-21, Graphics: Unity Neural"
+quote = '''Neural Texture Compression (NTC), which uses a trained model to compress textures near-losslessly — Unity showed texture runtime memory cut by over 50% and disk size reduced by about 70% with no visible quality loss. [...] Unity Neural begins rolling out in Unity 6.7, with more to come in Unity 7.'''
+checked = 2026-11-21
+
+["unreal-5.8-released"]
+url = "https://forums.unrealengine.com/t/2729274"
+section = "Epic Games staff, Unreal Engine 5.8 Released, Epic Developer Community Forums, Announcements, posted 2026-06-17, first sentence"
+quote = '''We’re excited to announce that Unreal Engine 5.8 is now available.'''
+checked = 2026-11-21
+
+["unreal-5.9-preview-announcement"]
+url = "https://forums.unrealengine.com/t/2852840"
+section = "Epic Games staff, [Preview 2] Unreal Engine 5.9 Preview, Epic Developer Community Forums, Announcements, posted 2026-11-09 and edited 2026-11-19"
+quote = '''We’ve been accumulating changes for rendering and animation in UE5 Main for an eventual 5.9 release next year. [...] This Preview had about a week of development and a shorter QA pass than usual. [...] Please keep in mind that Preview releases are not fully quality-tested, are still under heavy active development, and should be considered as unstable until the final release.'''
+checked = 2026-11-21
+
+["unreal-road-to-ue6-timeline"]
+url = "https://web.archive.org/web/20261113004853/https://www.unrealengine.com/news/the-road-to-ue-6"
+section = "Wassmer (Epic Games), The road to Unreal Engine 6, 2026-06-22, What is UE6?; The path from here to there"
+quote = '''In short, UE6 is UE5 and UEFN coming together into a single, unified engine for the next generation of gaming. [...] We’re targeting a Unreal Engine 6 Early Access release at the end of 2027, with the full release of UE6 coming 12-18 months later. [...] And while we aren’t currently planning another official UE5 release after 5.8, we’re reserving the option to release a 5.9, if needed.'''
+checked = 2026-11-21
+
+["unreal-5.9-first-person-rendering"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/first-person-rendering?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, First Person Rendering, First Person Rendering Implementation; First Person Primitives Settings; First Person Self-Shadow"
+quote = '''Consequently, the geometry technically exists in world space but for the most part looks like it is rendered with a different projection matrix. The caveat here is that the geometry is now very small and slightly skewed. This is done so that it will look good from the point of view of the camera, but it is unsuitable for other perspectives and therefore shouldn’t cast shadows on the scene or be visible in hardware ray tracing reflections — which is prevented by design. [...] World Space Representation: This primitive represents a first person primitive in world space. This is the primitive that other players would see and is used to cast shadow onto the ground and for reflections with hardware ray tracing, among other things. [...] Currently, first person self-shadowing is implemented with screen space tracing.'''
+checked = 2026-11-21
+
+["unreal-roadmap-5.7-first-person-rendering"]
+url = "https://portal.productboard.com/epicgames/1-unreal-engine-public-roadmap/c/2220-first-person-rendering"
+section = "Epic Games, Unreal Engine Public Roadmap, Unreal Engine 5.7, Rendering, card First Person Rendering"
+quote = '''First Person Rendering is considered production ready in UE 5.7. Now including support for Nanite, with and without WPO.'''
+checked = 2026-11-21
+
+["unreal-5.7-pcg-production-ready"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-7-release-notes?application_version=5.7"
+section = "Unreal Engine 5.7 Release Notes, Procedural Content Generation (PCG), PCG Framework is Production Ready"
+quote = '''The Procedural Content Generation Framework (PCG) is now Production Ready with the release of UE 5.7.'''
+checked = 2026-11-21
+
+["unreal-5.8-pcg-runtime-scatter"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-8-release-notes?application_version=5.8"
+section = "Unreal Engine 5.8 Release Notes, Procedural Content Generation (PCG), PCG Performance, Runtime"
+quote = '''PCG GPU runtime scatter is now within the same performance range as the landscape GPU grass system, and was stress-tested on all platforms. [...] Actor/component-less runtime generation'''
+checked = 2026-11-21
+
+["unreal-5.9-pcg-framework-scope"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/procedural-content-generation-framework-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Procedural Content Generation Framework, landing page, first paragraph"
+quote = '''The Procedural Content Generation Framework (PCG) is a toolset for creating your own procedural content inside Unreal Engine. PCG provides artists and designers the ability to build fast, iterative tools and content of any complexity ranging from asset utilities, such as buildings or biome generation, up to entire worlds.'''
+checked = 2026-11-21
+
+["unreal-5.9-mcp-runtime-toolsets"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-mcp-in-unreal-editor?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Unreal MCP in Unreal Editor (Experimental), Make Tools Available in Cooked Builds"
+quote = '''The server isn't tied to the editor. Cooked game builds, including Shipping builds, can host an MCP server. [...] Engine toolsets with runtime-callable tools include NavMesh, Scene Capture, Console, Widget Finder, Perf (CSV and GPU profiler, Stats), and Input.'''
+checked = 2026-11-21
+
+["unity-tokyo-2026-cli-agents"]
+url = "https://cdn.bfldr.com/S5BC9Y64/at/k7crmvj3rg9z7c8w9m9tbmvs/Unite_2026_Tokyo_-_Roadmap_Final.pdf"
+section = "Unity Technologies, Unite 2026 Tokyo roadmap deck (linked from unity.com/roadmap as Roadmap Update, Unite Tokyo 2026), slide Unity CLI: What it unlocks; What's next"
+quote = '''Unity CLI [...] Terminal, CI, and AI agent workflows [...] End-to-end device validation'''
+checked = 2026-11-21
+
+["unreal-5.8-audio-subtitles"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-8-release-notes?application_version=5.8"
+section = "Unreal Engine 5.8 Release Notes, Audio, Audio Subtitles (Beta)"
+quote = '''Audio subtitles are required for accessibility – dialogue systems, closed captioning, and voice chat. We promoted the plugin from Experimental to Beta status, reflecting its increased stability and feature completeness.'''
+checked = 2026-11-21
+
+["unity-6.3-screen-reader"]
+url = "https://docs.unity3d.com/6000.3/Documentation/Manual/WhatsNewUnity63.html"
+section = "Unity 6.3 Manual, New in Unity 6.3, Accessibility, Native screen reader support on desktop platforms"
+quote = '''Extended the screen reader support APIs to Windows and macOS, enabling compatibility of Unity applications with Narrator and VoiceOver.'''
+checked = 2026-11-21
+
+["unreal-5.9-nanite-unsupported"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/nanite-virtualized-geometry-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Nanite Virtualized Geometry, Supported Features, Rendering"
+quote = '''The following rendering features are not currently supported: [...] Forward Rendering [...] Multisampling Anti-Aliasing (MSAA) [...] (Experimental) Initial support for native ray-tracing of Nanite meshes is enabled with the console variable r.RayTracing.Nanite.Mode 1.'''
+checked = 2026-11-21
+
+["unreal-5.9-nanite-foliage-voxels"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/nanite-foliage?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Nanite Foliage (Experimental), overview; Nanite Assemblies; Nanite Voxels, Shading Process"
+quote = '''Learn to use this Experimental feature, but use caution when shipping with it. [...] Nanite Voxels are near pixel-sized aggregate voxels that preserve triangle details, animation, and material properties based on camera distance. Triangles seamlessly switch to voxels to solve the problem of rendering dense and dynamic aggregate triangle meshes. [...] For example, the UASSET disk space of the biggest tree in the demonstration went from being 3.5 gigabytes (Gb) to approximately 29 megabytes (Mb). [...] When writing to the GBuffer, a normal is chosen stochastically per pixel from this distribution.'''
+checked = 2026-11-21
+
+["unreal-5.7-nanite-foliage"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-7-release-notes?application_version=5.7"
+section = "Unreal Engine 5.7 Release Notes, Rendering, Nanite Foliage and Skinning (Experimental)"
+quote = '''When combined, this allows for more robust worlds to be imagined with lifelike and animated foliage that can be delivered within a 60fps budget on current generation hardware. [...] Nanite Voxels, for efficiently rendering foliage geometry in the distance. [...] TSR Thin Geometry detection to better handle foliage.'''
+checked = 2026-11-21
+
+["unreal-5.9-megalights-denoiser"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/megalights-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, MegaLights, overview; how MegaLights works; directional lights"
+quote = '''MegaLights requires hardware ray tracing, so the MegaLights setting is only available when Support Hardware Ray Tracing is enabled. [...] MegaLights is a stochastic direct lighting technique, which solves direct lighting though importance sampling of lights. It traces a fixed number of rays per pixel towards important light sources. [...] Finally, all accumulated lighting goes through a denoiser that tries to reconstruct high quality direct lighting from the stochastic and possibly noisy input. [...] Increased lighting complexity can lead to blurring of the lighting or cause ghosting [...] The recommended approach is to use Deferred Lighting and VSM for strong directional lights like sun and only enable MegaLights for dim and softer lights like moonlight where quality limitations are harder to spot.'''
+checked = 2026-11-21
+
+["unity-6.7-surface-cache-gi"]
+url = "https://docs.unity3d.com/6000.7/Documentation/Manual/surface-cache-gi-introduction.html"
+section = "Unity 6.7 Manual (6000.7), Real-time global illumination with Surface Cache, How Surface Cache GI works; Lighting that Surface Cache GI produces; Limitations"
+quote = '''Surface Cache GI is available in the Universal Render Pipeline (URP) only. [...] Surface Cache GI stores indirect lighting on the surfaces of your scene rather than in lightmaps or probes. [...] Inside the Surface Cache volume, Unity subdivides camera-visible surfaces into small areas called patches. [...] A single frame of rays is too noisy to display, so Unity combines each patch’s new samples with the results of previous frames, and can also blend lighting across neighboring patches. [...] Unity reads the patch lighting into a full-screen buffer of indirect light, which lit shaders sample in place of lightmap or probe lighting. [...] It doesn’t produce specular reflections, and it doesn’t light transparent materials. [...] Unity treats every triangle as opaque, so materials that rely on alpha cut-outs, such as foliage, block and bounce light as though they were solid.'''
+checked = 2026-11-21
+
+["unreal-5.9-vsm-stochastic-pcss"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-9-release-notes?application_version=5.9"
+section = "Unreal Engine 5.9 Preview Release Notes (last updated 2026-11-19), Rendering & Lighting, Virtual Shadow Maps"
+quote = '''Directional light Virtual Shadow Maps gain projection and page-management optimizations, along with Stochastic PCSS, a soft-shadow technique that keeps shadows sharp near contact points and softens them further away.'''
+checked = 2026-11-21
+
+["unreal-5.8-vsm-prefiltered-distant"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-8-release-notes?application_version=5.8"
+section = "Unreal Engine 5.8 Release Notes, Release Notes, Rendering, New"
+quote = '''Prefiltered distant experimental implementation. This adds support for drawing distant shadow casters into the clipmap at much lower resolution, while using prefiltering and temporal reprojection to produce a smooth result that often matched ground truth better than SMRT.'''
+checked = 2026-11-21
+
+["unreal-5.9-avboit-msaa"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/adaptive-voxelbased-order-independent-transparency-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Adaptive Voxel-Based Order Independent Transparency (Experimental), How AVBOIT Works; Enabling AVBOIT in a Project"
+quote = '''Before translucency is drawn, every translucent object is drawn once at low resolution to record how much light it blocks in each cell. [...] AVBOIT requires a desktop platform that uses Shader Model 6 (SM6). It isn't available on mobile platforms, and it turns off when the view uses MSAA anti-aliasing.'''
+checked = 2026-11-21
+
+["unreal-5.9-preview-release-notes"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-9-release-notes?application_version=5.9"
+section = "Unreal Engine 5.9 Preview Release Notes, page description and date; World Building and Procedural Content; Gameplay, AI and Mass; Core Engine and Programming"
+quote = '''Overview of new and updated features in Unreal Engine 5.9 Preview. [...] Last updated 11/19/26 [...] Mesh Partition gains mesh simplification settings, a ray-tracing proxy option and better interop with PCG. [...] Shallow-water rivers can now exclude chosen actors from capture and set their collision resolution, and a new paint tool paints water input. [...] The new Mass Characters plugin brings Mass traits for character interpolation and visualization, selective pawn replication, and a game feature action that sets up Mass characters. [...] The Navmesh can now build progressively, with control over how many tiles build per tick, and a new option keeps tiles outside the invoker radius. [...] UE 5.9 introduces a new experimental WebAssembly target with its own project settings and WebGPU rendering support.'''
+checked = 2026-11-21
+
+["unreal-5.9-mesh-terrain"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/mesh-terrain-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Mesh Terrain (Experimental), What is Mesh Terrain?"
+quote = '''Mesh Terrain is a new experimental technology for developing larger, more feature-rich worlds. Since the terrain is not based on classic height field workflows like the existing landscape tools, you are free to make more complex terrain with overhangs, tunnels, sheer cliff walls, and any type of shape you can imagine. [...] In addition, you no longer need to keep the resolution uniform across the entire landscape.'''
+checked = 2026-11-21
+
+["unreal-5.8-procedural-vegetation-editor"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-8-release-notes?application_version=5.8"
+section = "Unreal Engine 5.8 Release Notes, Procedural Content Generation (PCG), Procedural Vegetation Editor (Experimental)"
+quote = '''The Procedural Vegetation Editor is an experimental plugin to create and edit vegetation meshes, supporting Nanite foliage, directly within Unreal Engine.'''
+checked = 2026-11-21
+
+["unreal-roadmap-5.8-chaos-fluids"]
+url = "https://portal.productboard.com/epicgames/1-unreal-engine-public-roadmap/c/2430-chaos-fluids-5-8-"
+section = "Epic Games, Unreal Engine Public Roadmap, Unreal Engine 5.8, Simulation & VFX, card Chaos Fluids (5.8)"
+quote = '''Buoyancy Improvements - Perf optimizations, lift force, wave support, stable drag, water/cloth interaction [...] Baked River Workflow - Sparse grids for Chaos data (90% CPU memory reduction), river baking performance improvements, underwater post process support'''
+checked = 2026-11-21
+
+["unreal-5.9-dynamic-wind"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/dynamic-wind-for-nanite-foliage-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Dynamic Wind for Nanite Foliage (Experimental), overview"
+quote = '''Dynamic Wind moves foliage in the wind by simulating the bones of skeletal plant meshes on the GPU, instead of offsetting vertices in the material.'''
+checked = 2026-11-21
+
+["unreal-5.8-chaos-modular-vehicles"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-8-release-notes?application_version=5.8"
+section = "Unreal Engine 5.8 Release Notes, Simulation and VFX, Chaos Modular Vehicles"
+quote = '''The Modular Vehicle system gives users the ability to build vehicles in real time using dynamic scene graph components rather than relying on fixed skeletal meshes. [...] Added two-way interaction between the vehicle and the ground.'''
+checked = 2026-11-21
+
+["unreal-5.8-mass-and-crowds"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-8-release-notes?application_version=5.8"
+section = "Unreal Engine 5.8 Release Notes, MetaHuman, Populate Your World with a MetaHuman Crowd; Framework, Mass Framework: Faster, Modular, and Built for Scale"
+quote = '''Assemble optimized instances of MetaHuman characters to create crowds compatible with Mass, scaling from tens to thousands of characters. [...] Mass, our data-oriented entity system, gets a major overhaul. [...] entities can be created off the game thread thanks to archetype-based, lock-free scheduling.'''
+checked = 2026-11-21
+
+["unity-tokyo-2026-ecs-navigation"]
+url = "https://cdn.bfldr.com/S5BC9Y64/at/k7crmvj3rg9z7c8w9m9tbmvs/Unite_2026_Tokyo_-_Roadmap_Final.pdf"
+section = "Unity Technologies, Unite 2026 Tokyo roadmap deck, slides ECS for All: A new foundation of ECS; Navigation and pathfinding: Low level API and Terrain Trees"
+quote = '''ECS for All [...] Entities at the heart of the Engine [...] Entities for every GameObject [...] Query the NavMesh safely from jobs with NavWorld [...] Run many NPCs in parallel'''
 checked = 2026-11-21
