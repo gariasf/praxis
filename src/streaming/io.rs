@@ -14,6 +14,7 @@ use glam::DVec3;
 
 use crate::assets::{AssetReader, MaterialPool, MeshPool, MeshUse, PoolLoader};
 use crate::camera::Camera;
+use crate::components::{MaterialRef, MeshRef};
 use crate::cooked::{AssetId, CookedCache, CookedChunk, CookedMaterial, CookedMesh, CookedTexture};
 use crate::render::{Renderer, mips_written_bytes, texture_written_bytes};
 use crate::scenes::ReferenceScene;
@@ -23,6 +24,15 @@ use crate::streaming::{
     ChunkFrame, ChunkIo, ChunkStreamer, FinishedLoad, LoadedChunk, LoadedChunks,
     ResidentFarProxies, distance_metres,
 };
+use crate::transform::WorldTransform;
+
+/// The Renderables, whose Textures mip priority plans beside the
+/// Placements'.
+type RenderableQuery = QueryState<(
+    &'static WorldTransform,
+    &'static MeshRef,
+    Option<&'static MaterialRef>,
+)>;
 
 const IO_THREADS: usize = 4;
 
@@ -738,6 +748,8 @@ pub(crate) struct ChunkStreaming {
     /// places more loads alone.
     instances_placed_per_frame: usize,
     mips: MipPriority,
+    /// Made from the World at the first `update`.
+    renderables: Option<RenderableQuery>,
     fast_travel: FastTravelClock,
 }
 
@@ -793,6 +805,7 @@ impl ChunkStreaming {
             load_bytes_per_frame,
             instances_placed_per_frame: INSTANCES_PLACED_PER_FRAME,
             mips: MipPriority::default(),
+            renderables: None,
             fast_travel: FastTravelClock::default(),
         })
     }
@@ -946,6 +959,7 @@ impl ChunkStreaming {
                 load_bytes_per_frame,
                 instances_placed_per_frame,
                 mips,
+                renderables,
                 fast_travel: _,
             } = self;
             let mut frame_io = FrameIo {
@@ -1012,6 +1026,7 @@ impl ChunkStreaming {
             let mip_streaming = MipStreaming {
                 io,
                 priority: mips,
+                renderables: renderables.get_or_insert_with(|| world.query()),
                 renderer,
                 settle,
                 teleported,
@@ -1034,6 +1049,7 @@ impl ChunkStreaming {
 struct MipStreaming<'a> {
     io: &'a mut IoPool,
     priority: &'a mut MipPriority,
+    renderables: &'a mut RenderableQuery,
     renderer: &'a mut Renderer,
     settle: bool,
     teleported: bool,
@@ -1047,7 +1063,8 @@ impl MipStreaming<'_> {
     /// ID order, up to the frame's load bytes, or, while settling, all of them once nothing is
     /// in flight, as the Chunk streamer's last take found it; then requests
     /// the mips the Placements of the drawn Chunks and Far proxies need, and
-    /// of those held past their radius, from the camera a lead ahead,
+    /// of those held past their radius, and the drawn Renderables, from the
+    /// camera a lead ahead,
     /// finest-needed first, and counts the late mips. Returns whether no
     /// request is in flight. Without mip streaming, it does nothing.
     fn stream(mut self, world: &World, streamed: &mut StreamedFrame) -> bool {
@@ -1095,6 +1112,7 @@ impl MipStreaming<'_> {
             camera,
             self.teleported,
             chunks.chain(far_proxies),
+            self.renderables.iter(world),
             mesh_pool.meshes(),
             material_pool,
         );

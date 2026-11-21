@@ -1,8 +1,9 @@
 //! Mip priority (ADR 0017): the finest mip each streamed Texture needs, the
-//! finest any loaded Chunk's Placement sampling it needs from its distance
-//! and its Primitive's UV texel density against the 1440p pixel footprint,
-//! and the mips to request from the IO pool for it, finest-needed first,
-//! from where the camera will be once a read has had time to land.
+//! finest any loaded Chunk's Placement or drawn Renderable sampling it
+//! needs from its distance and its Primitive's UV texel density against the
+//! 1440p pixel footprint, and the mips to request from the IO pool for it,
+//! finest-needed first, from where the camera will be once a read has had
+//! time to land.
 
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -10,11 +11,12 @@ use std::ops::Range;
 use glam::DVec3;
 
 use crate::assets::material::EvictionRank;
-use crate::assets::{LoadedMeshes, MaterialPool};
+use crate::assets::{LoadedMeshes, MaterialHandle, MaterialPool, MeshHandle};
 use crate::camera::FIELD_OF_VIEW;
-use crate::components::Transform;
+use crate::components::{MaterialRef, MeshRef, Transform};
 use crate::cooked::{AssetId, CHUNK_EDGE_METRES};
 use crate::streaming::{LEAST_LEAD_FRAMES, LoadedChunk};
+use crate::transform::WorldTransform;
 
 /// The view mip priority judges against: 1440 pixels tall at 16:9.
 const PRIORITY_VIEW_HEIGHT_PIXELS: f64 = 1440.0;
@@ -60,9 +62,9 @@ pub(crate) enum Sight {
     Replaced,
 }
 
-/// One Placement's use of a Texture that streams: the sphere around its
-/// Mesh's bounds, and the Texture's texels per metre of its surface at
-/// mip 0.
+/// One Placement's or Renderable's use of a Texture that streams: the
+/// sphere around its Mesh's bounds, and the Texture's texels per metre of
+/// its surface at mip 0.
 struct TextureUse {
     texture: AssetId,
     centre: DVec3,
@@ -92,6 +94,8 @@ pub(crate) struct MipRequest {
 pub(crate) struct MipPriority {
     /// Each loaded Chunk's uses, by its Asset ID.
     uses: HashMap<AssetId, Vec<TextureUse>>,
+    /// The drawn Renderables' uses at the last `plan`, kept for its memory.
+    renderable_uses: Vec<TextureUse>,
     /// What each Texture needs, kept for its memory.
     needed: HashMap<AssetId, Need>,
     /// The camera's position at the last `plan`.
@@ -114,21 +118,29 @@ pub(crate) struct MipPriority {
 impl MipPriority {
     /// The finest mip each Texture `chunks`' Placements sample needs, those
     /// drawn and held ahead, `chunks` being the loaded Chunks and the
-    /// Resident Far proxies, each with its Sight, against what `materials`
-    /// holds Resident: from `camera`, or, as the camera closes on a
-    /// Placement at its rate since the last `plan`, from where it will be
-    /// `LEAD_FRAMES` later, at most a Chunk edge nearer, as the Chunk
-    /// streamer requests no further than one past its radius, unless it
-    /// `teleported`. Returns the late mips,
-    /// those the drawn Placements need from `camera` that are not Resident,
+    /// Resident Far proxies, each with its Sight, and each Texture the drawn
+    /// `renderables` sample, at their World transforms, against what
+    /// `materials` holds Resident: from `camera`, or, as the camera closes
+    /// on a Placement or Renderable at its rate since the last `plan`, from
+    /// where it will be `LEAD_FRAMES` later, at most a Chunk edge nearer, as
+    /// the Chunk streamer requests no further than one past its radius,
+    /// unless it `teleported`. Returns the late mips, those the drawn
+    /// Placements and Renderables need from `camera` that are not Resident,
     /// and the requests for those not yet requested whose move finds room
     /// in its Channel, free or by an eviction, finest-needed first, then by
     /// Asset ID.
-    pub(crate) fn plan<'chunks>(
+    pub(crate) fn plan<'chunks, 'renderables>(
         &mut self,
         camera: DVec3,
         teleported: bool,
         chunks: impl Iterator<Item = (&'chunks LoadedChunk, Sight)> + Clone,
+        renderables: impl Iterator<
+            Item = (
+                &'renderables WorldTransform,
+                &'renderables MeshRef,
+                Option<&'renderables MaterialRef>,
+            ),
+        >,
         meshes: &LoadedMeshes,
         materials: &MaterialPool,
     ) -> (u32, &[MipRequest]) {
@@ -155,26 +167,36 @@ impl MipPriority {
                 continue;
             }
             for texture_use in uses.iter() {
-                let distance_from = |position: DVec3| {
-                    distance_to_sphere(position, texture_use.centre, texture_use.radius)
-                };
-                let distance = distance_from(camera);
-                let closing = camera_before.map_or(0.0, |before| distance_from(before) - distance);
-                let lead_metres = (closing.max(0.0) * LEAD_FRAMES).min(CHUNK_EDGE_METRES);
-                let distance_ahead = (distance - lead_metres).max(0.0);
-                let texels_per_metre = texture_use.texels_per_metre;
-                let ahead = finest_mip_needed(texels_per_metre, distance_ahead);
-                let drawn = match sight {
-                    Sight::Drawn => finest_mip_needed(texels_per_metre, distance),
-                    Sight::Ahead | Sight::Replaced => u32::MAX,
-                };
-                let need = self.needed.entry(texture_use.texture).or_insert(Need {
-                    ahead: u32::MAX,
-                    drawn: u32::MAX,
-                });
-                need.ahead = need.ahead.min(ahead);
-                need.drawn = need.drawn.min(drawn);
+                add_need(&mut self.needed, texture_use, sight, camera, camera_before);
             }
+        }
+        self.renderable_uses.clear();
+        let mut unstreamed = None;
+        for (world_transform, mesh, material) in renderables {
+            let drawn = (mesh.0, material.map(|material| material.0));
+            if unstreamed == Some(drawn) {
+                continue;
+            }
+            let (scale, rotation, translation) = world_transform.0.to_scale_rotation_translation();
+            let transform = Transform {
+                translation,
+                rotation: rotation.as_quat(),
+                scale: scale.as_vec3(),
+            };
+            let uses_before = self.renderable_uses.len();
+            let (mesh, material) = drawn;
+            let uses = &mut self.renderable_uses;
+            push_texture_uses(uses, &transform, mesh, material, meshes, materials);
+            unstreamed = (self.renderable_uses.len() == uses_before).then_some(drawn);
+        }
+        for texture_use in &self.renderable_uses {
+            add_need(
+                &mut self.needed,
+                texture_use,
+                Sight::Drawn,
+                camera,
+                camera_before,
+            );
         }
         let mut late_mips = 0;
         self.requests.clear();
@@ -275,9 +297,37 @@ fn rank(
     })
 }
 
-/// The uses of streamed Textures by `chunk`'s Placements: each Primitive's
-/// Material, or the Placement's own, and each Texture it samples that has
-/// mips finer than its Resident tail, however many of them are Resident.
+/// Adds to `needed` what `texture_use`, seen by `sight`, needs from
+/// `camera`, and from a lead ahead of it as it closes on the use since
+/// `camera_before`.
+fn add_need(
+    needed: &mut HashMap<AssetId, Need>,
+    texture_use: &TextureUse,
+    sight: Sight,
+    camera: DVec3,
+    camera_before: Option<DVec3>,
+) {
+    let distance_from =
+        |position: DVec3| distance_to_sphere(position, texture_use.centre, texture_use.radius);
+    let distance = distance_from(camera);
+    let closing = camera_before.map_or(0.0, |before| distance_from(before) - distance);
+    let lead_metres = (closing.max(0.0) * LEAD_FRAMES).min(CHUNK_EDGE_METRES);
+    let distance_ahead = (distance - lead_metres).max(0.0);
+    let texels_per_metre = texture_use.texels_per_metre;
+    let ahead = finest_mip_needed(texels_per_metre, distance_ahead);
+    let drawn = match sight {
+        Sight::Drawn => finest_mip_needed(texels_per_metre, distance),
+        Sight::Ahead | Sight::Replaced => u32::MAX,
+    };
+    let need = needed.entry(texture_use.texture).or_insert(Need {
+        ahead: u32::MAX,
+        drawn: u32::MAX,
+    });
+    need.ahead = need.ahead.min(ahead);
+    need.drawn = need.drawn.min(drawn);
+}
+
+/// The uses of streamed Textures by `chunk`'s Placements.
 fn texture_uses(
     chunk: &LoadedChunk,
     meshes: &LoadedMeshes,
@@ -285,36 +335,51 @@ fn texture_uses(
 ) -> Vec<TextureUse> {
     let mut uses = Vec::new();
     for placement in &chunk.placements {
-        let Some(mesh) = meshes.get(placement.mesh) else {
-            continue;
-        };
-        let mut sphere = None;
-        for (&texel_density, &primitive_material) in
-            mesh.texel_densities.iter().zip(&mesh.materials)
-        {
-            let Some(material) = placement.material.or(primitive_material) else {
-                continue;
-            };
-            for &texture in materials.textures_of(material) {
-                let Some((shape, _)) = materials.texture_residency(texture) else {
-                    continue;
-                };
-                if shape.resident_tail_level() == 0 {
-                    continue;
-                }
-                let (centre, radius, smallest_scale) = *sphere
-                    .get_or_insert_with(|| placement_sphere(&placement.transform, mesh.bounds));
-                let side = shape.width.max(shape.height);
-                uses.push(TextureUse {
-                    texture,
-                    centre,
-                    radius,
-                    texels_per_metre: texels_per_metre(texel_density, side, smallest_scale),
-                });
-            }
-        }
+        let (transform, mesh, material) =
+            (&placement.transform, placement.mesh, placement.material);
+        push_texture_uses(&mut uses, transform, mesh, material, meshes, materials);
     }
     uses
+}
+
+/// Pushes onto `uses` the uses of streamed Textures by `mesh` placed by
+/// `transform`: each Primitive's Material, or `material` in its place, and
+/// each Texture it samples that has mips finer than its Resident tail,
+/// however many of them are Resident.
+fn push_texture_uses(
+    uses: &mut Vec<TextureUse>,
+    transform: &Transform,
+    mesh: MeshHandle,
+    material: Option<MaterialHandle>,
+    meshes: &LoadedMeshes,
+    materials: &MaterialPool,
+) {
+    let Some(mesh) = meshes.get(mesh) else {
+        return;
+    };
+    let mut sphere = None;
+    for (&texel_density, &primitive_material) in mesh.texel_densities.iter().zip(&mesh.materials) {
+        let Some(material) = material.or(primitive_material) else {
+            continue;
+        };
+        for &texture in materials.textures_of(material) {
+            let Some((shape, _)) = materials.texture_residency(texture) else {
+                continue;
+            };
+            if shape.resident_tail_level() == 0 {
+                continue;
+            }
+            let (centre, radius, smallest_scale) =
+                *sphere.get_or_insert_with(|| placement_sphere(transform, mesh.bounds));
+            let side = shape.width.max(shape.height);
+            uses.push(TextureUse {
+                texture,
+                centre,
+                radius,
+                texels_per_metre: texels_per_metre(texel_density, side, smallest_scale),
+            });
+        }
+    }
 }
 
 /// The finest mip of a Texture `side` texels across at mip 0 that a Mesh
@@ -536,6 +601,7 @@ mod tests {
             DVec3::ZERO,
             false,
             chunks.iter().zip(sights),
+            std::iter::empty(),
             &LoadedMeshes::default(),
             &pool,
         );
@@ -573,6 +639,7 @@ mod tests {
                     DVec3::new(0.0, 0.0, camera_z),
                     teleported,
                     chunks.iter().zip([Sight::Drawn]),
+                    std::iter::empty(),
                     &LoadedMeshes::default(),
                     &pool,
                 );
@@ -597,37 +664,56 @@ mod tests {
     /// proxy's atlas loads, it keeps that need, so eviction cannot take mip
     /// 0 from it; once the Texture is evicted to its tail, mip 3, the next
     /// plan requests mips 1 and 2 and counts them late.
+    /// A Material pool holding the Material `texture`, sampling the Texture
+    /// `texture` with its mips from `first_level` Resident, and the
+    /// Material's Handle.
+    fn pool_of_material(
+        context: &crate::gpu::GpuContext,
+        texture: AssetId,
+        first_level: u32,
+    ) -> (
+        MaterialPool,
+        crate::render::staging::LoadStaging,
+        MaterialHandle,
+    ) {
+        let (mut pool, mut staging) = empty_pool(context);
+        let material = pool
+            .load_making_room(
+                &context.device,
+                &mut staging,
+                &TextureReader { first_level },
+                texture,
+                crate::assets::MaterialUse::Ordinary,
+                &mut |_| false,
+            )
+            .expect("the Material loads");
+        (pool, staging, material)
+    }
+
+    /// A Mesh with one Primitive of `material`, at a point, sampling a
+    /// 2,048² Texture at one texel a pixel at 1 m.
+    fn mesh_of_material(meshes: &mut LoadedMeshes, material: MaterialHandle) -> MeshHandle {
+        meshes.insert(crate::assets::Mesh {
+            needs_material_handle: false,
+            vertices: 0..0,
+            bounds: [[0.0; 3]; 2],
+            texel_densities: vec![(1.0 / finest_pixel_metres_per_metre() / 2048.0) as f32],
+            materials: vec![Some(material)],
+        })
+    }
+
     #[test]
     fn a_texture_resident_to_mip_0_when_first_planned_keeps_its_use() {
         let Some(context) = crate::assets::pools::tests::gpu_context() else {
             return;
         };
         let texture = AssetId(10);
-        let pool_from = |first_level| {
-            let (mut pool, mut staging) = empty_pool(&context);
-            let material = pool
-                .load_making_room(
-                    &context.device,
-                    &mut staging,
-                    &TextureReader { first_level },
-                    texture,
-                    crate::assets::MaterialUse::Ordinary,
-                    &mut |_| false,
-                )
-                .expect("the Material loads");
-            (pool, staging, material)
-        };
-        let (at_mip_0, mut staging_at_mip_0, material) = pool_from(0);
-        let (evicted, mut staging_evicted, material_evicted) = pool_from(3);
+        let (at_mip_0, mut staging_at_mip_0, material) = pool_of_material(&context, texture, 0);
+        let (evicted, mut staging_evicted, material_evicted) =
+            pool_of_material(&context, texture, 3);
         assert_eq!(material, material_evicted);
         let mut meshes = LoadedMeshes::default();
-        let mesh = meshes.insert(crate::assets::Mesh {
-            needs_material_handle: false,
-            vertices: 0..0,
-            bounds: [[0.0; 3]; 2],
-            texel_densities: vec![(1.0 / finest_pixel_metres_per_metre() / 2048.0) as f32],
-            materials: vec![Some(material)],
-        });
+        let mesh = mesh_of_material(&mut meshes, material);
         let mut drawn = chunk(1, false);
         drawn
             .placements
@@ -642,6 +728,7 @@ mod tests {
                 DVec3::new(0.0, 0.0, -2.5),
                 false,
                 std::iter::once((&drawn, Sight::Drawn)),
+                std::iter::empty(),
                 &meshes,
                 pool,
             );
@@ -656,5 +743,145 @@ mod tests {
         assert_eq!(plan(&mut priority, &evicted), (2, vec![(texture, 1..3)]));
         staging_at_mip_0.submit(&context.queue);
         staging_evicted.submit(&context.queue);
+    }
+
+    /// A drawn Renderable outside any Chunk, 2.5 m away, needs mip 1 of its
+    /// Primitive's Material's Texture. Resident to mip 0, the Texture keeps
+    /// that need, so eviction cannot take mip 0 from it; evicted to its
+    /// tail, mip 3, mips 1 and 2 are requested and counted late. Moved to
+    /// 10 m away, it needs mip 3, which its tail serves.
+    #[test]
+    fn a_renderable_outside_any_chunk_has_its_mips_planned_where_it_is() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let texture = AssetId(10);
+        let (at_mip_0, mut staging_at_mip_0, material) = pool_of_material(&context, texture, 0);
+        let (evicted, mut staging_evicted, _) = pool_of_material(&context, texture, 3);
+        let mut meshes = LoadedMeshes::default();
+        let mesh = MeshRef(mesh_of_material(&mut meshes, material));
+        let mut priority = MipPriority::default();
+        let mut plan = |pool: &MaterialPool, renderable_z: f64| {
+            let world_transform =
+                WorldTransform(glam::DAffine3::from_translation(DVec3::Z * renderable_z));
+            let (late_mips, requests) = priority.plan(
+                DVec3::new(0.0, 0.0, -2.5),
+                false,
+                std::iter::empty(),
+                std::iter::once((&world_transform, &mesh, None)),
+                &meshes,
+                pool,
+            );
+            let requested: Vec<_> = (requests.iter())
+                .map(|request| (request.texture, request.levels.clone()))
+                .collect();
+            let need = priority.needed.get(&texture).map(|need| need.ahead);
+            (late_mips, requested, need)
+        };
+
+        assert_eq!(plan(&at_mip_0, 0.0), (0, vec![], Some(1)));
+        assert_eq!(plan(&evicted, 0.0), (2, vec![(texture, 1..3)], Some(1)));
+        assert_eq!(plan(&evicted, 7.5), (0, vec![], Some(3)));
+        staging_at_mip_0.submit(&context.queue);
+        staging_evicted.submit(&context.queue);
+    }
+
+    /// Reads Assets from the Cooked cache, each Texture its Resident tail
+    /// alone.
+    #[cfg(feature = "cook")]
+    struct ResidentTailReader<'a>(&'a crate::cooked::CookedCache);
+
+    #[cfg(feature = "cook")]
+    impl crate::assets::AssetReader for ResidentTailReader<'_> {
+        fn material(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMaterial> {
+            self.0.material(id)
+        }
+        fn texture(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedTexture> {
+            crate::cooked::CookedTexture::resident_tail_from_blob(&self.0.read(id)?)
+        }
+        fn mesh(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMesh> {
+            self.0.mesh(id)
+        }
+        fn chunk(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedChunk> {
+            self.0.chunk(id)
+        }
+    }
+
+    /// orrery's spheres are Renderables outside any Chunk, as its Chunks
+    /// place nothing. With their `grid` Texture Resident to its tail alone,
+    /// mip 3, seen from the scene's camera at frame 0, they need finer
+    /// mips, which are requested and counted late.
+    #[cfg(feature = "cook")]
+    #[test]
+    fn orrerys_spheres_have_their_grid_textures_mips_planned() {
+        use bevy_ecs::prelude::*;
+
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let scene = crate::scenes::ReferenceScene::Orrery;
+        let cache = crate::cooked::CookedCache::new(crate::cooked::COOKED_CACHE_DIRECTORY);
+        let reader = ResidentTailReader(&cache);
+        let (mut material_pool, mut staging) = empty_pool(&context);
+        let memory = crate::stats::gpu_memory::tests::gpu_memory(&context);
+        let capacities = crate::assets::PoolCapacities::checked_in();
+        let mut mesh_pool = crate::assets::MeshPool::new(&context.device, &memory, &capacities);
+        let mut world = World::new();
+        let mut pool_loader = crate::assets::PoolLoader {
+            device: &context.device,
+            staging: &mut staging,
+            reader: &reader,
+            mesh_pool: &mut mesh_pool,
+            material_pool: &mut material_pool,
+        };
+        let mut loader = crate::cook::CookingLoader::new(
+            scene,
+            std::path::Path::new(crate::cook::ASSETS_DIRECTORY),
+            &cache,
+            crate::cook::CookSettings::default(),
+            &mut pool_loader,
+        )
+        .expect("orrery's sources read");
+        crate::scenes::spawn_orrery(&mut world, &mut loader).expect("orrery spawns");
+        drop(loader);
+        let mut propagation = Schedule::default();
+        propagation.add_systems(crate::transform::propagate_world_transforms);
+        propagation.run(&mut world);
+        let sphere = scene.mesh_id("sphere");
+        let meshes = mesh_pool.meshes();
+        let mut spheres = world.query::<&MeshRef>();
+        let sphere_mesh = spheres.iter(&world).next().expect("a sphere").0;
+        let primitive_material = meshes
+            .get(sphere_mesh)
+            .expect("the sphere loaded")
+            .materials[0];
+        let grid_material = primitive_material.expect("the sphere's Primitive names grid");
+        let grid = material_pool.textures_of(grid_material)[0];
+        assert_eq!(
+            material_pool
+                .texture_residency(grid)
+                .map(|(_, level)| level),
+            Some(3),
+            "Mesh {sphere}'s grid Texture"
+        );
+        let mut renderables = world.query::<(&WorldTransform, &MeshRef, Option<&MaterialRef>)>();
+        let camera = scene.camera_at(0, DVec3::ZERO).position;
+        let mut priority = MipPriority::default();
+
+        let (late_mips, requests) = priority.plan(
+            camera,
+            false,
+            std::iter::empty(),
+            renderables.iter(&world),
+            meshes,
+            &material_pool,
+        );
+
+        let requested: Vec<_> = (requests.iter())
+            .map(|request| (request.texture, request.levels.end))
+            .collect();
+        assert!(late_mips > 0, "{late_mips} late mips");
+        assert_eq!(requested, [(grid, 3)]);
+        staging.submit(&context.queue);
     }
 }
