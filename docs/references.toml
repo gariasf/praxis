@@ -7649,8 +7649,8 @@ checked = 2026-11-14
 
 ["ign-mdt02-metadata"]
 url = "https://www.idee.es/csw-inspire-idee/srv/spa/csw?service=CSW&version=2.0.2&request=GetRecordById&outputSchema=http://www.isotc211.org/2005/gmd&elementSetName=full&id=spaignMDT02"
-section = "gmd:title; gmd:resourceConstraints, gmd:MD_LegalConstraints, gmd:otherConstraints; gmd:distributionInfo, gmd:onLine linkage"
-quote = '''Modelo Digital del Terreno con paso de malla de 2 metros (MDT02) de España [...] MDT02-cob2 2015-2021 CC-BY 4.0 scne.es [...] https://centrodedescargas.cnig.es/CentroDescargas/modelo-digital-terreno-mdt02-segunda-cobertura'''
+section = "gmd:title; gmd:resourceConstraints, gmd:MD_LegalConstraints, gmd:otherConstraints; gmd:distributionInfo, gmd:onLine linkage and gmd:MD_Format"
+quote = '''Modelo Digital del Terreno con paso de malla de 2 metros (MDT02) de España [...] MDT02-cob2 2015-2021 CC-BY 4.0 scne.es [...] https://centrodedescargas.cnig.es/CentroDescargas/modelo-digital-terreno-mdt02-segunda-cobertura [...] ASCII matriz ESRI (.asc)'''
 checked = 2026-11-21
 
 ["usgs-public-domain"]
@@ -7667,8 +7667,8 @@ checked = 2026-11-21
 
 ["copernicus-dem-glo30-licence"]
 url = "https://dataspace.copernicus.eu/sites/default/files/media/files/2025-06/copernicus_contributing_mission_data_access_v2_cop_dem_licenses.pdf"
-section = "Licence for Copernicus DEM instance COP-DEM-GLO-30-F Global 30m Full, Free & Open: Licence for the use of the Copernicus WorldDEM-30, Article 4 Right of Use and Article 6 User Obligations (a) and (e)"
-quote = '''The Licensor grants to the User the following non-exclusive rights of use regarding the Copernicus WorldDEM-30: (a) reproduction; (b) distribution; (c) communication to the General Public; (d) adaptation, modification and combination with other data and information. [...] When communicating to the General Public or distributing the Copernicus WorldDEM-30, the User shall inform the General Public of the source by using the following notice: © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved. [...] Where the user grants to any Subsequent User the rights to distribute or communicate to the General Public the Copernicus WorldDEM-30, modified or not, he shall ensure that its Subsequent Users are bound by the above obligations.'''
+section = "Licence for Copernicus DEM instance COP-DEM-GLO-30-F Global 30m Full, Free & Open: Licence for the use of the Copernicus WorldDEM-30, Article 4 Right of Use, Article 6 User Obligations (a) to (e), Article 7 Warranty and Liability"
+quote = '''The Licensor grants to the User the following non-exclusive rights of use regarding the Copernicus WorldDEM-30: (a) reproduction; (b) distribution; (c) communication to the General Public; (d) adaptation, modification and combination with other data and information. [...] When communicating to the General Public or distributing the Copernicus WorldDEM-30, the User shall inform the General Public of the source by using the following notice: © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved. [...] Where the Copernicus WorldDEM-30 data have been adapted or modified, the User shall provide the following notice: [...] The following sentence or its translation in any language shall be added by such Users in a licence or any legal warning or notice covering their distribution or communication to the General Public of the Copernicus WorldDEM-30: "The organisations in charge of the Copernicus programme by law or by delegation do not incur any liability for any use of the Copernicus WorldDEM-30". [...] User shall make sure not to convey the impression to the General Public that the user's activities are officially endorsed by the Provider, the Licensor or any other legal entities in charge of the Copernicus programme [...] Where the user grants to any Subsequent User the rights to distribute or communicate to the General Public the Copernicus WorldDEM-30, modified or not, he shall ensure that its Subsequent Users are bound by the above obligations. [...] The User will protect the Licensor and these legal entities and the Provider against any liability claim resulting from its use of the Copernicus WorldDEM-30.'''
 checked = 2026-11-21
 
 ["copernicus-dem-collection"]
@@ -7680,31 +7680,31 @@ checked = 2026-11-21
 ["copernicus-dem-aws-registry"]
 url = "https://registry.opendata.aws/copernicus-dem/"
 section = "Registry of Open Data on AWS, Copernicus Digital Elevation Model (DEM): Description; Resources on AWS"
-quote = '''GLO-30 Public provides limited worldwide coverage at 30 meters because a small subset of tiles covering specific countries are not yet released to the public by the Copernicus Programme. [...] AWS CLI Access (No AWS account required)'''
+quote = '''GLO-30 Public provides limited worldwide coverage at 30 meters because a small subset of tiles covering specific countries are not yet released to the public by the Copernicus Programme. [...] Data is provided as Cloud Optimized GeoTIFFs and comes from Copernicus DEM 2021 release. [...] AWS CLI Access (No AWS account required)'''
 checked = 2026-11-21
 
 ["nasa-esdis-data-use"]
 url = "https://www.earthdata.nasa.gov/engage/open-data-services-software-policies/data-use-guidance"
-section = "NASA Earthdata, Data Use Guidance, Licensing and Copyright"
-quote = '''Unless the content is marked with a use restriction or license, data provided from a NASA-led mission are licensed as Creative Commons Zero (CC0). While there are no restrictions on the use of these data, data users are very strongly urged to cite the data used in their work products.'''
+section = "NASA Earthdata, Data Use Guidance: Data Use; Licensing and Copyright"
+quote = '''Non-NASA data available through the ESDIS project is subject to the license arrangements of the sponsoring organization. [...] Unless the content is marked with a use restriction or license, data provided from a NASA-led mission are licensed as Creative Commons Zero (CC0). While there are no restrictions on the use of these data, data users are very strongly urged to cite the data used in their work products.'''
 checked = 2026-11-21
 
 ["swisstopo-ogd-terms"]
 url = "https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices"
-section = "Terms of use for free geodata and geoservices (OGD) from swisstopo, version 1.3.2021, 2. Terms of use"
-quote = '''The free geodata and geoservices of swisstopo may be used, distributed and made accessible. Furthermore, they may be enriched and processed and also used commercially. A reference to the source is mandatory.'''
+section = "Terms of use for free geodata and geoservices (OGD) from swisstopo, version 1.3.2021, 2. Terms of use; 3. Excessive use; 4. Framework conditions"
+quote = '''The free geodata and geoservices of swisstopo may be used, distributed and made accessible. Furthermore, they may be enriched and processed and also used commercially. A reference to the source is mandatory. [...] In the event of excessive use of the geoservices infrastructure, access may be restricted or refused. [...] The general terms of use and operating regulations of the Federal Spatial Data Infrastructure FSDI apply.'''
 checked = 2026-11-21
 
 ["swisstopo-swissalti3d"]
 url = "https://www.swisstopo.admin.ch/en/height-model-swissalti3d"
 section = "swissALTI3D, Technical details: Structure; Format, resolution and file sizes. Its Terms of use link is the OGD terms page"
-quote = '''swissALTI3D is an extremely precise digital elevation model which describes the surface of Switzerland without vegetation and development. [...] The data are delivered as a grid with an aperture width of 0.5 m or 2 m. The data are delivered by complete 1 km2 tiles. [...] Cloud Optimized Geotiff (COG), LZW compression'''
+quote = '''swissALTI3D is an extremely precise digital elevation model which describes the surface of Switzerland without vegetation and development. [...] The data are delivered as a grid with an aperture width of 0.5 m or 2 m. The data are delivered by complete 1 km2 tiles. The spatial density of the data is not always high enough to provide the smallest aperture width (0.5 m). In that case, the data are oversampled. [...] Cloud Optimized Geotiff (COG), LZW compression [...] Stereo correlation (more than 2,000 metres above sea level): 1 to 3 m'''
 checked = 2026-11-21
 
 ["gebco-grid-terms"]
 url = "https://www.gebco.net/data-products/gridded-bathymetry-data"
 section = "GEBCO, Gridded Bathymetry Data: Global ocean & land terrain models; Terms of use"
-quote = '''providing elevation data, in meters, on a 15 arc-second interval grid [...] can be download as global files in netCDF format or a set of 8 tiles (each with an area of 90° x 90°), giving global coverage, in Esri ASCII raster and data GeoTiff [...] The GEBCO Grid is placed in the public domain and may be used free of charge.'''
+quote = '''providing elevation data, in meters, on a 15 arc-second interval grid [...] can be download as global files in netCDF format or a set of 8 tiles (each with an area of 90° x 90°), giving global coverage, in Esri ASCII raster and data GeoTiff [...] The GEBCO Grid is placed in the public domain and may be used free of charge. Use of the GEBCO Grid indicates that the user accepts the conditions of use and disclaimer information.'''
 checked = 2026-11-21
 
 ["polyhaven-faq-photogrammetry"]
@@ -7715,7 +7715,7 @@ checked = 2026-11-21
 
 ["polyhaven-api-nature-models"]
 url = "https://api.polyhaven.com/assets?type=models&categories=nature"
-section = "Poly Haven API, the models of the nature category, counted on the date checked (the figures move): 110 records, of which 20 list the category trees, 37 rocks, 54 plants, 32 ground cover and 4 grass, and 72 set lods; max_resolution is 4096, 8192 or 16384 square across them and 8192 across the trees, whose texel_density spans 392 to 230007; the record of pine_tree_01"
+section = "Poly Haven API, the models of the nature category, counted on the date checked (the figures move): 110 records, of which 20 list the category trees, 37 rocks, 54 plants, 32 ground cover and 4 grass, and 72 set lods; max_resolution is 4096, 8192 or 16384 square across them and 8192 across the trees, whose polycount spans 33706 (dead_quiver_trunk) to 17427094 (pine_tree_01), with a median of 746644.5 and jacaranda_tree at 312356, and whose texel_density spans 392 to 230007; the record of pine_tree_01"
 quote = '''"pine_tree_01":{"date_published":1687478400,"name":"Pine Tree 01" [...] "categories":["nature","plants","trees","collection: pine_forest"],"geonodes":true [...] "max_resolution":[8192,8192],"polycount":17427094,"texel_density":5861.203711242229 [...] "lods":true'''
 checked = 2026-11-21
 
@@ -7734,7 +7734,7 @@ checked = 2026-11-21
 ["fab-eula-tiers"]
 url = "https://www.fab.com/eula"
 section = "Fab End User License Agreement (Last updated: October 1st, 2024): the Fab Standard License summary, Additional notes, and the CC-BY summary under it; 2. Content License Grant, a. License Tiers"
-quote = '''Both pricing tiers (Personal and Professional) grant you the same scope of rights. [...] CC-BY (Creative Commons Attribution License) The usage is governed by the terms of the Creative Commons license. [...] You are only eligible for a Personal - Reference Only tier or Personal tier if, at the time of the Transaction you, together with any controlling entity and other entities under common control with you, have not generated more than $100,000 USD in gross revenue from your commercial activity in the digital content industry in the last 12 months.'''
+quote = '''Both pricing tiers (Personal and Professional) grant you the same scope of rights. Reference-Only tier will only grant you access to the content in form of a referenced asset, not its source format [...] CC-BY (Creative Commons Attribution License) The usage is governed by the terms of the Creative Commons license. [...] You are only eligible for a Personal - Reference Only tier or Personal tier if, at the time of the Transaction you, together with any controlling entity and other entities under common control with you, have not generated more than $100,000 USD in gross revenue from your commercial activity in the digital content industry in the last 12 months. For purposes of this calculation, revenue includes any advances received or other funds raised.'''
 checked = 2026-11-21
 
 ["fab-eula-linear-media"]
@@ -7757,8 +7757,8 @@ checked = 2026-11-21
 
 ["sketchfab-terms-free-downloads"]
 url = "https://sketchfab.com/terms"
-section = "Sketchfab Terms of Use, 4.2.2 Use by others for free; 4.2.4 Download API"
-quote = '''Users may make User Content available to other users for download for free via either the License Agreement or one of several Creative Commons licenses. [...] The User is solely responsible for choosing the appropriate license, if any, under which the Content is available for download. By downloading User Content made available by other Users, you agree to adhere to the terms of the license that applies at the time of download. [...] Users accessing and downloading User Content through the download API operated by Sketchfab shall be authenticated'''
+section = "Sketchfab Terms of Use, 4.1 Generally; 4.2.2 Use by others for free; 4.2.4 Download API; 5. User Restrictions and Obligations"
+quote = '''You agree that your use of any User Content downloaded from the Services will always be subject to the most-current version of the License Agreement or Creative Commons license, as applicable [...] Users may make User Content available to other users for download for free via either the License Agreement or one of several Creative Commons licenses. [...] The User is solely responsible for choosing the appropriate license, if any, under which the Content is available for download. By downloading User Content made available by other Users, you agree to adhere to the terms of the license that applies at the time of download. [...] Users accessing and downloading User Content through the download API operated by Sketchfab shall be authenticated [...] Except where explicitly allowed by this Agreement, collect, aggregate, mine, scrape, or otherwise use any Sketchfab Content or User Content for the purposes of publishing, selling, distributing or otherwise making the content available to others to use, download or copy;'''
 checked = 2026-11-21
 
 ["sketchfab-download-api"]
@@ -7835,8 +7835,8 @@ checked = 2026-11-21
 
 ["blender-demo-files-licences"]
 url = "https://web.archive.org/web/20261115152100/https://www.blender.org/download/demo-files/"
-section = "blender.org, Demo Files: Asset Libraries; Blender Splash Artwork; Cycles (blender.org refused a direct fetch on the date checked; read from this snapshot)"
-quote = '''Human Base Meshes v1.4.1 by Blender Studio and community contributions. [...] 49 MB – CC0 [...] Blender 5.3 – OVERGROWN by Blender Studio 337MB – CC-BY [...] Blender 3.3 LTS – Scanlands by Piotr Krynski 81 MB – CC-BY-SA [...] Red forest, wind blowing by Robin Tran – License CC-BY-SA 3.0 [...] Classroom By Christophe Seux. (CC0, 72 MB)'''
+section = "blender.org, Demo Files: Asset Libraries; Blender Splash Artwork; Geometry Nodes; EEVEE; Cycles (blender.org refused a direct fetch on the date checked; read from this snapshot)"
+quote = '''Human Base Meshes v1.4.1 by Blender Studio and community contributions. [...] 49 MB – CC0 [...] Blender 5.3 – OVERGROWN by Blender Studio 337MB – CC-BY [...] Blender 3.3 LTS – Scanlands by Piotr Krynski 81 MB – CC-BY-SA [...] Red forest, wind blowing by Robin Tran – License CC-BY-SA 3.0 [...] Tree, leaves and grass 1MB — CC0 Simon Thommes, Blender Studio [...] Ember Forest By Mike Pan Wasp Bot [...] Classroom By Christophe Seux. (CC0, 72 MB)'''
 checked = 2026-11-21
 
 ["blender-license-artwork"]
@@ -7884,7 +7884,7 @@ checked = 2026-11-21
 ["ez-tree-readme"]
 url = "https://github.com/dgreenheck/ez-tree/blob/dcf309bd86bd521083d9c70f01f2de45fdc7c457/README.md"
 section = "EZ-Tree, README: introduction; the levels of detail generateLODs() builds"
-quote = '''EZ-Tree is a procedural tree generator with dozens of tunable parameters. [...] there is a standalone web app which allows you to create trees within the browser and export as .PNG or .GLB files. [...] All levels are meshed from the same skeleton, so the tree's silhouette stays consistent across switches — distant levels just use fewer ring segments and fewer (but larger) leaves. [...] All LOD levels share one bark material and one leaf material'''
+quote = '''EZ-Tree is a procedural tree generator with dozens of tunable parameters. [...] there is a standalone web app which allows you to create trees within the browser and export as .PNG or .GLB files. [...] All levels are meshed from the same skeleton, so the tree's silhouette stays consistent across switches — distant levels just use fewer ring segments and fewer (but larger) leaves. [...] All LOD levels share one bark material and one leaf material, so `tree.update(time)` animates wind at every level.'''
 checked = 2026-11-21
 
 ["ez-tree-texture-licence"]
@@ -7919,8 +7919,8 @@ checked = 2026-11-21
 
 ["gaea-eula"]
 url = "https://quadspinner.com/PDF/Gaea2-2025-07.pdf"
-section = "Gaea End-User License Agreement, July 14, 2025: 1.4.1 Community Edition, 1.4.2 Indie Edition, 1.4.3 Professional Edition; 1.8 Sale of Assets Created with Gaea, 1.8.2 and 1.8.3"
-quote = '''You may use the Community Edition of Software without a license for non-commercial purposes, including but not limited to Assets. [...] The Indie Edition of Software is restricted to individuals or entities whose annual gross revenue or capital does not exceed USD $100,000 [...] The Professional Edition is restricted to individuals or entities whose annual gross revenue or capital does not exceed USD $1,000,000 [...] You may sell or distribute Assets you create with the Software, subject to the following conditions: [...] Any public-facing product description for the Assets must include the text: “Assets created with QuadSpinner Gaea.” [...] Assets specifically include meshes, displacement maps, data maps, color maps, or any other output generated from the Software that can be used to recreate a 3D terrain in other applications.'''
+section = "Gaea End-User License Agreement, July 14, 2025: 1.2 Interactive End-Product; 1.3.4 Restrictions on AI Training; 1.4.1 Community Edition, 1.4.2 Indie Edition, 1.4.3 Professional Edition; 1.8 Sale of Assets Created with Gaea, 1.8.1 to 1.8.4"
+quote = '''You may not use the Software or Assets in any interactive end-product whose primary or prominent purpose is terrain generation or modification. [...] This restriction does not apply to Video Games [...] You are prohibited from using Software or Assets to train artificial intelligence (AI) systems [...] You may use the Community Edition of Software without a license for non-commercial purposes, including but not limited to Assets. [...] The Indie Edition of Software is restricted to individuals or entities whose annual gross revenue or capital does not exceed USD $100,000 [...] The Professional Edition is restricted to individuals or entities whose annual gross revenue or capital does not exceed USD $1,000,000 [...] You may sell or distribute Assets you create with the Software, subject to the following conditions: [...] Your gross retail revenue from sales of such Assets must not exceed USD $50,000 per calendar year. [...] Any public-facing product description for the Assets must include the text: “Assets created with QuadSpinner Gaea.” [...] Assets specifically include meshes, displacement maps, data maps, color maps, or any other output generated from the Software that can be used to recreate a 3D terrain in other applications. [...] This section applies only to retail sales through online marketplaces, online stores, or other similar channels'''
 checked = 2026-11-21
 
 ["gaea-editions"]
@@ -7943,8 +7943,8 @@ checked = 2026-11-21
 
 ["treeit-overview"]
 url = "http://www.evolved-software.com/treeit/treeit"
-section = "Evolved Software, Tree It: Features"
-quote = '''Adjustable LOD. Exports to *.dbo *.fbx *.obj *.x . Free.'''
+section = "Evolved Software, Tree It: Features; FAQ"
+quote = '''Adjustable LOD. Exports to *.dbo *.fbx *.obj *.x . Free. [...] Can I sell tree models made in tree it? Yes you can! so long as its your own work. [...] Wind info for vertex colors is exported as part of the dbo and fbx formats.'''
 checked = 2026-11-21
 
 ["gltf-validator-licence"]
@@ -7957,4 +7957,34 @@ checked = 2026-11-21
 url = "https://quadspinner.com/Legal"
 section = "QuadSpinner, Legal: End-User License Agreements, Gaea EULA"
 quote = '''License Agreement updates apply only to newer software versions released after the update. Older versions remain governed by the License Agreement that was in effect at the time they were released.'''
+checked = 2026-11-21
+
+["gebco-terms-of-use"]
+url = "https://www.gebco.net/data-products/gridded-bathymetry/terms-of-use"
+section = "GEBCO, Terms of use for the GEBCO Grid and derived information products: Terms of use"
+quote = '''Users are free to: Copy, publish, distribute and transmit The GEBCO Grid. Adapt The GEBCO Grid. Commercially exploit The GEBCO Grid, by, for example, combining it with other information, or by including it in their own product or application. Users must: Acknowledge the source of The GEBCO Grid. [...] Not use The GEBCO Grid in a way that suggests any official status or that GEBCO, or the IHO or IOC, endorses any particular application of The GEBCO Grid. Not mislead others or misrepresent The GEBCO Grid or its source.'''
+checked = 2026-11-21
+
+["fab-eula-amendments"]
+url = "https://www.fab.com/eula"
+section = "Fab End User License Agreement (Last updated: October 1st, 2024), 7. This Agreement between you and the Content Licensor, a. Amendments; 8. Who are you?, c. Epic Account"
+quote = '''Any Content you acquired (whether free or paid) prior to the modified terms will remain governed by the license terms applicable at the time when you acquired the Content. [...] In order to access and download the Content, you must first set up an account with Epic'''
+checked = 2026-11-21
+
+["mcguire-road-bike"]
+url = "https://casual-effects.com/g3d/data10/research/model/roadBike/info.js"
+section = "McGuire Computer Graphics Archive, the record of Road Bike"
+quote = '''title: "Road Bike", [...] triangles: 1677336, [...] copyright: "&copy; 2015, Yasutoshi Mori", [...] license: "<a href='http://creativecommons.org/licenses/by/4.0/'>CC BY 4.0</a>",'''
+checked = 2026-11-21
+
+["mcguire-horse-chestnut"]
+url = "https://casual-effects.com/g3d/data10/research/model/horseChestnut/info.js"
+section = "McGuire Computer Graphics Archive, the record of Horse Chestnut Tree"
+quote = '''title: "Horse Chestnut Tree", [...] copyright: "&copy; 2015 Xfrog Inc.", [...] license: "<a href='https://blog.turbosquid.com/royalty-free-license/'>Royalty Free</a>",'''
+checked = 2026-11-21
+
+["orca-archive"]
+url = "https://developer.nvidia.com/orca"
+section = "NVIDIA ORCA: Open Research Content Archive"
+quote = '''Note: This is a legacy SDK. Developers may download and continue to use, but it is no longer supported. [...] ORCA assets are in FBX format, available for use in any rendering system.'''
 checked = 2026-11-21
