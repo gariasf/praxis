@@ -11406,7 +11406,7 @@ cost = '''an NVIDIA GeForce GTX650 Ti GPU with 1GB of video RAM [...] a resoluti
 ["golus-2017-raw-a2c-fails"]
 url = "https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f"
 section = "Ben Golus, Anti-aliased Alpha Test: The Esoteric Alpha To Coverage, Medium, 2017, The Solution: Alpha to Coverage / Fixing the Solution"
-quote = '''It’s somehow simultaneously fuzzy and aliased, not to mention sort of noisy [...] Many implementations of Alpha to Coverage I’ve seen in games really do leave it here. [...] Two or more overlapping triangles with 50% Alpha to Coverage results in no change in opacity.'''
+quote = '''It’s somehow simultaneously fuzzy and aliased, not to mention sort of noisy [...] The limited number of opacity steps makes for some ugly banding. [...] Many implementations of Alpha to Coverage I’ve seen in games really do leave it here. [...] Two or more overlapping triangles with 50% Alpha to Coverage results in no change in opacity.'''
 checked = 2026-11-21
 
 ["wyman-2017-a2c-layer-correlation"]
@@ -11635,7 +11635,7 @@ checked = 2026-11-21
 ["speedtree-2023-sdk-continuous-leaf-and-branch-lod"]
 url = "https://docs.unity3d.com/speedtree-runtime-sdk/manual/level-of-detail.html"
 section = "Unity Technologies, SpeedTree Runtime SDK manual: Level of detail, 2023, Branches and fronds; Leaves and leaf cards"
-quote = '''the vertex format contains both a 3D position and a 3D LOD value. They're lerped between based on a CPU-supplied LOD value. [...] Some percentage of the leaf instances are gradually shrunk away and the remaining instances are scaled up. [...] LOD scales are uploaded per vertex that cue the cards when to shrink and when to grow.'''
+quote = '''Branches and fronds can employ traditional methods of popping between LODs [...] the vertex format contains both a 3D position and a 3D LOD value. They're lerped between based on a CPU-supplied LOD value. [...] Some percentage of the leaf instances are gradually shrunk away and the remaining instances are scaled up. [...] LOD scales are uploaded per vertex that cue the cards when to shrink and when to grow.'''
 checked = 2026-11-21
 
 ["speedtree-2023-sdk-forest-budget-advice"]
