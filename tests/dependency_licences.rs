@@ -16,6 +16,7 @@ const ALLOWED: &[&str] = &[
     "BSD-2-Clause",
     "BSD-2-Clause OR Apache-2.0 OR MIT",
     "BSD-3-Clause",
+    "BSD-3-Clause AND BSD-2-Clause",
     "BSD-3-Clause OR Apache-2.0",
     "BSD-3-Clause OR MIT OR Apache-2.0",
     "ISC",

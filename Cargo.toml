@@ -9,7 +9,7 @@ wgpu = { version = "30", default-features = false, features = ["std", "parking_l
 winit = "0.30"
 glam = "0.32"
 tracing = "0.1"
-pollster = "0.4"
+pollster = "1"
 anyhow = "1"
 bytemuck = "1.25.0"
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
