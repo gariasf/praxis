@@ -11314,6 +11314,897 @@ checked = 2026-11-21
 url = "https://github.com/dimforge/rapier/blob/475caa3ff4646fd9a796b67d14116256f4962bc7/crates/rapier3d-f64/Cargo.toml#L2"
 section = "Rapier (commit 475caa3, 2026-10-10), crates/rapier3d-f64/Cargo.toml (L2, L27)"
 quote = '''name = "rapier3d-f64" [...] default = ["dim3", "f64", "std", "block-solver"]'''
+
+["castano-2010-alpha-coverage-mips"]
+url = "https://ludicon.com/castano/blog/articles/computing-alpha-mipmaps/"
+section = "Ignacio Castaño, Computing Alpha Mipmaps, 2010 (author's site; first published on The Witness website), whole post"
+quote = '''each mipmap has a different alpha test coverage [...] Instead, what you can do is to find a new alpha reference value a_r that produces the desired coverage [...] this problem does not only show up when using alpha testing, but also when using alpha to coverage (as in these screenshots)'''
+checked = 2026-11-21
+
+["sanders-2018-hzd-depth-prepass-alpha"]
+url = "https://media.gdcvault.com/gdc2018/presentations/gilbert_sanders_between_tech_and.pdf"
+section = "Gilbert Sanders (Guerrilla Games), Between Tech and Art: The Vegetation of Horizon Zero Dawn, GDC 2018, slides 'Pixel Program: Alpha'"
+quote = '''Very Cheap Depth Only Shader [...] Depth Compare (Depth is Equal) [...] Zero percent Overdraw! [...] Find the point P in the histogram that corresponds to the original coverage. [...] Scale the pixels by 0.5 / P so that P ends up at our alpha testing value of 0.5.'''
+checked = 2026-11-21
+
+["unreal-mask-only-in-early-z"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/rendering-settings-in-the-unreal-engine-project-settings"
+section = "Epic Games, Unreal Engine documentation, Rendering Settings (Project Settings), Early Z Pass; Mask Material Only in Early Z Pass"
+quote = '''Defines whether to use a Depth Only Pass to initiate Z culling for the Base Pass. [...] Opaque and Masked Meshes [...] Defines whether to compute Materials' mask opacity only in Early Z Pass.'''
+checked = 2026-11-21
+
+["wyman-2019-coverage-preserving-mips-dilate"]
+url = "http://cwyman.org/papers/tvcg17_hashedAlphaExtended.pdf"
+section = "Wyman and McGuire, Improved Alpha Testing Using Hashed Sampling, IEEE TVCG 2019 (author's copy), §10 Results, Figure 10"
+quote = '''This approach dilates distant geometry to keep it visible, giving an overly dense appearance on the thin leaves in Figure 10.'''
+checked = 2026-11-21
+
+["lisyarus-2025-alpha-mips-without-taa"]
+url = "https://lisyarus.github.io/blog/posts/exploring-ways-to-mipmap-alpha-tested-textures.html"
+section = "lisyarus, Exploring ways to mipmap alpha-tested textures, blog, 5 January 2025, Hashed alpha testing & TAA; Method 6: coverage-based alpha remapping"
+quote = '''Supposedly with this technique, we don't need mipmaps at all, since the stochastic alpha testing together with TAA will average everything out. [...] by preserving the coverage value, it fills some holes in the texture at the expense of thinner features, thus once again shrinking the overall shape.'''
+checked = 2026-11-21
+
+["sanders-2018-hzd-needs-good-aa"]
+url = "https://media.gdcvault.com/gdc2018/presentations/gilbert_sanders_between_tech_and.pdf"
+section = "Gilbert Sanders (Guerrilla Games), Between Tech and Art: The Vegetation of Horizon Zero Dawn, GDC 2018, slides 'Alpha Testing Optimization' and 'Anti-Aliasing'"
+quote = '''256x128 pixel Alpha Texture [...] Need really good Anti-Aliasing! [...] Typically 4 Samples in total [...] Always two Samples per rendered pixel per frame [...] At most 1 millisecond per frame at 1080 / PS4'''
+checked = 2026-11-21
+cost = '''At most 1 millisecond per frame at 1080 / PS4'''
+
+["decarpentier-2017-decima-grass-flicker-without-taa"]
+url = "https://advances.realtimerendering.com/s2017/DecimaSiggraph2017.pdf"
+section = "Giliam de Carpentier (Guerrilla Games) and Kohei Ishiyama (Kojima Productions), Decima Engine: Advances in Lighting and AA, SIGGRAPH 2017 Advances in Real-Time Rendering in Games, slides 37 to 38, speaker notes"
+quote = '''This is without any AA. Notice how noisy and flickery both the short and tail grass looks. This is SMAA. It clearly helps, but it’s still quite noisy. This is TAA. Notice how much calmer everthing looks now. [...] The reason for that is that our AA is applied on often very thin geometry'''
+checked = 2026-11-21
+
+["decarpentier-2017-decima-taa-for-thin-alpha-tested"]
+url = "https://advances.realtimerendering.com/s2017/DecimaSiggraph2017.pdf"
+section = "Giliam de Carpentier (Guerrilla Games) and Kohei Ishiyama (Kojima Productions), Decima Engine: Advances in Lighting and AA, SIGGRAPH 2017 Advances in Real-Time Rendering in Games, slides 29 to 31, speaker notes"
+quote = '''Instead, our AA solution would need to cope with heavily curved, undersampled, ambiguous, alpha-tested and alpha-blended input. [...] Obviously, instead of morphological post-processing techniques, we could have considered multi-sampling techniques or analytical techniques, for example. But we simply couldn’t afford the overhead in complexity and performance [...] And in the end, we settled on a combination of FXAA and our own variation on TAA'''
+checked = 2026-11-21
+cost = '''our FXAA plus TAA PLUS UI compositing system is now taking up at most 1 millisecond per frame on the PS4 in 1080p'''
+
+["golus-2017-msaa-alone-does-not-fix-alpha-test"]
+url = "https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f"
+section = "Ben Golus, Anti-aliased Alpha Test: The Esoteric Alpha To Coverage, Medium, 2017, The Problem: Self Inflicted Aliasing"
+quote = '''Note that the above image is using 4x MSAA. That doesn’t help here since this is shader aliasing which generally MSAA can’t help with. This is something people usually fix with some extra super sampling or they give up on MSAA and use TAA instead.'''
+checked = 2026-11-21
+
+["unreal-msaa-does-not-touch-materials"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/anti-aliasing-and-upscaling-in-unreal-engine"
+section = "Epic Games, Unreal Engine documentation, Anti-Aliasing and Upscaling, Multi-Sample Anti-Aliasing (MSAA)"
+quote = '''Aliasing from materials, textures, and transparent surfaces are not affected by MSAA.'''
+checked = 2026-11-21
+
+["godot-msaa-alpha-scissor"]
+url = "https://docs.godotengine.org/en/stable/tutorials/3d/3d_antialiasing.html"
+section = "Godot Engine documentation (stable), 3D antialiasing, Multisample antialiasing (MSAA)"
+quote = '''MSAA does not reduce transparency aliasing for materials using the Alpha Scissor transparency mode (1-bit transparency). MSAA is also ineffective on specular aliasing. [...] Alpha to coverage has a moderate performance cost, but it's effective at reducing aliasing on transparent materials without introducing any blurriness.'''
+checked = 2026-11-21
+cost = '''Alpha to coverage has a moderate performance cost'''
+
+["unity-alpha-to-mask"]
+url = "https://docs.unity3d.com/Manual/writing-shader-alpha-to-mask.html"
+section = "Unity Manual, Reduce aliasing with AlphaToMask mode, whole page"
+quote = '''Alpha-to-coverage mode can reduce the excessive aliasing that occurs when you use multisample anti-aliasing (MSAA) with shaders that use alpha testing, such as vegetation shaders.'''
+checked = 2026-11-21
+
+["filament-masked-enables-a2c"]
+url = "https://google.github.io/filament/Materials.md.html"
+section = "Google, Filament Materials Guide (documentation), Blending and transparency: blending; Rasterization: alphaToCoverage"
+quote = '''When `blending` is set to `masked`, alpha to coverage is automatically enabled for the material. [...] This property is only meaningful when MSAA is enabled.'''
+checked = 2026-11-21
+
+["papavasiliou-2015-msaa-alpha-to-coverage"]
+url = "https://jcgt.org/published/0004/01/02/paper.pdf"
+section = "Dimitris Papavasiliou, Real-Time Grass (and Other Procedural Objects) on Terrain, Journal of Computer Graphics Techniques 4(1), 2015, §2 (shading, alpha mask); §4 Results"
+quote = '''The edges of the plant can be anti-aliased by using multisample anti-aliasing and converting the value of the alpha mask to a coverage mask for each pixel. This approach avoids the cost of sorting each plant by depth [...] a resolution of 1920 × 1080 pixels and anti-aliasing was performed with 8 samples per fragment.'''
+checked = 2026-11-21
+cost = '''an NVIDIA GeForce GTX650 Ti GPU with 1GB of video RAM [...] a resolution of 1920 × 1080 pixels and anti-aliasing was performed with 8 samples per fragment'''
+
+["golus-2017-raw-a2c-fails"]
+url = "https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f"
+section = "Ben Golus, Anti-aliased Alpha Test: The Esoteric Alpha To Coverage, Medium, 2017, The Solution: Alpha to Coverage / Fixing the Solution"
+quote = '''It’s somehow simultaneously fuzzy and aliased, not to mention sort of noisy [...] The limited number of opacity steps makes for some ugly banding. [...] Many implementations of Alpha to Coverage I’ve seen in games really do leave it here. [...] Two or more overlapping triangles with 50% Alpha to Coverage results in no change in opacity.'''
+checked = 2026-11-21
+
+["wyman-2017-a2c-layer-correlation"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2017-02_Hashed-Alpha-Testing/Wyman2017Hashed.pdf"
+section = "Wyman and McGuire, Hashed Alpha Testing, I3D 2017, §8 Results, Figure 6"
+quote = '''Hardware accelerated alpha-to-coverage has high layer-to-layer correlation that causes leaves to appear as a single layer and overly transparent. Hashed alpha testing and hashed alpha-to-coverage fix these problems'''
+checked = 2026-11-21
+
+["yuksel-2018-sample-mask-texture"]
+url = "https://cemyuksel.com/research/alphadistribution/alpha_distribution.pdf"
+section = "Yuksel, Alpha Distribution for Alpha Testing, Proc. ACM CGIT (I3D 2018), §4 Alpha-to-coverage, §4.1 Sample Mask Texture"
+quote = '''two fragments on a pixel with the same coverage pattern perfectly occlude each other, thereby effectively discarding one of the two fragments. [...] Our first solution involves introducing a secondary texture that stores a sample mask. The bits of this sample mask indicate which sub-pixel samples should be considered covered.'''
+checked = 2026-11-21
+
+["persson-2005-alpha-to-coverage-demo"]
+url = "https://www.humus.name/index.php?page=3D&ID=61"
+section = "Emil Persson (Humus), Alpha to coverage, demo page, 2005, demo description"
+quote = '''it's using the alpha value directly rather than checking against a number of thresholded alpha values, and thus doesn't have the flicker and discontinuity problem that often occurs even with supersampling when the texture is minified a couple of mipmap levels [...] boosts the alpha contrast around 0.5 when the texture is magnified so that the [0, 1] range of alpha values spans over the width of a pixel'''
+checked = 2026-11-21
+
+["pcgh-2021-forza-horizon-5-vegetation-flicker"]
+url = "https://www.pcgameshardware.de/Forza-Horizon-5-Spiel-73350/Specials/PC-Release-Benchmark-Test-Steam-Systemanforderungen-1382783/3/"
+section = "PC Games Hardware, Forza Horizon 5 im Technik-Test, 2021, page 3 (press test, German), Forza Horizon 5 im Technik-Test: MSAA"
+quote = '''ein Alpha-2-Coverage-Filter erlaubt das Erfassen von feiner Vegetation, das MSAA ist dank Forward-Plus-Rendering zudem günstig [...] Außerdem unterdrückt FXAA das gröbste Rest-Flimmern von Vegetation und Asphalt. Richtig effektiv wäre dagegen Temporal-AA'''
+checked = 2026-11-21
+
+["computerbase-2022-forza-horizon-5-msaa-flicker"]
+url = "https://www.computerbase.de/2022-06/forza-horizon-5-series-9-update-taa-test/"
+section = "ComputerBase, Forza Horizon 5: Das Series 9 Update reduziert Flimmern mit TAA deutlich, June 2022 (press test, German), 'Forza Horizon 5 war schon immer hübsch, flimmerte aber stark' and following section"
+quote = '''Allerdings hat das MSAA in Forza Horizon 5 zugleich einen großen Nachteil: Es bekommt viele Elemente einfach nicht gut geglättet [...] Selbst in Full HD flimmert das Bild mit TAA weniger als mit MSAA in Ultra HD.'''
+checked = 2026-11-21
+cost = '''So läuft Forza Horizon 5 mit TAA auf einer GeForce RTX 3060 Ti in 1.920 × 1.080 und 2.560 × 1.440 um 4 Prozent flotter als mit vierfachem MSAA'''
+
+["golus-2017-sharpened-a2c"]
+url = "https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f"
+section = "Ben Golus, Anti-aliased Alpha Test: The Esoteric Alpha To Coverage, Medium, 2017, Fixing the Solution"
+quote = '''Alpha to Coverage is great for anti-aliasing alpha test, not so much for replacing an alpha blend! [...] col.a = (col.a - _Cutoff) / max(fwidth(col.a), 0.0001) + 0.5; [...] What that line does is sharpens the alpha of the texture to the width of a single pixel.'''
+checked = 2026-11-21
+
+["golus-2017-mip-alpha-scale"]
+url = "https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f"
+section = "Ben Golus, Anti-aliased Alpha Test: The Esoteric Alpha To Coverage, Medium, 2017, Fixing the Solution (mip mapping)"
+quote = '''As you get far away from an object using alpha test it’ll appear to shrink and eventually vanish. [...] col.a *= 1 + CalcMipLevel(i.uv * _MainTex_TexelSize.zw) * _MipScale; [...] We can approximate the loss of density from mip mapping almost perfectly with a _MipScale of 0.25.'''
+checked = 2026-11-21
+
+["godot-alpha-edge-modes"]
+url = "https://docs.godotengine.org/en/stable/tutorials/3d/standard_material_3d.html"
+section = "Godot Engine documentation (stable), Standard Material 3D and ORM Material 3D, Alpha Antialiasing"
+quote = '''Alpha Edge Clip: Results in a sharp, but still antialiased transition between opaque and transparent areas. [...] this feature relies on alpha to coverage, which is a feature provided by MSAA. Without MSAA, a fixed dithering pattern is applied on the material's edges'''
+checked = 2026-11-21
+
+["meta-a2c-over-cutout"]
+url = "https://developers.meta.com/horizon/blog/common-rendering-mistakes-how-to-find-them-and-how-to-fix-them/"
+section = "Meta developer blog, Common Rendering Mistakes: How to Find Them and How to Fix Them, MSAA section and summary list"
+quote = '''MSAA also doesn’t apply to Alpha Cutout materials since the clip happens per pixel. [...] Alpha To Coverage looks better than Alpha Cutout'''
+checked = 2026-11-21
+cost = '''We recommend 4x MSAA as the quality difference makes the extra cost worth it.'''
+
+["wyman-2017-hashed-alpha-stability-claim"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2017-02_Hashed-Alpha-Testing/Wyman2017Hashed.pdf"
+section = "Wyman and McGuire, Hashed Alpha Testing, I3D 2017, Abstract"
+quote = '''With a good hash function and inputs, hashed alpha testing maintains distant geometry without introducing more temporal flicker than traditional alpha testing.'''
+checked = 2026-11-21
+
+["wyman-2017-hashed-alpha-subpixel-motion"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2017-02_Hashed-Alpha-Testing/Wyman2017Hashed.pdf"
+section = "Wyman and McGuire, Hashed Alpha Testing, I3D 2017, §8 Results, Figure 9"
+quote = '''under the same sub-pixel motion hashed alpha testing exhibits temporal stability roughly equivalent to traditional alpha testing [...] However, even nearby chains on the fence have noisy edges.'''
+checked = 2026-11-21
+
+["wyman-2017-hashed-alpha-cost"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2017-02_Hashed-Alpha-Testing/Wyman2017Hashed.pdf"
+section = "Wyman and McGuire, Hashed Alpha Testing, I3D 2017, §8 Results, Table 1"
+quote = '''Our added overhead for hashed alpha testing is all computation, without additional texture or global memory accesses.'''
+checked = 2026-11-21
+cost = '''At 1920×1080 with one test per fragment, our hashed alpha test costs an additional 0.1 to 0.3 ms per frame [...] alpha tests at 1920×1080 on a GeForce GTX 1080.'''
+
+["wyman-2019-msaa-a2c-matches-taa"]
+url = "http://cwyman.org/papers/tvcg17_hashedAlphaExtended.pdf"
+section = "Wyman and McGuire, Improved Alpha Testing Using Hashed Sampling, IEEE TVCG 2019 (author's copy), §10 Results, Figure 11"
+quote = '''Figure 11 compares hashed alpha testing, 8× MSAA using hashed alpha-to-coverage, and both hashed techniques with temporal antialiasing. Interestingly using hashed alpha testing with TAA gives results largely similar to [...] and temporally antialiased alpha-to-coverage is nearly indistinguishable from the ground truth.'''
+checked = 2026-11-21
+
+["wyman-2019-hashed-alpha-taa-insufficient"]
+url = "http://cwyman.org/papers/tvcg17_hashedAlphaExtended.pdf"
+section = "Wyman and McGuire, Improved Alpha Testing Using Hashed Sampling, IEEE TVCG 2019 (author's copy), §7.2 Hashed Alpha Testing With Temporal Antialiasing"
+quote = '''Naive application of TAA gives smooth-edged, pixel-sized blocks rather than accumulating stochastic coverage temporally. [...] the eight jittered samples TAA typically uses is insufficient for converged results. This can introduce temporal flicker.'''
+checked = 2026-11-21
+
+["yuksel-2018-alpha-distribution-no-shader-change"]
+url = "https://cemyuksel.com/research/alphadistribution/"
+section = "Cem Yuksel, Alpha Distribution (project page for the I3D 2018 paper), Abstract"
+quote = '''We introduce the alpha distribution approach for pre-processing the alpha values of a texture such that alpha testing produces expected results with semi-transparency without any modification to render-time operations.'''
+checked = 2026-11-21
+
+["yuksel-2018-alpha-distribution-limits"]
+url = "https://cemyuksel.com/research/alphadistribution/alpha_distribution.pdf"
+section = "Yuksel, Alpha Distribution for Alpha Testing, Proc. ACM CGIT (I3D 2018), §6 Limitations"
+quote = '''when a texture is tiled, the same visibility pattern is repeated on each tile [...] it does not work well in extreme close-ups, where magnification filtering is used [...] In this case hashed alpha testing [Wyman and McGuire 2017a,b] leads to a different kind of undesirable result in the form of excessive noise, so it must be faded out in close-ups.'''
+checked = 2026-11-21
+
+["enderton-2010-stochastic-transparency-noise"]
+url = "https://www.cse.chalmers.se/~d00sint/StochasticTransparency_I3D2010.pdf"
+section = "Enderton, Sintorn, Shirley, Luebke, Stochastic Transparency, I3D 2010, §1 Introduction; §4 Results; §5 Limitations (Temporal coherence)"
+quote = '''uses a fixed dithering pattern, multiple layers occlude each other instead of blending correctly [...] For basic stochastic transparency without alpha correction, 64 samples seems like a minimum. [...] Seeding by fragment z is effective for still images, but causes the noise pattern of moving objects to change completely each frame.'''
+checked = 2026-11-21
+
+["wohllaib-2021-got-grass-cards-rejected"]
+url = "https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass"
+section = "Eric Wohllaib (Sucker Punch Productions), Procedural Grass in 'Ghost of Tsushima', GDC 2021 Advanced Graphics Summit, GDC Vault English caption track, minute 1"
+quote = '''we experimented with traditional grass cards. [...] having our animation tied to the entire grass card was very limiting. Second, overdraw was problematic for the density of foliage we were looking to have in our world.'''
+checked = 2026-11-21
+
+["wohllaib-2021-got-grass-compute-per-tile"]
+url = "https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass"
+section = "Eric Wohllaib (Sucker Punch Productions), Procedural Grass in 'Ghost of Tsushima', GDC 2021 Advanced Graphics Summit, GDC Vault English caption track, minute 3 (slide 'Placing a Grass Blade' lists the same steps)"
+quote = '''The textures are 512 by 512, which ends up meaning we have one texel every 39 centimeters or so. For each render tile, we run one compute shader. Each lane in the compute shader gets a position on a grid within the tile and adds a random offset to pick our blade's position. Once we know where it is, we do distance culling and frustum culling. [...] Now that we're fairly certain we have a grass blade, we do occlusion culling.'''
+checked = 2026-11-21
+
+["wohllaib-2021-got-grass-lod-by-tile"]
+url = "https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass"
+section = "Eric Wohllaib (Sucker Punch Productions), Procedural Grass in 'Ghost of Tsushima', GDC 2021 Advanced Graphics Summit, GDC Vault English caption track, minutes 8 to 9 (slide: 'High LOD', 'Low LOD', '15 vertices', '7 vertices')"
+quote = '''High LOD grass has 15 verts per blade, while the low LOD has seven. [...] the high LOD blends towards the low LOD as it nears it. It's also worth mentioning that the low LOD tiles are twice the size of the high LOD tiles, but have the same number of grass blades. [...] the high LOD tiles LOD out three out of every four grass blades before they transition to the low LOD tiles.'''
+checked = 2026-11-21
+
+["wohllaib-2021-got-grass-lod-limit"]
+url = "https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass"
+section = "Eric Wohllaib (Sucker Punch Productions), Procedural Grass in 'Ghost of Tsushima', GDC 2021 Advanced Graphics Summit, GDC Vault English caption track, minutes 23 to 24 (future work)"
+quote = '''this means that we're tied to LOD-ing out three fourths of our grass blades at a distance that isn't very easy to change.'''
+checked = 2026-11-21
+
+["wohllaib-2021-got-grass-scale-and-cost"]
+url = "https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass"
+section = "Eric Wohllaib (Sucker Punch Productions), Procedural Grass in 'Ghost of Tsushima', GDC 2021 Advanced Graphics Summit, GDC Vault English caption track of the talk video, minute 1 (the slide deck at https://media.gdcvault.com/GDC+2021/gdc_2021_procedural_grass_in_got.pdf carries only headings)"
+quote = '''This scene considers just over one million blades of grass and renders about 83,000 of them, each individually animating with the wind and taking about two and a half milliseconds end to end.'''
+checked = 2026-11-21
+cost = '''taking about two and a half milliseconds end to end'''
+
+["wohllaib-2021-got-grass-thin-blades-and-specular-aliasing"]
+url = "https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass"
+section = "Eric Wohllaib (Sucker Punch Productions), Procedural Grass in 'Ghost of Tsushima', GDC 2021 Advanced Graphics Summit, GDC Vault English caption track, minute 14 (slides '<glancing angle adjustment>' and '<specular anti-aliasing with clump normal>')"
+quote = '''we slightly shift the blades verts in view space when the blades normal is orthogonal to the view vector. This subtly thickens the grass blade from the user's view, [...] We also struggled with very aliased specular highlights in the mid to far distance, especially in the rain. [...] we start to lerp the outputted normal towards a common normal for the grass clump. This helps maintain the shape of the field while still reducing noise. Additionally, we reduce gloss in the pixel shader.'''
+checked = 2026-11-21
+
+["wohllaib-2021-got-grass-no-velocity"]
+url = "https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass"
+section = "Eric Wohllaib (Sucker Punch Productions), Procedural Grass in 'Ghost of Tsushima', GDC 2021 Advanced Graphics Summit, GDC Vault English caption track, minutes 16 to 17 (slide 'VELOCITY', '<we don't have velocity >')"
+quote = '''our grass doesn't write velocity to our velocity buffer. [...] the way the grass works makes it a poor target for temporally accumulated effects. The grass blades constantly wave back and forth over each other, occluding and dis-occluding nonstop. So even if we did spend the perf to get correct velocities, our AO would end up a splotchy and glittery mass.'''
+checked = 2026-11-21
+
+["patry-2021-got-checkerboard-resolution"]
+url = "https://www.advances.realtimerendering.com/s2021/jpatry_advances2021.pdf"
+section = "Jasmin Patry (Sucker Punch Productions), Real-Time Samurai Cinema: Lighting, Atmosphere, and Tonemapping in Ghost of Tsushima, SIGGRAPH 2021 Advances in Real-Time Rendering in Games, bonus slide, speaker notes (volumetric haze filtering cost table)"
+quote = '''Note that 1800cb refers to 3200x1800 checkerboard resolution, where 1600x1800 pixels are rendered each frame.'''
+checked = 2026-11-21
+
+["jahrmann-2017-msaa-8x-cost"]
+url = "https://www.cg.tuwien.ac.at/research/publications/2017/JAHRMANN-2017-RRTG/JAHRMANN-2017-RRTG-draft.pdf"
+section = "Klemens Jahrmann and Michael Wimmer, Responsive Real-Time Grass Rendering for General 3D Scenes, I3D 2017 (authors' draft), §7 Results, Table 1 (nature scene)"
+quote = '''The resolution that is used for the renderings is 1024x768 pixels. In order to reduce aliasing artifacts, MSAA with 8 samples is used.'''
+checked = 2026-11-21
+cost = '''NVIDIA GeForce GTX 780M graphics card [...] 1024x768 pixels [...] It consists of 397,881 blades of grass. [...] Frame time 8.130 7.742 12.821 [...] Blades drawn 43,128 43,128 168,333'''
+
+["jahrmann-2017-width-correction"]
+url = "https://www.cg.tuwien.ac.at/research/publications/2017/JAHRMANN-2017-RRTG/JAHRMANN-2017-RRTG-draft.pdf"
+section = "Klemens Jahrmann and Michael Wimmer, Responsive Real-Time Grass Rendering for General 3D Scenes, I3D 2017 (authors' draft), §6.3, Width correction"
+quote = '''This effect can be reduced by modifying the interpolation parameter of the respective shape with a correction value based on the width in pixels, so that blades of grass at far distances are rendered as quads regardless of the chosen shape.'''
+checked = 2026-11-21
+
+["jahrmann-2017-culling-as-anti-aliasing"]
+url = "https://www.cg.tuwien.ac.at/research/publications/2017/JAHRMANN-2017-RRTG/JAHRMANN-2017-RRTG-draft.pdf"
+section = "Klemens Jahrmann and Michael Wimmer, Responsive Real-Time Grass Rendering for General 3D Scenes, I3D 2017 (authors' draft), §6.2 Culling (orientation test, distance test) and §7.2"
+quote = '''Thus, blades that are approximately parallel to the viewing direction can cause unwanted aliasing artifacts since their projected pixel width is less than the size of a pixel. [...] According to this distance, the blade is classified into one of n distance levels, which are evenly distributed over the interval [0, dmax ], where dmax is a user-defined maximum distance. [...] Note that distance and orientation culling can introduce some popping artifacts for moving cameras, depending on the number of levels used, as can also be seen in the accompanying video.'''
+checked = 2026-11-21
+
+["cook-2007-area-preservation"]
+url = "https://graphics.pixar.com/library/StochasticSimplification/paper.pdf"
+section = "Robert L. Cook, John Halstead, Maxwell Planck, David Ryu, Stochastic Simplification of Aggregate Detail, SIGGRAPH 2007 (archive snapshot of Pixar's copy, 2022-10-26), abstract; §3.2 Area preservation, equation 3"
+quote = '''Scenes are rendered by randomly selecting a subset of the geometric elements and altering those elements statistically to preserve the overall appearance of the scene. [...] Excluding elements decreases the total area to λ Na; to compensate for this, the area of the included elements should be scaled by an amount s so that (λ N)(as) = Na'''
+checked = 2026-11-21
+
+["cook-2007-contrast-and-smooth-animation"]
+url = "https://graphics.pixar.com/library/StochasticSimplification/paper.pdf"
+section = "Robert L. Cook, John Halstead, Maxwell Planck, David Ryu, Stochastic Simplification of Aggregate Detail, SIGGRAPH 2007 (archive snapshot of Pixar's copy, 2022-10-26), §3.4 Contrast preservation; §3.5 Smooth Animation"
+quote = '''As a result, excluding more elements from an object increases its variance (i.e., contrast). [...] As elements are excluded, they should gradually fade out instead of just abruptly disappearing. This can be done by gradually making the elements either more transparent or smaller as they are excluded.'''
+checked = 2026-11-21
+
+["faber-2024-gpuopen-mesh-shader-grass-lod"]
+url = "https://gpuopen.com/learn/mesh_shaders/mesh_shaders-procedural_grass_rendering/"
+section = "Carsten Faber, Bastian Kuth, Quirin Meyer, Max Oberberger, Procedural grass rendering (Mesh shaders on AMD GPUs), AMD GPUOpen, originally posted March 20, 2024, Level of detail: Fractional scaling; Geometry compensation"
+quote = '''For this, we reduce the number of blades of grass in the distance. To compensate for this, we increase the width of the remaining grass blades for the whole patch. [...] The width of the last grass blade at bladeId = bladeCount-1 gets scaled with the fractional part of bladeCountF.'''
+checked = 2026-11-21
+
+["wihlidal-2023-nanite-foliage-opaque-geometry"]
+url = "https://web.archive.org/web/2025id_/https://www.unrealengine.com/en-US/tech-blog/bringing-nanite-to-fortnite-battle-royale-in-chapter-4"
+section = "Graham Wihlidal (Epic Games), Bringing Nanite to Fortnite Battle Royale in Chapter 4, Unreal Engine tech blog, 2023 (archive snapshot), foliage sections: masked materials; Preserve Area"
+quote = '''we found it was usually faster to avoid masked materials and instead rely on increasing triangle counts of the mesh and keeping the materials opaque, especially for trees and grass [...] negative space in the alpha maps adds additional overdraw cost [...] redistributes the lost area to the remaining triangles by dilating out the open boundary edges'''
+checked = 2026-11-21
+
+["epic-2026-nanite-foliage-no-alpha-cards"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/nanite-foliage"
+section = "Epic Games, Nanite Foliage, Unreal Engine 5.9 Documentation (feature marked Experimental), 2026, introduction"
+quote = '''Alpha Masking: Nanite doesn’t work well with it since it introduces a lot of overdraw in addition to having to execute a potentially expensive mask function. [...] This allows trees to retain their volumetric look at distances without resorting to billboards or LODs in the distance.'''
+checked = 2026-11-21
+
+["epic-2026-nanite-assemblies-tree-as-instanced-parts"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/nanite-foliage"
+section = "Epic Games, Nanite Foliage, Unreal Engine 5.9 Documentation (feature marked Experimental), 2026, Nanite Assemblies"
+quote = '''Nanite assemblies work by taking the clusters of the part meshes and encodes them into the final mesh’s hierarchy without duplicating the geometry of the parts during build time. [...] On non-Nanite platforms, the triangles of the parts are transformed and merged together into a single mesh.'''
+checked = 2026-11-21
+cost = '''the UASSET disk space of the biggest tree in the demonstration went from being 3.5 gigabytes (Gb) to approximately 29 megabytes (Mb). The streaming memory of just one of the trees in one particular view was measured to go down from approximately 36 Mb to around 2.7 Mb.'''
+
+["kulikov-2025-analytic-line-coverage"]
+url = "https://www.advances.realtimerendering.com/s2025/content/Strand%20Hair%20in%20IJGC%20-%20Final%20Slides%20(Post-Conference).pdf"
+section = "Sergei Kulikov (MachineGames), Strand-based hair and fur in Indiana Jones and the Great Circle, SIGGRAPH 2025 Advances in Real-Time Rendering (slides with notes), rasterization slides and notes; timings slide"
+quote = '''hair segments are definitely small, often much thinner than a pixel [...] it’s easier to render perfectly anti-aliased lines like that [...] What worked for us it to accumulate coverage additively using an atomicAdd, and reconstruct alpha blended coverage later, on the composition stage'''
+checked = 2026-11-21
+cost = '''Total 2.39ms 1.94ms 1.95ms 1.64ms'''
+
+["wyman-2017-subpixel-billboards-not-solved"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2017-02_Hashed-Alpha-Testing/Wyman2017Hashed.pdf"
+section = "Wyman and McGuire, Hashed Alpha Testing, I3D 2017, §2 Why does alpha-mapped geometry disappear, 'Coarse raster grid'"
+quote = '''Billboards may not appear on screen at all, causing an apparent loss of coverage [...] Our algorithms do not address this issue, though conservative rasterization and multisampling reduce the problem.'''
+checked = 2026-11-21
+
+["speedtree-2023-sdk-continuous-leaf-and-branch-lod"]
+url = "https://docs.unity3d.com/speedtree-runtime-sdk/manual/level-of-detail.html"
+section = "Unity Technologies, SpeedTree Runtime SDK manual: Level of detail, 2023, Branches and fronds; Leaves and leaf cards"
+quote = '''Branches and fronds can employ traditional methods of popping between LODs [...] the vertex format contains both a 3D position and a 3D LOD value. They're lerped between based on a CPU-supplied LOD value. [...] Some percentage of the leaf instances are gradually shrunk away and the remaining instances are scaled up. [...] LOD scales are uploaded per vertex that cue the cards when to shrink and when to grow.'''
+checked = 2026-11-21
+
+["speedtree-2023-sdk-forest-budget-advice"]
+url = "https://docs.unity3d.com/speedtree-runtime-sdk/manual/gpu-performance.html"
+section = "Unity Technologies, SpeedTree Runtime SDK manual: GPU performance, 2023, Unique model count; Overdraw; Draw distance"
+quote = '''3 to 5 unique .stsdk models randomly scaled and rotated go a long way [...] For dense forests, overdraw can get out of hand quickly. Be sure to have the artists trim as many interior leaf triangles as possible. [...] the number of billboards rendered will increase exponentially as the draw distance increases'''
+checked = 2026-11-21
+
+["leblanc-conte-2025-acshadows-bvh-no-vertex-animation"]
+url = "https://www.realtimerendering.com/advances/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf"
+section = "Luc Leblanc, Melino Conte (Ubisoft Montréal), Ray tracing the world of Assassin's Creed Shadows, SIGGRAPH 2025 Advances in Real-Time Rendering in Games course, slide (number as printed) 28, Ray tracing scene description: Geometry (speaker notes)"
+quote = '''There is no vertex animation support, so no skinning (no character) or moving vegetation. [...] We cull as much as possible small geometries such as small vegetations and clutter.'''
+checked = 2026-11-21
+
+["ubisoft-2025-acshadows-vegetation-animated-on-screen"]
+url = "https://www.ubisoft.com/en-us/game/assassins-creed/news/4XbPPtFyQEtIMWrA9xVDmZ"
+section = "Ubisoft, Assassin's Creed Shadows Tech Q&A (answers by Pierre Fortin, technology director), ubisoft.com, 2025, answer on the choice of baked versus ray-traced global illumination"
+quote = '''all the vegetation in AC Shadows is physically animated on the GPU based on a dynamic wind system driven by a fluid simulation!'''
+checked = 2026-11-21
+
+["leblanc-conte-2025-acshadows-alpha-test-opaque-approximation"]
+url = "https://www.realtimerendering.com/advances/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf"
+section = "Luc Leblanc, Melino Conte (Ubisoft Montréal), Ray tracing the world of Assassin's Creed Shadows, SIGGRAPH 2025 Advances in Real-Time Rendering in Games course, slide (number as printed) 85, Alpha-tested materials: Opaque approximation (speaker notes)"
+quote = '''The solution used in the end is an opaque approximation. We scaled the triangles according to average opacity and force them to be opaque, leaving us with better performance for the trace and close to our reference in result. We did not analyze the introduced bias, but found our result to be very close to the alpha-test reference, at almost half cost.'''
+checked = 2026-11-21
+cost = '''• 60% cost* [...] *relative to reference on a Nvidia GPU'''
+
+["leblanc-conte-2025-acshadows-alpha-test-cost-ladder"]
+url = "https://www.realtimerendering.com/advances/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf"
+section = "Luc Leblanc, Melino Conte (Ubisoft Montréal), Ray tracing the world of Assassin's Creed Shadows, SIGGRAPH 2025 Advances in Real-Time Rendering in Games course, slides 80-84, Alpha-tested materials (speaker notes)"
+quote = '''Alpha-tested materials are known to be costly due to the need to load and test the alpha textures when traversing the BVH. This is also problematic since many leaves are condensed in clusters, leading to divergent times for each of our ray tracing compute groups. [...] Its well known to be too expensive for real-time in dense forests. [...] An other solution we tested was dithering the alpha-test through noise. [...] This did not bring any performance gains for us, even sometimes being more costly than the real test.'''
+checked = 2026-11-21
+cost = '''• 85% cost* (n=2) • 90% cost* (n=4) *relative to reference on a Nvidia GPU'''
+
+["leblanc-conte-2025-acshadows-specular-needs-alpha-test"]
+url = "https://www.realtimerendering.com/advances/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf"
+section = "Luc Leblanc, Melino Conte (Ubisoft Montréal), Ray tracing the world of Assassin's Creed Shadows, SIGGRAPH 2025 Advances in Real-Time Rendering in Games course, slides 66-67, Per-pixel indirect specular: Removed opaque approximations (speaker notes)"
+quote = '''The opaque approximation that we use for alpha-tested vegetation works great for computing the diffuse illumination but is very visible when used to compute strong reflective surface as you can see in this image. [...] We had to switch to the evaluation of the alpha-test texture limiting to 4 any hit shader call.'''
+checked = 2026-11-21
+
+["devahl-2025-indiana-gi-vegetation-static-no-alpha"]
+url = "https://www.enginearchitecture.org/downloads/REAC_2025_Indy.pdf"
+section = "Joel de Vahl (MachineGames), presentation on shipping Indiana Jones and the Great Circle (PDF title 'REAC 2025 - Pushing Indy to 60'), Rendering Engine Architecture Conference (REAC) 2025, PDF page 54 (slide numbered 50), speaker notes"
+quote = '''For vegetation we have a bit of a simplified representation. We skip wind animation and do not support alpha compared vegetation for ray tracing. Instead, we discard triangles from alpha compared meshes proportional to the number of transparent pixels in their opacity map. [...] o Keep vegetation static (in non PT)'''
+checked = 2026-11-21
+
+["koshlo-2024-snowdrop-rt-alpha-dither"]
+url = "https://gdcvault.com/play/1034404/Ray-Tracing-in-Snowdrop-Scene"
+section = "Oleksandr Koshlo (Massive Entertainment), Ray Tracing in Snowdrop: Scene Representation and Custom BVH, GDC 2024, slides (saved PDF), slides 'Materials - overview', 'Materials – alpha test'"
+quote = '''We don’t support alpha-testing, we fake it [...] Avatar: Frontiers of Pandora has lots of vegetation relying on alpha-test [...] Use blue-noise dithering instead. Each alpha-tested instance gets a constant alpha value, and we randomly reject triangle hits based on dithering test [...] Works great for diffuse GI – gives expected amount of occlusion and saturation from trees'''
+checked = 2026-11-21
+
+["koshlo-2024-snowdrop-rt-scene"]
+url = "https://gdcvault.com/play/1034404/Ray-Tracing-in-Snowdrop-Scene"
+section = "Oleksandr Koshlo (Massive Entertainment), Ray Tracing in Snowdrop: Scene Representation and Custom BVH, GDC 2024, slides (saved PDF), slides 'RT Scene Traversal – what’s added to the world?', 'Snowdrop mesh rendering overview', 'DXR vs Custom BVH - impostors'"
+quote = '''By default mesh is set to “RT-auto” – static meshes are added to the world, skinned or meshes requiring per-instance BVH are excluded [...] We randomly prune-out meshes from procedural sectors with some heuristics, to avoid excessive amount of instances in RT [...] Impostors with baked depth information are used for trees [...] Impostors are added for distant sun shadows (beyond CSM range) [...] Geometry LOD of ray-tracing world doesn’t match raster world. That doesn’t allow for precise shadows [...] During ray traversal we do procedural trace against impostor depth'''
+checked = 2026-11-21
+
+["ue-docs-rt-wpo-ignored-by-default"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/ray-tracing-performance-guide-in-unreal-engine"
+section = "Epic Games, Ray Tracing Performance Guide in Unreal Engine, Unreal Engine 5.9 Documentation, World Position Offset on Static Mesh Components"
+quote = '''World Position Offset (WPO) is challenging to support efficiently with Ray Tracing features because it requires dynamically rebuilding the BLAS, as well as unique memory for each instance. [...] By default, Unreal Engine ignores WPO when building Ray Tracing Scene, which can cause self-intersections artifacts. [...] However, it only works for a short distance around the camera, 120 meters unless otherwise specified.'''
+checked = 2026-11-21
+
+["unity-hdrp17-rt-no-vertex-animation-no-terrain-trees"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/ray-tracing-introduction.html"
+section = "Unity Technologies, High Definition Render Pipeline 17.0 manual, Ray tracing introduction, Ray tracing limitations: Geometry and materials"
+quote = '''Ray tracing in HDRP isn't compatible with the following features. [...] The detail meshes and trees in the Terrain system. To include detailed meshes and trees in ray traced reflections, use mixed tracing. [...] Vertex animation, for example wind deformation of vegetation.'''
+checked = 2026-11-21
+
+["narkowicz-costa-2025-megalights-alpha-tricks-fail-for-direct-shadows"]
+url = "https://advances.realtimerendering.com/s2025/content/MegaLights_Stochastic_Direct_Lighting_2025.pdf"
+section = "Krzysztof Narkowicz, Tiago Costa (Epic Games), MegaLights: Stochastic Direct Lighting in Unreal Engine 5, SIGGRAPH 2025 Advances in Real-Time Rendering in Games course, PDF page 48, slide 'Alpha Masking' (speaker notes)"
+quote = '''While for GI or reflections we can usually get away with tricks like shrinking or culling triangles during BVH build based on alpha mask to cheaply approximate occlusion, those methods don’t work well for direct shadows. [...] The second approach is to do the usual lightweight inline trace first, and if we hit an instance that needs material evaluation, we trace a “continuation” ray with any hit evaluation enabled.'''
+checked = 2026-11-21
+
+["narkowicz-costa-2025-megalights-foliage-falls-back-to-shadow-maps"]
+url = "https://advances.realtimerendering.com/s2025/content/MegaLights_Stochastic_Direct_Lighting_2025.pdf"
+section = "Krzysztof Narkowicz, Tiago Costa (Epic Games), MegaLights: Stochastic Direct Lighting in Unreal Engine 5, SIGGRAPH 2025 Advances in Real-Time Rendering in Games course, PDF page 49, slide 'Shadow Map Sampling' (speaker notes)"
+quote = '''● HWRT not practical for some content ○ Eg: animated / alpha masked foliage ● Option to fallback to Virtual Shadow Maps [...] The overhead of running AHS might simply be too high, specially since it’s usually used on dense foliage with lots of overlapping triangles. [...] Or there might be heavily instanced animated meshes which require a lot of memory and time spent building BVHs. [...] So in practice this is used only for the directional light since representation mismatches tend to be more noticeable there'''
+checked = 2026-11-21
+
+["narkowicz-costa-2025-megalights-proxy-mismatch-screen-traces"]
+url = "https://advances.realtimerendering.com/s2025/content/MegaLights_Stochastic_Direct_Lighting_2025.pdf"
+section = "Krzysztof Narkowicz, Tiago Costa (Epic Games), MegaLights: Stochastic Direct Lighting in Unreal Engine 5, SIGGRAPH 2025 Advances in Real-Time Rendering in Games course, PDF pages 43-47, slides 'Mesh Representation Mismatches' and 'Screen Traces' (speaker notes)"
+quote = '''Those mismatches cause incorrect self-shadowing, since rays are traced from the rasterized geometry surface and they might immediately intersect proxy mesh triangles. [...] So our main method to avoid incorrect self-shadowing, is screen space ray tracing. [...] We can then offset the origin of the world trace based on how far the screen trace got [...] ○ Limit ray length (eg: 20cm)'''
+checked = 2026-11-21
+cost = '''using either front or back face culling adds about 10% overhead to tracing'''
+
+["bavoil-2025-indiana-alpha-test-off-outside-path-tracing"]
+url = "https://developer.nvidia.com/blog/path-tracing-optimizations-in-indiana-jones-opacity-micromaps-and-compaction-of-dynamic-blass"
+section = "Louis Bavoil (NVIDIA), Path Tracing Optimizations in Indiana Jones: Opacity MicroMaps and Compaction of Dynamic BLASs, NVIDIA Technical Blog, 15 May 2025, Alpha testing in RT shaders"
+quote = '''The non-path-tracing version of the game kept ray-traced alpha-testing support disabled for performance reasons. [...] For the shadow rays, we used a rayQueryEXT object. We could not use a RayGen shader because some of these rays had to be traced within fragment shaders due to the engine doing Forward+ rendering. [...] It then calls rayQueryConfirmIntersectionEXT only if the alpha-test should not reject the hit.'''
+checked = 2026-11-21
+
+["nvidia-2022-ada-whitepaper-omm"]
+url = "https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf"
+section = "NVIDIA, NVIDIA Ada GPU Architecture (whitepaper), 2022, 2x Faster Alpha Traversal Performance with Opacity Micromap Engine, pp. 16-18"
+quote = '''When a leaf is hit by a ray, a shader is invoked to determine how to treat the intersection, even if the ray is simply characterized as a hit or a miss. This incurs noticeable cost. Specifically, when a warp of rays is cast towards non-opaque objects, individual ray queries may require multiple shader invocations to resolve, while other rays terminate immediately. The result is lingering live threads and commensurate inefficiency. [...] Performance gains heavily depend on usage, typically shadow rays cast against alpha-tested geometry see the largest gains.'''
+checked = 2026-11-21
+cost = '''we have measured a doubling of scene traversal performance in applications with alpha-tested geometry'''
+
+["bavoil-2025-indiana-omm-cost"]
+url = "https://developer.nvidia.com/blog/path-tracing-optimizations-in-indiana-jones-opacity-micromaps-and-compaction-of-dynamic-blass"
+section = "Louis Bavoil (NVIDIA), Path Tracing Optimizations in Indiana Jones: Opacity MicroMaps and Compaction of Dynamic BLASs, NVIDIA Technical Blog, 15 May 2025, The profiled scene; Initial GPU performance; With Opacity MicroMaps, Table 2"
+quote = '''Figure 2 shows that the TraceMain pass took 7.90 ms and had 17% of the periodic shader samples spent in the AHS. The only thing this AHS is doing is alpha testing. [...] For shadow rays, we used the four-state OMMs, which are fully conservative. [...] The GPU time spent in the SunTracing pass has also been sped up, by 14%.'''
+checked = 2026-11-21
+cost = '''TraceMain7.90 ms3.58 ms-55% SunTracing0.83 ms0.71 ms-14% [...] captured from the Peru scene shown on Figure 1, on a GeForce RTX 5080 GPU [...] (4K UHD with DLSS-RR Performance), the path-tracing is done in 1080p [...] the Ray Tracing Acceleration Structure (RTAS) contains 26.9M triangles'''
+
+["waldemarson-doggett-2024-omm-independent-frame-times"]
+url = "https://fileadmin.cs.lth.se/graphics/research/papers/2024/succinct_opacity_micromaps/paper-author-version.pdf"
+section = "Gustaf Waldemarson, Michael Doggett (Lund University / Arm), Succinct Opacity Micromaps, Proc. ACM CGIT 7(3), art. 1 (HPG 2024), author version, §5.2 Runtime; §6.1 Frame-time"
+quote = '''It seems as this is the primary case where the RTX 40-series significantly improve matters: Using the official micromap methods the worst recorded frame-time is only increased by 2 % and the best recorded one reduces it by 29 %. [...] which clearly shows a case where not using micromaps seems preferable if an RTX 40-series card is not available.'''
+checked = 2026-11-21
+cost = '''All methods are rendered at 1920 × 1080 with a refining ambient occlusion and stochastic transparency algorithm on a Nvidia RTX 3080 and 4080.'''
+
+["khronos-vk-opacity-micromap-ext-and-khr"]
+url = "https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_opacity_micromap.html"
+section = "Khronos Group, VK_EXT_opacity_micromap(3) Manual Page, Vulkan specification (latest), Description; Promotion to VK_KHR_opacity_micromap"
+quote = '''When adding transparency to a ray traced scene, an application can choose between further tessellating the geometry or using an any-hit shader to allow the ray through specific parts of the geometry. These options have the downside of either significantly increasing memory consumption or adding runtime overhead to run shader code in the middle of traversal, respectively. [...] Functionality in this extension is included in VK_KHR_opacity_micromap. [...] The two extensions differ in how opacity micromap data is consumed by ray query traversal.'''
+checked = 2026-11-21
+
+["apple-wwdc22-metal-alpha-test-intersection-function"]
+url = "https://developer.apple.com/videos/play/wwdc2022/10105/"
+section = "Apple, Maximize your Metal ray tracing performance, WWDC22 session 10105, transcript on developer.apple.com, transcript, 'Alpha testing with intersection functions' (from 4:04)"
+quote = '''In this technique, the alpha channel of a texture mapped onto a triangle is used to determine if the ray should hit the triangle or continue further. [...] To achieve this, you need to configure the intersector to call your custom intersection function when a triangle is hit by the ray.'''
+checked = 2026-11-21
+
+["bavoil-2025-indiana-vegetation-blas-refit"]
+url = "https://developer.nvidia.com/blog/path-tracing-optimizations-in-indiana-jones-opacity-micromaps-and-compaction-of-dynamic-blass"
+section = "Louis Bavoil (NVIDIA), Path Tracing Optimizations in Indiana Jones: Opacity MicroMaps and Compaction of Dynamic BLASs, NVIDIA Technical Blog, 15 May 2025, Compacting dynamic BLASs"
+quote = '''It turned out that the BLASs of the dynamic vegetation models of the game never needed to be rebuilt [...] the dynamic vegetation is waving in the wind and being deformed under the character’s feet, and always goes back to its initial position at some point. As a result, periodically rebuilding the BLASs for the dynamic vegetation was not necessary to keep the quality of the BLAS high. [...] all the BLASs with dynamic-BLAS compaction had the following BLAS build flags: PREFER_FAST_BUILD | ALLOW_UPDATE | ALLOW_COMPACTION.'''
+checked = 2026-11-21
+cost = '''doing so has made the VRAM allocated for all BLASs go from 1027 to 606 MB, a 41% saving, on NVIDIA RTX 5080 GPUs'''
+
+["remedy-2024-reac-deformed-geometry-shared-with-bvh"]
+url = "https://enginearchitecture.org/downloads/REAC_2024_Remedy.pdf"
+section = "Tatu Aalto (Remedy Entertainment), Modernizing geometry drawing in Alan Wake II, Rendering Engine Architecture Conference (REAC) 2024, slides 'Technical limitation: Geometry deformation', 'Technical vision: Geometry drawing', 'Technical vision: Geometry deformation'"
+quote = '''Foliage movement from original Alan Wake - Vertex shaders based wobbling - Deep hierarchies painful if not impossible - Lacking integration with raytracing [...] Matching geometry on raytracing and rasterisation - Preserve all the detail that that is allowed by raytracing - Deformed geometry written to memory for BVH building [...] Geometry deformation is shared between ray tracing and rasterisation - Compute shader access to bone array - Compute shader writes deformed vertices to memory'''
+checked = 2026-11-21
+
+["kandar-2024-alan-wake-2-gpu-skinned-vegetation"]
+url = "https://www.gdcvault.com/play/1034219/Large-Scale-GPU-Based-Skinning"
+section = "Kandar (Remedy Entertainment), Large Scale GPU-Based Skinning for Vegetation in 'Alan Wake 2', GDC 2024, session description on GDC Vault, Overview"
+quote = '''GPU-based skinning pipeline, built to handle detailed and dense environments that are mostly comprised of dynamically animated vegetation geometry [...] enable full representation in the Northlight engine's raytracing implementation'''
+checked = 2026-11-21
+
+["vanantwerpen-2026-nanite-voxels-and-alan-wake-in-rays"]
+url = "https://doi.org/10.1145/3820021"
+section = "van Antwerpen, Gautron, Biddulph, Kubisch, Schmid, Stich (NVIDIA), Real-time Path Tracing of Massive Dynamic Foliage, Proc. ACM Comput. Graph. Interact. Tech. 9(4) (HPG 2026), article 51, §2 Related Work"
+quote = '''The clearest published example is Alan Wake 2 [Remedy Entertainment 2024]. For ray tracing, they fully skin their foliage meshes. Scaling to open forests nonetheless cannot afford unique animation per plant; instead, each plant model uses several uniquely animated variants that are instanced repeatedly. [...] intersecting the native brick format in an intersection shader was roughly 4 × slower than tracing against hardware-accelerated primitives'''
+checked = 2026-11-21
+
+["ue-docs-rt-instanced-wpo-extreme-cost"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/ray-tracing-performance-guide-in-unreal-engine"
+section = "Epic Games, Ray Tracing Performance Guide in Unreal Engine, Unreal Engine 5.9 Documentation, World Position Offset on Static Mesh Components"
+quote = '''Instanced components, like Instanced Static Mesh Components, do not support WPO by default because of its extreme cost. [...] Toggling it on can significantly increase memory pressure and slow render times because it effectively converts every instance in a single mesh with a separate BLAS.'''
+checked = 2026-11-21
+
+["ue-docs-rt-dynamic-blas-budget"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/ray-tracing-performance-guide-in-unreal-engine"
+section = "Epic Games, Ray Tracing Performance Guide in Unreal Engine, Unreal Engine 5.9 Documentation, Managing Ray Tracing Build Cost; Achieving 60 FPS with Ray Tracing"
+quote = '''You can restrict how many triangles are dynamically updated per frame by specifying a desired limit with r.RayTracing.DynamicGeometry.MaxUpdatePrimitivesPerFrame. Depending on the target platform performance a good starting point is setting a 10k-30k limit. [...] By default all dynamic ray tracing geometries will be updated in a round-robin fashion. [...] r.RayTracing.DynamicGeometry.MaxUpdatePrimitivesPerFrame=20000'''
+checked = 2026-11-21
+
+["gruen-2026-tetrahedral-cages-classic-blas-cost"]
+url = "https://gpuopen.com/learn/ray-tracing-massive-amounts-animated-geometry/"
+section = "Holger Gruen (AMD), Ray tracing massive amounts of animated geometry using tetrahedral cages, AMD GPUOpen post, September 2026, paragraph on the 25k plant terrain video"
+quote = '''We are managing a complex world with 25k plants that are all animated through skinned tetrahedral cages independently. [...] Please note that classic BLAS updates for these independently animating plant LODs would consume up to 80GBs of GPU memory and take more than 300ms to update on a Radeon RX 9070 XT.'''
+checked = 2026-11-21
+cost = '''about 500 million animated triangles per frame which are raytraced (primary ray+shadow ray) at over 60 FPS on an AMD Radeon RX 9070 XT GPU'''
+
+["narkowicz-costa-2025-megalights-dynamic-geometry-unsolved"]
+url = "https://advances.realtimerendering.com/s2025/content/MegaLights_Stochastic_Direct_Lighting_2025.pdf"
+section = "Krzysztof Narkowicz, Tiago Costa (Epic Games), MegaLights: Stochastic Direct Lighting in Unreal Engine 5, SIGGRAPH 2025 Advances in Real-Time Rendering in Games course, PDF page 78, slide 'Future Challenges - BVH' (speaker notes)"
+quote = '''Shadows for direct lighting can easily expose the underlying ray tracing representation of meshes. [...] Dynamic geometry is still very much an unsolved problem and it can easily blow memory and performance budgets, making it currently impossible to accurately represent large numbers of animated instances. [...] ○ Nanite Foliage'''
+checked = 2026-11-21
+
+["vanantwerpen-2026-rigid-bones-no-blas-update"]
+url = "https://doi.org/10.1145/3820021"
+section = "van Antwerpen, Gautron, Biddulph, Kubisch, Schmid, Stich (NVIDIA), Real-time Path Tracing of Massive Dynamic Foliage, Proc. ACM Comput. Graph. Interact. Tech. 9(4) (HPG 2026), article 51, §2.1 Rasterizing Animated Foliage; §4 Foliage Assets; §9 PTLAS Management"
+quote = '''Per-plant deformed geometry stored in memory and BLAS updates each frame do not scale to forest-sized plant counts. [...] We use rigid animation of meshes to avoid building and storing unique acceleration structures per plant for each frame. [...] Bone motion is stateless, enabling parallel, per-instance animation without extra per-plant storage.'''
+checked = 2026-11-21
+
+["vanantwerpen-2026-animation-cutoff-and-far-field"]
+url = "https://doi.org/10.1145/3820021"
+section = "van Antwerpen, Gautron, Biddulph, Kubisch, Schmid, Stich (NVIDIA), Real-time Path Tracing of Massive Dynamic Foliage, Proc. ACM Comput. Graph. Interact. Tech. 9(4) (HPG 2026), article 51, §7 LOD Optimization (last paragraph); §8 Distant Vegetation"
+quote = '''We always add one more LOD beyond the merge schedule where the entire plant is baked into just three orthogonal OMMs aligned to the plant’s bounding box. [...] an animation cutoff distance, after which each plant is reduced to a single rigid instance and its motion lies within the screen-space error budget [...] layers of smaller plants are merged into the tessellated height-map terrain by terrain stamping [...] baking all plants in the layer into one aggregate BLAS'''
+checked = 2026-11-21
+cost = '''the offline LOD generation pipeline (CPU mesh simplification, OMM replacement, and instance merging) took ∼ 70 s; generating OMM opacity and shading data on the GPU added ∼ 2 s'''
+
+["vanantwerpen-2026-forest-path-tracing-cost"]
+url = "https://doi.org/10.1145/3820021"
+section = "van Antwerpen, Gautron, Biddulph, Kubisch, Schmid, Stich (NVIDIA), Real-time Path Tracing of Massive Dynamic Foliage, Proc. ACM Comput. Graph. Interact. Tech. 9(4) (HPG 2026), article 51, Fig. 1 caption; §10 Results"
+quote = '''A forest comprising 60 M plants instanced from 230 unique models, animated by wind simulation. [...] The forest is path-traced at 1 sample per pixel and fed to a denoiser for denoising and upscaling. [...] we sustain 60 fps within a budget of only 3 M instances'''
+checked = 2026-11-21
+cost = '''rendered with real-time path tracing at 60 fps, at 1440p and upscaled to 2160p, on an RTX 4090 [...] Using PTLAS instead of TLAS reduces the frame time by 40%. [...] an additional ∼ 6 GB for textures, denoiser state, and framebuffers is omitted'''
+
+["vanantwerpen-2026-lod-pops-hidden-by-temporal-denoiser"]
+url = "https://doi.org/10.1145/3820021"
+section = "van Antwerpen, Gautron, Biddulph, Kubisch, Schmid, Stich (NVIDIA), Real-time Path Tracing of Massive Dynamic Foliage, Proc. ACM Comput. Graph. Interact. Tech. 9(4) (HPG 2026), article 51, §1 Introduction; §10 Results; Limitations"
+quote = '''relying on a temporal denoiser to crossfade local shading transitions together with the Monte Carlo noise [...] This also allows us to pick LOD levels more aggressively as minor transition pops are smoothed by the denoiser [...] We rely on a denoiser to suppress the resulting high-frequency noise.'''
+checked = 2026-11-21
+
+["gruen-2026-tetrahedral-cages-method"]
+url = "https://gpuopen.com/download/TetrahedralMeshes_AuthorsVersion.pdf"
+section = "Holger Gruen, Carsten Benthin, Michael Kern, David McAllister (AMD), Ray Tracing Massive Amounts of Animated Geometry, Proc. ACM CGIT 9(4), art. 49 (HPG 2026), authors' version, abstract; §6 DXR Implementation, Instance Transformation-Based Variant"
+quote = '''Instead of applying animation transformations to the actual triangular geometry, we apply them only to the tetrahedral cage and transform rays intersecting the animated tetrahedra. Only the acceleration structure over all tetrahedra needs to be rebuilt once per frame. [...] Each tetrahedron in this list is mapped to a single DXR instance. Each DXR instance transformation matrix is set to the tetrahedron’s transformation'''
+checked = 2026-11-21
+
+["gruen-2026-tetrahedral-cages-cost"]
+url = "https://gpuopen.com/download/TetrahedralMeshes_AuthorsVersion.pdf"
+section = "Holger Gruen, Carsten Benthin, Michael Kern, David McAllister (AMD), Ray Tracing Massive Amounts of Animated Geometry, Proc. ACM CGIT 9(4), art. 49 (HPG 2026), authors' version, Fig. 1; §7 Results; Table 3"
+quote = '''All experiments were conducted on an AMD Radeon RX 9070 XT GPU with 16 GB of memory, running Windows 11. Render timings include tracing two rays per pixel (one primary and one secondary shadow ray) as well as shading and sampling. [...] The update time, which includes animating the tetMesh vertices and rebuilding the TLAS (tetLAS) over the tetrahedra, is the most expensive step and consumes 78% of the total time per frame.'''
+checked = 2026-11-21
+cost = '''584m 2.8m 0.35 ms (3%) 9.66 ms (78%) 2.42 ms (19%) 12.43 ms [...] at 60 frames per second on an AMD RX 9070 XT at 1080p'''
+
+["ue-docs-rt-grass-skip"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/ray-tracing-performance-guide-in-unreal-engine"
+section = "Epic Games, Ray Tracing Performance Guide in Unreal Engine, Unreal Engine 5.9 Documentation, Ray Traversal Cost"
+quote = '''There are other common causes of high ray traversal costs, the first being skyboxes [...] Another is grass — it has large bounds and high geometry complexity. [...] you can choose to have those ray tracing tracing skip those meshes.'''
+checked = 2026-11-21
+
+["ue-docs-rt-60fps-drops-instanced-meshes"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/ray-tracing-performance-guide-in-unreal-engine"
+section = "Epic Games, Ray Tracing Performance Guide in Unreal Engine, Unreal Engine 5.9 Documentation, Achieving 60 FPS with Ray Tracing; Top Level Acceleration Structure Build; Culling"
+quote = '''r.RayTracing.Geometry.InstancedStaticMeshes=0 [...] r.RayTracing.Geometry.NaniteProxies.WPO=0 [...] In order to achieve a 30 frames per second target on next generation consoles, scenes should generally have 100,000 instances or fewer in the Ray Tracing Scene after culling. [...] r.Raytracing.Culling.Angle: Culls meshes whose projected angle is smaller than this value, in degrees. The default is 1.'''
+checked = 2026-11-21
+
+["wohllaib-2021-got-grass-shadows"]
+url = "https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass"
+section = "Eric Wohllaib (Sucker Punch Productions), Procedural Grass in 'Ghost of Tsushima', GDC 2021 Advanced Graphics Summit, GDC Vault English caption track, minutes 21 to 22 (slides 'SHADOWS')"
+quote = '''We generally rely on an imposter system that uses the underlying terrain. Effectively, we raise the verts of the terrain to match the height of the grass at that location, then offset the depth we write out to the shadow map in a dithered pattern. When we combine this with our shadow filtering, we end up with a result that roughly matches the shadow density of the grass. [...] For more fine detail, we relied on screen space shadows to make up the difference.'''
+checked = 2026-11-21
+
+["aldridge-2023-bend-screen-space-shadows-distant-trees"]
+url = "https://www.bendstudio.com/assets/cms/downloads/screen_space_shadows.zip"
+section = "Graham Aldridge (Sony Bend Studio), Screen Space Shadows, Sony Creators Conference at SIGGRAPH 2023 (slides; linked from bendstudio.com/blog/inside-bend-screen-space-shadows/), slides 8-11, 20, 27, 29"
+quote = '''The majority of distant tree shadows here are screen space shadows. [...] Disocclusion artefacts can be quite significant This is a fundamental limitation of Screen Space Shadows This is why they cannot replace shadow maps, only complement them [...] Other than this overlap, the effect is temporally stable – as it does not rely on dithering or random sampling. [...] Days Gone (PS4) was the first title to use this technique for Sun Light shadows'''
+checked = 2026-11-21
+cost = '''PS5 1440p resolution 60 sample shadow full-screen coverage 0.19ms'''
+
+["sousa-2025-idtech8-blas-missing-detail-screen-space-occlusion"]
+url = "https://www.advances.realtimerendering.com/s2025/content/SOUSA_SIGGRAPH_2025_Final.pdf"
+section = "Tiago Sousa (id Software), Fast as Hell: idTech 8 Global Illumination, SIGGRAPH 2025 Advances in Real-Time Rendering in Games course, slide 29, Compositing Results (speaker notes)"
+quote = '''– Used for high frequency details. • Don’t have all data in BLASes. [...] – Contact shadows for every light. [...] • Denoise + temporal filter [Mattausch2010] [...] This bring back some high frequency details that we miss, due to not having every geometry/upper lod details on BLASes.'''
+checked = 2026-11-21
+
+["cook-2007-shadow-probability"]
+url = "https://graphics.pixar.com/library/StochasticSimplification/paper.pdf"
+section = "Robert L. Cook, John Halstead, Maxwell Planck, David Ryu, Stochastic Simplification of Aggregate Detail, SIGGRAPH 2007 (archive snapshot of Pixar's copy, 2022-10-26), §4 Results"
+quote = '''The same shadow map was used for all frames; this does not produce artifacts when the number of elements changes because preserving area'''
+checked = 2026-11-21
+
+["sanders-2018-hzd-shadow-casters"]
+url = "https://media.gdcvault.com/gdc2018/presentations/gilbert_sanders_between_tech_and.pdf"
+section = "Gilbert Sanders (Guerrilla Games), Between Tech and Art: The Vegetation of Horizon Zero Dawn, GDC 2018, slides 'Shadow Casting', 'Shadow Casting Vegetation'"
+quote = '''Separate Visual Meshes and Shadow Casting Meshes [...] LOD3 Visual Mesh [...] Alpha Tested, Animated [...] Even less triangles [...] Non-Alpha Tested, Non-Animated [...] Distant cascade – height-field-based system'''
+checked = 2026-11-21
+
+["sousa-2007-crysis-main-and-detail-bending"]
+url = "https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-16-vegetation-procedural-animation-and-shading-crysis"
+section = "Sousa (Crytek), Vegetation Procedural Animation and Shading in Crysis, GPU Gems 3, chapter 16, 2007, 16.1 Procedural Animation"
+quote = '''we divide animation into two parts: (1) the main bending, which animates the entire vegetation along the wind direction; and (2) the detail bending, which animates the leaves. A wind vector is computed per-instance, in world space, by summing up the wind forces affecting the instance. [...] Artists paint one RGB color per-vertex'''
+checked = 2026-11-21
+
+["zioma-2007-stateless-branch-hierarchy-wind"]
+url = "https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-6-gpu-generated-procedural-wind-animations-trees"
+section = "Zioma, GPU-Generated Procedural Wind Animations for Trees, GPU Gems 3, chapter 6, 2007, 6.2; 6.5 GPU implementation"
+quote = '''A shallow hierarchy, two to three nodes deep, is usually enough to represent visually plausible tree motion. [...] Wind field state, bone hierarchy, and tree parameters are the only required input for each step of the simulation. [...] The wind field can either be sampled from a two-dimensional texture in the vertex shader'''
+checked = 2026-11-21
+cost = '''GPU: NVIDIA GeForce 8800 GTX [...] 4,617 Vertices per Instance'''
+
+["speedtree-2021-wind-cost-and-lod"]
+url = "https://docs.speedtree.com/doku.php?id=performance"
+section = "SpeedTree (IDV / Unity), SpeedTree Documentation: Performance (wind), Performance; Tuning in the Compiler Application; Tuning in the Modeler Application"
+quote = '''almost the entire wind computation load is in the vertex shaders [...] For wind LOD, go to global or no wind as soon as possible. [...] Global motion is the side-to-side swaying of the whole tree based on its height. This effect requires no extra per-vertex data. [...] The “Computed” option requires the oscillation vector (packed into a single float) be uploaded with each vertex'''
+checked = 2026-11-21
+cost = '''they can be off, simple, or very complex (as in 400+ instruction vertex shaders)'''
+
+["rockenbeck-2021-got-tree-wind-in-vertex-shader"]
+url = "https://gdcvault.com/play/1027350/Blowing-from-the-West-Simulating"
+section = "Bill Rockenbeck (Sucker Punch Productions), Blowing from the West: Simulating Wind in 'Ghost of Tsushima', GDC 2021, GDC Vault English caption track, minutes 11 to 12"
+quote = '''They're actually run entirely in the vertex shader, using only local information stored at each vertex. [...] This wind sway is running on pretty much every vert and all of the greenery you see in Tsushima, including most impostor level geometry for trees covering distant hillsides.'''
+checked = 2026-11-21
+
+["wohllaib-2021-got-grass-wind"]
+url = "https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass"
+section = "Eric Wohllaib (Sucker Punch Productions), Procedural Grass in 'Ghost of Tsushima', GDC 2021 Advanced Graphics Summit, GDC Vault English caption track, minutes 12 to 13"
+quote = '''The wind is effectively 2D Perlin noise shaped by user parameters and scrolled in the direction that the wind is blowing. [...] This bobbing is a simple sine wave where the phase offset is affected by the per blade hash, as well as the position along the grass blade'''
+checked = 2026-11-21
+
+["sanders-2018-hzd-grass-lods-and-wind"]
+url = "https://media.gdcvault.com/gdc2018/presentations/gilbert_sanders_between_tech_and.pdf"
+section = "Gilbert Sanders (Guerrilla Games), Between Tech and Art: The Vegetation of Horizon Zero Dawn, GDC 2018, slides 'Simulation: Making Foliage Move', 'Vertex Program: Grass', 'Making Grass Do More'"
+quote = '''All Movement is driven by a Global Wind Force Field [...] Compute Shader: around 150 microseconds [...] Grass has three LODs: [...] 20-36 triangles [...] we vertically push the vertices of the mesh down'''
+checked = 2026-11-21
+cost = '''Compute Shader: around 150 microseconds'''
+
+["epic-2026-nanite-skinning-wind-cost"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/nanite-foliage"
+section = "Epic Games, Nanite Foliage, Unreal Engine 5.9 Documentation (feature marked Experimental), 2026, Using Nanite Skinning for Animation of Nanite Foliage; Nanite Skinning Performance Tips; Dynamic Wind limitations"
+quote = '''Nanite Skinning resolves this because more accurate bounds can be calculated from skinning matrices and everything can use the fixed function rasterizer. [...] Virtual Shadow Map (VSM) performance requires you to disable animation in the distance. [...] Only has support for global wind direction.'''
+checked = 2026-11-21
+cost = '''there are one-hundred thousand bones updating, which takes about 0.1 milliseconds on the GPU'''
+
+["epic-2026-dynamic-wind-per-bone-data"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/dynamic-wind-for-nanite-foliage-in-unreal-engine"
+section = "Epic Games, Dynamic Wind for Nanite Foliage, Unreal Engine 5.9 Documentation (Experimental plugin), 2026, How Dynamic Wind Simulates Foliage; What the Mesh Provides; Shared Wind and Individual Plants; External Velocity Volumes"
+quote = '''the editor analyzes its geometry and stores each bone's mass, wind-catching area, center of mass and center of pressure [...] Plants that only feel the global wind share a small set of simulations, one per wind direction. [...] you can register a volume texture of air velocities with the Dynamic Wind subsystem [...] Each bone simulates on its own as a spring. There's no full constraint solver between bones.'''
+checked = 2026-11-21
+cost = '''Dynamic Wind needs the Shader Model 6 (SM6) feature level. Below it, plants don't move.'''
+
+["rockenbeck-2021-got-displacement-buffer"]
+url = "https://gdcvault.com/play/1027350/Blowing-from-the-West-Simulating"
+section = "Bill Rockenbeck (Sucker Punch Productions), Blowing from the West: Simulating Wind in 'Ghost of Tsushima', GDC 2021, GDC Vault English caption track, minutes 12 and 14"
+quote = '''There's also a TD displacement buffer around the camera, which we write into using a special kind of particle. As the hero passes by, the blades will bend and tilt accordingly. [...] We also optionally take the displacement buffer into account using very similar code, based on the same skeleton so the branches can get bent out of the way as Jin walks through them.'''
+checked = 2026-11-21
+
+["jahrmann-2017-blade-model-and-collision"]
+url = "https://www.cg.tuwien.ac.at/research/publications/2017/JAHRMANN-2017-RRTG/JAHRMANN-2017-RRTG-draft.pdf"
+section = "Klemens Jahrmann and Michael Wimmer, Responsive Real-Time Grass Rendering for General 3D Scenes, I3D 2017 (authors' draft), §4 and §7.3"
+quote = '''In our system, a blade of grass consists of three vertices, v0...2 , which are the control points of a quadratic Bézier curve. [...] In comparison, our physical model has a persistent state over more than a single frame, which allows the implementation of natural forces and collisions with one physical model.'''
+checked = 2026-11-21
+cost = '''Time physical model 0.547 0.041 0.519'''
+
+["vanmuijden-2017-hzd-placement-method"]
+url = "https://www.guerrilla-games.com/media/News/Files/GDC2017_VanMuijden_GPUBasedProceduralPlacementInHorizonZeroDawn.pdf"
+section = "Jaap van Muijden (Guerrilla Games), GPU-based Procedural Placement in Horizon Zero Dawn, GDC 2017 (archive snapshot 2022-12-24 of Guerrilla's copy), slides 'Motivation', 'WorldData', 'Step2: GENERATE', 'Layered Dithering'"
+quote = '''Deterministic [...] Locally stable [...] Collection of 2D maps [...] ~4MB/km2 exclusively [...] Discretizing step [...] Dither based [...] Responsible for collision'''
+checked = 2026-11-21
+cost = '''~10µs, VGPR: 28, SGPR: 64, Cycles: 342'''
+
+["vanmuijden-2017-hzd-placement-cost"]
+url = "https://www.guerrilla-games.com/media/News/Files/GDC2017_VanMuijden_GPUBasedProceduralPlacementInHorizonZeroDawn.pdf"
+section = "Jaap van Muijden (Guerrilla Games), GPU-based Procedural Placement in Horizon Zero Dawn, GDC 2017 (archive snapshot 2022-12-24 of Guerrilla's copy), slides 'Results' and 'Conclusion'"
+quote = '''We use procedural placement for all nature! [...] 500+ asset types [...] 100.000+ objects in scene [...] ~250µs avg busy load on GPU'''
+checked = 2026-11-21
+cost = '''~250µs avg busy load on GPU'''
+
+["kuth-2024-work-graphs-grass-cost"]
+url = "https://gpuopen.com/download/Real-Time_Procedural_Generation_with_GPU_Work_Graphs-GPUOpen_preprint.pdf"
+section = "Bastian Kuth, Max Oberberger, Carsten Faber, Dominik Baumeister, Matthäus Chajdas, Quirin Meyer, Real-Time Procedural Generation with GPU Work Graphs, Proc. ACM Comput. Graph. Interact. Tech. 7(3) (HPG 2024), GPUOpen preprint, abstract; §8 Results, Fig. 10"
+quote = '''For (d) our system places 79,674 grass patches, 3,359 flowers, 1,038 bee swarms, 3 butterfly swarms, and 281 mushroom patches. The total generation of the draw list takes 0.39 ms.'''
+checked = 2026-11-21
+cost = '''We augment the scene in the teaser image with 79,710 instances in 3.74 ms on an AMD Radeon RX 7900 XTX.'''
+
+["kuth-2025-gpu-tree-generation"]
+url = "https://gpuopen.com/download/Real-Time_GPU_Tree_Generation.pdf"
+section = "Kuth, Oberberger, Faber, Pfeifer, Tabaei, Baumeister, Meyer, Real-Time GPU Tree Generation, High-Performance Graphics 2025, Abstract; §3.9; §4 Results and Discussion"
+quote = '''By using GPU work graphs with mesh nodes, we render gigabytes-worth of tree geometry from kilobytes of generation code every frame exclusively on the GPU. [...] Frame-to-frame timings of 7.74 ms additionally contains rendering all other scene geometry including grass, the compositing pass, screen space ambient occlusion and reflections, temporal antialiasing, tone mapping, and present.'''
+checked = 2026-11-21
+cost = '''Generating the unique tree geometries of our teaser test scene and rendering them to the G-buffer takes 3.13 ms on an AMD Radeon RX 7900 XTX. [...] at a 1920×1080 resolution'''
+
+["suckerpunch-2025-yotei-far-trees-and-pssr"]
+url = "https://blog.playstation.com/?p=411201"
+section = "Bentley (Sucker Punch Productions), Ghost of Yōtei tech deep dive, PlayStation Blog, 23 October 2025, sections on sight lines and on ray tracing and PS5 Pro"
+quote = '''the distant mountains with over one million trees, rocks, and bushes are culled down to about sixty thousand individual items that we render to generate our G-buffers [...] PSSR does a better job reconstructing fine details on architecture and foliage. It is also more stable under motion.'''
+checked = 2026-11-21
+cost = '''over one million trees, rocks, and bushes are culled down to about sixty thousand individual items'''
+
+["carrier-2018-far-cry-5-biome-recipes"]
+url = "https://blog.playstation.com/2018/03/22/the-procedural-world-generation-of-far-cry-5/"
+section = "Carrier (Ubisoft Montréal), The Procedural World Generation of Far Cry 5, PlayStation Blog, 22 March 2018, article body"
+quote = '''we developed a sophisticated procedural pipeline using Houdini and Houdini Engine [...] build biome recipes that react to the physical features of the land to ensure coherence throughout the world [...] orienting grass assets on a wind vector map'''
+checked = 2026-11-21
+
+["massive-2023-snowdrop-scatter-parent-child"]
+url = "https://www.massive.se/blog/games-technology/snowdrop/crafting-pandoras-breathtaking-landscape-with-snowdrop/"
+section = "Massive Entertainment, Crafting Pandora's Breathtaking Landscape With Snowdrop (interview with Luthra, Österlind, Leonardsson), 2023, article body"
+quote = '''It uses a node system that connects objects together in a parent-child relationship based on the radius around the objects. [...] We consider scattering to be the first pass [...] now we can scatter on other assets, on props, anything really that we think should have it'''
+checked = 2026-11-21
+
+["epic-2026-procedural-foliage-ecosystem-rules"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/procedural-foliage-tool-in-unreal-engine"
+section = "Epic Games, Procedural Foliage Tool Quick Start, Unreal Engine Documentation (Experimental), step 3, Collision and Clustering"
+quote = '''When a Virtual Seed's collision radius overlaps an existing collision or shade radius from another Foliage Type Object's Virtual Seed, one Virtual Seed will be replaced or killed based on which Foliage Type Object has the higher priority. [...] which will grow and spread the trees for 3 years'''
+checked = 2026-11-21
+
+["kopf-2006-recursive-wang-tiles-density"]
+url = "https://johanneskopf.de/publications/blue_noise/paper/Recursive_Wang_Tiles_For_Real-Time_Blue_Noise.pdf"
+section = "Kopf, Cohen-Or, Deussen, Lischinski, Recursive Wang Tiles for Real-Time Blue Noise, SIGGRAPH 2006 (archive snapshot of the author's copy), Abstract; §1"
+quote = '''The local density of a point set may be prescribed by an arbitrary target density function, without any preset bound on the maximum density. Our technique is deterministic and tile-based; thus, any local portion of a potentially infinite point set may be consistently regenerated as needed. [...] plants prevent others from growing in their direct vicinity and, thus, Poisson disk distributions arise'''
+checked = 2026-11-21
+cost = '''In practice, point generation speed reaches a few million points per second.'''
+
+["godot-2020-octahedral-impostors-mit"]
+url = "https://github.com/wojtekpil/Godot-Octahedral-Impostors"
+section = "wojtekpil and K. S. Ernest (iFire) Lee, Godot Octahedral Impostors, README, 2020, README: introduction; Bake an asset to impostor"
+quote = '''This implementation uses only one plane to imitate a three-dimensional object from multiple angles. [...] Grid size - A root value of number of images taken from different angles of baked model. 16 is recommended value [...] For standard foliage a hemisphere should be better, because it increase resolution from the side views.'''
+checked = 2026-11-21
+
+["torque3d-9521d43-imposters"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/ts/tsLastDetail.h#L79"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/ts/tsLastDetail.h (L68, L79 to L83, L114 to L120): a shape's last detail level is a set of views captured at load and drawn as a billboard with an alpha fade; read, not run"
+quote = '''/// .y = alpha fade out [...] /// This neat little class renders the object to a texture so that when the object [...] /// is far away, it can be drawn as a billboard instead of a mesh. [...] /// The number steps around the equator of [...] /// the globe at which we capture an imposter.'''
+checked = 2026-11-21
+
+["wohllaib-2021-got-grass-far-field-texture"]
+url = "https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass"
+section = "Eric Wohllaib (Sucker Punch Productions), Procedural Grass in 'Ghost of Tsushima', GDC 2021 Advanced Graphics Summit, GDC Vault English caption track, minutes 19 to 20 (slide '<far LOD texture on terrain>')"
+quote = '''I experimented with some view dependent ways of rendering the terrain that were driven by the clump information. [...] Unfortunately, this ended up being impractically expensive. [...] we chose to render an artist authored texture at that place in the terrain instead of the underlying material. This approach is inexpensive and works well enough, but there is still room for improvement here.'''
+checked = 2026-11-21
+
+["vanantwerpen-2026-opacity-micromaps-instead-of-alpha-test"]
+url = "https://doi.org/10.1145/3820021"
+section = "van Antwerpen, Gautron, Biddulph, Kubisch, Schmid, Stich (NVIDIA), Real-time Path Tracing of Massive Dynamic Foliage, Proc. ACM Comput. Graph. Interact. Tech. 9(4) (HPG 2026), article 51, §4 Foliage Assets; §6.2 OMM replacement"
+quote = '''Everything, including leaves and needles, is modeled as explicit geometry without the use of alpha textures. [...] We use OMMs rather than alpha textures because OMM traversal is hardware-accelerated and avoids any-hit shader invocations [...] we encode opacity in OMMs using only the two discrete states fully opaque or fully transparent. We use OMM dithering to approximate partial opacity'''
+checked = 2026-11-21
+
+["epic-2026-hardware-ray-tracing-wpo-opt-in"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/hardware-ray-tracing-in-unreal-engine"
+section = "Epic Games, Hardware Ray Tracing, Unreal Engine 5.9 Documentation, 2026, supported features table; Nanite Geometry in Ray Tracing"
+quote = '''Check the Evaluate World Position Offset in Ray Tracing property on individual scene actors to opt in to using WPO with ray tracing. [...] Dithered LOD transitions are not yet supported. [...] Ray tracing doesn't trace against Nanite's full-detail rendered geometry.'''
+checked = 2026-11-21
+
+["unreal-two-sided-foliage"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/shading-models-in-unreal-engine"
+section = "Epic Games, Unreal Engine documentation, Shading Models, Two Sided Foliage"
+quote = '''allows light transmission through the surface of the Material creating natural, uniform looking results, like light passing through the leaves of a tree. The subsurface color is used to define the amount of light transmission [...] the Default Lit result appears almost black on the underside surfaces because it does not simulate any sort of light transmission, which is critical for natural looking foliage.'''
+checked = 2026-11-21
+
+["unity-hdrp-translucent-leaf"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/Material-Type.html"
+section = "Unity HDRP 17.0 manual, Material Type, Translucent"
+quote = '''Use this Material Type, and a thickness map, to simulate a translucent object, such as a plant leaf. In contrast to Subsurface Scattering Materials, Translucent Materials do not blur light that transmits through the Material.'''
+checked = 2026-11-21
+
+["godot-back-lighting"]
+url = "https://docs.godotengine.org/en/stable/tutorials/3d/standard_material_3d.html"
+section = "Godot Engine documentation (stable), Standard Material 3D and ORM Material 3D, Back Lighting"
+quote = '''This controls how much light from the lit side (visible to light) is transferred to the dark side (opposite from the light). This works well for thin objects such as plant leaves, grass, human ears, etc.'''
+checked = 2026-11-21
+
+["sousa-2007-crysis-leaf-shading"]
+url = "https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-16-vegetation-procedural-animation-and-shading-crysis"
+section = "Tiago Sousa (Crytek), Vegetation Procedural Animation and Shading in Crysis, GPU Gems 3 ch. 16, 2007, §16.2 Vegetation Shading"
+quote = '''We render it as double-sided, and leaves use alpha test while grass uses alpha blending. [...] a cheap and artist-friendly subsurface-scattering approximation that is computed per-vertex'''
+checked = 2026-11-21
+
+["vlachos-2015-geometric-specular-aliasing"]
+url = "https://web.archive.org/web/2026id_/https://media.steampowered.com/apps/valve/2015/Alex_Vlachos_Advanced_VR_Rendering_GDC2015.pdf"
+section = "Alex Vlachos (Valve), Advanced VR Rendering, GDC 2015 slides (archive snapshot of Valve's PDF), slides 44-45 (Geometric Specular Aliasing)"
+quote = '''Dense meshes without normal maps also alias, and roughness mips can’t help you! [...] We use partial derivatives of interpolated vertex normals to generate a geometric roughness term that approximates curvature. [...] Normal interpolation can cause specular sparkling at silhouettes due to over-interpolated vertex normals'''
+checked = 2026-11-21
+
+["tokuyoshi-2021-projected-space-ndf-filtering"]
+url = "https://www.jcgt.org/published/0010/02/02/paper-lowres.pdf"
+section = "Tokuyoshi and Kaplanyan, Stable Geometric Specular Antialiasing with Projected-Space NDF Filtering, JCGT 10(2), 2021, §1 Introduction; §6 Results; §7 Limitations"
+quote = '''and artifacts at grazing angles, especially when estimated using GPU quad derivatives [...] pixels can still flicker in animation (please see the supplemental video) [...] aliasing caused by geometric discontinuities cannot be handled by this method'''
+checked = 2026-11-21
+cost = '''Forward shading time (ms) at 8K resolution (NVIDIA R GeForce R RTX 2080 GPU). [...] Forward shading time (ms) at 1920×1080 pixels (Intel R Iris R Plus graphics). [...] about 0.5 ms for non-axis-aligned filtering, about 0.4 ms for axis-aligned filtering, and about 0.1 ms for normal-based isotropic filtering.'''
+
+["kaplanyan-2016-ndf-filtering-limits"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2016-06_Filtering-Distributions-of/NDFFiltering.pdf"
+section = "Kaplanyan, Hill, Patney, Lefohn, Filtering Distributions of Normals for Shading Antialiasing, HPG 2016, §6.1 Image Quality; Limitations"
+quote = '''using NDF filtering at just 1 sample per pixel is similar in quality to ray tracing with 512 samples per pixel. [...] Other sources of aliasing such as visibility are not covered, therefore no improvements should be expected with respect to geometric aliasing. [...] On geometry with high-frequency details, submanifolds can change rapidly, causing geometric aliasing during occlusion or disocclusion.'''
+checked = 2026-11-21
+cost = '''In almost all cases, the cost of additional computation for NDF filtering is negligible. The only exceptions are shaders that filter GGX BSDFs (around 4 ms for San Miguel for a shader that takes 12 ms). [...] NVIDIA Quadro M6000 GPU [...] images rendered at 3840×2160 pixels'''
+
+["unreal-forward-msaa-versus-taa"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/forward-shading-renderer-in-unreal-engine"
+section = "Epic Games, Unreal Engine documentation, Forward Shading Renderer, Enabling Multisample Anti-Aliasing"
+quote = '''in most cases, TAA is preferable because it removes both geometric aliasing and specular aliasing. In VR however, the constant sub-pixel movement introduced by head tracking generates unwanted blurriness, making MSAA a better choice. Projects that choose to use MSAA will want to build content to mitigate specular aliasing.'''
+checked = 2026-11-21
+cost = '''In our tests, using MSAA instead of TAA increases GPU frame time by about 25% (actual cost will depend on your content).'''
+
+["godot-which-antialiasing"]
+url = "https://docs.godotengine.org/en/stable/tutorials/3d/3d_antialiasing.html"
+section = "Godot Engine documentation (stable), 3D antialiasing, Which antialiasing technique should I use?"
+quote = '''For projects with a photorealistic art direction, TAA is generally the most suitable option. While TAA can introduce ghosting artifacts, there is no other technique that combats specular aliasing as well as TAA does. [...] MSAA is also a good option if avoiding blurriness and temporal artifacts is important'''
+checked = 2026-11-21
+
+["vlachos-2016-forward-because-msaa"]
+url = "https://web.archive.org/web/2026id_/https://media.steampowered.com/apps/valve/2016/Alex_Vlachos_Advanced_VR_Rendering_Performance_GDC2016.pdf"
+section = "Alex Vlachos (Valve), Advanced VR Rendering Performance, GDC 2016 slides (archive snapshot of Valve's PDF), slide 50 (Valve's Unity Rendering Plugin); Adaptive Quality slides"
+quote = '''The plugin is a single-pass forward renderer (because we want 4xMSAA and 8xMSAA)'''
+checked = 2026-11-21
+cost = '''0: 4xMSAA, 1.0x resolution (Default) (NVIDIA 970 stays at or above this level)'''
+
+["patry-2021-tsushima-probe-grid-sky-visibility"]
+url = "https://www.advances.realtimerendering.com/s2021/jpatry_advances2021.pdf"
+section = "Patry (Sucker Punch), Real-Time Samurai Cinema: Lighting, Atmosphere, and Tonemapping in Ghost of Tsushima, SIGGRAPH 2021 Advances in Real-Time Rendering in Games (slides with notes), Indirect Lighting | Diffuse (slides 16-28, notes)"
+quote = '''arranged at 12.5 m intervals along the ground, and at elevations of 1.5, 10, and 30m above ground level. [...] and then update the probes by multiplying the sky luminance by the sky visibility, [...] The yellow colour comes from the bright yellow leaves of the trees surrounding the temple'''
+checked = 2026-11-21
+
+["leblanc-2025-acshadows-probes-leak-and-vegetation-denoise"]
+url = "https://www.realtimerendering.com/advances/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances in Real-Time Rendering in Games (slides with notes), Probe volume slide; Noise: Vegetation disocclusion (slide 123); Conclusion: Limitations"
+quote = '''2 meters – 32 meters spacing [...] Relax temporal reprojection criteria for moving vegetation [...] Tall grass blades in the wind have high normal variance and disocclusion. We adapted our denoiser for them. [...] Probe interpolation always leaks'''
+checked = 2026-11-21
+
+["leblanc-conte-2025-acshadows-grass-denoiser"]
+url = "https://www.realtimerendering.com/advances/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf"
+section = "Luc Leblanc, Melino Conte (Ubisoft Montréal), Ray tracing the world of Assassin's Creed Shadows, SIGGRAPH 2025 Advances in Real-Time Rendering in Games course, slide (number as printed) 123, Noise: Vegetation disocclusion (speaker notes)"
+quote = '''Tall grass blades in the wind have high normal variance and disocclusion. We adapted our denoiser for them. [...] • Relax temporal reprojection criteria for moving vegetation • Expand temporal reprojection search for vegetation using 16 pixels instead of 4'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-coverage-mask"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/shaders/shadingHF.hlsli#L559"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), shaders/shadingHF.hlsli (L559 to L596) and shaders/hairparticlePS_prepass.hlsl (L10, L22): the pre-pass writes SV_Coverage from alpha, dithered by animated blue noise under TAA and undithered under MSAA; read, not run"
+quote = '''// When Temporal AA is enabled, dither the alpha mask with animated blue noise: [...] // Multisampled transparency: [...] //	alphaTest is not made, pure alpha is used for sample mask [...] return ~0u >> (31u - uint(alpha * GetCamera().sample_count)); [...] uint main(VertexToPixel input, out uint coverage : SV_Coverage) : SV_Target [...] coverage = AlphaToCoverage(alpha, material.GetAlphaTest(), input.GetDither(), input.pos);'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-grass-blas-refit"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiHairParticle.cpp#L306"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), wiHairParticle.cpp (L306 to L311) and wiScene.cpp (L5288 to L5291): the grass BLAS is refitted each frame and rebuilt in rotation, and its TLAS instance is traced by diffuse GI rays; read, not run"
+quote = '''// Grass is heavily traced by GI rays, so prefer a traversal-optimized [...] // BVH (FAST_TRACE) over a cheap-to-build one. Animation is handled by [...] // per-frame refits (ALLOW_UPDATE) plus a periodic full rebuild on the [...] // renderer side to keep the structure's quality from decaying. [...] // Grass participates in diffuse GI rays. If its raytracing [...] // cost is still too high on a given target, it can be excluded'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-grass-far-collapsed"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/shaders/hairparticle_simulateCS.hlsl#L176"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), shaders/hairparticle_simulateCS.hlsl (L176 to L186, L274 to L279) and shaders/hairparticleVS.hlsl (L36): strands past the view distance are collapsed to zero area in the ray-tracing vertex buffer, and the drawn strands dither out over the last fifth of that distance; read, not run"
+quote = '''// Strand is beyond the view distance, so it is never rendered: no [...] // own emitter position (not a shared point): the triangles stay [...] // zero-area (so far grass still does not contribute to ray traced [...] //	dither-faded out before reaching the cull distance, so the transition [...] Out.fade = saturate(Out.fade - 0.8f) * 5.0f; // fade will be on edge and inwards 20%'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-ddgi-force-opaque"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/shaders/ddgi_raytraceCS.hlsl#L237"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), shaders/ddgi_raytraceCS.hlsl (L237 to L245): the probe ray is traced with every triangle forced opaque; read, not run"
+quote = '''q.TraceRayInline( [...] RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | [...] RAY_FLAG_FORCE_OPAQUE,			// uint RayFlags'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-grass-ring"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/data/shaders/grass_populate.hlsl#L71"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, data/shaders/grass_populate.hlsl (L68, L71 to L77, L479): a ring of cells around the camera, placement hashed from world-space cell coordinates, slots taken by an atomic counter, density thinned by a keep probability; read, not run"
+quote = '''// gpu scatter placement (ghost of tsushima style), slot 0 is grass and the higher slots are micro [...] // one thread per cell in a 2d ring around the camera, the ring lives entirely inside grass_instances [...] // each accepted cell is atomically committed into the per-lod section of the buffer and the per-lod [...] // determinism: the cell grid is snapped to world space using floor(camera / cell_size), the hash [...] // world position regardless of the camera path. only ring-boundary cells appear and disappear. [...] // ceil the count and carry the fraction as a keep probability instead, so density is continuous'''
+checked = 2026-11-21
+
+["bevy-feronia-0.8.4-lod-dither"]
+url = "https://github.com/NicoZweifel/bevy_feronia/blob/9533d0fe6cfe896b8824c2e8630e4bbba77bbcfb/src/instancing/instanced.wgsl#L163"
+section = "bevy_feronia v0.8.4 (NicoZweifel, commit 9533d0f, 2026-06-22), src/instancing/instanced.wgsl (L28, L163 to L165): a chunk's LOD range fades by Bevy's per-pixel visibility-range dither; read, not run"
+quote = '''@location(0) @interpolate(flat) visibility_range_dither: i32, [...] #ifdef VISIBILITY_RANGE_DITHER [...] bevy_pbr::pbr_functions::visibility_range_dither(in.clip_position, in.visibility_range_dither);'''
+checked = 2026-11-21
+
+["webgpu-grass-9a14b51-cost"]
+url = "https://github.com/siliconjungle/inkwell-webgpu-grass/blob/9a14b514e319f4d790c95df64a2f76d84c319e82/README.md#L41"
+section = "inkwell-webgpu-grass (siliconjungle, commit 9a14b51, 2026-08-11), README.md, Results (L41 to L46): its own benchmark; the Apple GPU is not named"
+quote = '''The checked-in report was captured on Apple Metal at 1440×900, DPR 1. [...] FPS while drawing about 234k blades from 16.77M candidates.'''
+checked = 2026-11-21
+cost = '''Its two render confirmations measured 9.11 and 9.16 ms GPU. Hierarchical culling tested about 472k candidates and took 0.075–0.105 ms of GPU time; the flat 16.77M-candidate A/B took 2.50 ms.'''
+
+["terrain3d-1.1.0-instancer-lod-shadow"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/instancer.md#L161"
+section = "Terrain3D v1.1.0-stable (commit 629bbd6, 2026-11-02), doc/docs/instancer.md (L161, L176)"
+quote = '''Instances are drawn using a 32x32m grid of MMIs, so LODs are switched a grid cell at a time, not per instance. If your LODs are fairly similar, pop-in shouldn't be terrible [...] We provide the option of using a shadow impostor, which uses a lower resolution mesh to calculate the shadows while rendering a higher resolution mesh.'''
+checked = 2026-11-21
+
+["godot-voxel-1.7-instancing"]
+url = "https://github.com/Zylann/godot_voxel/blob/2ac9f5f8a8219bf499314cc0fad54ffc47df908f/doc/source/instancing.md#L44"
+section = "godot_voxel v1.7 (commit 2ac9f5f, 2026-08-20), doc/source/instancing.md (L35, L44)"
+quote = '''The range at which items spawn is based on the LOD system of the voxel terrain itself, either on high-resolution chunks, or low-resolution ones. [...] When making grass or other items, it may be a good idea to fade meshes based on distance from the camera using a custom shader, so they won't disappear abruptly.'''
+checked = 2026-11-21
+
+["acerola-grass-6de5844-cull"]
+url = "https://github.com/GarrettGunnell/Grass/blob/6de58448250950025f5d08d52d42edeab09cdb19/Assets/Resources/CullGrass.compute#L1"
+section = "GarrettGunnell/Grass (commit 6de5844, 2022-07-28), Assets/Resources/CullGrass.compute (L1 to L4, L48, L51): blades are culled by a vote, a prefix sum and a compaction, which keeps their order; read, not run"
+quote = '''#pragma kernel Vote [...] #pragma kernel Scan [...] #pragma kernel Compact [...] _VoteBuffer[id.x] = inView * withinDistance; [...] // From GPU Gems Chapter 39 'Parallel Prefix Sum (Scan) with CUDA''''
+checked = 2026-11-21
+
+["hterrain-49887ff-detail-shader"]
+url = "https://github.com/Zylann/godot_heightmap_plugin/blob/49887ff956f02263d9013006fa1994d34643a199/addons/zylann.hterrain/shaders/detail.gdshader#L85"
+section = "HeightMap terrain plugin for Godot (Zylann/godot_heightmap_plugin, commit 49887ff, 2026-11-13), addons/zylann.hterrain/shaders/detail.gdshader (L85 to L88, L102): grass quads are alpha-scissored and their alpha falls with distance; read, not run"
+quote = '''// Fade alpha with distance [...] COLOR.a = clamp(1.0 - dr * dr * dr, 0.0, 1.0); [...] ALPHA_SCISSOR_THRESHOLD = 0.5;'''
+checked = 2026-11-21
+
+["godot-4.7.2-alpha-to-coverage-mode"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/servers/rendering/renderer_rd/forward_clustered/scene_shader_forward_clustered.cpp#L106"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), servers/rendering/renderer_rd/forward_clustered/scene_shader_forward_clustered.cpp (L106, L243, L244): a material's alpha antialiasing mode turns alpha to coverage on as blend state in the clustered forward renderer; read, not run"
+quote = '''actions.render_mode_values["alpha_to_coverage"] = Pair<int *, int>(&alpha_antialiasing_mode, ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE); [...] if (alpha_antialiasing_mode != ALPHA_ANTIALIASING_OFF) { [...] blend_mode = BLEND_MODE_ALPHA_TO_COVERAGE;'''
 checked = 2026-11-21
 
 ["losasso-2004-geometry-clipmaps-idea"]
