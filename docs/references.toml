@@ -6675,9 +6675,9 @@ checked = 2026-11-14
 
 ["majercik-2021-ddgi-hysteresis-thresholds"]
 url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=10"
-section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §4.3, pp. 10-11, with Listing 2; §9, p. 25 (what remains)"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §4.3, pp. 10-11, with Listing 2; §8.1, p. 25 (what remains)"
 quote = '''Our lower threshold detects changes with magnitude above 25% of maximum value and lowers the hysteresis by 0.15. [...] changes with magnitude above 80% and lowers the hysteresis to 0.0 [...] These thresholds are active only for irradiance updates—we found them to be too unstable when updating visibility. [...] Small lighting change (e.g., player-held flashlight turns on): reduce irradiance hysteresis by 15% for four frames [...] Large object change (e.g., ceiling caves in): reduce irradiance hysteresis by 50% for 10 frames and visibility hysteresis by 50% for seven frames. [...] hysteresis for all probes (not just the probes local to the change) is reduced [...] Note that temporal anti-aliasing (TAA) applies its own hysteresis, so the base hysteresis for our technique can be lower if TAA is applied. [...] there is still some ghosting in the indirect illumination for small, bright light sources'''
-checked = 2026-11-14
+checked = 2026-11-21
 
 ["majercik-2021-ddgi-rays-against-hysteresis"]
 url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=18"
@@ -10163,7 +10163,19 @@ checked = 2026-11-21
 ["heckel-2026-gi-probe-form"]
 url = "https://blog.maximeheckel.com/posts/lighting-that-feels-just-right/"
 section = "Heckel, Lighting That Feels Just Right, 2026-11-17, Estimating Light with Probes (World space probes, Hysteresis) and Final Thoughts"
-quote = '''We’ll use a 2D storage texture called an atlas where each probe stores six lighting estimates. Each estimate gathers light over a hemisphere facing one of the positive or negative coordinate axes. [...] Skip the probe if it lies inside solid geometry. [...] traceWorld finds the nearest sphere or box intersection. [...] When lighting changes, stableFrames is reset without clearing the atlas, allowing probes to make new measurements that gradually replace the old lighting instead of starting from scratch. [...] Yes, there still is some ghosting when the light changes abruptly, [...] it’s definitely not production-grade in any way'''
+quote = '''We’ll use a 2D storage texture called an atlas where each probe stores six lighting estimates. Each estimate gathers light over a hemisphere facing one of the positive or negative coordinate axes. [...] Skip the probe if it lies inside solid geometry. [...] traceWorld finds the nearest sphere or box intersection. [...] With hysteresis set to 0.95, once enough history has accumulated, the blend consists of 95% history and 5% updated measurements. While the lighting remains unchanged, we give history progressively more influence. [...] When lighting changes, stableFrames is reset without clearing the atlas, allowing probes to make new measurements that gradually replace the old lighting instead of starting from scratch. [...] Yes, there still is some ghosting when the light changes abruptly, [...] it’s definitely not production-grade in any way'''
+checked = 2026-11-21
+
+["heckel-2026-gi-probe-occlusion-at-shading"]
+url = "https://blog.maximeheckel.com/posts/lighting-that-feels-just-right/"
+section = "Heckel, Lighting That Feels Just Right, 2026-11-17, Estimating Light with Probes (the list of steps) and Rendering light from our probe atlas; the listing Sampling the probe atlas there, read as evidence and not quoted, traces from the shaded point toward each neighbouring probe and skips a probe when the trace hits nearer than the probe"
+quote = '''We read and blend the stored lighting estimate in our post-processing effect to shade visible surfaces. Occluded probes are also discarded. [...] explore its neighbors in a 3 x 3 x 3 neighborhood around it'''
+checked = 2026-11-21
+
+["majercik-2019-ddgi-trilinear-blend"]
+url = "https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=14"
+section = "Majercik, Guertin, Nowrouzezahrai and McGuire, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, §5.2, p. 14, the last item of the list of weights"
+quote = '''we then perform a standard trilinear interpolation based on the distance between the shading point and the probe centers, using the aforementioned weighting and biasing factors.'''
 checked = 2026-11-21
 
 ["heckel-2026-gi-sky-and-reflections"]
@@ -10174,7 +10186,7 @@ checked = 2026-11-21
 
 ["threejs-light-probe-grid-baked"]
 url = "https://github.com/mrdoob/three.js/blob/ea074ee9d4118fd31d3ab3ec6bfecf1d39e6ed98/examples/jsm/lighting/LightProbeGridWebGL.js#L59-L85"
-section = "three.js (MIT) at commit ea074ee, examples/jsm/lighting/LightProbeGridWebGL.js, the class comment (lines 59 to 85) and the comment of bake (lines 220 to 225); the class examples/webgl_lightprobes.html builds its grid from"
+section = "three.js at commit ea074ee, examples/jsm/lighting/LightProbeGridWebGL.js, the class comment (lines 59 to 85) and the comment of bake (lines 220 to 225); the class examples/webgl_lightprobes.html builds its grid from"
 quote = '''A 3D grid of L2 Spherical Harmonic irradiance probes that provides [...] position-dependent diffuse global illumination. [...] Baking is fully GPU-resident: cubemap rendering, SH projection, and [...] texture packing all happen on the GPU with zero CPU readback. [...] Bakes probes by rendering cubemaps at each probe position and [...] projecting to L2 SH.'''
 checked = 2026-11-21
 
@@ -10204,8 +10216,8 @@ checked = 2026-11-21
 
 ["wallace-2016-caustics-area-ratio"]
 url = "https://medium.com/@evanwallace/rendering-realtime-caustics-in-webgl-2a99a29a0b2c"
-section = "Wallace, Rendering Realtime Caustics in WebGL, 2016-01-07, the whole article (eight paragraphs), on the WebGL Water demo of 2011"
-quote = '''Caustics create intricate light patterns with sharp creases that will be blurred and may even be lost completely when using these realtime approximations. [...] A better approach is to approximate a wavefront of the light using a mesh. [...] The brightness change is proportional to the ratio of the original area to the final area. [...] This approach only works in certain cases but it’s perfect for caustics due to the refraction of light through a planar body of water. [...] The vertex shader in the demo positions the vertices by tracing a ray for that vertex along the sunlight direction, refracting it through the surface, and intersecting it with the ground geometry. [...] My demo uses a few more tricks like rendering the caustics to a texture that can then be draped over the scene, but that’s optional and not fundamental to the approach'''
+section = "Wallace, Rendering Realtime Caustics in WebGL, 2016-01-07, the whole article, on the WebGL Water demo of 2011"
+quote = '''Caustics create intricate light patterns with sharp creases that will be blurred and may even be lost completely when using these realtime approximations. [...] A better approach is to approximate a wavefront of the light using a mesh. [...] The brightness change is proportional to the ratio of the original area to the final area. Representing area directly instead of sampling it avoids needing a massive number of samples to clearly resolve caustic shapes and so is much more efficient. This approach only works in certain cases but it’s perfect for caustics due to the refraction of light through a planar body of water. [...] It’s actually possible to compute the ratio of the original and final triangle areas without ever needing the vertex locations. [...] each one can compute the instantaneous screen-space partial derivative along the x and y axes of any value using finite differencing between itself and the neighboring fragment shader along that axis. [...] The vertex shader in the demo positions the vertices by tracing a ray for that vertex along the sunlight direction, refracting it through the surface, and intersecting it with the ground geometry. [...] My demo uses a few more tricks like rendering the caustics to a texture that can then be draped over the scene, but that’s optional and not fundamental to the approach'''
 checked = 2026-11-21
 
 ["wallace-2011-webgl-water-licence"]
@@ -10222,8 +10234,14 @@ checked = 2026-11-21
 
 ["khr-materials-transmission-opaque-behind"]
 url = "https://github.com/KhronosGroup/glTF/blob/5b00b913b74c8f0260c64578b98a09ef2dde0b41/extensions/2.0/Khronos/KHR_materials_transmission/README.md#implementation-notes"
-section = "Khronos glTF repository at commit 5b00b91, KHR_materials_transmission, Limitations of Alpha as Coverage (its last paragraph: what the extension covers) and Implementation Notes (the closing paragraphs and the caption of the figure Multi-layer Transparency)"
+section = "Khronos glTF repository at commit 5b00b91, KHR_materials_transmission, Limitations of Alpha as Coverage (its last paragraph: what the extension covers) and Implementation Notes, a section marked non-normative (the closing paragraphs and the caption of the figure Multi-layer Transparency)"
 quote = '''This extension aims to address the simplest and most common use cases for optical transparency: infinitely-thin materials with no refraction, scattering, or dispersion. [...] Various techniques are available to trade off physical accuracy against realtime performance requirements in client implementations. This extension does not mandate any particular technique. [...] We recommend that client implementations aim to display at least opaque objects through a transmissive material. [...] The minimum expectation for a compliant renderer is to render only opaque objects (i.e. like the first image). Additional transparent layers may be rendered but are not required.'''
+checked = 2026-11-21
+
+["khr-materials-volume-refraction"]
+url = "https://github.com/KhronosGroup/glTF/blob/5b00b913b74c8f0260c64578b98a09ef2dde0b41/extensions/2.0/Khronos/KHR_materials_volume/README.md#refraction"
+section = "Khronos glTF repository at commit 5b00b91, KHR_materials_volume, Overview and Refraction"
+quote = '''By default, a glTF 2.0 material describes the scattering properties of a surface enclosing an infinitely thin volume. [...] Volumes provide effects like refraction, absorption and scattering. [...] Light rays falling through the volume boundary are refracted according to the index of refraction (IOR) given in `KHR_materials_ior`.'''
 checked = 2026-11-21
 
 ["khr-materials-dispersion-per-channel-ior"]
