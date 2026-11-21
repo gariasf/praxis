@@ -117,17 +117,17 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/bend_pass.rs</code></div>
   <h1>The bend pass</h1>
   <p class="definition">A compute pass that rewrites, in every frame, each bent Mesh's vertices from its rest Mesh's, the middle curved into a circular arc and each vertex's tangent frame turned with it: the engine's <span class="concept" data-term="Bend" data-tip="The GPU's stand-in for skinning until M8: each frame a compute pass rewrites a Renderable's own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.">bend</span>, which stands in for skinning and which the <code>crowd</code> scene's figures take.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at fbae12f4 (2026-11-04), with its capacity as the Budget split leaves it. A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="reference-scenes.html#crowd">The Reference scenes</a> for the scene whose figures the pass bends, <a href="blas-refit.html">BLAS Refit</a> for what follows the pass in the crowd's refit form.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 62052fe8 (2026-11-21), with its capacity as the Budget split leaves it. A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="reference-scenes.html#crowd">The Reference scenes</a> for the scene whose figures the pass bends, <a href="blas-refit.html">BLAS Refit</a> for what follows the pass in the crowd's refit form.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
       <dt>Runs</dt><dd>In every frame whose <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span> lists a bend, which among the <span class="concept" data-term="Reference scene" data-tip="A Scene paired with a fixed camera path and injected time, so that every run produces the same frames. Used for Goldens and Baselines.">Reference scenes</span> is <code>crowd</code>'s alone: the first pass recorded into the frame's encoder, after the frame's uploads and before culling phase one, so every pass that pulls vertices reads the bent shapes. A frame with no bends records no pass.</dd>
-      <dt>Reads</dt><dd>The frame's bends, a <code>BendData</code> each, in a buffer the CPU writes through frame staging; each rest Mesh's range of the vertex <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, indices, and Meshlets with their vertices and triangles.">Arena</span>.</dd>
+      <dt>Reads</dt><dd>The frame's bends, a <code>BendData</code> each, in a buffer the CPU writes through frame staging; each rest Mesh's range of the vertex <span class="concept" data-term="Arena" data-tip="A GPU buffer of fixed capacity, created at startup and never grown, from which a Pool sub-allocates ranges; the Mesh pool's hold vertices, LOD 0's indices, and every LOD's Meshlets with their vertices and triangles.">Arena</span>.</dd>
       <dt>Writes</dt><dd>Each bent Mesh's range of the vertex Arena, whole vertices: the position bent, the UV copied, the QTangent turned.</dd>
       <dt>Dispatches</dt><dd>One, <code>bend_vertices</code>: a row of workgroups per bend, each of 64 invocations (<code>BEND_WORKGROUP_SIZE</code>), as many as the longest bend's vertices need.</dd>
       <dt>Bind groups</dt><dd>Group 3, <code>BENDS</code>: the bends, read-only storage, and the vertex Arena, read-write storage.</dd>
-      <dt>Shader</dt><dd><code>src/render/shaders/bend.wgsl</code>, assembled after the common part as the module <code>BEND</code>.</dd>
-      <dt>Counted</dt><dd><code>bend_pass</code> in GPU time; <code>bends_left_out</code> in counters; the bends' buffer in GPU memory; each frame's bends in <code>uploaded_bytes</code>.</dd>
+      <dt>Shader</dt><dd><code>src/render/shaders/bend.wgsl</code>, assembled after the common part, with the Render capacities, as the module <code>BEND</code>.</dd>
+      <dt>Counted</dt><dd><code>bend_pass</code> in GPU time; <code>bends_left_out</code> in counters; the bends' buffer in GPU memory, under the scene and pass buffers (<code>scene_and_pass_buffers</code>); each frame's bends in <code>uploaded_bytes</code>.</dd>
       <dt>Files</dt><dd><code>src/render/bend_pass.rs</code>, <code>src/render/shaders/bend.wgsl</code></dd>
     </dl>
   </aside>
@@ -185,7 +185,7 @@ if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
     recorder.stage(BLAS_REFIT, started);
 }</code></pre>
   <p class="code-source"><code>Renderer::render</code>, <code>src/render/renderer.rs</code>.</p>
-  <p>With the <code>crowd_form</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, and the form the crowd scene's deforming meshes take in the TLAS. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> at its default, <code>CrowdForm::Proxies</code>, the Renderer has no <code>BlasRefit</code>, nothing is cut, and the bent Meshes have no BLAS: shadow proxies cast their shadows. In the refit and rebuild forms each figure traces its own BLAS, which must take the bent shape before the dynamic TLAS is built over it. So in a frame that bent anything the encoder is swapped for a fresh one right after the pass, and the head, the uploads and the bend pass, goes to the GPU in a submission of its own with the BLAS updates, ahead of the build (<a href="blas-refit.html">BLAS Refit</a>). <code>record</code>'s answer, whether it recorded anything, decides that cut; the pass is timed only when it records, since only then does it turn its queries into timestamp writes, which marks it run for the frame's GPU stats (<a href="frame-stats.html#queries">Frame stats</a>).</p>
+  <p>With the <code>crowd_form</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps: whether Instances are culled, whether lights are culled into Froxels or all reach every pixel, whether shadow rays are traced, whether a pass counts each lit pixel's point lights, the form the crowd scene's deforming meshes take in the TLAS, whether Textures hold back the mips finer than their Resident tails (residency), whether a frame waits for the static TLAS's worker, as captures do, and the LOD every Instance draws where one is forced, rather than the one selected for it. Their defaults are what ships; scene content such as ambient and background is not a switch.">Render switch</span> at its default, <code>CrowdForm::Proxies</code>, the Renderer has no <code>BlasRefit</code>, nothing is cut, and the bent Meshes have no BLAS: shadow proxies cast their shadows. In the refit and rebuild forms each figure traces its own BLAS, which must take the bent shape before the dynamic TLAS is built over it. So in a frame that bent anything the encoder is swapped for a fresh one right after the pass, and the head, the uploads and the bend pass, goes to the GPU in a submission of its own with the BLAS updates, ahead of the build (<a href="blas-refit.html">BLAS Refit</a>). <code>record</code>'s answer, whether it recorded anything, decides that cut; the pass is timed only when it records, since only then does it turn its queries into timestamp writes, which marks it run for the frame's GPU stats (<a href="frame-stats.html#queries">Frame stats</a>).</p>
 </section>
 
 <section class="part prose" id="ticks">
@@ -240,6 +240,7 @@ fixed_schedule.add_systems(
         (spawn_helmet, despawn_helmet)
             .chain()
             .run_if(resource_exists::&lt;HelmetAssets&gt;),
+        wrap_around_camera.run_if(any_with_component::&lt;WrapsAroundCamera&gt;),
         spin,
         sway,
         clear_just_pressed,
@@ -258,25 +259,25 @@ fixed_schedule.add_systems(
 <pre class="code"><code>fn prepare_bends(
     world: &amp;World,
     bend_query: &amp;mut BendQuery,
-    mesh_pool: &amp;MeshPool,
+    meshes: &amp;LoadedMeshes,
     blend_weight: f32,
     bends: &amp;mut Vec&lt;BendData&gt;,
     left_out: &amp;mut u32,
 ) {
     bends.clear();
     for (mesh_ref, bend) in bend_query.iter(world) {
-        let (Some(bent), Some(rest)) = (mesh_pool.get(mesh_ref.0), mesh_pool.get(bend.rest)) else {
+        let (Some(bent), Some(rest)) = (meshes.get(mesh_ref.0), meshes.get(bend.rest)) else {
             tracing::warn!(
-                mesh = mesh_ref.0.0,
-                rest = bend.rest.0,
+                mesh = ?mesh_ref.0,
+                rest = ?bend.rest,
                 "A bent Mesh or its rest Mesh is not in the pool, so it is not bent"
             );
             continue;
         };
         if bent.vertices.len() != rest.vertices.len() {
             tracing::warn!(
-                mesh = mesh_ref.0.0,
-                rest = bend.rest.0,
+                mesh = ?mesh_ref.0,
+                rest = ?bend.rest,
                 "A bent Mesh and its rest Mesh hold different vertex counts, so it is not bent"
             );
             continue;
@@ -315,7 +316,7 @@ fixed_schedule.add_systems(
     *left_out = bends.len().saturating_sub(capacity) as u32;
     bends.truncate(capacity);
 }</code></pre>
-  <p class="code-source"><code>prepare_bends</code>, <code>src/render/prepare.rs</code>, called at the end of <code>FramePreparer::prepare</code> with the frame's <code>blend_weight</code> from <code>FixedTime</code>.</p>
+  <p class="code-source"><code>prepare_bends</code>, <code>src/render/prepare.rs</code>, called near the end of <code>FramePreparer::prepare</code> with the frame's <code>blend_weight</code> from <code>FixedTime</code> and <code>LoadedMeshes</code>, the Meshes the Mesh pool holds, each with its range of the vertex Arena.</p>
   <p>The rules, in the code's order:</p>
   <p><b>Both Meshes loaded, with as many vertices.</b> A bend whose Mesh or rest Mesh the Mesh pool lacks, or whose two Meshes differ in vertex count, is warned about and skipped.</p>
   <p><b>No races.</b> One dispatch runs every bend at once, writing each bent Mesh while it reads each rest Mesh. So the list is sorted by where each bent Mesh's vertices start in the Arena; of two bends of one Mesh, the dedup keeps one; and a bend whose rest Mesh some bend writes, its own included, is dropped, found by binary search over the sorted starts. One warning counts what was dropped. These checks run in every build.</p>
@@ -342,7 +343,19 @@ pub struct BendData {
     pub curvature: f32,
 }</code></pre>
   <p class="code-source"><code>BendData</code>, <code>src/render/bend_pass.rs</code>; its WGSL twin in <code>bend.wgsl</code> holds the same five fields.</p>
-  <p>The bends' buffer is made once, at <code>BEND_CAPACITY</code> bends, and never grows. <code>Renderer::upload</code> writes the frame's bends to its start through frame staging with the frame's other uploads, whenever the list is not empty, and frame staging's bound counts the buffer whole.</p>
+  <p>The bends' buffer is made once, in <code>BendPass::new</code>, at <code>BEND_CAPACITY</code> bends, and never grows. The GPU memory ledger creates it and counts it under the scene and pass buffers, the kind whose Budget holds it.</p>
+<pre class="code"><code>let bends = memory.create_buffer(
+    device,
+    GpuMemoryKind::SceneAndPassBuffers,
+    &amp;wgpu::BufferDescriptor {
+        label: Some("Bend Buffer"),
+        size: u64::from(BEND_CAPACITY) * size_of::&lt;BendData&gt;() as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    },
+);</code></pre>
+  <p class="code-source"><code>BendPass::new</code>, <code>src/render/bend_pass.rs</code>.</p>
+  <p><code>Renderer::upload</code> writes the frame's bends to the buffer's start through frame staging with the frame's other uploads, whenever the list is not empty. Frame staging's bound counts the buffer whole, and so does <code>RenderCapacities::most_uploaded_bytes</code>, the most one frame uploads, which the staging Budget sets aside for the frames in flight before what is left goes to streamed loads.</p>
 <pre class="code"><code>pub fn record(
     &amp;self,
     encoder: &amp;mut wgpu::CommandEncoder,
@@ -433,6 +446,7 @@ fn sinc(angle: f32) -&gt; f32 {
 }</code></pre>
   <p class="code-source"><code>bend_vertices</code>, its end, <code>bend.wgsl</code>. <code>unpack_qtangent</code> is the common part's; <code>QTANGENT_SMALLEST_W</code> and <code>BEND_WORKGROUP_SIZE</code> are declared into the WGSL from Rust when the module is assembled.</p>
   <p>The stored quaternion is normalised and given back its positive w before the turn, since its sign carries the bitangent sign and not the rotation. After the product, w is made positive again and kept at least <code>QTANGENT_SMALLEST_W</code>, one Snorm16 step, so it never rounds to zero and loses the sign; then the sign is put back. The cooker's <code>qtangent</code> in <code>src/cook/mesh.rs</code> takes the same three steps with the same constant. The vertex's UV is copied unchanged, and the whole vertex lands in the bent Mesh's range at the same index.</p>
+  <p>Every LOD of the bent Mesh draws from that one range: each LOD's Meshlets index the Mesh's vertices in the vertex Arena, so whichever LOD the culling pass selects for a figure draws it bent (<a href="culling-pass.html">The culling pass</a>).</p>
 </section>
 
 <section class="part prose" id="tests">
@@ -449,7 +463,7 @@ fn sinc(angle: f32) -&gt; f32 {
       <tr><td><code>between_ticks_a_bend_is_drawn_at_the_blend_of_its_two_newest_tick_curvatures</code></td><td><code>state.rs</code></td><td>through the State's fixed schedule, 200 frames at 144, 60, 30 and 90 Hz in turn, which run from no Tick to three a frame: every frame draws the curvature at the analytic blend</td></tr>
       <tr><td><code>structs_shared_with_the_cpu_match_their_rust_twins</code></td><td><code>shader_tests.rs</code></td><td><code>BendData</code>'s fields, offsets and strides match its WGSL twin</td></tr>
       <tr><td><code>a_refitted_frame_times_its_submissions_apart_and_its_refit_from_the_bend</code></td><td><code>readback.rs</code></td><td>the pass's time, and a frame that bends nothing reading it as zero, in each frame shape</td></tr>
-      <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td><code>crowd</code>'s frame, bent figures and their shadows, matches its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span></td></tr>
+      <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td><code>crowd</code>'s frame, bent figures and their shadows, matches its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>, and with LOD 0 forced, the LOD 0 Golden beside it</td></tr>
     </tbody>
   </table>
   </div>
@@ -459,25 +473,25 @@ fn sinc(angle: f32) -&gt; f32 {
 <section class="part prose" id="cost">
   <div class="part-mark">8 &middot; <code>praxis report bench/baselines/&lt;adapter&gt;</code></div>
   <h2>What it costs</h2>
-  <p class="key-idea">Only <code>crowd</code> bends, so only its Baselines time the pass: a small share of its GPU frame on each adapter. Every other scene reads zero, since a frame with no bends records no pass, but holds the pass's one buffer in GPU memory.</p>
-  <p>Medians and 95th percentiles in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, in the shipping form, the proxies; the live figures are the Series on the <a href="https://gariasf.github.io/praxis/bench/">Bench history</a> page. CI's lavapipe Baseline, at 640&times;360 with only its counters judged, is left out.</p>
+  <p class="key-idea">Only <code>crowd</code> bends, so only its Baselines time the pass: a small share of its GPU frame on each adapter. Every other scene, <code>world</code> among them, reads zero, since a frame with no bends records no pass, but holds the pass's one buffer in GPU memory.</p>
+  <p>Medians and 95th percentiles in microseconds from the committed <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12. A commit re-records one when it changes a timing the Baseline held or its Harness version; a commit that changes only its counters does not, and starts no line on its Series.">Baselines</span>, release builds at 2560&times;1440 with 4x MSAA over 1,800 measured frames, in the shipping form, the proxies; the live figures are the Series on the <a href="https://gariasf.github.io/praxis/bench/">Bench history</a> page. CI's lavapipe Baseline, at 640&times;360 with only its counters judged, is left out.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>bend_pass</code> median</th><th class="n"><code>bend_pass</code> p95</th><th class="n">GPU frame</th></tr></thead>
     <tbody>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">27.8</td><td class="n">30.7</td><td class="n">3,747.5</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">39.2</td><td class="n">40.9</td><td class="n">2,169.8</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">36.2</td><td class="n">36.9</td><td class="n">1,970.2</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">33.1</td><td class="n">35.3</td><td class="n">3,380.0</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">39.2</td><td class="n">40.8</td><td class="n">2,235.6</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">36.6</td><td class="n">37.2</td><td class="n">1,976.8</td></tr>
     </tbody>
   </table>
   </div>
-  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code>, <code>crowd.json</code>, at the commit above: <code>gpu_pass_microseconds.bend_pass</code> and <code>gpu_frame_microseconds</code>. <code>crowd</code> bends its 100 figures of 5,120 triangles each in every frame.</p>
+  <p class="note"><code>bench/baselines/apple-m4-pro</code>, <code>nvidia-geforce-rtx-2070-super</code> and <code>nvidia-geforce-rtx-2070-super-dx12</code>, <code>crowd.json</code>, at the commit above: <code>gpu_pass_microseconds.bend_pass</code> and <code>gpu_frame_microseconds</code>, medians and 95th percentiles over <code>measured_frames</code>. The adapters' Baselines come from different engine sources: the M4 Pro's was recorded on 2026-11-16, after LOD selection and Thin Primitives reached the frame, the RTX 2070 SUPER's on Vulkan and on DX12 on 2026-11-07, before them (<code>provenance.started_unix_seconds</code>, <code>provenance.source_hash</code>). The pass itself is the same in both, but the GPU frame around it is not, so a row compares with the rows of its own adapter only. Every other scene's file, <code>world.json</code> over its 3,352 measured frames included, holds 0 for the pass on all three adapters. <code>crowd</code> bends all <code>CROWD_FIGURES</code>, 100 figures, in every frame.</p>
   <p>The pass's memory is its bends' buffer alone, in every scene; the vertices it writes are the bent Meshes' own ranges of the vertex Arena, which the Mesh pool counts. Each frame uploads its bends, 20 bytes each.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Buffer</th><th>Size</th><th class="n">Bytes</th></tr></thead>
     <tbody>
-      <tr><td>the bends, GPU memory in every scene</td><td><code>BEND_CAPACITY</code> &times; 20</td><td class="n">81,920</td></tr>
+      <tr><td>the bends, GPU memory in every scene, within <code>scene_and_pass_buffers</code></td><td><code>BEND_CAPACITY</code> &times; 20</td><td class="n">81,920</td></tr>
       <tr><td>uploaded per <code>crowd</code> frame</td><td>100 bends &times; 20</td><td class="n">2,000</td></tr>
     </tbody>
   </table>
@@ -500,9 +514,9 @@ fn sinc(angle: f32) -&gt; f32 {
   <h2>Limits</h2>
   <p><b>One arc, about one axis.</b> A bend curves the middle of a rest Mesh that stands up +Y from y = 0, toward one azimuth, at one curvature over its whole height. It is not skinning: no bones, no weights, no twist.</p>
   <p><b>A rigid turn of the tangent frame.</b> Each vertex's offset and tangent frame turn rigidly with the middle at its height. The bend also stretches the surface along the middle on the side away from the azimuth and compresses it on the side toward it, which a rigid turn does not follow, so a normal that is neither horizontal nor along the middle leans a little off the bent surface's.</p>
-  <p><b>Bounds and BLASes stay as loaded.</b> The pass rewrites vertices only. The culling pass tests the bent Mesh's cooked bounds, which must hold every shape it bends to, as <code>Bend</code> requires. A bent Mesh loaded as <code>MeshUse::Drawn</code> has no BLAS; its shadow comes from shadow proxies or, in the refit and rebuild forms, from a BLAS the next step updates.</p>
+  <p><b>Bounds and BLASes stay as loaded.</b> The pass rewrites vertices only. The culling pass tests the bent Mesh's cooked bounds, which must hold every shape it bends to, as <code>Bend</code> requires, and selects its LOD by the LOD errors cooked for its unbent shape. A bent Mesh loaded as <code>MeshUse::Drawn</code> has no BLAS; its shadow comes from shadow proxies or, in the refit and rebuild forms, from a BLAS the next step updates.</p>
   <p><b>A frame's bends, at most 4,096.</b> Past <code>BEND_CAPACITY</code> the highest Meshes in the Arena keep their last shape, counted and warned about. A bend prepare drops as a race keeps no shape of its own that frame.</p>
-  <p><b>No bends, no time.</b> A frame that bends nothing records no pass; its timestamp slots keep an earlier frame's values, and the readback reads the pass as taking no time.</p>
+  <p><b>No bends, no time.</b> A frame that bends nothing records no pass and never turns its queries into timestamp writes, so the frame's pass log leaves it unmarked; its queries keep an earlier frame's timestamps, and the readback reads the pass as taking no time.</p>
 </section>
 
 <section class="part prose" id="sources">
@@ -515,8 +529,8 @@ fn sinc(angle: f32) -&gt; f32 {
     <dt><a href="https://www.realtimerendering.com/Real-Time_Rendering_4th-TOC_Preface_Intro_Bib_Index.pdf">Akenine-M&ouml;ller and colleagues, Real-Time Rendering, 4th edition, chapter 4, Transforms (the table of contents: the book is not online)</a></dt><dd>&sect;4.3, quaternions: the rotations the bend and the QTangent use; &sect;4.4, vertex blending: the skinning the bend stands in for</dd>
   </dl>
   <h3>History</h3>
-  <p class="note">The pass arrived in the third milestone with the <code>crowd</code> scene, in four steps: the pass, the <code>Bend</code> component and its blend between Ticks, the scene's swaying figures, and the shadow proxies that give them shadows; the refit form then cut the frame after the pass so each figure's own BLAS could follow its bend. This page describes the pass as it is.</p>
-  <footer class="sources">Written from <code>src/render/bend_pass.rs</code>, <code>src/render/shaders/bend.wgsl</code>, <code>common.wgsl</code>, <code>src/render/shaders/mod.rs</code>, <code>src/render/bind_groups.rs</code>, <code>prepare.rs</code>, <code>renderer.rs</code>, <code>readback.rs</code>, <code>src/components.rs</code>, <code>src/transform/mod.rs</code>, <code>src/state.rs</code>, <code>src/cook/mesh.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0003, 0013, 0017, 0018, 0019, 0020 and 0022, the committed Baselines, and the sources above, all at <code>main</code> fbae12f4.</footer>
+  <p class="note">The pass arrived in the third milestone with the <code>crowd</code> scene, in four steps: the pass, the <code>Bend</code> component and its blend between Ticks, the scene's swaying figures, and the shadow proxies that give them shadows; the refit form then cut the frame after the pass so each figure's own BLAS could follow its bend. Its buffer later came to be created through the GPU memory ledger under its kind, its capacity counted in the scene and pass buffers' and the staging Budgets, and its time read through the frame's pass log. This page describes the pass as it is.</p>
+  <footer class="sources">Written from <code>src/render/bend_pass.rs</code>, <code>src/render/shaders/bend.wgsl</code>, <code>common.wgsl</code>, <code>src/render/shaders/mod.rs</code>, <code>src/render/bind_groups.rs</code>, <code>prepare.rs</code>, <code>renderer.rs</code>, <code>readback.rs</code>, <code>src/components.rs</code>, <code>src/transform/mod.rs</code>, <code>src/state.rs</code>, <code>src/assets/mesh.rs</code>, <code>src/cook/mesh.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0003, 0013, 0017, 0018, 0019, 0020 and 0022, the committed Baselines, and the sources above, all at <code>main</code> 62052fe8.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="dynamic-tlas.html">Previous: The dynamic TLAS</a><a href="index.html">All field guides</a><a href="blas-refit.html">Next: The BLAS refit</a></nav>

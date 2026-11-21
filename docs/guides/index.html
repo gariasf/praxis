@@ -106,11 +106,11 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
       <span class="reads">Page: <a class="reference" href="dynamic-tlas.html">The dynamic TLAS</a></span></li>
     <li>The bend pass, in frames that bend Meshes, which only the <code>crowd</code> scene does: each figure bent from its rest Mesh. With the crowd's refit form, chosen by a Render switch and available on Metal only, the frame's commands up to the bend pass are submitted first, with the refit of each figure's BLAS, and the dynamic TLAS's build follows them.
       <span class="reads">Pages: <a class="reference" href="bend-pass.html">The bend pass</a>, <a class="reference" href="blas-refit.html">The BLAS refit</a>, and <a class="reference" href="reference-scenes.html#crowd">The Reference scenes</a> for the crowd scene</span></li>
-    <li>Phase one of the culling pass, which builds the draw of the Instances in view that were visible the frame before.
+    <li>Phase one of the culling pass, which selects each Instance's LOD and builds the draw of the Instances in view that were visible the frame before, the indices of Thin Primitives and small Instances apart from the others.
       <span class="reads">Page: <a class="reference" href="culling-pass.html">The culling pass</a>, and <a class="reference" href="metal-quirks.html#order">Metal quirks</a> for why the draw is built in slot order</span></li>
     <li>The Froxel pass, which lists for each Froxel the point lights that may reach it.
       <span class="reads">Page: <a class="reference" href="froxel-pass.html">The Froxel pass</a>, which opens with the light buffer it reads</span></li>
-    <li>The depth pre-pass, which draws phase one's Instances into the 4x MSAA depth target, and with shadow rays on each sample's surface normals beside it.
+    <li>The depth pre-pass, which draws phase one's Instances into the 4x MSAA depth target, Thin Primitives and small Instances a pixel wide at the samples their coverage keeps, and with shadow rays on each sample's surface normals beside it.
       <span class="reads">Page: <a class="reference" href="depth-prepass.html">The depth pre-pass</a>, and <a class="reference" href="metal-quirks.html#merging">Metal quirks</a> for the flat input its fragments read</span></li>
     <li>The depth pyramid pass, which reduces that depth, level by level, to the farthest depth over each texel's share of the screen.
       <span class="reads">Page: <a class="reference" href="depth-pyramid-pass.html">The depth pyramid pass</a></span></li>
