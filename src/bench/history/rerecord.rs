@@ -1,4 +1,4 @@
-//! `praxis history rerecord`: a sweep's runs of `main` re-record the
+//! `praxis history rerecord`: runs of `main` re-record the
 //! counters of this machine's Baselines where they moved. A re-recorded
 //! Baseline keeps its timings and Harness version, which a person chooses,
 //! so its record starts no line on its Series; where those timings no
