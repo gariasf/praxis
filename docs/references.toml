@@ -8830,8 +8830,8 @@ checked = 2026-11-21
 
 ["jolt-5.7.0-buoyancy"]
 url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Body/Body.h#L234"
-section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Body/Body.h (L234): read, not run"
-quote = '''Applies an impulse to the body that simulates fluid buoyancy and drag.'''
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Body/Body.h (L234, L236): read, not run"
+quote = '''Applies an impulse to the body that simulates fluid buoyancy and drag. [...] @param inSurfacePosition Position of the fluid surface in world space'''
 checked = 2026-11-21
 
 ["jolt-5.7.0-precision-determinism"]
@@ -10146,4 +10146,476 @@ checked = 2026-11-21
 url = "https://media.gdcvault.com/gdc2026/Slides/Petr_Smrcek_SupportingThousandsOfNPCsInKingdomComeDeliveranceAndKingdomComeDeliverance2.pdf#page=31"
 section = "Petr Smrček (Warhorse Studios), Supporting Thousands of NPCs in 'Kingdom Come: Deliverance' & 'Kingdom Come: Deliverance II', GDC 2026, slides Naive AI LOD (15), Movement vs LOD (17), Results for KCD (30)"
 quote = '''Naive AI LOD • Optimization of far NPCs Remove render, animation and physics • Breaks the script LOD branching in script [...] Movement vs LOD • No physics and animation • Teleport Consecutive small teleports • Transparent to script [...] Results for KCD • ~600 NPCs • 30 FPS • 60-90m NPC visibility • Some NPCs unloaded • Bloated scripting logic • Long faders'''
+
+["crest-ff0602f-collision-async"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/docs/user/collision-shape-and-buoyancy-physics.rst#L34"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, docs/user/collision-shape-and-buoyancy-physics.rst (L34, L45, L56, L59): the built-in height queries are asynchronous, and the GPU one is the default"
+quote = '''The collision providers built intout our system perform queries asynchronously; queries are offloaded to the GPU or to spare CPU cores for processing. [...] Secondly, even if only a one-time query of the height is needed, the query function should be called every frame until it indicates that the results were successfully retrieved. [...] This is the default and recommended choice for when a GPU is present. [...] The result of the query accurately tracks the height of the surface, including all wave components and depth caches and other Crest features.'''
+checked = 2026-11-21
+
+["crest-ff0602f-query-requests"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/crest/Assets/Crest/Crest/Scripts/Collision/QueryBase.cs#L28"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, crest/Assets/Crest/Crest/Scripts/Collision/QueryBase.cs (L28, L29, L110, L111): up to seven read-backs in flight, and queries kept across frames for callers in the fixed update; read, not run"
+quote = '''// 4 was enough for a long time, but Linux setups seems to demand 7 [...] const int s_maxRequests = 7; [...] // queries are often made from FixedUpdate(), and at high framerates this may not be called, which would mean [...] // the query would get lost and this leads to stuttering and other artifacts.'''
+checked = 2026-11-21
+
+["crest-ff0602f-baked-fft"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/docs/user/collision-shape-and-buoyancy-physics.rst#L65"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, docs/user/collision-shape-and-buoyancy-physics.rst (L65, L70, L72, L83 to L85): the baked FFT collision source and its limits"
+quote = '''In scenarios where a GPU is not present such as for headless servers, a CPU option is available. [...] **Time Resolution** - Frames per second of baked data. [...] **Time Loop Length** - FFT waves will loop with a period of this many seconds. Smaller values decrease data size but can make waves visibly repetitive. [...] Only a single set of waves from one *Shape FFT* component is supported. [...] The *Depth Cache* components are not supported. In order to get a one to one match between the visuals and the collision data, depth caches should not be used. [...] This feature assumes a fixed sea level for the whole scene.'''
+checked = 2026-11-21
+
+["crest-ff0602f-baked-sampler"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/crest/Assets/Crest/Crest/Scripts/Shapes/FFT/FFTBakedData.cs#L189"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, crest/Assets/Crest/Crest/Scripts/Shapes/FFT/FFTBakedData.cs (L189), Scripts/Shapes/FFT/FFTBaker.cs (L90), Scripts/Shapes/FFT/ShapeFFT.cs (L47, L51), Scripts/Shapes/ShapeWaves.cs (L68) and Shaders/Resources/FFT/FFTSpectrum.compute (L64, L69): a baked height is a function of position, time and the baked frames, and frequencies are rounded so the bake loops; read, not run"
+quote = '''public static float4 SampleHeightXZT(float4 x, float4 z, float4 t, FFTBakedDataParameters parameters, in NativeArray<half> framesFlattened) [...] var frameCount = (int)(resolutionTime * loopPeriod); [...] public int _timeResolution = 4; [...] public float _timeLoopLength = 32f; [...] public int _resolution = 128; [...] // Allow FFT to loop in time [...] // Make sure loops integral number of times'''
+checked = 2026-11-21
+
+["crest-ff0602f-gerstner-cpu"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/docs/user/collision-shape-and-buoyancy-physics.rst#L98"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, docs/user/collision-shape-and-buoyancy-physics.rst (L94, L98, L99, L101, L102): the deprecated CPU sum of Gerstner waves"
+quote = '''The *Shape Gerstner Batched* component is deprecated which supported this option. [...] This sums over all waves to compute displacements, normals, velocities, etc. [...] In contrast to the displacement textures the horizontal range of this collision source is unlimited. [...] A drawback of this approach is the CPU performance cost of evaluating the waves. [...] It also does not include wave attenuation from water depth or any custom rendered shape.'''
+checked = 2026-11-21
+
+["crest-ff0602f-deterministic-waves"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/docs/user/faq.rst#L68"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, docs/user/faq.rst (L68) and docs/user/time-providers.rst (L4, L10)"
+quote = '''Yes, the animated waves are deterministic and can be synchronised across the network. [...] By default, `Crest` uses the current game time given by `Time.time` when simulating and rendering the water. [...] simulation must progress frame by frame and can not be set to use a specific time, and also cannot be synchronised accurately over a network.'''
+checked = 2026-11-21
+
+["crest-ff0602f-rendering-notes"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/docs/user/rendering-notes.rst#L9"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, docs/user/rendering-notes.rst (L9 to L11, L30 to L32)"
+quote = '''`Crest` is rendered in a standard way for water shaders - in the transparent pass and refracts the scene. [...] The refraction is implemented by sampling the camera's colour texture which has opaque surfaces only. [...] It writes to the depth buffer during rendering to ensure overlapping waves are sorted correctly to the camera. [...] Alpha blend and refractive shaders will not render behind the water surface. [...] The end result is transparent objects not being visible behind `Crest`.'''
+checked = 2026-11-21
+
+["crest-ff0602f-lod-morph"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/docs/user/system-notes.rst#L75"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, docs/user/system-notes.rst (L75, L76, L78, L79)"
+quote = '''The vertex shader snaps the verts to grid positions to make them stable. [...] It then computes a *lodAlpha* which starts at 0 for the inside of the LOD and becomes 1 at the outer edge. [...] This value is used to drive the vertex layout transition, to enable a seamless match between the two. [...] The vertex shader then samples any required ocean data for the current and next LOD scales and uses *lodAlpha* to interpolate them for a smooth transition across displacement textures.'''
+checked = 2026-11-21
+
+["crest-ff0602f-foam-and-shadow-history"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/crest/Assets/Crest/Crest/Shaders/Resources/UpdateFoam.compute#L38"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, crest/Assets/Crest/Crest/Shaders/Resources/UpdateFoam.compute (L38), Scripts/LodData/Shadows/SimSettingsShadow.cs (L24) and docs/user/water-appearance.rst (L481, L483): foam and shadow data persist in the viewer-centred cascades, not on screen; read, not run"
+quote = '''// Slice to sample previous frames data from. LOD change takes into account shifting of the cascades in scale. [...] Current frame weight for accumulation over frames for soft shadows. [...] This data is captured from the shadow maps Unity renders before the transparent pass. [...] The Shadow LOD Data then reads these shadow maps and copies shadow information into its LOD textures.'''
+checked = 2026-11-21
+
+["crest-ff0602f-underwater"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/docs/user/underwater.rst#L8"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, docs/user/underwater.rst (L8, L9, L33)"
+quote = '''*Crest* supports seamless transitions above/below water. [...] It can also have a meniscus which renders a subtle line at the intersection between the camera lens and the water to visually help the transition. [...] The *Underwater Renderer* component executes a fullscreen underwater effect between the transparent pass and post-processing pass.'''
+checked = 2026-11-21
+
+["crest-ff0602f-buoyancy"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/docs/user/collision-shape-and-buoyancy-physics.rst#L112"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, docs/user/collision-shape-and-buoyancy-physics.rst (L112, L115) and crest/Assets/Crest/Crest/Scripts/Interaction/BoatProbes.cs (L116, L165): the boat script queries the surface from the fixed update; read, not run"
+quote = '''Buoyancy physics for boats is not a core focus of `Crest`. [...] With that said, we do provide rudimentary physics scripts. [...] private void FixedUpdate() [...] collProvider.Query(GetHashCode(), ObjectWidth, _queryPoints, _queryResultDisps, null, _queryResultVels);'''
+checked = 2026-11-21
+
+["crest-ff0602f-open-worlds"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/docs/user/open-worlds.rst#L12"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, docs/user/open-worlds.rst (L12, L25)"
+quote = '''*Crest* has support for 'shifting origin' functionality [...] To avoid popping in the waves, the threshold needs to be set to *WaveResolution x LargestWavelength*.'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-ocean-patch"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiOcean.h#L17"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), wiOcean.h (L17, L19), wiOcean.cpp (L386) and shaders/oceanSurfaceVS.hlsl (L28, L34): one 512 by 512 patch through one FFT, drawn on a grid built in screen space; read, not run"
+quote = '''int dmap_dim = 512; [...] float patch_length = 50.0f; [...] wi::fftgenerator::fft_512x512_c2c(buffer_Float_Dxyz, buffer_Float_Dxyz, buffer_Float2_Ht, cmd); [...] // Assemble screen space grid: [...] // Perform ray tracing of screen grid and plane surface to unproject to world space:'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-ocean-readback-latency"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiOcean.cpp#L221"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), wiOcean.cpp (L221, L222, L441, L443), shaders/oceanSimulatorCS.hlsl (L21) and wiRenderer.cpp (L4291, L4293): the whole displacement map is copied into a ring of read-back textures each frame, and the waves' phase follows accumulated frame time; read, not run"
+quote = '''// GetDisplacedPosition() query. Must comfortably exceed the GPU->CPU readback [...] // latency (GetBufferCount() frames) so that continuous but irregular queries [...] device->CopyResource(&displacementMap_readback[displacement_readback_index], &displacementMap, cmd); [...] displacement_readback_index = (displacement_readback_index + 1) % device->GetBufferCount(); [...] sincos(g_InputOmega[in_index] * GetFrame().time * xOceanTimeScale, sin_v, cos_v); [...] frameCB.delta_time = dt * GetGameSpeed(); [...] frameCB.time += frameCB.delta_time;'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-buoyancy-step"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiPhysics_Jolt.cpp#L2470"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), wiPhysics_Jolt.cpp (L2470, L2856, L2858): buoyancy reads the ocean query once a frame, before a fixed-step loop; read, not run"
+quote = '''const Vec3 surface_position = cast(scene.GetOceanPosAt(cast(com))); [...] physics_scene.accumulator += dt; [...] while (physics_scene.accumulator >= TIMESTEP)'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-ocean-shading"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/shaders/oceanSurfacePS.hlsl#L121"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), shaders/oceanSurfacePS.hlsl (L121, L124, L174, L176): reflection from a planar reflection texture where one exists, refraction from a colour copy and scene depth; read, not run"
+quote = '''if (camera.texture_reflection_index >= 0) [...] float4 reflectionPos = mul(camera.reflection_view_projection, float4(surface.P, 1)); [...] surface.refraction.rgb = texture_refraction.SampleLevel(sampler_linear_mirror, refraction_uv, 0).rgb; [...] refraction_depth = texture_depth.SampleLevel(sampler_point_clamp, refraction_uv, 0);'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-ocean-order"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiRenderPath3D.cpp#L2168"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), wiRenderPath3D.cpp (L2143, L2144, L2168, L2172) and shaders/underwaterCS.hlsl (L128): under MSAA the ocean's pass loads the multisampled colour the opaque pass stored and resolves again, after the resolved colour is copied for refraction; read, not run"
+quote = '''rp[rp_count++] = RenderPassImage::RenderTarget(&rtMain_render, RenderPassImage::LoadOp::LOAD); [...] rp[rp_count++] = RenderPassImage::Resolve(&rtMain); [...] // Draw only the ocean first, fog and lightshafts will be blended on top: [...] wi::renderer::Postprocess_Downsample4x(rtMain, rtSceneCopy, cmd); [...] // The ocean is not rendered into the lineardepth unfortunately, so we also trace it:'''
+checked = 2026-11-21
+
+["web-ocean-a07c7fd-height-probe"]
+url = "https://github.com/Noniv/web-ocean/blob/a07c7fd522ef0a897601c114f927a49d93d95520/js/main.js#L295"
+section = "web-ocean (Noniv, commit a07c7fd, 2026-10-17), js/main.js (L295, L817, L818): one height under the camera, read back asynchronously at most every eighth frame; read, not run"
+quote = '''// Water height under the camera (async readback, a few frames of latency) so the [...] if (!probePending && (frameIndex & 7) === 0) { [...] enc.copyBufferToBuffer(probeOut, 0, probeRead, 0, 16);'''
+checked = 2026-11-21
+
+["web-ocean-a07c7fd-shading"]
+url = "https://github.com/Noniv/web-ocean/blob/a07c7fd522ef0a897601c114f927a49d93d95520/js/wgsl/ocean.js#L135"
+section = "web-ocean (Noniv, commit a07c7fd, 2026-10-17), js/wgsl/ocean.js (L71, L135, L200, L262), js/main.js (L369) and js/wgsl/sim.js (L147, L345, L346): a vertex morph over the last fifth of a level's range, slope variance from mip-mapped moments, one resolve of the 4x pass, frequencies rounded so time loops, and foam kept in world-space clipmaps; read, not run"
+quote = '''let mk = clamp((d - 0.8 * R) / (0.2 * R), 0.0, 1.0); [...] cov += vec3f(max(mv.x - dv.x * dv.x, 0.0), max(mv.y - dv.y * dv.y, 0.0), mv.z - dv.x * dv.y); [...] // ---- water body: upwelling scatter + backlit subsurface glow ---- [...] var col = body * (1.0 - Fr) + refl * Fr + spec; [...] mainPass.colorAttachments[0].resolveTarget = hdrTex.createView(); [...] let w = floor(omegaOf(kl) / w0) * w0; [...] // World-space foam clipmaps (toroidally addressed, centred on the camera). [...] // Foam is injected where the TOTAL surface Jacobian (all cascades) folds, then decays.'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-buoyancy-path"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/physics/PhysicsWorld.cpp#L650"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, source/physics/PhysicsWorld.cpp (L650), data/shaders/ocean/ocean_assemble.hlsl (L63), source/rendering/Renderer_Definitions.h (L91) and data/shaders/ocean/ocean_spectrum.hlsl (L118): each fixed physics step applies buoyancy from a cache the GPU's displacement reaches through a four-slot read-back, and the waves' time is the render clock's; read, not run"
+quote = '''// buoyancy from the fft water, applied per step so the force integrates consistently [...] // mirror displacement for cpu buoyancy [...] const uint32_t renderer_draw_data_buffer_count = 4;       // matches command list pool size, avoids cpu-gpu memcpy races [...] float t  = fmod((float)buffer_frame.time, loop_period);'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-water-reflection"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/data/shaders/reflections_apply.hlsl#L38"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, data/shaders/reflections_apply.hlsl (L38): the pass that applies its ray-traced reflections describes a spatiotemporal denoiser; read, not run"
+quote = '''// spatiotemporal denoiser reconstructs a roughness proportional blur, so rough surfaces show a'''
+checked = 2026-11-21
+
+["torque3d-9521d43-water-queries"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/environment/waterPlane.cpp#L898"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/environment/waterPlane.cpp (L898, L899, L935) and Engine/source/environment/river.cpp (L1448): the CPU's surface is the plane without its waves, and a river's flow is its segment's direction; read, not run"
+quote = '''// Simply look for the hit on the water plane [...] // and ignore any future issues with waves, etc. [...] return getPosition().z; [...] VectorF flow = segment.slice0->p1 - segment.slice1->p1;'''
+checked = 2026-11-21
+
+["torque3d-9521d43-planar-reflection"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/scene/reflector.cpp#L758"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/scene/reflector.cpp (L126, L758): the planar reflection draws the scene again, and may skip a frame's update; read, not run"
+quote = '''"If less than maxRateMs has elapsed since this relfection was last " [...] gClientSceneGraph->renderSceneNoLights( &reflectRenderState, objTypeFlag );'''
+checked = 2026-11-21
+
+["godot-ocean-waves-a171446-updates"]
+url = "https://github.com/2Retr0/GodotOceanWaves/blob/a171446f8174348895aaafc426576c26261058b9/assets/water/wave_generator.gd#L57"
+section = "GodotOceanWaves (2Retr0, commit a171446, 2024-09-27), assets/water/wave_generator.gd (L57), README.md (L83) and assets/shaders/compute/fft_unpack.glsl (L62): one cascade updated a frame, a stutter its readme admits, and foam that decays in the cascade's own texture; read, not run"
+quote = '''# Update one cascade each frame for load balancing. [...] While this reduces the amount of GPU-time spent working on FFT, frames during which the wave generation pipeline runs still stutter. [...] foam *= exp(-foam_decay_rate);'''
+checked = 2026-11-21
+
+["acerola-water-1673a12-buoyancy"]
+url = "https://github.com/GarrettGunnell/Water/blob/1673a12e796c5745aea6fa26eda53261da8efa80/Assets/Scripts/Buoyancy.cs#L98"
+section = "GarrettGunnell/Water (commit 1673a12, 2023-12-30), Assets/Scripts/Buoyancy.cs (L98), Assets/Shaders/FFTWater.compute (L336) and Assets/Shaders/FFTWater.shader (L50): one texel of the first band's height read back asynchronously, and a hull stage; read, not run"
+quote = '''voxelWaterRequest = AsyncGPUReadback.Request(waterSource.GetBuoyancyData(), 0, x, 1, y, 1, 0, 1, null); [...] _BuoyancyData[id.xy] = displacement.y; [...] #pragma hull hp'''
+checked = 2026-11-21
+
+["proland-e59a245-ocean"]
+url = "https://gitlab.inria.fr/neyret/proland/-/blob/e59a245f1f8901023c7cb726b4392b898113ec04/ocean/sources/proland/ocean/DrawOceanFFTTask.cpp#L208"
+section = "Proland 4.0 (Inria, gitlab.inria.fr/neyret/proland, commit e59a245, 2022-01-09), ocean/sources/proland/ocean/DrawOceanFFTTask.cpp (L208), ocean/examples/ocean1/oceanShader.glsl (L103), ocean/examples/ocean2/oceanFFTShader.glsl (L342) and river/sources/proland/rivers/DrawRiversTask.h (L67, L83): slope variance filtered from the spectrum, a screen grid clamped at the horizon, and rivers after Yu's thesis with a flicker its header lists; read, not run"
+quote = '''// precomputes filtered slope variances in a 3d texture, based on the wave spectrum [...] vec3 Lsea = refractedSeaRadiance(V, N, sigmaSq) * seaColor * skyE / PI; [...] cameraDir = normalize((screenToCamera * vec4(vertex.x, min(vertex.y, horizon), 0.0, 1.0)).xyz); [...] * This class is used to draw multi-resolution Animated Rivers as described [...] * - Screen flickers when using postProcess method.'''
+checked = 2026-11-21
+
+["lumix-8ce5ab5-water-ssr"]
+url = "https://github.com/nem0/LumixEngine/blob/8ce5ab5680e5b72edec118452b79512b7780719b/data/scripts/core/render/transparent.evox#L20"
+section = "Lumix Engine (commit 8ce5ab5, 2026-11-20), data/scripts/core/render/transparent.evox (L20, L23) and data/shaders/water.hlsl (L153, L156): water reads a copy of the frame's lit colour, for refraction and for a jittered screen-space march; read, not run"
+quote = '''// water and transparent materials sample what was rendered so far, a target can't be read while it's drawn to [...] ctx.blit(hdr, color_copy, width, height); [...] float jitter = hash(pos_ws.xy + Global_random_float2_normalized); [...] return sampleBindless(LinearSamplerClamp, u_bg, hit.xy * Global_rcp_framebuffer_size).rgb;'''
+checked = 2026-11-21
+["mcguire-mara-2014-screen-space-ray-tracing"]
+url = "https://jcgt.org/published/0003/04/04/paper.pdf#page=11"
+section = "McGuire and Mara, Efficient GPU Screen-Space Ray Tracing, Journal of Computer Graphics Techniques 3(4), 2014: Figure 1, p. 1 (p. 73 of the volume); section 1, p. 2; section 4, p. 11"
+quote = '''Figure 1. Reflections in ripply water approximated by a screen space ray tracer in 2 ms at 1080p on GeForce 650M. [...] Of course, the depth buffer fails to represent areas of high depth complexity and those far outside the viewport. [...] At 1920 × 1080 resolution, casting a diagonal ray for 25 iterations of the inner loop at every pixel costs 1.2 ms on a desktop NVIDIA GeForce Titan and 6.4 ms on a MacBook NVIDIA GeForce 650M.'''
+checked = 2026-11-21
+cost = '''At 1920 × 1080 resolution, casting a diagonal ray for 25 iterations of the inner loop at every pixel costs 1.2 ms on a desktop NVIDIA GeForce Titan and 6.4 ms on a MacBook NVIDIA GeForce 650M.'''
+
+["stachowiak-2015-ssr-previous-frame"]
+url = "https://web.archive.org/web/20261101155405/https://advances.realtimerendering.com/s2015/Stochastic%20Screen-Space%20Reflections.pptx"
+section = "Stachowiak, Stochastic Screen-Space Reflections, SIGGRAPH 2015 course Advances in Real-Time Rendering in Games, speaker notes of slide 11, slide 75 (its timing table, whose totals run from 2.19ms to 4.41ms) and slide 90; read from the Internet Archive's snapshot of 2026-11-01, since the course's host refused the fetch"
+quote = '''When we intersect a surface, we must fetch the color at the intersection. There are a few options here, but the most popular one is re-projecting the previous frame’s final lighting, and returning that. [...] PS4 timings (Frostbite testbed) 1600 x 900; all pixels reflective [...] Can’t kill all the lag anyway Reflection color is from previous frame !'''
+checked = 2026-11-21
+
+["cichocki-2017-pixel-projected-reflections"]
+url = "https://web.archive.org/web/20260910051056/https://advances.realtimerendering.com/s2017/PixelProjectedReflectionsAC_v_1.92.pdf#page=42"
+section = "Cichocki, Optimized pixel-projected reflections for planar reflectors, SIGGRAPH 2017 course Advances in Real-Time Rendering in Games, slides on pp. 1, 3, 5, 42 to 47; read from the Internet Archive's snapshot of 2026-09-10, since the course's host refused the fetch"
+quote = '''private research [...] Constrained form of SSR [...] Reflection generated from: [...] color buffer [...] depth buffer [...] analytical reflective areas [...] Non-glossy reflections [...] Reflections only on planar surfaces [...] Normalmaps not supported [...] Measured on nVidia GTX 1070 [...] 4K resolution (3840x2160) [...] Full resolution reflection [...] Performance and quality: Brute force SSR [...] 20,6 ms [...] Performance and quality: Hierarchical depth SSR [...] 3.2 ms [...] Performance and quality: Pixel-projected reflections [...] 0.95 ms'''
+checked = 2026-11-21
+cost = '''Measured on nVidia GTX 1070 [...] 4K resolution (3840x2160) [...] Performance and quality: Pixel-projected reflections [...] 0.95 ms'''
+
+["sousa-2005-generic-refraction"]
+url = "https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-19-generic-refraction-simulation"
+section = "Sousa (Crytek), Generic Refraction Simulation, GPU Gems 2 (Addison-Wesley, 2005), chapter 19, introduction and section 19.2"
+quote = '''which is based on using the current back buffer as a refraction map and then adding displacement to the texture coordinates [...] has all the scene geometry rendered into it, including objects in front of the refractive mesh, and we are indiscriminately applying perturbation on every pixel. This leads [...] to refraction "leakage" between objects in the scene.'''
+checked = 2026-11-21
+
+["guardado-2004-water-caustics"]
+url = "https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-2-rendering-water-caustics"
+section = "Guardado and Sánchez-Crespo, Rendering Water Caustics, GPU Gems (Addison-Wesley, 2004), chapter 2, sections 2.2 and 2.3"
+quote = '''Stam's approach involved computing an animated [...] caustic texture using wave theory, so it could be used to light the ground floor. [...] We make some aggressive assumptions about good candidates for [...] caustics, and we compute only a subset of the arriving rays.'''
+checked = 2026-11-21
+
+["yang-ouyang-2021-water-caustics"]
+url = "https://developer.download.nvidia.com/ray-tracing-gems/rtg2-chapter30-preprint.pdf#page=18"
+section = "Yang and Ouyang (NVIDIA), Real-Time Ray Traced Caustics, Ray Tracing Gems II (Apress, 2021), chapter 30, NVIDIA's preprint: Figure 30-1, p. 2 of the file; section 30.3, pp. 18 to 19; 30.3.1, p. 21; 30.3.4, p. 26; 30.3.5, p. 27; 30.3.6, p. 28. Its timings are a bar chart, Figure 30-30"
+quote = '''the undersea water caustic effect from the game JX3 HD Remake [...] Render water surfaces into the caustics map from the light view, recording the positions and normals of the water surface [...] Generate rays from positions recorded in the caustics map, and trace them along the reflected or refracted directions calculated from the surface normals. [...] footprints formed into continuous patterns without any denoising involved. [...] We accumulate the caustics over several frames with a temporal filter to output the soft caustics. [...] The scene has four cascades of a 1024 × 1024 × 4 caustics map to cover the sea surface of 240 × 240 m2 . [...] CCM only works for directional lights and does not support PCM.'''
+checked = 2026-11-21
+
+["wallace-2011-webgl-water"]
+url = "https://github.com/evanw/webgl-water/blob/73eda8be832b649367b25ea5690c1f0181bb56ad/renderer.js#L263"
+section = "Wallace, WebGL Water (evanw/webgl-water, commit 73eda8b, 2016-01-07), main.js (L5, L6): its licence statement, the repository having no licence file; renderer.js (L263 to L265): caustic brightness from how refraction changes a triangle's area; read, not run"
+quote = '''* Copyright 2011 Evan Wallace [...] * Released under the MIT license [...] float oldArea = length(dFdx(oldPos)) * length(dFdy(oldPos));\ [...] float newArea = length(dFdx(newPos)) * length(dFdy(newPos));\ [...] gl_FragColor = vec4(oldArea / newArea * 0.2, 1.0, 0.0, 0.0);\'''
+checked = 2026-11-21
+
+["heckel-2024-caustics"]
+url = "https://blog.maximeheckel.com/posts/caustics-in-webgl/"
+section = "Heckel, Shining a light on Caustics with Shaders and React Three Fiber (blog.maximeheckel.com, 2024-01-23), sections Extracting Normals and Calculating caustics intensity; read as an article, and no code is taken from it"
+quote = '''Use partial derivatives along the [...] axes for the original and the refracted position. When multiplied, the result lets us approximate a small surface neighboring the original and refracted vertex. [...] Compare the resulting surfaces to determine the intensity of the caustics. [...] from Evan Wallace'''
+checked = 2026-11-21
+
+["losasso-hoppe-2004-clipmap-transition"]
+url = "https://hhoppe.com/geomclipmap.pdf#page=4"
+section = "Losasso and Hoppe, Geometry Clipmaps: Terrain Rendering Using Nested Regular Grids, ACM Transactions on Graphics 23(3) (SIGGRAPH 2004), section 6.2 (Transition regions for visual continuity), p. 4"
+quote = '''provide temporal continuity, we morph the geometry near the outer boundary of each render_region(𝑙) such that it transitions to the geometry of the coarser level 𝑙–1. The morph is a function of the spatial (𝑥, 𝑦) grid coordinates of the terrain vertices relative [...] but instead tracks the continuous viewer position.'''
+checked = 2026-11-21
+
+["johanson-2004-projected-grid-swimming"]
+url = "https://fileadmin.cs.lth.se/graphics/theses/projects/projgrid/projgrid-hq.pdf#page=32"
+section = "Johanson, Real-time water rendering: Introducing the projected grid concept, MSc thesis, Lund University, 2004, section 4.1 (Implications of the projected grid), p. 32 of the file"
+quote = '''Another disadvantage of the projected grid algorithm is that it suffers from the artefact known as swimming, which is somewhat similar (and related) to aliasing. When the camera is moving, the locations of the points of the grid (and consequently the sampled height-data) will change. [...] It is even less relevant if the surface is animated as that hides it pretty well.'''
+checked = 2026-11-21
+["unity-hdrp-17-water-script-modes"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/api/UnityEngine.Rendering.HighDefinition.WaterScriptInteractionsMode.html"
+section = "Unity HDRP 17.0 scripting API, enum WaterScriptInteractionsMode, Fields; and the manual page Float objects on a water surface; documentation only. The API's two descriptions read as exchanged against the manual's Script interactions section, which calls the CPU simulation the accurate one"
+quote = '''CPUSimulation | Results come with a few frames latency but at no extra cost. | GPUReadback | Accurate results but significant CPU cost. [...] You can add buoyancy to the water simulation with a script that queries the height of the water surface.'''
+checked = 2026-11-21
+
+["unity-hdrp-17-water-depth-order"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/Environment-Limitations.html"
+section = "Unity HDRP 17.0 manual, Environment limitations, Water system; documentation only"
+quote = '''Water is a refractive transparent object, however for performance reasons, it is necessary to render the depth of the water surface in the depth buffer. As a result, other transparent objects that are located behind the water surface will get culled during rendering by z-testing. [...] This works by copying the depth buffer before rendering water, and using the original buffer for z-test when rendering non refractive transparent objects.'''
+checked = 2026-11-21
+
+["unity-hdrp-17-water-caveats"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/water-capabilities-of-the-water-system.html"
+section = "Unity HDRP 17.0 manual, Capabilities of the water system, Raytracing caveats and Limitations and caveats; and Underwater view; documentation only"
+quote = '''Although water surfaces can receive Ray-Traced Reflections, they cannot contribute to them. [...] The water system does not currently support: Breaking waves on shorelines [...] The underwater view is rendered as a full-screen post-processing effect. [...] the underwater view adds a boundary when transitioning from below to above the water's surface.'''
+checked = 2026-11-21
+
+["unity-hdrp-17-water-caustics"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/settings-and-properties-related-to-the-water-system.html"
+section = "Unity HDRP 17.0 manual, Settings and properties related to the water system, Appearance, Caustics, Virtual Plane Distance; documentation only"
+quote = '''Sets the distance at which the simulated caustics are projected. High values generate sharper caustics but can cause artefacts.'''
+checked = 2026-11-21
+
+["ue-5.9-water-cpu-queries"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/water-debugging-and-scalability-options-in-unreal-engine"
+section = "Unreal Engine 5.9 documentation (the page as served on the date checked), Water Debugging and Scalability Options, Stat Water and the console variables; documentation only. The page lists a wave-height function among CPU statistics; no page read says in words where buoyancy evaluates the waves"
+quote = '''toggle display of CPU statistics about the water-related functions used in the current scene. [...] WaterBody_ComputeWaveHeight | Runs as part of the WaterBody_ComputeWaterInfo function to compute data on the water height. [...] if many queries are done by gameplay systems, physics, or other systems, there can be significant time added to the frame. [...] r.Water.OverrideWavesTime | Force the time used for waves if values are greater than or equal to 0.'''
+checked = 2026-11-21
+
+["ue-5.9-single-layer-water-inputs"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/single-layer-water-shading-model-in-unreal-engine"
+section = "Unreal Engine 5.9 documentation (the page as served on the date checked), Single Layer Water Shading Model, Implementation; documentation only"
+quote = '''The fully lit scene and depth are used as input to the Single Layer Water pass, and reading the buffers is how refraction and translucency is achieved for an Opaque or Masked material. [...] you can use an optional step to downsample the scene color and depth buffer for the refraction reads. [...] composite reflection captures, sky, and newly computed screen space reflections on top of the water's surface.'''
+checked = 2026-11-21
+
+["ue-5.9-water-reflections"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/planar-reflections-in-unreal-engine"
+section = "Unreal Engine 5.9 documentation (the pages as served on the date checked), Planar Reflections, Limitations; and Lumen Global Illumination and Reflections, Lumen Reflections; documentation only. The Planar Reflections page's timings name no hardware or resolution and are not quoted"
+quote = '''Planar Reflections cause your entire scene to be rendered twice, so you'll want to budget half your frame time for it on the Rendering thread and GPU! [...] Lumen Reflections support Single Layer Water materials, with reflections forced to mirror.'''
+checked = 2026-11-21
+
+["ue-5.9-water-rivers-and-ripples"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/water-body-actors-in-unreal-engine"
+section = "Unreal Engine 5.9 documentation (the pages as served on the date checked), Water Body Actors, River Water Body; Water System, introduction; Fluid Simulation Overview, Shallow Water; Water Buoyancy Component; documentation only"
+quote = '''They do not drive surface motion using waves. Instead, rivers use velocity from the individual points along the spline to drive motion. The velocity is written to a flow map [...] fluid simulation with gameplay, such as ripples caused by footsteps or the wake behind a boat moving through the water. [...] Shallow Water simulations are height fields that are rendered as displacements to a water surface. [...] uses spheres (pontoons) to create a simplistic volumetric approximation of the object'''
+checked = 2026-11-21
+
+["nvidia-waveworks-host-readback"]
+url = "https://developer.nvidia.com/waveworks"
+section = "NVIDIA WaveWorks product page, Key Features and the download terms; a vendor page, and the only WaveWorks source that could be opened: its documentation refused the fetch and its repository is not public"
+quote = '''Host readbacks for in-game physics [...] A "no graphics" path for clients & servers [...] By downloading, you agree to the Terms of the GameWorks SDK EULA'''
+checked = 2026-11-21
+
+["godot-docs-screen-texture-copy"]
+url = "https://docs.godotengine.org/en/stable/tutorials/shaders/screen-reading_shaders.html"
+section = "Godot Engine documentation (stable), Screen-reading shaders, Behind the scenes; and Spatial shaders, the note on transparency"
+quote = '''In 3D, the screen is copied after the opaque geometry pass, but before the transparent geometry pass, so transparent objects will not be captured in the screen texture. [...] Transparent materials also cannot cast shadows or appear in hint_screen_texture and hint_depth_texture uniforms.'''
+checked = 2026-11-21
+["gonzalez-ochoa-2012-uncharted-stateless-waves"]
+url = "https://cgzoo.files.wordpress.com/2012/04/water-technology-of-uncharted-gdc-2012.pdf#page=50"
+section = "Gonzalez-Ochoa (Naughty Dog), Water Technology of Uncharted, GDC 2012, slides on pp. 50 and 56 of the file, speaker notes included"
+quote = '''Evaluate at any point in R space and time [...] Needed for cutscenes and multiplayer [...] For FMA scenes we needed to be able to rewind the ocean, so we cannot "advance" the state. So our system is stateless [...] + Deterministic in time. No need to move particles New position is derived from initial position, velocity and time [...] evaluates 4 gerstner waves plus 4 wave-particle grids per vertex'''
+checked = 2026-11-21
+
+["gonzalez-ochoa-2012-uncharted-queries"]
+url = "https://cgzoo.files.wordpress.com/2012/04/water-technology-of-uncharted-gdc-2012.pdf#page=153"
+section = "Gonzalez-Ochoa (Naughty Dog), Water Technology of Uncharted, GDC 2012, slides on pp. 125, 127 and 153 of the file: a boat's samples, the point query and the ocean's timings on a PlayStation 3, whose resolution the slide does not give"
+quote = '''Sample points along length of the boat Don’t sample all waves (filter out high frequencies) Use a spring to allow movement of bow [...] We use a search method to the wave field instead of building a mesh and then do some form of ray casting. [...] 0.9 ms wave particles 0.1 ms water query (point and ray) 8.0 ms tessellation + wave displacement 5 SPUs average 7 rings = 21 jobs ~2.7 ms rendering'''
+checked = 2026-11-21
+cost = '''0.9 ms wave particles 0.1 ms water query (point and ray) 8.0 ms tessellation + wave displacement 5 SPUs average 7 rings = 21 jobs ~2.7 ms rendering'''
+
+["gonzalez-ochoa-2016-uncharted4-water"]
+url = "https://web.archive.org/web/20241216063613/https://advances.realtimerendering.com/s2016/Rendering%20rapids%20in%20Uncharted%204.pptx"
+section = "Gonzalez-Ochoa (Naughty Dog), Rendering Rapids in Uncharted 4, SIGGRAPH 2016 course Advances in Real-Time Rendering in Games, speaker notes of slides 22, 69 and 71 and slides 43 and 70; read from the Internet Archive's snapshot of 2024-12-16, since the course's host refused the fetch"
+quote = '''Instead of using the Tessendorf technique to simulate the motion of an open oceans we use the wave particle technique [...] CDLOD for short Used in terrain rendering quadtree like structure (GPU friendly) [...] When doing water evaluations, for example when we want to know the water level around a boat, we use the offset buffer to displace the vertices of the surface. [...] *timings for a fullscreen ocean✢ mixed with render and async compute jobs [...] Temporal AA and water has lots of issues [...] For each vertex, we compute twice the displacement: once for the current frame and once for the previous frame.'''
+checked = 2026-11-21
+
+["tcheblokov-war-thunder-physics-on-cpu"]
+url = "https://sambuz.com/doc/bringing-waveworks-online-ppt-presentation-97773"
+section = "Tcheblokov (NVIDIA), Bringing WaveWorks Online (War Thunder), slides 12, 13, 14 and 16, as transcribed by a slide-hosting site: the original deck, its conference and its date were not found, and the figures are a vendor's"
+quote = '''Simulation for physics runs on CPU [...] Ensure same physics for everybody Server + each client Fixed timestep, 48 ticks/second [...] Large sized FFT is expensive for CPU! [...] Physics: 128x128 Graphics: up to 512*512 [...] < 5 cm discrepancy @ 3m amplitude [...] Fast! 900 results in <1msec [...] DirectX9: GPU readbacks always introduce stall Avoid readbacks by performing simulation on CPU!'''
+checked = 2026-11-21
+
+["mihelich-tcheblokov-2019-atlas-waves"]
+url = "https://gpuopen.com/gdc-presentations/2019/gdc-2019-agtd6-interactive-water-simulation-in-atlas.pdf#page=9"
+section = "Mihelich (Grapeshot Games) and Tcheblokov (NVIDIA), Wakes, Explosions and Lighting: Interactive Water Simulation in Atlas, GDC 2019, slides on pp. 9, 11, 25 to 27, 67 and 73; the timings are a vendor's and name no resolution"
+quote = '''Split spectrum to 4 frequency bands based on wave lengths [...] Only depends on absolute time and spectrum parameters ● Can be simulated independently on server and clients [...] Discrete wave height samples noisy in time domain ● Server simulation often runs at < 10Hz ● Relying on forces and rigid body dynamics adds latency and instability [...] Samples used as input to plane fitting algorithm [...] Wave simulation outputs 3D displacements relative to an imaginary plane [...] An iterative approximation is required [...] Wakes, explosions: Prototype [...] Wind waves simulation time on GPU (max quality): AMD RADEON VII NVIDIA GeForce RTX2080 0.5 msec 0.5 msec'''
+checked = 2026-11-21
+cost = '''Wind waves simulation time on GPU (max quality): AMD RADEON VII NVIDIA GeForce RTX2080 0.5 msec 0.5 msec Interactive waves simulation time on GPU (normal quality): AMD RADEON VII NVIDIA GeForce RTX2080 0.8 msec 0.6 msec'''
+
+["bowles-2017-crest-low-frequency-physics"]
+url = "https://web.archive.org/web/20241216074607/https://advances.realtimerendering.com/s2017/Ocean_SIGGRAPH17_Final.pptx"
+section = "Bowles, Crest: Novel Ocean Rendering Techniques in an Open Source Framework, SIGGRAPH 2017 course Advances in Real-Time Rendering in Games, slides 33 and 73; read from the Internet Archive's snapshot of 2024-12-16, since the course's host refused the fetch. The timing's resolution is not on the slide"
+quote = '''Use low freq waves for physics/gameplay [...] Shape + meshing < 1ms on GTX980 6 lods, 128x128 verts/shape texels'''
+checked = 2026-11-21
+
+["bowles-zimmermann-2019-crest-readback-and-cost"]
+url = "https://web.archive.org/web/20241216070248/https://advances.realtimerendering.com/s2019/CrestSIGGRAPH2019-Final-for_web.pptx"
+section = "Bowles and Zimmermann, Multi-resolution Ocean Rendering in Crest Ocean System, SIGGRAPH 2019 course Advances in Real-Time Rendering in Games, speaker notes of slide 53 and slides 93 and 95; read from the Internet Archive's snapshot of 2024-12-16, since the course's host refused the fetch"
+quote = '''we transfer a subset of the displacement textures back to the CPU for physics and gameplay. This has worked well for us so far, but we’re looking at replacing it with a new system that uploads query points to the gpu and evaluates them in compute, rather than downloading the textures. [...] Standalone Unity3D build, 1080p, Geforce GTX 1070 512x512 cascade resolution, 8 cascades [...] Ocean simulation GPU time – 1.99ms [...] Draw ocean surface – 170k triangles – 0.98ms'''
+checked = 2026-11-21
+cost = '''Standalone Unity3D build, 1080p, Geforce GTX 1070 512x512 cascade resolution, 8 cascades [...] Ocean simulation GPU time – 1.99ms [...] Draw ocean surface – 170k triangles – 0.98ms'''
+
+["malan-2022-forbidden-west-water"]
+url = "https://web.archive.org/web/20250118070840/https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Water-Malan.pdf#page=4"
+section = "Malan (Guerrilla), Rendering Water in Horizon Forbidden West, SIGGRAPH 2022 course Advances in Real-Time Rendering in Games, speaker notes on pp. 4, 13 and 43 of the file; read from the Internet Archive's snapshot of 2025-01-18, since the course's host refused the fetch"
+quote = '''These waves should be driven by an baked offline sim. [...] the ocean waves in Killzone 3 used streamed mesh data. Likewise, the sea in COD WWII was driven by a looping Houdini sim. [...] The vertex buffer for the water surface is generated by a compute shader. [...] I haven’t talked about audio or physics or interaction at all.'''
+checked = 2026-11-21
+
+["mcauley-2018-far-cry-5-water"]
+url = "https://web.archive.org/web/20241216064524/https://advances.realtimerendering.com/s2018/The%20Challenges%20of%20Rendering%20an%20Open%20World%20in%20Far%20Cry%205%20(With%20Notes).pdf#page=14"
+section = "McAuley (Ubisoft), The Challenges of Rendering an Open World in Far Cry 5, SIGGRAPH 2018 course Advances in Real-Time Rendering in Games, speaker notes on pp. 14 to 16 and 18 of the file; read from the Internet Archive's snapshot of 2024-12-16, since the course's host refused the fetch"
+quote = '''You render your water before your transparent objects, having resolved the frame buffer beforehand to do some cool refraction effects. Water writes depth, so transparent objects don’t appear underwater. [...] ensuring we only had one water height to generate reflections at was always a pain for our art and world building team. Moreover, for Far Cry 5 we wanted sloped water for river rapids, so planar reflections would no longer work. Plus, if you already have SSLR for your world, why not re-use it for water? [...] So we render a water pre-pass with depth buffer and G-Buffer data BEFORE we do our deferred lighting passes. [...] although it’ll be expensive, we can perform shadows, lighting, fog and atmospheric scattering in forward on water.'''
+checked = 2026-11-21
+
+["vlachos-2010-water-flow"]
+url = "https://web.archive.org/web/20241216065002/https://advances.realtimerendering.com/s2010/Vlachos-Waterflow(SIGGRAPH%202010%20Advanced%20RealTime%20Rendering%20Course).pdf#page=9"
+section = "Vlachos (Valve), Water Flow in Portal 2, SIGGRAPH 2010 course Advances in Real-Time Rendering in 3D Graphics and Games, slides on pp. 2, 9, 40 and 52 of the file, the second its list of future work; read from the Internet Archive's snapshot of 2024-12-16, since the course's host refused the fetch"
+quote = '''Pixel shader flow, not geometric flow [...] Flowing Normal Maps in Left 4 Dead 2 [...] Additional texture fetches: 2 - flow & noise • Additional arithmetic pixel shader instructions: 21 [...] Use flow map with our physics simulation to have objects flow on the water surface using the same data'''
+checked = 2026-11-21
+
+["ang-2018-sea-of-thieves-ocean"]
+url = "https://history.siggraph.org/wp-content/uploads/2022/09/2018-Talks-Ang_The-Technical-Art-of-Sea-of-Thieves.pdf#page=1"
+section = "Ang, Catling, Ciardi and Kozin (Rare), The Technical Art of Sea of Thieves, SIGGRAPH 2018 Talks (doi:10.1145/3214745.3214820), section 1.1 Ocean, p. 1"
+quote = '''The underlying ocean water simulation is an implementation of [...] the FFT technique described in [Tessendorf 2001]. [...] the water surface within a camera centered window using depth [...] buffer comparisons. We progressively blur the result of the foam [...] buffer with feedback'''
+checked = 2026-11-21
+
+["geffroy-2020-doom-eternal-water"]
+url = "https://web.archive.org/web/20241216063844/https://advances.realtimerendering.com/s2020/RenderingDoomEternal.pdf#page=66"
+section = "Geffroy, Gneiting and Wang (id Software), Rendering the Hellscape of Doom Eternal, SIGGRAPH 2020 course Advances in Real-Time Rendering in Games, slides on pp. 3, 57, 58, 64, 66, 68 and 74 of the file; read from the Internet Archive's snapshot of 2024-12-16, since the course's host refused the fetch"
+quote = '''Fully forward rendered [...] Generate displacement map and normal map for water surface according to Simulating Ocean Water [Tessendorf2001] [...] Real-Time Water Rendering, Introducing the Projected Grid Concept [Johanson2004] [...] VERTICES IMAGE TAA DISABLED [...] Compute water surface SSR to SSR image using depth and normals from G-buffer [...] Split main color buffer into before- and after-water pixels [...] Resulting caustics image is used next frame'''
+checked = 2026-11-21
+
+["kryachko-2016-world-of-warships-cost"]
+url = "https://history.siggraph.org/wp-content/uploads/2022/09/2016-Talks-Kryachko_Sea-Surface-Visualization-in-World-of-Warships.pdf#page=2"
+section = "Kryachko (Wargaming), Sea Surface Visualization in World of Warships, SIGGRAPH 2016 Talks, caption of Figure 1, p. 1; section 6 Conclusion, p. 2"
+quote = '''A) Original Projected Grid. B) After two Newton’s iterations. [...] We tested our solution on the AMD HD 7970 GPU at 1920x1080 at the maximum quality preset with six AA samples. It takes 4.2ms of GPU time on average.'''
+checked = 2026-11-21
+cost = '''We tested our solution on the AMD HD 7970 GPU at 1920x1080 at the maximum quality preset with six AA samples. It takes 4.2ms of GPU time on average.'''
+["tessendorf-2004-fft-ocean"]
+url = "https://people.computing.clemson.edu/~jtessen/reports/papers_files/coursenotes2004.pdf#page=9"
+section = "Tessendorf, Simulating Ocean Water, SIGGRAPH course notes (2004 revision of the 2001 notes): section 1, p. 3; section 4.2, p. 8; section 4.3, p. 9; section 4.4, p. 10; section 4.6, p. 12"
+quote = '''synthesizes a patch of ocean waves from a Fast Fourier Transform (FFT) prescription, with user-controllable size and resolution, and which can be tiled seamlessly over a larger domain. [...] the animation of the water surface loops after a time T because the quantized frequencies are all integer multiples of ω0 . [...] The fft process generates the height field at discrete points x = (nLx /N, mLz /M ). The value at other points can also be obtained by switching to a discrete fourier transform, but under many circumstances this is unnecessary and is not applied here. [...] the wave field at any chosen time can be computed without computing the field at any other time. [...] Running on a 1+ GHz cpu, 512 × 512 FFTs can be generated at nearly interactive rates. [...] the horizontal position of a grid point of the surface is now x + λD(x, t), with height h(x) as before.'''
+checked = 2026-11-21
+
+["finch-2004-summed-waves"]
+url = "https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-1-effective-water-simulation-physical-models"
+section = "Finch (Cyan Worlds), Effective Water Simulation from Physical Models, GPU Gems (Addison-Wesley, 2004), chapter 1, introduction and sections 1.2 and 1.2.3"
+quote = '''The sum of sines gives a continuous function describing the height and surface orientation of the water at all points. In processing vertices, we sample that function based on the horizontal position of each vertex [...] We limit ourselves to four geometric waves. [...] having been used extensively in Cyan Worlds' Uru: Ages Beyond Myst'''
+checked = 2026-11-21
+
+["horvath-2015-wave-spectra"]
+url = "https://cdn.shopify.com/s/files/1/0134/1131/9867/files/EmpiricalDirectionalWaveSpectra_DigiPro2015_Jun20_2015_Optimized.pdf#page=2"
+section = "Horvath, Empirical Directional Wave Spectra for Computer Graphics, DigiPro 2015 (doi:10.1145/2791261.2791267), abstract and section 1, pp. 1 to 2; section 5.1.5, p. 6; read from a mirror, since the publisher's host refused the fetch"
+quote = '''it readily gives plausible, attractive results for a wide range of wind speeds, ocean depths, and other physical parameters, without requiring artists to manually adjust gain and filter parameters [...] Shallow Water: The model doesn’t adjust wave amplitudes to account for shallow ocean depths. [...] the final form of the spectrum is just the product of the JONSWAP spectrum and the Kitaigorodskii Depth Attenuation function'''
+checked = 2026-11-21
+
+["dupuy-bruneton-2012-whitecaps"]
+url = "https://liris.cnrs.fr/Documents/Liris-5812.pdf#page=3"
+section = "Dupuy and Bruneton, Real-time Animation and Rendering of Ocean Whitecaps, SIGGRAPH Asia 2012 Technical Briefs, abstract, p. 1; Figure 2, p. 3"
+quote = '''The whitecap coverage on the ocean surface is determined using a wave deformation criteria which can be pre-filtered linearly. This allows us to take advantage of the fast mip-mapping and texture filtering capabilities of modern hardware [...] Frames are generated in less than 10ms at 1280 × 720 resolution on an NVIDIA GeForce 560Ti.'''
+checked = 2026-11-21
+cost = '''Frames are generated in less than 10ms at 1280 × 720 resolution on an NVIDIA GeForce 560Ti.'''
+
+["bruneton-2010-ocean-geometry-to-brdf"]
+url = "https://web.archive.org/web/20240417165943/https://maverick.inria.fr/Publications/2010/BNH10/article.pdf#page=3"
+section = "Bruneton, Neyret and Holzschuch, Real-time Realistic Ocean Lighting using Seamless Transitions from Geometry to BRDF, Computer Graphics Forum 29(2) (Eurographics 2010): section 1, p. 2; section 3.2, p. 3; section 7.3, p. 8; read from the Internet Archive's snapshot of 2024-04-17, since the authors' host did not answer"
+quote = '''Our geometric model is a finite sum of wave trains of all wavelengths; the transition from geometry to normal to BRDF depends on the wavelength, for each wave train. [...] This eliminates geometric aliasing as well as popping. [...] With a NVIDIA 8800 GTS and a 1024 × 768 resolution, we get 52 fps with 60 trochoids from 2 cm to 30 m, with a horizontal view at 4 m above the surface (with 8 × 8 pixels cells for the projected grid). This gives 19.2 ms per frame'''
+checked = 2026-11-21
+cost = '''With a NVIDIA 8800 GTS and a 1024 × 768 resolution, we get 52 fps with 60 trochoids from 2 cm to 30 m, with a horizontal view at 4 m above the surface (with 8 × 8 pixels cells for the projected grid). This gives 19.2 ms per frame'''
+
+["yuksel-2007-wave-particles"]
+url = "http://www.cemyuksel.com/research/waveparticles/waveparticles.pdf#page=6"
+section = "Yuksel, House and Keyser, Wave Particles, ACM Transactions on Graphics 26(3) (SIGGRAPH 2007): section 5, pp. 5 to 6; section 6 and Table 1, p. 6"
+quote = '''Then we copy these textures to main memory and use them to determine applied forces on the objects. [...] Finding the correct location on the extended height field requires the inverse transformation of the final horizontal displacement [...] a standard PC with a 2.13GHz Core2 Duo processor and GeForce 7900 graphics card [...] Total Simulation Time Simulation Frames Per Second 5.87 170 fps 24.49 40.8 fps 206.78 4.84 fps 1073.38 0.93 fps'''
+checked = 2026-11-21
+
+["tessendorf-2004-iwave"]
+url = "https://people.computing.clemson.edu/~jtessen/reports/papers_files/Interactive_Water_Surfaces.pdf#page=1"
+section = "Tessendorf, Interactive Water Surfaces, Game Programming Gems 4 (Charles River Media, 2004), introduction, p. 1; the propagation listing, p. 5"
+quote = '''a software-only implementation is capable of simulating a 128x128 water surface height grid at over 30 fps on GHz processors. [...] previous_height holds the height grid from the previous time step'''
+checked = 2026-11-21
+
+["kass-miller-1990-shallow-water"]
+url = "https://web.archive.org/web/20260106085047/https://ohiostate.pressbooks.pub/app/uploads/sites/45/2017/09/kass-miller.pdf#page=6"
+section = "Kass and Miller, Rapid, Stable Fluid Dynamics for Computer Graphics, Computer Graphics 24(4) (SIGGRAPH 1990), caption of Figure 6, p. 6 of a scanned copy; read from the Internet Archive's snapshot of 2026-01-06, since the host refused the fetch"
+quote = '''The implementation runs at 30 frames per second with a 32 by 32 grid size on an SGI 4D/210.'''
+checked = 2026-11-21
+
+["chentanez-mueller-2010-height-field-water"]
+url = "https://matthias-research.github.io/pages/publications/hfFluid.pdf#page=9"
+section = "Chentanez and Müller, Real-time Simulation of Large Bodies of Water with Small Scale Details, SCA 2010, section 3 (Results) with Tables 1 and 2, p. 9: the Ocean scene's grid is 256 by 256, and its column of Table 2, OceanG, totals 13.13 ms"
+quote = '''All timings are done on an Intel Core i7, 2.67 GHz with 4GB of memory and NVIDIA GTX480. [...] We use ∆t = 16.66ms in all examples, except the boat riding example [...] all the steps are executed on the GPU except for the solid [...] BoatC1 BoatC2 BoatC3 BoatC4 BoatG WaterFG PMLG BeachG OceanG Total 94.50 76.75 73.88 69.75 18.05 7.97 3.78 9.88 13.13'''
+checked = 2026-11-21
+
+["yu-2009-rivers"]
+url = "https://web.archive.org/web/20240418091309/https://maverick.inria.fr/Publications/2009/YNBH09/riversEG09.pdf#page=5"
+section = "Yu, Neyret, Bruneton and Holzschuch, Scalable Real-Time Animation of Rivers, Computer Graphics Forum 28(2) (Eurographics 2009): section 5, p. 5; section 6, p. 7; read from the Internet Archive's snapshot of 2024-04-18, since the authors' host did not answer. Its timings are a chart"
+quote = '''We then read back on CPU the pixels of this buffer that correspond to the new particles. [...] we achieved real-time performance even in the worst case where the projected surfaces occupy the whole window.'''
+checked = 2026-11-21
+
+["jeschke-2018-water-surface-wavelets"]
+url = "https://research-explorer.ista.ac.at/download/134/5744/2018_ACM_Jeschke.pdf#page=10"
+section = "Jeschke, Skřivan, Müller-Fischer, Chentanez, Macklin and Wojtan, Water Surface Wavelets, ACM Transactions on Graphics 37(4) (SIGGRAPH 2018): section 4.3 and section 5, p. 7; section 8 and Table 2, p. 10. The frame's resolution is not stated"
+quote = '''we can evaluate the water height at any point in space by approximating the onedimensional integral in Equation 20 with a summation over several sampled angles. [...] our GPU-optimized version uses hardware tesselation [...] Our laptop with a NVIDIA Geforce GTX 1070 GPU achieves an average frame rate of 60fps with the parameters in Table 1 [...] Updating A Computing η Miscellaneous rendering and unrelated overhead Timing 8.54ms 4.16ms 3.97ms'''
+checked = 2026-11-21
+
+["water-surface-wavelets-69c88a7-licence"]
+url = "https://github.com/lecopivo/WaterSurfaceWavelets/blob/69c88a77b1832b17f2e60e762128df465f7076ab/LICENSE#L1"
+section = "WaterSurfaceWavelets (lecopivo, commit 69c88a7, 2019-08-30), LICENSE (L1, L3): the paper's reference code is under the MIT licence"
+quote = '''MIT License [...] Copyright (c) 2018 Tomas Skrivan'''
+checked = 2026-11-21
+
+["schreck-2019-fundamental-solutions"]
+url = "https://research-explorer.ista.ac.at/download/6442/6443/2019_ACM_Schreck.pdf#page=9"
+section = "Schreck, Hafner and Wojtan, Fundamental Solutions for Water Wave Animation, ACM Transactions on Graphics 38(4) (SIGGRAPH 2019): section 4.2, p. 5; section 6.1, p. 9"
+quote = '''the expression is in closed form, so it will never blow up [...] Their method can reach real time while ours still takes 2 or 3 seconds per frame for this example.'''
+checked = 2026-11-21
+
+["jeschke-2020-boundary-aware-waves"]
+url = "https://visualcomputing.ist.ac.at/publications/2020/MPWWBa/"
+section = "Jeschke, Hafner, Chentanez, Macklin, Müller-Fischer and Wojtan, Making Procedural Water Waves Boundary-aware, SCA 2020: the abstract on the authors' project page, the only part opened; the paper's hosts refused the fetch and its archive snapshots are cut short"
+quote = '''an extension that guarantees the satisfaction of boundary conditions imposed by terrain while still approximating physical wave behavior. In combination with a particle system that models wave breaking, foam, and spray, this allows us to naturally model waves interacting with beaches and rocks. Our system is able to animate waves at large scales at interactive frame rates on a commodity PC.'''
+checked = 2026-11-21
+
+["jeschke-wojtan-2023-dispersive-shallow-water"]
+url = "https://research-explorer.ista.ac.at/download/14240/14725/2023_ACMToG_Jeschke.pdf#page=8"
+section = "Jeschke and Wojtan, Generalizing Shallow Water Simulations with Dispersive Surface Waves, ACM Transactions on Graphics 42(4) (SIGGRAPH 2023): section 4.5 and section 5, p. 8. The frame's resolution is not stated"
+quote = '''The time step is now finished, and these q and ℎ variables will now feed into [...] We implemented our wave simulation algorithm in CUDA on an NVIDIA RTX2080 Max-Q Laptop. Our examples run in real-time (comfortably over 40fps), including the cost of rendering. Without rendering, our simulation runs around 100fps. [...] we set Δ𝑥 to 1m and the grid size to 512 × 512; we set Δ𝑡 to 1/60s for Figures 1 and 3'''
+checked = 2026-11-21
+
+["lutz-2024-aperiodic-ocean"]
+url = "https://web.archive.org/web/20240810171342/https://dl.acm.org/doi/pdf/10.1145/3675388#page=16"
+section = "Lutz, Schoentgen and Gilet, Fast Orientable Aperiodic Ocean Synthesis Using Tiling and Blending, Proceedings of the ACM on Computer Graphics and Interactive Techniques 7(3) (HPG 2024), doi:10.1145/3675388: section 4.1, p. 8; section 7.2 and Table 1, p. 16, whose three rows are tiles of 128, 256 and 512 samples a side; read from the Internet Archive's snapshot of 2024-08-10, since the publisher's host refused the fetch. The frame's resolution is not stated"
+quote = '''using the tiling and blending described in Section 3.2 on 𝐷𝑆 in the vertex shader, and using the resulting displacement map to displace the ocean mesh. [...] Table 1 showcases the time measurements captured using our unoptimized prototype on a NVIDIA GeForce RTX 2070 SUPER. [...] Periodic ocean Tile generation Rendering Total GPU time 0.78 ms 1.52 ms 2.30 ms Tile generation Rendering Total GPU time 0.98 ms 1.49 ms 2.47 ms Tile generation Rendering Total GPU time 2.16 ms 1.45 ms 3.61 ms'''
+checked = 2026-11-21
+cost = '''Table 1 showcases the time measurements captured using our unoptimized prototype on a NVIDIA GeForce RTX 2070 SUPER. [...] Periodic ocean Tile generation Rendering Total GPU time 0.78 ms 1.52 ms 2.30 ms Tile generation Rendering Total GPU time 0.98 ms 1.49 ms 2.47 ms Tile generation Rendering Total GPU time 2.16 ms 1.45 ms 3.61 ms'''
+
+["algis-2025-arc-blanc"]
+url = "https://arxiv.org/pdf/2503.03326#page=24"
+section = "Algis, Bramas, Darles and Aveneau, Arc Blanc: a real time ocean simulation framework, arXiv:2503.03326v2 (2025), a preprint: section 4.2, p. 24; section 6, p. 35"
+quote = '''the final step transfers the data to the CPU, where the physics solver integrates the buoyancy [...] These experiments ran on a Intel Core i7-10700 and a Nvidia GeForce RTX 2070 Super using singleprecision floating-point numbers. The ocean was simulated with three cascades using a resolution of 256×265.'''
+checked = 2026-11-21
+
+["eriksson-wingard-2022-readback-cost"]
+url = "https://odr.chalmers.se/bitstreams/72eeb17c-9864-4265-8b9f-81ab66f05545/download#page=42"
+section = "Eriksson and Wingård, Improving the Accuracy of FFT-based GPGPU Ocean Surface Simulations, master's thesis, Chalmers University of Technology and University of Gothenburg, 2022: abstract, p. 5 of the file; section 1, p. 18; section 2.5, p. 42. A thesis, not a reviewed paper; its read-back figure is its authors' own measurement in Unreal Engine, on hardware the passage does not name"
+quote = '''read back the resulting heightfield to the CPU as input to the application’s physics engine. [...] One solution is to run an identical FFT-based ocean simulation in parallel on the CPU, but using a significantly lower resolution. With low enough resolution, the FFT becomes feasible to compute in real-time, but (1) it still consumes precious CPU cycles, (2) requires more memory and computations overall, (3) does not represent the elevations accurately enough for physics [79], and (4) may easily cause a mismatch between the logical ocean on the CPU and the visual ocean on the GPU. [...] When performing synchronous readbacks of a 256 × 256 texture (with 32 bits per pixel) in Unreal Engine, we found from our own measurements15 that the overall cost imposed by such stalls was typically in the range of 5-15 milliseconds per frame'''
 checked = 2026-11-21
