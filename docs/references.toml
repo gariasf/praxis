@@ -8203,3 +8203,1107 @@ url = "https://cdn.bfldr.com/S5BC9Y64/at/k7crmvj3rg9z7c8w9m9tbmvs/Unite_2026_Tok
 section = "Unity Technologies, Unite 2026 Tokyo roadmap deck, slides ECS for All: A new foundation of ECS; Navigation and pathfinding: Low level API and Terrain Trees"
 quote = '''ECS for All [...] Entities at the heart of the Engine [...] Entities for every GameObject [...] Query the NavMesh safely from jobs with NavWorld [...] Run many NPCs in parallel'''
 checked = 2026-11-21
+
+["wicked-engine-fc8385b-world-systems"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/features.txt#L33"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), features.txt, lines 30, 33, 37, 43, 57, 61, 67, 80, 82, 86 and 87"
+quote = '''Tessellation (silhouette smoothing, displacement mapping) [...] Hair particle systems (grass/vegetation) [...] TAA (Temporal Antialiasing) [...] Physics: rigid body, soft body, ragdoll, vehicle, character [...] Impostor system [...] Tiled decals [...] Ocean simulation (FFT) [...] Real time ray tracing: ambient occlusion, shadows, reflections (DXR and Vulkan raytracing) [...] Stochastic alphatest transparency [...] Procedural terrain generator [...] Virtual textures'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-terrain"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiTerrain.h#L50"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), wiTerrain.h (L50, L226, L253) and wiTerrain.cpp (L86, L281): chunks of 64 cells with an apron, an index buffer per LOD, a virtual texture with a feedback map, grass and props per chunk; read, not run"
+quote = '''static constexpr int chunk_width = 64 + 3; // + 3: filler vertices for lod apron and grid perimeter [...] wi::HairParticleSystem grass; [...] int region = 0; // region selection in range [0,3] (0: base/grass, 1: slopes, 2: low altitude (bottom level-0), 3: high altitude (0-top level))'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-ocean-readback"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiOcean.cpp#L226"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), wiOcean.cpp (L103, L226 to L230) and wiPhysics_Jolt.cpp (L2470 to L2478): a Phillips spectrum, and a CPU height query served from a read-back of the displacement map, which buoyancy calls; read, not run"
+quote = '''// Phillips Spectrum [...] XMFLOAT3 Ocean::GetDisplacedPosition(const XMFLOAT3& worldPosition) const [...] // Signal that ocean height is being queried on the CPU, so the readback copy [...] // in CopyDisplacementMapReadback() stays enabled.'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-rain-blocker"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/shaders/wetmap_updateCS.hlsl#L56"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), shaders/wetmap_updateCS.hlsl (L25, L53 to L56) and wiScene.cpp (L5465): rain is a GPU particle emitter flagged to read a rain blocker, a depth map in the shadow atlas, and the per-vertex wet map reads the same map; read, not run"
+quote = '''drying *= lerp(4, 1, pow8(saturate(normal.y))); // modulate drying speed based on surface slope [...] if(push.rain_amount > 0 && GetFrame().texture_shadowatlas_index >= 0 && any(GetFrame().rain_blocker_mad)) [...] float3 shadow_pos = mul(GetFrame().rain_blocker_matrix, float4(world_pos, 1)).xyz;'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-wind"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/shaders/windCS.hlsl#L3"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), shaders/windCS.hlsl (L3 to L18) and shaders/hairparticle_simulateCS.hlsl (L309): wind is a 3D texture of summed gradient noise, written each frame with the previous frame's value beside it, which the grass simulation samples; read, not run"
+quote = '''RWTexture3D<float2> output : register(u0); [...] waveoffset += noise_gradient_3D(position.xyz); [...] return sin(mad(time, wind.speed, waveoffset)); [...] output[DTid] = float2(compute_wind(position, GetTime()), compute_wind(position, GetTimePrev()));'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-vehicle"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiPhysics_Jolt.cpp#L832"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), wiPhysics_Jolt.cpp (L50, L51, L744 to L750, L832 to L850): vehicles are Jolt's wheeled and motorcycle controllers, with a ray, sphere or cylinder cast per wheel; read, not run"
+quote = '''#include <Jolt/Physics/Vehicle/WheeledVehicleController.h> [...] #include <Jolt/Physics/Vehicle/MotorcycleController.h> [...] vehicle_tester = new VehicleCollisionTesterCastCylinder(Layers::MOVING); [...] WheeledVehicleControllerSettings* controller_settings = new WheeledVehicleControllerSettings; [...] controller_settings->mDifferentials.resize(four_wheel_drive ? 2 : 1);'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-grass"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiHairParticle.h#L38"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), wiHairParticle.h (L38, L90 to L92, L132) and shaders/hairparticle_simulateCS.hlsl (L274 to L278): grass is strands of segments drawn as billboards, simulated in compute, with an acceleration structure of its own; read, not run"
+quote = '''wi::graphics::RaytracingAccelerationStructure BLAS; [...] uint32_t strandCount = 0; [...] uint32_t segmentCount = 1; [...] uint32_t billboardCount = 1; [...] constexpr uint32_t GetVertexCount() const { return strandCount * (segmentCount * 2 + 2) * billboardCount; }'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-licence"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/license.md#L1"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, license.md"
+quote = '''The MIT License [...] Copyright(c) 2015-2026 Panos Karabelas [...] Permission is hereby granted, free of charge, to any person obtaining a copy'''
+checked = 2026-11-21
+
+["spartan-engine-5f3f9f2-licence"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/5f3f9f241bb70b2eddc8ca245186903f1c099eb9/license.md#L1"
+section = "Spartan Engine at commit 5f3f9f2 (2026-11-19), license.md, sections 1, 2, 3.1 and 10; version 1.0 of this licence replaced MIT in commit 230a887 (2026-09-24). Of this commit only license.md and license_faq.md were read"
+quote = '''# Spartan Engine License 2.0 [...] This license does not withdraw permissions already granted for copies or versions previously released under the MIT License [...] to use, copy, modify, combine, and distribute the Software, in source or compiled form, for noncommercial purposes. [...] after that, you owe 3% of the Product's Gross Revenue above $1,000,000, calculated per calendar quarter. [...] This is a custom source-available license, not an open source license.'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-rendering"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/readme.md"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, readme.md, sections Rendering: Architecture, Lighting and Global Illumination, Performance and Upscaling"
+quote = '''**Universal HLSL** compiled for both Vulkan (SPIR-V) and DirectX 12 [...] **Unified deferred rendering**, opaque and transparent surfaces share the same BSDF and render path [...] **ReSTIR path tracing** with spatiotemporal reservoir resampling for real-time multi-bounce global illumination [...] **Hardware ray-traced reflections and shadows** via ray queries [...] **Froxel volumetric fog**, a single view-aligned volume for height and distance fog, sun shafts, and underwater caustic shafts, with temporal reprojection and shadowing [...] **FFT ocean** with a Tessendorf spectrum and multi-cascade IFFT in compute, driving a camera-following clipmap with choppy displacement, dynamic normals and crest foam [...] **TAAU**, temporal anti-aliasing with built-in upsampling, Halton-jittered with variance-clip history reprojection [...] **NVIDIA DLSS 4.5** Super Resolution (SDK 310.9.1) [...] **FXAA**'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-car"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/readme.md"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, readme.md, section Car Simulation — 200Hz; the engine's own account, not measured"
+quote = '''A full vehicle dynamics simulation running inside the PhysX fixed-timestep loop. [...] Pacejka MF 5.2 with combined slip, thermal model, pressure, wear, multiple surfaces [...] Convex hull sweep contact, spring-damper, anti-roll bars, bump stops, bump steer, camber/toe [...] Geometric + elastic lateral split via roll center heights and roll stiffness [...] Engine torque curve, turbo, 7-speed gearbox, rev-match, open/locked/LSD differentials, RWD/FWD/AWD [...] Thermal model with fade, front/rear bias, slip-threshold ABS [...] Drag, front/rear downforce, ground effect, DRS, rolling resistance [...] Ackermann geometry, high-speed reduction, self-aligning torque [...] Semi-implicit Euler with consolidated net-torque per wheel'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-car-source"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/car/CarSimulation.h"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, source/car/CarSimulation.h, CarPacejka.h, CarMultibody.h and CarThermal.h: the files' own comments; read, not run"
+quote = '''// the whole vehicle model, a physx chassis body plus per-wheel tire, suspension, drivetrain and aero'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-car-tyre"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/car/CarPacejka.h"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, source/car/CarPacejka.h: the tyre force functions; read, not run"
+quote = '''// tire math: pacejka magic formula curves, load-sensitive grip, temperature factors, [...] // per-surface friction scalars, brake efficiency. all pure functions, no state mutation. [...] return peak * sinf(shape * atanf(stiffness_slip - curvature * (stiffness_slip - atanf(stiffness_slip))));'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-car-multibody"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/car/CarMultibody.h"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, source/car/CarMultibody.h: the suspension, anti-roll bar and driveline as PhysX bodies and joints; read, not run"
+quote = '''// physx suspension assembly and spring damper force coupling [...] // The closed suspension loops need enough position iterations to keep ball [...] static constexpr PxU32 suspension_position_iterations = 64; [...] struct anti_roll_bar [...] struct driveline_assembly'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-physics-step"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/physics/PhysicsWorld.cpp#L67"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, source/physics/PhysicsWorld.cpp (L67, L605, L627) and source/physics/PhysicsSceneOrigin.h (L46): a fixed 200 Hz step and an origin that follows the camera; read, not run"
+quote = '''float hz      = 200.0f; // simulation frequency in hz [...] const float fixed_time_step   = 1.0f / settings::hz; [...] if (Camera* camera = World::GetCamera()) RebaseOrigin(camera->GetEntity()->GetPosition());'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-ocean-readback"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/rendering/Renderer.h#L289"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, source/rendering/Renderer.h (L289), source/rendering/Renderer_Definitions.h (L157), source/world/components/Physics.cpp (L146) and source/world/components/Water.h (L36): buoyancy reads wave heights from a GPU read-back; read, not run"
+quote = '''// world space wave height at (x, z) from the readback of the gpu displacement, false when no ocean is active'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-wind-field"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/data/shaders/wind_field.hlsl#L22"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, data/shaders/wind_field.hlsl (L22 to L24) and data/shaders/common_vertex_processing.hlsl (L361, L362): one wind texture a frame, read by grass, flowers and trees; read, not run"
+quote = '''// once-per-frame procedural wind field sampled by all wind-driven geometry [...] // rg = flow vector (signed, [-1,1]), b = gust pressure (0..1), a = micro turbulence (0..1) [...] // the texture tiles seamlessly in world space so a single sampler_bilinear_wrap covers any range'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-terrain-surface"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/data/shaders/common_terrain.hlsl#L26"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, data/shaders/common_terrain.hlsl (L26 to L29) and source/world/components/Terrain.cpp (L3845): procedural layers scored per pixel against a baked analysis of an eroded height field; read, not run"
+quote = '''// the layer set lives in the bindless material table as a contiguous block, the surface material [...] // points at its base and every layer carries its own procedural rule. per pixel this file scores [...] // all layers against the baked heightfield analysis, keeps the highest weighted few, samples them [...] // with hex tiling or biplanar projection, and resolves them with a height blend.'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-grass"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/data/shaders/grass_populate.hlsl#L57"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, data/shaders/grass_populate.hlsl (L57 to L59): grass instances made and culled in compute each frame; read, not run"
+quote = '''// conservative world-space bound used to cull an instance against the camera frustum and the occluder [...] // hi-z, covers the tallest scaled instance plus wind sway and the intra-cell scatter, generous enough'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-grass-tracks"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/data/shaders/grass_interaction.hlsl#L2"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, data/shaders/grass_interaction.hlsl (L2, L26): a persistent field of tyre tracks pressed into the grass; read, not run"
+quote = '''// Persistent tire deformation, independent of the transient grass instance pool. [...] // Integer scrolling preserves the exact history: bilinear reprojection would diffuse tracks.'''
+checked = 2026-11-21
+
+["godot-4.7.2-licence"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/LICENSE.txt#L1"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), LICENSE.txt (L1, L4)"
+quote = '''Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). [...] Permission is hereby granted, free of charge, to any person obtaining a copy'''
+checked = 2026-11-21
+
+["godot-4.7.2-renderers"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/doc/classes/ProjectSettings.xml#L3281"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), doc/classes/ProjectSettings.xml (L3281, L3282, L3283, L3308, L3309, L3310): the three rendering methods and the drivers of the RenderingDevice ones"
+quote = '''[b]forward_plus[/b] (Forward+): High-end renderer designed for desktop devices. [...] [b]mobile[/b] (Mobile): Modern renderer designed for mobile devices. [...] [b]gl_compatibility[/b] (Compatibility): Low-end renderer designed for older devices. Based on the limitations of the OpenGL 3.3 / OpenGL ES 3.0 / WebGL 2 APIs. [...] - [code]metal[/code], Metal (supported on Apple Silicon Macs and iOS). [...] - [code]vulkan[/code], Vulkan (supported on all desktop and mobile platforms). [...] - [code]d3d12[/code], Direct3D 12 (supported on Windows).'''
+checked = 2026-11-21
+
+["godot-4.7.2-msaa-forward-clustered"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/servers/rendering/renderer_rd/forward_clustered/render_forward_clustered.cpp#L1721"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), servers/rendering/renderer_rd/forward_clustered/render_forward_clustered.cpp (L1721, L2125, L2146, L2188, L2309): the clustered forward renderer's pass order with its MSAA resolves; read, not run"
+quote = '''static const int texture_multisamples[RSE::VIEWPORT_MSAA_MAX] = { 1, 2, 4, 8 }; [...] RENDER_TIMESTAMP("Render Depth Pre-Pass"); [...] RENDER_TIMESTAMP("Resolve Depth Pre-Pass (MSAA)"); [...] RENDER_TIMESTAMP("Render Opaque Pass"); [...] RENDER_TIMESTAMP("Resolve MSAA");'''
+checked = 2026-11-21
+
+["godot-4.7.2-taa"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/doc/classes/ProjectSettings.xml#L2883"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), doc/classes/ProjectSettings.xml (L2883, L2885, L2886): temporal antialiasing is off by default and, by the documentation's account, incomplete"
+quote = '''<member name="rendering/anti_aliasing/quality/use_taa" type="bool" setter="" getter="" default="false"> [...] [b]Note:[/b] The implementation is not complete yet. Some visual instances such as particles and skinned meshes may show ghosting artifacts in motion. [...] [b]Note:[/b] TAA is only supported in the Forward+ rendering method, not Mobile or Compatibility.'''
+checked = 2026-11-21
+
+["godot-4.7.2-vehicle"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/doc/classes/VehicleBody3D.xml#L7"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), doc/classes/VehicleBody3D.xml (L7, L10, L23): the engine's own account of its vehicle body"
+quote = '''It is based on the raycast vehicle system commonly found in physics engines. [...] [b]Note:[/b] This class has known issues and isn't designed to provide realistic 3D vehicle physics. [...] [b]Note:[/b] The simulation does not take the effect of gears into account, you will need to add logic for this if you wish to simulate gears.'''
+checked = 2026-11-21
+
+["godot-4.7.2-particle-heightfield"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/doc/classes/GPUParticlesCollisionHeightField3D.xml#L9"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), doc/classes/GPUParticlesCollisionHeightField3D.xml (L9): a real-time height field that GPU particles collide with"
+quote = '''This makes [GPUParticlesCollisionHeightField3D] a good choice for weather effects such as rain and snow and games with highly dynamic geometry. [...] However, this class is limited since heightmaps cannot represent overhangs (e.g. indoors or caves).'''
+checked = 2026-11-21
+
+["godot-4.7.2-wind-soft-body"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/doc/classes/Area3D.xml#L134"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), doc/classes/Area3D.xml (L134): area wind acts on soft bodies only"
+quote = '''[b]Note:[/b] This wind force only applies to [SoftBody3D] nodes. Other physics bodies are currently not affected by wind.'''
+checked = 2026-11-21
+
+["godot-4.7.2-ray-tracing-api"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/doc/classes/RenderingDevice.xml#L32"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), doc/classes/RenderingDevice.xml (L32): the acceleration structure methods are marked experimental"
+quote = '''<method name="blas_create" experimental="">'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-licence"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/LICENSE.txt#L3"
+section = "Terrain3D v1.1.0-stable (commit 629bbd6, 2026-11-02), LICENSE.txt (L3): the MIT licence's copyright line; line 1 reads MIT License"
+quote = '''Copyright (c) 2023-2026 Cory Petkovsek, Roope Palmroos, and Contributors.'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-clipmap"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/introduction.md#L9"
+section = "Terrain3D v1.1.0-stable (commit 629bbd6, 2026-11-02), doc/docs/introduction.md (L9, L38)"
+quote = '''This is a Geomorphing Geometric Clipmap Mesh Terrain, as used in The Witcher 3. [...] There is currently a limit of 1024 regions or 32 x 32.'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-architecture"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/system_architecture.md#L7"
+section = "Terrain3D v1.1.0-stable (commit 629bbd6, 2026-11-02), doc/docs/system_architecture.md (L7, L13)"
+quote = '''Like The Witcher 3, this system uses a geometry clipmap, where the mesh components are generated once, and at periodic intervals are centered on the camera location. [...] On each update, the vertex heights of the mesh components are adjusted by the GPU vertex shader reading from the terrain heightmap. [...] Earlier versions of Terrain3D used Mike's implementation. Blog and repository code released under the MIT license, clarified per email communication with Mike.'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-texturing"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/shader_design.md#L8"
+section = "Terrain3D v1.1.0-stable (commit 629bbd6, 2026-11-02), doc/docs/shader_design.md (L8, L112)"
+quote = '''At its core, the current texture painting and rendering system is a vertex painter, not a pixel painter. [...] The **Index map approach** samples a control map at 4 fixed grid points surrounding the current terrain pixel.'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-temporal"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/troubleshooting.md#L103"
+section = "Terrain3D v1.1.0-stable (commit 629bbd6, 2026-11-02), doc/docs/troubleshooting.md (L103, L105)"
+quote = '''This is caused by temporal effects: FSR, TAA, and motion blur shaders. [...] To fix the flickering, disable the effects above, or use Godot 4.5+ and Terrain3D v1.0.2+, v1.1.0+, or source built against the godot-cpp 4.5 branch or higher.'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-instancer"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/instancer.md#L101"
+section = "Terrain3D v1.1.0-stable (commit 629bbd6, 2026-11-02), doc/docs/instancer.md (L101, L197)"
+quote = '''Each region is divided into 32x32m cells so that these MultiMeshes can be culled by frustum or occlusion. [...] We don't currently provide these shaders, but you can find both online.'''
+checked = 2026-11-21
+
+["godot-voxel-1.7-licence"]
+url = "https://github.com/Zylann/godot_voxel/blob/2ac9f5f8a8219bf499314cc0fad54ffc47df908f/LICENSE.md#L3"
+section = "godot_voxel v1.7 (commit 2ac9f5f, 2026-08-20), LICENSE.md (L3): the MIT licence's copyright line; line 1 reads MIT License"
+quote = '''Copyright (c) 2016-2024 Marc Gilleron'''
+checked = 2026-11-21
+
+["godot-voxel-1.7-transvoxel-tables"]
+url = "https://github.com/Zylann/godot_voxel/blob/2ac9f5f8a8219bf499314cc0fad54ffc47df908f/meshers/transvoxel/transvoxel_tables.cpp#L5"
+section = "godot_voxel v1.7 (commit 2ac9f5f, 2026-08-20), meshers/transvoxel/transvoxel_tables.cpp (L5, L10, L17, L28, L29): the notice on the Transvoxel tables, which is not the repository's MIT licence; only this header was read"
+quote = '''// Copyright 2009 by Eric Lengyel [...] // The data in this file may be freely used in implementations of the Transvoxel [...] // then the credit in the source code is required. [...] // The contents of this file are protected by copyright and may not be publicly [...] // reproduced without permission.'''
+checked = 2026-11-21
+
+["godot-voxel-1.7-readme"]
+url = "https://github.com/Zylann/godot_voxel/blob/2ac9f5f8a8219bf499314cc0fad54ffc47df908f/README.md#L21"
+section = "godot_voxel v1.7 (commit 2ac9f5f, 2026-08-20), README.md (L21, L27, L29)"
+quote = '''- Realtime 3D terrain editable in-game (Unlike a heightmap based terrain, this allows for overhangs, tunnels, and user creation/destruction) [...] - Smooth terrain with level of detail using Transvoxel [...] - Instancing system to spawn foliage, rocks and other decoration on surfaces'''
+checked = 2026-11-21
+
+["godot-voxel-1.7-lod"]
+url = "https://github.com/Zylann/godot_voxel/blob/2ac9f5f8a8219bf499314cc0fad54ffc47df908f/doc/source/smooth_terrain.md#L175"
+section = "godot_voxel v1.7 (commit 2ac9f5f, 2026-08-20), doc/source/smooth_terrain.md (L175, L467)"
+quote = '''Classic UV-mapping cannot be used on smooth voxel surfaces, because of the arbitrary shapes it can contain. [...] LOD is implemented using multiple parented grids, each with blocks twice the size of their children.'''
+checked = 2026-11-21
+
+["hterrain-49887ff-licence"]
+url = "https://github.com/Zylann/godot_heightmap_plugin/blob/49887ff956f02263d9013006fa1994d34643a199/LICENSE.md#L4"
+section = "HeightMap terrain plugin for Godot (Zylann/godot_heightmap_plugin, commit 49887ff, 2026-11-13), LICENSE.md (L4, L6): the MIT terms, under the plugin's name"
+quote = '''Copyright (c) 2016-2020 Marc Gilleron [...] Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction'''
+checked = 2026-11-21
+
+["hterrain-49887ff-docs"]
+url = "https://github.com/Zylann/godot_heightmap_plugin/blob/49887ff956f02263d9013006fa1994d34643a199/addons/zylann.hterrain/doc/docs/index.md#L158"
+section = "HeightMap terrain plugin for Godot (Zylann/godot_heightmap_plugin, commit 49887ff, 2026-11-13), addons/zylann.hterrain/doc/docs/index.md (L158, L165)"
+quote = '''This brush only produces holes visually. [...] This terrain supports level of details on the geometry using a quad tree. It is divided in chunks of 32x32 (or 16x16 depending on your settings)'''
+checked = 2026-11-21
+
+["hterrain-49887ff-maintenance"]
+url = "https://github.com/Zylann/godot_heightmap_plugin/blob/49887ff956f02263d9013006fa1994d34643a199/README.md#L22"
+section = "HeightMap terrain plugin for Godot (Zylann/godot_heightmap_plugin, commit 49887ff, 2026-11-13), README.md (L22, L23)"
+quote = '''This plugin is not in "active" development. [...] I wouldn't say it's dead, but as a matter of fact, I no longer work on features, and only do bug fixes these days.'''
+checked = 2026-11-21
+
+["godot-ocean-waves-a171446-licence"]
+url = "https://github.com/2Retr0/GodotOceanWaves/blob/a171446f8174348895aaafc426576c26261058b9/LICENSE#L3"
+section = "GodotOceanWaves (2Retr0, commit a171446, 2024-09-27), LICENSE (L3): the MIT licence's copyright line; line 1 reads MIT License"
+quote = '''Copyright (c) 2024 Ethan Truong'''
+checked = 2026-11-21
+
+["godot-ocean-waves-a171446-readme"]
+url = "https://github.com/2Retr0/GodotOceanWaves/blob/a171446f8174348895aaafc426576c26261058b9/README.md#L2"
+section = "GodotOceanWaves (2Retr0, commit a171446, 2024-09-27), README.md (L2, L41, L73, L78, L85, L102)"
+quote = '''An open ocean rendering experiment in the Godot Engine utilizing the inverse Fourier transform of directional ocean-wave spectra for wave generation. [...] the *Texel-Marsen-Arsloe* (TMA) spectrum described in Horvath was chosen. [...] A custom FFT implementation was written for the GPU using compute shaders. [...] The wave generation system allows multiple wave cascades to be layered simultaneously to address this. Each cascade has its own tiling size and set of parameters. [...] Whenever the frame time is shorter than the update rate, only one cascade is updated per frame. [...] by **Takuya Okahisa** is used and modified under the [MIT](http://wwwa.pikara.ne.jp/okojisan/otfft-en/download.html) license.'''
+checked = 2026-11-21
+
+["godot-grass-3785bec-licence"]
+url = "https://github.com/2Retr0/GodotGrass/blob/3785bec8e2567f57faf3b9a6c0e617af710d090a/LICENSE#L3"
+section = "GodotGrass (2Retr0, commit 3785bec, 2024-08-15), LICENSE (L3): the MIT licence's copyright line; line 1 reads MIT License"
+quote = '''Copyright (c) 2024 Ethan Truong'''
+checked = 2026-11-21
+
+["godot-grass-3785bec-readme"]
+url = "https://github.com/2Retr0/GodotGrass/blob/3785bec8e2567f57faf3b9a6c0e617af710d090a/README.md#L3"
+section = "GodotGrass (2Retr0, commit 3785bec, 2024-08-15), README.md (L3, L11, L20, L27, L29)"
+quote = '''Individual blades of grass are generated with GPU instancing via Godot's MultiMeshInstance node and are colored/animated using a shader-driven approach. [...] Grass blades which are perpendicular to the camera are stretched horizontally in view space as suggested in the "Ghost of Tsushima" GDC talk. [...] Wind was simulated by scrolling a Perlin noise texture, sampled at different frequencies, to get a wind direction (blade rotational offset) and wind strength (blade bend) at a given time. [...] A simple tile-based LOD system is used to improve performance while maintaining a consistent visual quality. [...] This requires the positions of blades to be calculated on the CPU'''
+checked = 2026-11-21
+
+["bevy-0.20.1-licence"]
+url = "https://github.com/bevyengine/bevy/blob/a0577b5c6a7b208719dd761c5c6a7a539e472a97/README.md#L106"
+section = "Bevy v0.20.1 (commit a0577b5, 2026-10-28), README.md (L106, L108, L109): the readme's licence section, which joins the two licence files, LICENSE-MIT and LICENSE-APACHE"
+quote = '''Except where noted (below and/or in individual files), all code in this repository is dual-licensed under either: [...] * MIT License ([LICENSE-MIT](LICENSE-MIT) or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT)) [...] * Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0))'''
+checked = 2026-11-21
+
+["bevy-0.20.1-taa-msaa"]
+url = "https://github.com/bevyengine/bevy/blob/a0577b5c6a7b208719dd761c5c6a7a539e472a97/crates/bevy_anti_alias/src/taa/mod.rs#L88"
+section = "Bevy v0.20.1 (commit a0577b5, 2026-10-28), crates/bevy_anti_alias/src/taa/mod.rs (L88, L101): read, not run"
+quote = '''/// * Greatly increases the quality of stochastic rendering techniques such as SSAO, certain shadow map sampling methods, etc [...] /// Any camera with this component must also disable [`Msaa`] by setting it to [`Msaa::Off`].'''
+checked = 2026-11-21
+
+["bevy-0.20.1-msaa-default"]
+url = "https://github.com/bevyengine/bevy/blob/a0577b5c6a7b208719dd761c5c6a7a539e472a97/crates/bevy_render/src/view/mod.rs#L228"
+section = "Bevy v0.20.1 (commit a0577b5, 2026-10-28), crates/bevy_render/src/view/mod.rs (L228, L230): read, not run"
+quote = '''/// Defaults to 4 samples. A higher number of samples results in smoother edges. [...] /// Some advanced rendering features may require that MSAA is disabled.'''
+checked = 2026-11-21
+
+["bevy-0.20.1-solari"]
+url = "https://github.com/bevyengine/bevy/blob/a0577b5c6a7b208719dd761c5c6a7a539e472a97/crates/bevy_solari/src/realtime/mod.rs#L108"
+section = "Bevy v0.20.1 (commit a0577b5, 2026-10-28), crates/bevy_solari/src/realtime/mod.rs (L108, L111, L113): the ray-traced lighting crate needs MSAA off and a deferred prepass; read, not run"
+quote = '''/// `Msaa::Off`. [...] #[require(Hdr, DeferredPrepass, DepthPrepass, MotionVectorPrepass)] [...] /// [ReSTIR](https://en.wikipedia.org/wiki/Spatiotemporal_reservoir_resampling) is a technique to reuse path samples'''
+checked = 2026-11-21
+
+["bevy-0.20.1-ray-query"]
+url = "https://github.com/bevyengine/bevy/blob/a0577b5c6a7b208719dd761c5c6a7a539e472a97/crates/bevy_solari/src/scene/bindings.wesl#L4"
+section = "Bevy v0.20.1 (commit a0577b5, 2026-10-28), crates/bevy_solari/src/scene/bindings.wesl (L4, L109): ray queries in a WESL shader on wgpu 30; read, not run"
+quote = '''enable wgpu_ray_query; [...] rayQueryInitialize(&rq, tlas, ray);'''
+checked = 2026-11-21
+
+["bevy-0.20.1-water-example"]
+url = "https://github.com/bevyengine/bevy/blob/a0577b5c6a7b208719dd761c5c6a7a539e472a97/assets/shaders/water_material.wesl#L1"
+section = "Bevy v0.20.1 (commit a0577b5, 2026-10-28), assets/shaders/water_material.wesl (L1, L4): read, not run"
+quote = '''//! A shader that creates water ripples by overlaying 4 normal maps on top of one [...] //! This is used in the `ssr` example. It only supports deferred rendering.'''
+checked = 2026-11-21
+
+["bevy-0.20.1-clustered-decals"]
+url = "https://github.com/bevyengine/bevy/blob/a0577b5c6a7b208719dd761c5c6a7a539e472a97/crates/bevy_pbr/src/decal/clustered.rs#L3"
+section = "Bevy v0.20.1 (commit a0577b5, 2026-10-28), crates/bevy_pbr/src/decal/clustered.rs (L3, L9): read, not run"
+quote = '''//! A *clustered decal* is a bounding box that projects a texture onto any [...] //! used on WebGL 2 or WebGPU. Bevy's clustered decals can be used with forward'''
+checked = 2026-11-21
+
+["bevy-0.20.1-maturity"]
+url = "https://github.com/bevyengine/bevy/blob/a0577b5c6a7b208719dd761c5c6a7a539e472a97/README.md#L15"
+section = "Bevy v0.20.1 (commit a0577b5, 2026-10-28), README.md (L15)"
+quote = '''Bevy is still in the early stages of development. Important features are missing. Documentation is sparse. A new version of Bevy containing breaking changes to the API is released [approximately once'''
+checked = 2026-11-21
+
+["bevy-terrain-5a88daf-licence"]
+url = "https://github.com/kurtkuehnert/bevy_terrain/blob/5a88daf4a4199e0d33d960141ff3be9a1147fbf8/README.md#L97"
+section = "bevy_terrain (kurtkuehnert, commit 5a88daf, 2024-07-17), README.md (L97, L99, L100): the readme's licence section, which joins the two licence files, LICENSE-MIT and LICENSE-APACHE"
+quote = '''Bevy Terrain source code (this excludes the datasets in the assets directory) is dual-licensed under either [...] * MIT License (LICENSE-MIT or http://opensource.org/licenses/MIT) [...] * Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)'''
+checked = 2026-11-21
+
+["bevy-terrain-5a88daf-udlod"]
+url = "https://github.com/kurtkuehnert/bevy_terrain/blob/5a88daf4a4199e0d33d960141ff3be9a1147fbf8/docs/implementation.md#L37"
+section = "bevy_terrain (kurtkuehnert, commit 5a88daf, 2024-07-17), docs/implementation.md (L37, L39, L47, L69, L108)"
+quote = '''One such solution is the Uniform Distance-Dependent Level of Detail (UDLOD) algorithm that I have developed as part of [...] It divides the terrain into numerous small tiles in parallel on the GPU. They are then rendered using a single indirect [...] UDLOD uses a slightly modified version of the CDLOD morphing scheme. [...] The frustum culling uses a 2D min-max height data attachment to approximate the bounding volumes of each tile correctly. [...] To solve this, I have developed the chunked clipmap data structure (if you are unfamiliar with the concept, I encourage'''
+checked = 2026-11-21
+
+["bevy-terrain-5a88daf-missing"]
+url = "https://github.com/kurtkuehnert/bevy_terrain/blob/5a88daf4a4199e0d33d960141ff3be9a1147fbf8/docs/development.md#L29"
+section = "bevy_terrain (kurtkuehnert, commit 5a88daf, 2024-07-17), docs/development.md (L29, L39, L52): what the plugin's own notes list as missing"
+quote = '''Probably the biggest missing puzzle piece of this plugin is support for procedural texturing using splat maps or something similar. [...] Another important capability that is currently missing is the support for large-scale shadow rendering. [...] Same as for shadow rendering, Bevy does not have a built-in physics engine yet. For now, the de-facto standard is the rapier physics engine.'''
+checked = 2026-11-21
+
+["bevy-terrain-5a88daf-state"]
+url = "https://github.com/kurtkuehnert/bevy_terrain/blob/5a88daf4a4199e0d33d960141ff3be9a1147fbf8/README.md#L13"
+section = "bevy_terrain (kurtkuehnert, commit 5a88daf, 2024-07-17), README.md (L13)"
+quote = '''**Warning:** This plugin is still in early development, so expect the API to change and possibly break you existing'''
+checked = 2026-11-21
+
+["fyrox-1.0.0-licence"]
+url = "https://github.com/FyroxEngine/Fyrox/blob/a4907aa547d14e9582c98d1208f24d4a34dcdd63/LICENSE.md#L1"
+section = "Fyrox v1.0.0 (commit a4907aa, 2026-03-24), LICENSE.md (L1, L3)"
+quote = '''Copyright (c) 2019-present Dmitry Stepanov and Fyrox Engine contributors. [...] Permission is hereby granted, free of charge, to any person obtaining a copy'''
+checked = 2026-11-21
+
+["fyrox-1.0.0-terrain"]
+url = "https://github.com/FyroxEngine/Fyrox/blob/a4907aa547d14e9582c98d1208f24d4a34dcdd63/fyrox-impl/src/scene/terrain/mod.rs#L947"
+section = "Fyrox v1.0.0 (commit a4907aa, 2026-03-24), fyrox-impl/src/scene/terrain/mod.rs (L947, L965, L980, L982, L1003): read, not run"
+quote = '''/// Terrain is a height field where each point has fixed coordinates in XZ plane, but variable Y coordinate. [...] /// Layer is a material with a blending mask. Layers helps you to build a terrain with wide variety of details. [...] /// set of blocks using quad-tree algorithm. [...] /// Current implementation uses modified version of CDLOD algorithm without patch morphing. Apparently it is not [...] /// In case of terrains you need to create a collider with `Heightfield` shape and specify your terrain as a'''
+checked = 2026-11-21
+
+["fyrox-1.0.0-msaa"]
+url = "https://github.com/FyroxEngine/Fyrox/blob/a4907aa547d14e9582c98d1208f24d4a34dcdd63/fyrox-impl/src/engine/mod.rs#L1032"
+section = "Fyrox v1.0.0 (commit a4907aa, 2026-03-24), fyrox-impl/src/engine/mod.rs (L1032): read, not run"
+quote = '''/// MSAA works only for forward rendering and does not work for deferred rendering.'''
+checked = 2026-11-21
+
+["fyrox-1.0.0-paths"]
+url = "https://github.com/FyroxEngine/Fyrox/blob/a4907aa547d14e9582c98d1208f24d4a34dcdd63/fyrox-impl/src/scene/mesh/mod.rs#L102"
+section = "Fyrox v1.0.0 (commit a4907aa, 2026-03-24), fyrox-impl/src/scene/mesh/mod.rs (L102, L106): read, not run"
+quote = '''/// objects and there is no way to change blending. Deferred rendering is default rendering path. [...] /// Forward rendering path supports translucency and custom blending. However current support'''
+checked = 2026-11-21
+
+["bevy-hanabi-738b353-licence"]
+url = "https://github.com/djeedai/bevy_hanabi/blob/738b353d9e1120c817099244c7b35091c1af635c/README.md#L258"
+section = "bevy_hanabi (djeedai, commit 738b353, 2026-11-01), README.md (L258): the readme's licence line; LICENSE-MIT and LICENSE-APACHE2 hold the two texts"
+quote = '''`SPDX-License-Identifier: MIT OR Apache-2.0`'''
+checked = 2026-11-21
+
+["bevy-hanabi-738b353-readme"]
+url = "https://github.com/djeedai/bevy_hanabi/blob/738b353d9e1120c817099244c7b35091c1af635c/README.md#L18"
+section = "bevy_hanabi (djeedai, commit 738b353, 2026-11-01), README.md (L18, L20, L174, L179): the feature list leaves Collision and Depth buffer unchecked"
+quote = '''🚧 _This project is under heavy development, and is currently lacking both features and performance / usability polish. However, for moderate-size effects, it can already be used in your project. Feedb [...] 🎆 Hanabi makes heavy use of compute shaders to offload work to the GPU in a performant way. Support for compute shaders on the `wasm` target (WebAssembly) is available as of v0.13 (Bevy 0.14), and onl [...] - [ ] Collision [...] - [ ] Depth buffer'''
+checked = 2026-11-21
+
+["bevy-feronia-0.8.4-licence"]
+url = "https://github.com/NicoZweifel/bevy_feronia/blob/9533d0fe6cfe896b8824c2e8630e4bbba77bbcfb/README.md#L182"
+section = "bevy_feronia v0.8.4 (NicoZweifel, commit 9533d0f, 2026-06-22), README.md (L182, L187): the code's licence; assets/LICENSE holds other terms for the example assets, which were not opened"
+quote = '''The code is dual-licensed: [...] Feel free to copy the grass assets. All the other assets used in the examples are licensed assets.'''
+checked = 2026-11-21
+
+["bevy-feronia-0.8.4-wind"]
+url = "https://github.com/NicoZweifel/bevy_feronia/blob/9533d0fe6cfe896b8824c2e8630e4bbba77bbcfb/src/wind/displace.wgsl#L1"
+section = "bevy_feronia v0.8.4 (NicoZweifel, commit 9533d0f, 2026-06-22), src/wind/displace.wgsl (L1, L6): read, not run"
+quote = '''// The use of layered macro/micro noise, secondary motions (S-curve, bop) [...] // "Advanced Graphics Summit: Procedural Grass in 'Ghost of Tsushima'".'''
+checked = 2026-11-21
+
+["bevy-feronia-0.8.4-wind-noise"]
+url = "https://github.com/NicoZweifel/bevy_feronia/blob/9533d0fe6cfe896b8824c2e8630e4bbba77bbcfb/src/wind/noise.wgsl#L29"
+section = "bevy_feronia v0.8.4 (NicoZweifel, commit 9533d0f, 2026-06-22), src/wind/noise.wgsl (L29): read, not run"
+quote = '''// Sampling the same noise for neighbors, breaks motion vectors / DLSS / TAA'''
+checked = 2026-11-21
+
+["bevy-feronia-0.8.4-taa"]
+url = "https://github.com/NicoZweifel/bevy_feronia/blob/9533d0fe6cfe896b8824c2e8630e4bbba77bbcfb/examples/EXAMPLES.md#L19"
+section = "bevy_feronia v0.8.4 (NicoZweifel, commit 9533d0f, 2026-06-22), examples/EXAMPLES.md (L19)"
+quote = '''> The examples all use `TAA` by default, you can however run it with `DLAA` by using `--features dlss`.'''
+checked = 2026-11-21
+
+["warbler-grass-bdb4228-licence"]
+url = "https://github.com/EmiOnGit/warbler_grass/blob/bdb4228d715bed7868f8183a5a14d0abd0ba7ebc/Cargo.toml#L6"
+section = "warbler_grass v0.6.1 (EmiOnGit, commit bdb4228, 2024-06-21), Cargo.toml (L6): the crate's licence expression; LICENSE-MIT and LICENSE-APACHE hold the two texts"
+quote = '''license = "MIT OR Apache-2.0"'''
+checked = 2026-11-21
+
+["warbler-grass-bdb4228-shader"]
+url = "https://github.com/EmiOnGit/warbler_grass/blob/bdb4228d715bed7868f8183a5a14d0abd0ba7ebc/src/render/assets/grass_shader.wgsl#L69"
+section = "warbler_grass v0.6.1 (EmiOnGit, commit bdb4228, 2024-06-21), src/render/assets/grass_shader.wgsl (L69, L125, L142): read, not run"
+quote = '''var texture_offset = config.wind.xy * config.time * NOISE_TEXTURE_SPEED; [...] position_field_offset.y = texture2d_offset(y_texture, position_field_offset.xz).r * aabb.vect.y; [...] // only applies wind if the vertex is not on the bottom of the grass (or very small)'''
+checked = 2026-11-21
+
+["bevy-procedural-grass-f5b5081-licence"]
+url = "https://github.com/jadedbay/bevy_procedural_grass/blob/f5b50817b3e92edc78a731f1563bd738ec1d2169/Cargo.toml#L6"
+section = "bevy_procedural_grass 0.2.0 (jadedbay, commit f5b5081, 2023-12-12), Cargo.toml (L6): the crate's licence expression; LICENSE-MIT and LICENSE-APACHE hold the two texts"
+quote = '''license = "MIT OR Apache-2.0"'''
+checked = 2026-11-21
+
+["bevy-procedural-grass-f5b5081-readme"]
+url = "https://github.com/jadedbay/bevy_procedural_grass/blob/f5b50817b3e92edc78a731f1563bd738ec1d2169/README.md#L59"
+section = "bevy_procedural_grass 0.2.0 (jadedbay, commit f5b5081, 2023-12-12), README.md (L59, L60, L62, L63, L70, L72)"
+quote = '''- Grass positions generated based of mesh [...] - Wind Animation [...] - GPU Instancing [...] - Frustum/Distance Culling [...] - Grass Interaction, allow grass to move out of the way of other entites. [...] - Compute Shaders, use compute shaders to generate grass instance data each frame to optimize memory usage.'''
+checked = 2026-11-21
+
+["o3de-2610.0-licence"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/LICENSE.txt#L2"
+section = "Open 3D Engine 2610.0 (commit b612281, 2026-11-20), LICENSE.txt (L2, L3, L4)"
+quote = '''The default license for Open 3D Engine is the Apache License, Version 2.0 [...] (see LICENSE_APACHE2.TXT); you may elect at your option to use the Open 3D [...] Engine under the MIT License (see LICENSE_MIT.TXT).  Contributions must be'''
+checked = 2026-11-21
+
+["o3de-2610.0-forward-plus"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Atom/Feature/Common/Assets/ShaderLib/Atom/Features/Pipeline/Forward/Readme.md#L3"
+section = "Open 3D Engine 2610.0 (commit b612281, 2026-11-20), Gems/Atom/Feature/Common/Assets/ShaderLib/Atom/Features/Pipeline/Forward/Readme.md (L3, L8)"
+quote = '''The files in this folder are intended to be used with the Forward+ - pipeline, or something very similar to it. [...] The light assignment is tile-based in screenspace, and uses the `LightCullingTileIterator`'''
+checked = 2026-11-21
+
+["o3de-2610.0-msaa"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Atom/Feature/Common/Assets/Passes/MainRenderPipeline.azasset#L13"
+section = "Open 3D Engine 2610.0 (commit b612281, 2026-11-20), Gems/Atom/Feature/Common/Assets/Passes/MainRenderPipeline.azasset (L13, L16)"
+quote = '''                "samples": 2 [...] "DefaultAAMethod": "MSAA"'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-mesh"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/Code/Source/TerrainRenderer/TerrainMeshManager.cpp#L274"
+section = "Open 3D Engine 2610.0 (commit b612281, 2026-11-20), Gems/Terrain/Code/Source/TerrainRenderer/TerrainMeshManager.cpp (L274, L414, L922, L1235): read, not run"
+quote = '''// Sectors use toroidal addressing to avoid needing to update any more than necessary. [...] // Create the ray tracing meshes. Each sector has 5 meshes which all share the same data - one mesh that covers the whole [...] // Store the height and normal information for the next lod level in each vertex for continuous LOD. [...] // Each sector in an LOD is half the size of a sector in the next LOD in each direction, so 4 sectors'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-queries"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Code/Framework/AzFramework/AzFramework/Terrain/TerrainDataRequestBus.h#L206"
+section = "Open 3D Engine 2610.0 (commit b612281, 2026-11-20), Code/Framework/AzFramework/AzFramework/Terrain/TerrainDataRequestBus.h (L206, L212): read, not run"
+quote = '''virtual float GetHeight(const AZ::Vector3& position, Sampler sampler = Sampler::BILINEAR, bool* terrainExistsPtr = nullptr) const = 0; [...] //! Returns true if there's a hole at location x,y.'''
+checked = 2026-11-21
+
+["o3de-2610.0-terrain-state"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Terrain/gem.json#L9"
+section = "Open 3D Engine 2610.0 (commit b612281, 2026-11-20), Gems/Terrain/gem.json (L9)"
+quote = '''The Terrain Gem is an experimental terrain system.  The terrain system maps height, color, and surface data to regions of the world'''
+checked = 2026-11-21
+
+["o3de-2610.0-vegetation"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/Vegetation/Code/Source/AreaSystemComponent.h#L57"
+section = "Open 3D Engine 2610.0 (commit b612281, 2026-11-20), Gems/Vegetation/Code/Source/AreaSystemComponent.h (L57, L75): read, not run"
+quote = '''int m_sectorSizeInMeters = 16; [...] * Manages an sectors and claims while the camera scrolls through the 3D world'''
+checked = 2026-11-21
+
+["o3de-2610.0-wind"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Code/Framework/AzFramework/AzFramework/Physics/WindBus.h#L33"
+section = "Open 3D Engine 2610.0 (commit b612281, 2026-11-20), Code/Framework/AzFramework/AzFramework/Physics/WindBus.h (L33): read, not run"
+quote = '''virtual AZ::Vector3 GetWind(const AZ::Vector3& worldPosition) const = 0;'''
+checked = 2026-11-21
+
+["o3de-2610.0-rtxgi-licence"]
+url = "https://github.com/o3de/o3de/blob/b6122815be0e5cd2a76d91d58773e744229f1e81/Gems/DiffuseProbeGrid/Assets/Shaders/DiffuseGlobalIllumination/Nvidia%20RTX-GI%20License.txt#L1"
+section = "Open 3D Engine 2610.0 (commit b612281, 2026-11-20), Gems/DiffuseProbeGrid/Assets/Shaders/DiffuseGlobalIllumination/Nvidia RTX-GI License.txt (L1, L3): the probe GI gem's shaders are under NVIDIA's agreement, not the engine's licence; only this file's head was read"
+quote = '''SOFTWARE LICENSE AGREEMENT [...] is a legal agreement between you and NVIDIA Corporation ("NVIDIA") and governs your use of the NVIDIA RTXGI software and materials'''
+checked = 2026-11-21
+
+["torque3d-9521d43-licence"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/LICENSE.md#L3"
+section = "Torque3D (commit 9521d43, 2026-11-19), LICENSE.md (L3, L5): the MIT terms; the file goes on to a BSD notice for one bundled tool"
+quote = '''Copyright (c) 2012-2016 GarageGames, LLC [...] Permission is hereby granted, free of charge, to any person obtaining a copy'''
+checked = 2026-11-21
+
+["torque3d-9521d43-terrain"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/terrain/terrCell.h#L75"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/terrain/terrCell.h (L75, L85): read, not run"
+quote = '''/// The TerrCell is a single quadrant of the terrain geometry quadtree. [...] /// It is only used if this cell has any empty squares'''
+checked = 2026-11-21
+
+["torque3d-9521d43-forest"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/forest/forest.cpp#L70"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/forest/forest.cpp (L70, L72): read, not run"
+quote = '''"%Forest is designed to efficiently render a large number of static meshes: trees, rocks " [...] "effects using vertex shader transformations guided by vertex color in the asset and "'''
+checked = 2026-11-21
+
+["torque3d-9521d43-water"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/environment/waterObject.cpp#L158"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/environment/waterObject.cpp (L158, L159, L161, L165): read, not run"
+quote = '''"\t- Waves represented by vertex undulation and user paramaters.\n" [...] "\t- Ripples represented by a normal map and user parameters.\n" [...] "\t- Dynamic planar reflection or static cubemap reflection.\n" [...] "that is active. With Basic Lighting, we do not have a deferred texture to "'''
+checked = 2026-11-21
+
+["torque3d-9521d43-precipitation"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/T3D/fx/precipitation.cpp#L55"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/T3D/fx/precipitation.cpp (L55, L428): read, not run"
+quote = '''"@brief Defines a precipitation based storm (rain, snow, etc).\n\n" [...] "@note This can be expensive as each drop will perform a raycast when "'''
+checked = 2026-11-21
+
+["torque3d-9521d43-vehicle"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/T3D/vehicles/wheeledVehicle.h#L50"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/T3D/vehicles/wheeledVehicle.h (L50, L54, L93, L129, L130): read, not run"
+quote = '''F32 kineticFriction;       // Tire friction coefficient [...] // Tires act as springs and generate lateral and longitudinal [...] F32 antiSway;              // Opposite wheel anti-sway [...] F32 maxWheelSpeed;            // Engine torque is scale based on wheel speed [...] F32 engineTorque;             // Engine force controlled through throttle'''
+checked = 2026-11-21
+
+["torque3d-9521d43-deferred"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/lighting/advanced/advancedLightManager.cpp#L61"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/lighting/advanced/advancedLightManager.cpp (L61, L127): read, not run"
+quote = ''':  LightManager( "Advanced Lighting", "ADVLM" ) [...] deferredBin->assignName("AL_DeferredBin");'''
+checked = 2026-11-21
+
+["lumix-8ce5ab5-licence"]
+url = "https://github.com/nem0/LumixEngine/blob/8ce5ab5680e5b72edec118452b79512b7780719b/LICENSE#L1"
+section = "Lumix Engine (commit 8ce5ab5, 2026-11-20), LICENSE (L1, L3)"
+quote = '''The MIT License (MIT) [...] Copyright (c) 2013-9001 Mikulas Florek'''
+checked = 2026-11-21
+
+["lumix-8ce5ab5-render"]
+url = "https://github.com/nem0/LumixEngine/blob/8ce5ab5680e5b72edec118452b79512b7780719b/docs/render_scripts.md#L31"
+section = "Lumix Engine (commit 8ce5ab5, 2026-11-20), docs/render_scripts.md (L31, L39, L79, L80)"
+quote = '''it runs the stage scripts (shadows, geometry, lighting, transparent, debug views, tonemap), the C++ plugins (DLSS, FSR3, ...) and the default effects, in order. [...] | before lighting | `fn(Context) : void` | G-buffer is filled, e.g. SSAO. | [...] Shifts the camera by a sub-pixel offset each frame, as TAA needs. [...] False while TAA is off, e.g. because an upscaler (DLSS, FSR3) does the antialiasing.'''
+checked = 2026-11-21
+
+["lumix-8ce5ab5-terrain"]
+url = "https://github.com/nem0/LumixEngine/blob/8ce5ab5680e5b72edec118452b79512b7780719b/src/renderer/pipeline.cpp#L1722"
+section = "Lumix Engine (commit 8ce5ab5, 2026-11-20), src/renderer/pipeline.cpp (L1722, L1744, L1762): read, not run"
+quote = '''IVec2 from = IVec2((ref_pos.xz() + Vec2(0.5f * s)) / float(s)) - IVec2(terrain->m_base_grid_res / 2); [...] stream.drawArraysInstanced((subto.x - subfrom.x) * 2 + 2, subto.y - subfrom.y); [...] prev_from_to = IVec4(from / 2, to / 2);'''
+checked = 2026-11-21
+
+["lumix-8ce5ab5-vehicle"]
+url = "https://github.com/nem0/LumixEngine/blob/8ce5ab5680e5b72edec118452b79512b7780719b/src/physics/physics_module.cpp#L188"
+section = "Lumix Engine (commit 8ce5ab5, 2026-11-20), src/physics/physics_module.cpp (L188, L1954, L1958): read, not run"
+quote = '''PxVehicleDrive4W* drive = nullptr; [...] diff.mType = PxVehicleDifferential4WData::eDIFF_TYPE_LS_4WD; [...] engine.mPeakTorque = vehicle.peak_torque;'''
+checked = 2026-11-21
+
+["lumix-8ce5ab5-water"]
+url = "https://github.com/nem0/LumixEngine/blob/8ce5ab5680e5b72edec118452b79512b7780719b/data/shaders/water.hlsl#L13"
+section = "Lumix Engine (commit 8ce5ab5, 2026-11-20), data/shaders/water.hlsl (L13, L18, L247): read, not run"
+quote = '''//@uniform "Flow dir", "float2", {0.06, 0.04} [...] //@define "SSR" [...] float3 transmittance = saturate(exp(-water_depth * material.u_water_scattering * (1.0f - water_color)));'''
+checked = 2026-11-21
+
+["ogre-next-c13fa29-licence"]
+url = "https://github.com/OGRECave/ogre-next/blob/c13fa29e69b5f4deb9ef88f145fda239273f88c0/COPYING#L1"
+section = "OGRE-Next (commit c13fa29, 2026-11-15), COPYING (L1, L3, L5)"
+quote = '''OGRE (www.ogre3d.org) is made available under the MIT License. [...] Copyright (c) 2000-2013 Torus Knot Software Ltd [...] Permission is hereby granted, free of charge, to any person obtaining a copy'''
+checked = 2026-11-21
+
+["ogre-next-c13fa29-terra"]
+url = "https://github.com/OGRECave/ogre-next/blob/c13fa29e69b5f4deb9ef88f145fda239273f88c0/Docs/src/manual/Plugins/TerraSystem.md#L79"
+section = "OGRE-Next (commit c13fa29, 2026-11-15), Docs/src/manual/Plugins/TerraSystem.md (L79, L91, L107, L135, L147, L154, L177)"
+quote = '''Heightmap-based terrains are essentially 2D quads on the XZ plane stacked together while the height Y is fetch from a heightmap texture. [...] we calculate the visibility (frustum cull) of the first 4x4 blocks around the camera. [...] while doubling its size and halving tessellation factor [...] This hole is fixed with *skirts*, which is simply extruding the edge downwards: [...] Directional lights are instead handled differently, using a compute shader that performs 2D raymarching, generating a shadow texture in real time. [...]  - Green channel: Max height for applying shadows to regular objects. [...] Examples of Terra in real world use are [Racecraft](https://store.steampowered.com/app/346610/Racecraft/)'''
+checked = 2026-11-21
+
+["the-forge-cd50468-licence"]
+url = "https://github.com/ConfettiFX/The-Forge/blob/cd5046893faba2dc7869243873bf01f02a6f0df9/LICENSE#L189"
+section = "The Forge (commit cd50468, 2026-08-27), LICENSE (L189, L191)"
+quote = '''Copyright (c) 2017 - 2025 The Forge Interactive Inc. [...] Licensed under the Apache License, Version 2.0 (the "License");'''
+checked = 2026-11-21
+
+["the-forge-cd50468-readme"]
+url = "https://github.com/ConfettiFX/The-Forge/blob/cd5046893faba2dc7869243873bf01f02a6f0df9/README.md#L17"
+section = "The Forge (commit cd50468, 2026-08-27), README.md (L17, L37, L39, L650)"
+quote = '''Please note that you need a license from us to use the console platforms. [...] - Renderer / Scene (not provided) / Resource Streaming (not provided) / Resource Loading / Animation [...] What is not there: Physics / Networking / Sound [...] We switched to Ray Queries for the common Ray Tracing APIs on all the platforms we support.'''
+checked = 2026-11-21
+
+["stride-4.4.3-licence"]
+url = "https://github.com/stride3d/stride/blob/77eebe50bd887f8188d13854ff703ab26dcc50c7/LICENSE.md#L1"
+section = "Stride 4.4.3 (commit 77eebe5, 2026-11-17), LICENSE.md (L1, L4, L5)"
+quote = '''The MIT License (MIT) [...] Copyright (c) 2018-2021 Stride contributors (https://stride3d.net) [...] Copyright (c) 2011-2018 Silicon Studio Corp. (https://www.siliconstudio.co.jp)'''
+checked = 2026-11-21
+
+["jolt-5.7.0-engine"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Vehicle/VehicleEngine.h#L3"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Vehicle/VehicleEngine.h (L3, L38, L63): the SPDX line and the engine torque; read, not run"
+quote = '''SPDX-License-Identifier: MIT [...] Moment of inertia (kg m^2) of the engine [...] return inAcceleration * mMaxTorque * mNormalizedTorque.GetValue(mCurrentRPM / mMaxRPM);'''
+checked = 2026-11-21
+
+["jolt-5.7.0-transmission"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Vehicle/VehicleTransmission.h#L41"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Vehicle/VehicleTransmission.h (L41): read, not run"
+quote = '''Total torque a clutch applies is Torque = ClutchStrength * (Velocity Engine - Avg Velocity Wheels At Clutch)'''
+checked = 2026-11-21
+
+["jolt-5.7.0-drivetrain-solve"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Vehicle/WheeledVehicleController.cpp#L416"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Vehicle/WheeledVehicleController.cpp (L416, L456): read, not run"
+quote = '''tc(t):=S*(we(t)-sum(R(j)*ww(j,t),j,1,N)/N) [...] because the system is very stiff this turns out to be unstable, so we need to use implicit Euler instead:'''
+checked = 2026-11-21
+
+["jolt-5.7.0-differential"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Vehicle/VehicleDifferential.h#L33"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Vehicle/VehicleDifferential.h (L33, L35): read, not run"
+quote = '''Ratio between rotation speed of gear box and wheels [...] When this ratio is exceeded, all torque gets distributed to the slowest moving wheel. This allows implementing a limited slip differential. Set to FLT_MAX for an open differential.'''
+checked = 2026-11-21
+
+["jolt-5.7.0-anti-roll"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Vehicle/VehicleAntiRollBar.h#L13"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Vehicle/VehicleAntiRollBar.h (L13): read, not run"
+quote = '''An anti rollbar is a stiff spring that connects two wheels to reduce the amount of roll the vehicle makes in sharp corners'''
+checked = 2026-11-21
+
+["jolt-5.7.0-tyre"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Vehicle/WheeledVehicleController.h#L34"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Vehicle/WheeledVehicleController.h (L34, L35, L70, L194): read, not run"
+quote = '''On the X-axis: the slip ratio (fraction) defined as (omega_wheel * r_wheel - v_longitudinal) / |v_longitudinal|. [...] On the X-axis: the slip angle (degrees) defined as angle between relative contact velocity and tire direction. [...] The properties in this controller are largely based on "Car Physics for Games" by Marco Monster. [...] outLongitudinalImpulse = inLongitudinalFriction * inSuspensionImpulse;'''
+checked = 2026-11-21
+
+["jolt-5.7.0-collision-testers"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Vehicle/VehicleCollisionTester.h#L84"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Vehicle/VehicleCollisionTester.h (L84, L105, L128): read, not run"
+quote = '''Collision tester that tests collision using a raycast [...] Collision tester that tests collision using a sphere cast [...] Collision tester that tests collision using a cylinder shape'''
+checked = 2026-11-21
+
+["jolt-5.7.0-buoyancy"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Body/Body.h#L234"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Body/Body.h (L234): read, not run"
+quote = '''Applies an impulse to the body that simulates fluid buoyancy and drag.'''
+checked = 2026-11-21
+
+["jolt-5.7.0-precision-determinism"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Docs/Architecture.md#L737"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Docs/Architecture.md (L737, L744, L756, L758, L791)"
+quote = '''Each physics step can be divided into multiple collision steps. [...] In general, the system is stable when running at 60 Hz with 1 collision step. [...] By default the library compiles using floats. [...] you may want to compile the library using the JPH_DOUBLE_PRECISION define [...] The physics simulation is deterministic provided that:'''
+checked = 2026-11-21
+
+["jolt-5.7.0-readme"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/README.md#L10"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), README.md (L10, L30, L161)"
+quote = '''Used by Horizon Forbidden West and Death Stranding 2: On the Beach. [...] The simulation runs deterministically. You can replicate a simulation to a remote client by merely replicating the inputs to the simulation. [...] [Rust](https://github.com/SecondHalfGames/jolt-rust)'''
+checked = 2026-11-21
+
+["jolt-5.7.0-motorcycle"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Vehicle/MotorcycleController.h#L11"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Vehicle/MotorcycleController.h (L11, L12): read, not run"
+quote = '''Settings of a two wheeled motorcycle (adds a spring to balance the motorcycle) [...] Note: The motor cycle controller is still in development and may need a lot of tweaks/hacks to work properly!'''
+checked = 2026-11-21
+
+["rapier-475caa3-licence"]
+url = "https://github.com/dimforge/rapier/blob/475caa3ff4646fd9a796b67d14116256f4962bc7/LICENSE#L189"
+section = "Rapier (commit 475caa3, 2026-10-10), LICENSE (L189): the Apache-2.0 text's copyright line; Cargo.toml reads license = 'Apache-2.0'"
+quote = '''Copyright 2020 Sébastien Crozet'''
+checked = 2026-11-21
+
+["rapier-475caa3-vehicle"]
+url = "https://github.com/dimforge/rapier/blob/475caa3ff4646fd9a796b67d14116256f4962bc7/src/control/ray_cast_vehicle_controller.rs#L1"
+section = "Rapier (commit 475caa3, 2026-10-10), src/control/ray_cast_vehicle_controller.rs (L1, L167, L341, L643): read, not run"
+quote = '''A vehicle controller based on ray-casting, ported and modified from Bullet [...] The forward force applied by this wheel on the chassis. [...] let hit = queries.cast_ray_and_get_normal(&ray, 1.0, true); [...] let max_imp = wheel.wheel_suspension_force * dt * wheel.friction_slip;'''
+checked = 2026-11-21
+
+["rapier-475caa3-vehicle-docs"]
+url = "https://github.com/dimforge/rapier/blob/475caa3ff4646fd9a796b67d14116256f4962bc7/website/docs/user_guides/templates/vehicle_controller.mdx#L6"
+section = "Rapier (commit 475caa3, 2026-10-10), website/docs/user_guides/templates/vehicle_controller.mdx (L6, L7)"
+quote = '''(the current implementation was ported from the `btRaycastVehicle` of Bullet) [...] its wheels are only represented by ray-casts pushing that body along a'''
+checked = 2026-11-21
+
+["rapier-475caa3-determinism"]
+url = "https://github.com/dimforge/rapier/blob/475caa3ff4646fd9a796b67d14116256f4962bc7/website/docs/user_guides/templates/determinism.mdx#L12"
+section = "Rapier (commit 475caa3, 2026-10-10), website/docs/user_guides/templates/determinism.mdx (L12, L23, L27)"
+quote = '''By default, Rapier is **locally deterministic**, meaning that running the exact same simulation (with the **same initial [...] It is possible to make Rapier **cross-platform deterministic** [...] The `enhanced-determinism` feature of Rapier is enabled.'''
+checked = 2026-11-21
+
+["physx-5.13.0-licence"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/README.md#L83"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac, tag ovphysx-0.8.0, 2026-11-13), README.md (L83, L86): the repository's component licences; physx/LICENSE.md holds the Apache-2.0 text and the root LICENSE.md a BSD-3-Clause one"
+quote = '''These licenses apply to the listed components; other components retain their own licenses. [...] `physx/` source: [Apache License 2.0](physx/LICENSE.md), with the bundled-component exceptions in [third-party notices](physx/THIRD_PARTY_NOTICES.md).'''
+checked = 2026-11-21
+
+["physx-5.13.0-drivetrain"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/physx/include/vehicle/drivetrain/PxVehicleDrivetrainParams.h#L95"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac, tag ovphysx-0.8.0, 2026-11-13), physx/include/vehicle/drivetrain/PxVehicleDrivetrainParams.h (L95, L108, L174, L317, L574): read, not run"
+quote = '''Choose between a potentially more expensive but more accurate solution to the clutch model or a potentially cheaper but less accurate solution. [...] The clutch connects two plates together. One plate rotates with the speed of the engine. [...] Graph of normalized torque (torque/#peakTorque) against normalized engine speed ( engineRotationSpeed / #maxOmega ). [...] Gear ratio applied is #ratios[currentGear]*#finalRatio [...] torqueRatios describes the fraction of torque delivered to each wheel through the differential.'''
+checked = 2026-11-21
+
+["physx-5.13.0-suspension"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/physx/include/vehicle/suspension/PxVehicleSuspensionParams.h#L118"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac, tag ovphysx-0.8.0, 2026-11-13), physx/include/vehicle/suspension/PxVehicleSuspensionParams.h (L118, L204, L314): read, not run"
+quote = '''Compliance describes how toe and camber angle and force application points are affected by suspension compression. [...] Suspension force is computed by converting suspenson state to suspension force under the assumption of a linear spring. [...] The purpose of the anti-roll bar is to generate a torque to apply to the vehicle's rigid body that will reduce the jounce difference arising'''
+checked = 2026-11-21
+
+["physx-5.13.0-tyre"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/physx/include/vehicle/tire/PxVehicleTireParams.h#L23"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac, tag ovphysx-0.8.0, 2026-11-13), physx/include/vehicle/tire/PxVehicleTireParams.h (L23, L42, L57, L83): read, not run"
+quote = '''Tire lateral stiffness is a graph of tire load that has linear behavior near zero load and [...] Longitudinal force can be approximated as longStiff*longitudinalSlip. [...] Graph of friction vs longitudinal slip with 3 points. [...] Tire load variation can be strongly dependent on the time-step so it is a good idea to filter it'''
+checked = 2026-11-21
+
+["physx-5.13.0-custom-tyre"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/physx/snippets/snippetvehiclecustomtire/SnippetVehicleCustomTire.cpp#L58"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac, tag ovphysx-0.8.0, 2026-11-13), physx/snippets/snippetvehiclecustomtire/SnippetVehicleCustomTire.cpp (L58): read, not run"
+quote = '''the custom component implements a version of the Magic Formula Tire Model (also'''
+checked = 2026-11-21
+
+["physx-5.13.0-substeps"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/physx/snippets/snippetvehiclefourwheeldrive/SnippetVehicleFourWheelDrive.cpp#L282"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac, tag ovphysx-0.8.0, 2026-11-13), physx/snippets/snippetvehiclefourwheeldrive/SnippetVehicleFourWheelDrive.cpp (L282, L293, L297): a sample's step and substeps, not a requirement the SDK states; read, not run"
+quote = '''const PxReal timestep = 1.0f/60.0f; [...] Apply substepping at low forward speed to improve simulation fidelity. [...] const PxU8 nbSubsteps = (forwardSpeed < 5.0f ? 3 : 1);'''
+checked = 2026-11-21
+
+["physx-5.13.0-road-queries"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/physx/include/vehicle/physxRoadGeometry/PxVehiclePhysXRoadGeometryParams.h#L24"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac, tag ovphysx-0.8.0, 2026-11-13), physx/include/vehicle/physxRoadGeometry/PxVehiclePhysXRoadGeometryParams.h (L24, L31): read, not run"
+quote = '''PhysX scene queries may be raycasts or sweeps. [...] Info about the road geometry below the wheel is provided by the user'''
+checked = 2026-11-21
+
+["physx-5.13.0-blast-licence"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/blast/PACKAGE-LICENSES/blast-sdk-LICENSE.md#L1"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac, tag ovphysx-0.8.0, 2026-11-13), blast/PACKAGE-LICENSES/blast-sdk-LICENSE.md (L1, L9)"
+quote = '''Redistribution and use in source and binary forms, with or without [...] Neither the name of NVIDIA CORPORATION nor the names of its'''
+checked = 2026-11-21
+
+["bullet-3.25-licence"]
+url = "https://github.com/bulletphysics/bullet3/blob/2c204c49e56ed15ec5fcfa71d199ab6d6570b3f5/LICENSE.txt#L2"
+section = "Bullet 3.25 (commit 2c204c4, 2022-09-24), LICENSE.txt (L2, L7, L9)"
+quote = '''The files in this repository are licensed under the zlib license, except for the files under 'Extras' and examples/ThirdPartyLibs. [...] This software is provided 'as-is', without any express or implied warranty. [...] Permission is granted to anyone to use this software for any purpose,'''
+checked = 2026-11-21
+
+["bullet-3.25-vehicle"]
+url = "https://github.com/bulletphysics/bullet3/blob/2c204c49e56ed15ec5fcfa71d199ab6d6570b3f5/src/BulletDynamics/Vehicle/btRaycastVehicle.cpp#L361"
+section = "Bullet 3.25 (commit 2c204c4, 2022-09-24), src/BulletDynamics/Vehicle/btRaycastVehicle.cpp (L361, L584, L693): read, not run"
+quote = '''wheelInfo.m_engineForce = force; [...] btScalar maximp = wheelInfo.m_wheelsSuspensionForce * timeStep * wheelInfo.m_frictionSlip; [...] m_dynamicsWorld->rayTest(from, to, rayCallback);'''
+checked = 2026-11-21
+
+["chrono-10.0.0-licence"]
+url = "https://github.com/projectchrono/chrono/blob/9faf13dd8f1128dd75ed233a9627027b0422c3f7/LICENSE#L1"
+section = "Project Chrono 10.0.0 (commit 9faf13d, 2026-04-07), LICENSE (L1, L4, L8): the BSD-3-Clause terms"
+quote = '''Copyright (c) 2016, Project Chrono Development Team [...] Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: [...] Neither the name of the nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.'''
+checked = 2026-11-21
+
+["chrono-10.0.0-tyres"]
+url = "https://github.com/projectchrono/chrono/blob/9faf13dd8f1128dd75ed233a9627027b0422c3f7/doxygen/documentation/manuals/vehicle/wheeled_tire.md#L7"
+section = "Project Chrono 10.0.0 (commit 9faf13d, 2026-04-07), doxygen/documentation/manuals/vehicle/wheeled_tire.md (L7, L20, L30, L38, L48)"
+quote = '''Chrono::Vehicle currently supports three different classes of tire models: rigid, handling, and finite element. [...] Handling tire models are designed for flat road surfaces and they normally use single point contact or four point contact (TMeasy). [...] Due to the lack of reference data sets the inflation pressure dependence terms and the large camber terms are actually not implemented. [...] The implementation used in Chrono lacks some functionality compared to the latest commercial TMeasy versions. [...] The Fiala tire model is based on a brush model assumption and only requires a small number of coefficients.'''
+checked = 2026-11-21
+
+["chrono-10.0.0-powertrain"]
+url = "https://github.com/projectchrono/chrono/blob/9faf13dd8f1128dd75ed233a9627027b0422c3f7/doxygen/documentation/manuals/vehicle/vehicle_powertrain.md#L10"
+section = "Project Chrono 10.0.0 (commit 9faf13d, 2026-04-07), doxygen/documentation/manuals/vehicle/vehicle_powertrain.md (L10, L18, L19, L22, L43, L59)"
+quote = '''Chrono::Vehicle is designed to permit linking to a third-party powertrain model. [...] specified through speed-torque curves [...] specified through curves for the capacity factor as function of the speed ratio and the torque ratio as function of the speed ratio [...] thus permitting simulating motor torque effects on the chassis. [...] The model has no torque converter and can have either a manual or an automatic transmission. [...] This model uses a trivial speed-torque dependency, has no torque converter and no transmission box.'''
+checked = 2026-11-21
+
+["chrono-10.0.0-overview"]
+url = "https://github.com/projectchrono/chrono/blob/9faf13dd8f1128dd75ed233a9627027b0422c3f7/doxygen/documentation/manuals/vehicle/vehicle_overview.md#L11"
+section = "Project Chrono 10.0.0 (commit 9faf13d, 2026-04-07), doxygen/documentation/manuals/vehicle/vehicle_overview.md (L11, L102, L113)"
+quote = '''suspension (double wishbone, reduced double wishbone using distance constraints, multi-link, solid-axle, MacPhearson strut, semi-trailing arm, ...) [...] A Chrono::Vehicle simulation loop takes the form of a force-displacement co-simulation scheme [...] will actually be a monolithic, all-at-once coupled simulation.'''
+checked = 2026-11-21
+
+["chrono-10.0.0-tyre-step"]
+url = "https://github.com/projectchrono/chrono/blob/9faf13dd8f1128dd75ed233a9627027b0422c3f7/src/chrono_vehicle/wheeled_vehicle/ChTire.h#L49"
+section = "Project Chrono 10.0.0 (commit 9faf13d, 2026-04-07), src/chrono_vehicle/wheeled_vehicle/ChTire.h (L49, L57): read, not run"
+quote = '''enum class CollisionType { SINGLE_POINT, FOUR_POINTS, ENVELOPE }; [...] Set the integration step size for the underlying dynamics (default: 1ms).'''
+checked = 2026-11-21
+
+["chrono-10.0.0-demo-step"]
+url = "https://github.com/projectchrono/chrono/blob/9faf13dd8f1128dd75ed233a9627027b0422c3f7/src/demos/vehicle/wheeled_models/demo_VEH_Wheeled.cpp#L103"
+section = "Project Chrono 10.0.0 (commit 9faf13d, 2026-04-07), src/demos/vehicle/wheeled_models/demo_VEH_Wheeled.cpp (L103, L245): a demo's step, not a requirement the library states; read, not run"
+quote = '''double step_size = 2e-3; [...] vehicle.EnableRealtime(true);'''
+checked = 2026-11-21
+
+["chrono-10.0.0-scm-terrain"]
+url = "https://github.com/projectchrono/chrono/blob/9faf13dd8f1128dd75ed233a9627027b0422c3f7/doxygen/documentation/manuals/vehicle/vehicle_terrain.md#L79"
+section = "Project Chrono 10.0.0 (commit 9faf13d, 2026-04-07), doxygen/documentation/manuals/vehicle/vehicle_terrain.md (L79)"
+quote = '''its lightweight formulation allows computing vehicle-terrain contact forces in close to real-time.'''
+checked = 2026-11-21
+
+["chrono-10.0.0-pac02"]
+url = "https://github.com/projectchrono/chrono/blob/9faf13dd8f1128dd75ed233a9627027b0422c3f7/src/chrono_vehicle/wheeled_vehicle/tire/ChPac02Tire.h#L17"
+section = "Project Chrono 10.0.0 (commit 9faf13d, 2026-04-07), src/chrono_vehicle/wheeled_vehicle/tire/ChPac02Tire.h (L17, L21): read, not run"
+quote = '''ChPac02 is based on the Pacejka 2002 formulae as written in [...] This implementation is a small subset of the commercial product MFtire:'''
+checked = 2026-11-21
+
+["physx-5.13.0-sdk-licence"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/physx/LICENSE.md#L1"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac, tag ovphysx-0.8.0, 2026-11-13), physx/LICENSE.md (L1, L5): the SDK's licence file: the Apache-2.0 text"
+quote = '''Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. [...] Version 2.0, January 2004'''
+checked = 2026-11-21
+
+["crest-ff0602f-licence"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/LICENSE#L3"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, LICENSE (L3, L5): the MIT terms"
+quote = '''Copyright (c) 2019 Wave Harmonic and contributors [...] Permission is hereby granted, free of charge, to any person obtaining a copy'''
+checked = 2026-11-21
+
+["crest-ff0602f-editions"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/README.md#L17"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, README.md (L17, L28)"
+quote = '''This repository targets the built-in renderer. For other render pipelines, see the following: [...] Crest Water 5 is now available.'''
+checked = 2026-11-21
+
+["crest-ff0602f-height-queries"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/crest/Assets/Crest/Crest/Scripts/Collision/QueryBase.cs#L17"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, crest/Assets/Crest/Crest/Scripts/Collision/QueryBase.cs (L17, L18): read, not run"
+quote = '''Works by uploading query positions to GPU and computing [...] the data and then transferring back the results asynchronously.'''
+checked = 2026-11-21
+
+["crest-ff0602f-shorelines"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/docs/user/shallows-and-shorelines.rst#L6"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, docs/user/shallows-and-shorelines.rst (L6, L97)"
+quote = '''requires water depth information to attenuate large waves in shallow water, to generate foam near shorelines, and to provide shallow water shading. [...] Modelling realistic shoreline waves efficiently is a challenging open problem.'''
+checked = 2026-11-21
+
+["crest-ff0602f-system-notes"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/docs/user/system-notes.rst#L14"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, docs/user/system-notes.rst (L14, L56)"
+quote = '''This data is stored in a multi-resolution format, namely cascaded textures that are centered at the viewer. [...] the surface is composed of concentric rings of geometry tiles.'''
+checked = 2026-11-21
+
+["acerola-water-1673a12-licence"]
+url = "https://github.com/GarrettGunnell/Water/blob/1673a12e796c5745aea6fa26eda53261da8efa80/LICENSE#L3"
+section = "GarrettGunnell/Water (commit 1673a12, 2023-12-30), LICENSE (L3): the MIT licence's copyright line"
+quote = '''Copyright (c) 2023 Garrett Gunnell'''
+checked = 2026-11-21
+
+["acerola-water-1673a12-readme"]
+url = "https://github.com/GarrettGunnell/Water/blob/1673a12e796c5745aea6fa26eda53261da8efa80/README.md#L25"
+section = "GarrettGunnell/Water (commit 1673a12, 2023-12-30), README.md (L25, L31, L33, L35)"
+quote = '''Dual JONSWAP (4 layered frequency bands) [...] intended to be used as a production ready asset. Please use as a reference for your own shaders. [...] ## What's Missing? [...] * Buoyancy'''
+checked = 2026-11-21
+
+["acerola-grass-6de5844-licence"]
+url = "https://github.com/GarrettGunnell/Grass/blob/6de58448250950025f5d08d52d42edeab09cdb19/LICENSE.md#L3"
+section = "GarrettGunnell/Grass (commit 6de5844, 2022-07-28), LICENSE.md (L3): the MIT licence's copyright line"
+quote = '''Copyright (c) 2022 Garrett Gunnell'''
+checked = 2026-11-21
+
+["acerola-grass-6de5844-readme"]
+url = "https://github.com/GarrettGunnell/Grass/blob/6de58448250950025f5d08d52d42edeab09cdb19/README.md#L7"
+section = "GarrettGunnell/Grass (commit 6de5844, 2022-07-28), README.md (L7, L13)"
+quote = '''please don't attempt to use it yourself as it is tuned to my needs. Instead, reference it as much as you'd like. [...] * Chunked grass position buffers to cover any desired area'''
+checked = 2026-11-21
+
+["web-ocean-a07c7fd-licence"]
+url = "https://github.com/Noniv/web-ocean/blob/a07c7fd522ef0a897601c114f927a49d93d95520/LICENSE#L3"
+section = "web-ocean (Noniv, commit a07c7fd, 2026-10-17), LICENSE (L3): the MIT licence's copyright line"
+quote = '''Copyright (c) 2026 Maksymilian Dendura'''
+checked = 2026-11-21
+
+["web-ocean-a07c7fd-readme"]
+url = "https://github.com/Noniv/web-ocean/blob/a07c7fd522ef0a897601c114f927a49d93d95520/README.md#L3"
+section = "web-ocean (Noniv, commit a07c7fd, 2026-10-17), README.md (L3, L46, L50, L68, L80, L85)"
+quote = '''A real-time ocean renderer written from scratch on WebGPU, with no engine or rendering library. [...] The sea is a Tessendorf FFT simulation with six cascades of 256 by 256 samples. [...] The surface mesh is a CDLOD quadtree with 17 levels. [...] The scene renders in HDR with 4x MSAA. [...] The scene is open ocean only. There is no shoreline, surf, or objects in the water. [...] I built this with Claude Code (Opus 5.5).'''
+checked = 2026-11-21
+
+["webgpu-grass-9a14b51-licence"]
+url = "https://github.com/siliconjungle/inkwell-webgpu-grass/blob/9a14b514e319f4d790c95df64a2f76d84c319e82/LICENSE#L3"
+section = "inkwell-webgpu-grass (siliconjungle, commit 9a14b51, 2026-08-11), LICENSE (L3): the MIT licence's copyright line"
+quote = '''Copyright (c) 2026 James Addison'''
+checked = 2026-11-21
+
+["webgpu-grass-9a14b51-readme"]
+url = "https://github.com/siliconjungle/inkwell-webgpu-grass/blob/9a14b514e319f4d790c95df64a2f76d84c319e82/README.md#L3"
+section = "inkwell-webgpu-grass (siliconjungle, commit 9a14b51, 2026-08-11), README.md (L3, L41)"
+quote = '''A standalone raw WebGPU procedural grass renderer and stress-test lab. [...] reconstructing every blade from an integer candidate ID in WGSL [...] The checked-in report was captured on Apple Metal at 1440×900, DPR 1.'''
+checked = 2026-11-21
+
+["libcbt-2d5439a-licence"]
+url = "https://github.com/jdupuy/libcbt/blob/2d5439a4b2129b3bb4ef8fdddf6a60f169973362/LICENSE.txt#L2"
+section = "libcbt (jdupuy, commit 2d5439a, 2025-07-17), LICENSE.txt (L2, L4, L22)"
+quote = '''This software is available under 2 licenses -- choose whichever you prefer. [...] ALTERNATIVE A - MIT License [...] ALTERNATIVE B - Public Domain (www.unlicense.org)'''
+checked = 2026-11-21
+
+["libcbt-2d5439a-readme"]
+url = "https://github.com/jdupuy/libcbt/blob/2d5439a4b2129b3bb4ef8fdddf6a60f169973362/README.md#L3"
+section = "libcbt (jdupuy, commit 2d5439a, 2025-07-17), README.md (L3)"
+quote = '''This library provides a concurrent binary tree data-structure suitable for accelerating the processing of subdivision algorithms on multicore processors, including GPUs. [...] Concurrent Binary Trees (with application to Longest Edge Bisection)'''
+checked = 2026-11-21
+
+["cdlod-ea8195b-licence"]
+url = "https://github.com/fstrugar/CDLOD/blob/ea8195b335c1d542627a6af048e44326d75cb1ef/LICENSE#L3"
+section = "CDLOD (fstrugar, commit ea8195b, 2018-03-11), LICENSE (L3): the root licence file, MIT; the source headers name the zlib licence"
+quote = '''Copyright (c) 2010 Filip Strugar'''
+checked = 2026-11-21
+
+["cdlod-ea8195b-source-licence"]
+url = "https://github.com/fstrugar/CDLOD/blob/ea8195b335c1d542627a6af048e44326d75cb1ef/source/StreamingCDLOD/CDLODQuadTree.h#L3"
+section = "CDLOD (fstrugar, commit ea8195b, 2018-03-11), source/StreamingCDLOD/CDLODQuadTree.h (L3, L8): read, not run"
+quote = '''Distributed under the zlib License (see readme file) [...] This version has implicit nodes and MinMax maps and uses ~10% of memory'''
+checked = 2026-11-21
+
+["cdlod-ea8195b-readme"]
+url = "https://github.com/fstrugar/CDLOD/blob/ea8195b335c1d542627a6af048e44326d75cb1ef/README.md#L13"
+section = "CDLOD (fstrugar, commit ea8195b, 2018-03-11), README.md (L13, L21)"
+quote = '''it is structured around a quadtree of regular grids [...] Source code (pretty old by now, DirectX 9)'''
+checked = 2026-11-21
+
+["vdrift-f4767dd-licence"]
+url = "https://github.com/VDrift/vdrift/blob/f4767dd0eb98f55a61d64c8c1462e254e0a23fa6/LICENSE#L1"
+section = "VDrift (commit f4767dd, 2026-10-30), LICENSE (L1, L2): GPL-3.0: evidence only"
+quote = '''GNU GENERAL PUBLIC LICENSE [...] Version 3, 29 June 2007'''
+checked = 2026-11-21
+
+["vdrift-f4767dd-tyres"]
+url = "https://github.com/VDrift/vdrift/blob/f4767dd0eb98f55a61d64c8c1462e254e0a23fa6/src/physics/cartire.h#L16"
+section = "VDrift (commit f4767dd, 2026-10-30), src/physics/cartire.h (L16): read, not run"
+quote = '''using CarTire = CarTire1;'''
+checked = 2026-11-21
+
+["vdrift-f4767dd-step"]
+url = "https://github.com/VDrift/vdrift/blob/f4767dd0eb98f55a61d64c8c1462e254e0a23fa6/src/physics/dynamicsworld.h#L30"
+section = "VDrift (commit f4767dd, 2026-10-30), src/physics/dynamicsworld.h (L30, L38, L53): read, not run"
+quote = '''class DynamicsWorld  : public btDiscreteDynamicsWorld [...] btScalar timeStep = 1/60.0, [...] cast ray into collision world, returns first hit, caster is excluded fom hits'''
+checked = 2026-11-21
+
+["proland-e59a245-licence"]
+url = "https://gitlab.inria.fr/neyret/proland/-/blob/e59a245f1f8901023c7cb726b4392b898113ec04/ocean/LICENCE.TXT#L4"
+section = "Proland 4.0 (Inria, gitlab.inria.fr/neyret/proland, commit e59a245, 2022-01-09), ocean/LICENCE.TXT (L4, L6, L16): the ocean plugin's licence file, BSD-3-Clause; core, terrain, forest and river carry the same copyright line; the repository has no root licence file"
+quote = '''Copyright (c) 2008-2015 INRIA - LJK (CNRS - Grenoble University) [...] Redistribution and use in source and binary forms, with or without [...] 3. Neither the name of the copyright holder nor the names of its contributors'''
+checked = 2026-11-21
+
+["proland-e59a245-readme"]
+url = "https://gitlab.inria.fr/neyret/proland/-/blob/e59a245f1f8901023c7cb726b4392b898113ec04/README.TXT#L1"
+section = "Proland 4.0 (Inria, gitlab.inria.fr/neyret/proland, commit e59a245, 2022-01-09), README.TXT (L1, L11)"
+quote = '''Proland is a C++/OpenGL library for the real-time rendering and [...] has its own licence, source tree, examples, documentation and project'''
+checked = 2026-11-21
+
+["proland-e59a245-height-readback"]
+url = "https://gitlab.inria.fr/neyret/proland/-/blob/e59a245f1f8901023c7cb726b4392b898113ec04/core/sources/proland/terrain/TileSamplerZ.h#L62"
+section = "Proland 4.0 (Inria, gitlab.inria.fr/neyret/proland, commit e59a245, 2022-01-09), core/sources/proland/terrain/TileSamplerZ.h (L62): read, not run"
+quote = '''also reads back the elevation value below the current viewer position to'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-readme"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/README.md#L270"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), README.md (L270, L271): the readme's list of games and tools made with the engine"
+quote = '''A relaxing game made with Wicked Engine where you control the wind [...] Easy to use game creator'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-readme"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/readme.md#L8"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, readme.md (L8, L28)"
+quote = '''A personal R&D engine, not a commercial product. No roadmap promises, no support queue, no compromises on the vision. [...] its rendering technology runs in **Godot Engine** and **S.T.A.L.K.E.R. Anomaly**'''
+checked = 2026-11-21
+
+["jolt-5.7.0-licence"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/LICENSE#L1"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), LICENSE (L1, L3): the MIT terms"
+quote = '''Copyright 2021 Jorrit Rouwe [...] Permission is hereby granted, free of charge, to any person obtaining a copy of this software'''
+checked = 2026-11-21
+
+["avian-0.8.0-licence"]
+url = "https://github.com/avianphysics/avian/blob/a693f2b7cec0955770fabfa45a8e0fae355c449f/README.md#L218"
+section = "Avian v0.8.0 (commit a693f2b, 2026-10-20), README.md (L218): the readme's licence section, which joins LICENSE-MIT and LICENSE-APACHE"
+quote = '''Avian is free and open source. All code in this repository is dual-licensed under either:'''
+checked = 2026-11-21
+
+["bullet-3.25-vehicle-notice"]
+url = "https://github.com/bulletphysics/bullet3/blob/2c204c49e56ed15ec5fcfa71d199ab6d6570b3f5/src/BulletDynamics/Vehicle/btRaycastVehicle.cpp#L2"
+section = "Bullet 3.25 (commit 2c204c4, 2022-09-24), src/BulletDynamics/Vehicle/btRaycastVehicle.cpp (L2, L4, L6): the notice at the head of the ray-cast vehicle, which is its author's own and not the zlib text"
+quote = '''Copyright (c) 2005 Erwin Coumans https://bulletphysics.org [...] Permission to use, copy, modify, distribute and sell this software [...] provided that the above copyright notice appear in all copies.'''
+checked = 2026-11-21
+
+["crest-ff0602f-planar-reflection-origin"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/crest/Assets/Crest/Crest/Scripts/Reflection/OceanPlanarReflection.cs#L5"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, crest/Assets/Crest/Crest/Scripts/Reflection/OceanPlanarReflection.cs (L5): the file's own account of where it came from"
+quote = '''This script originated from the unity standard assets.'''
+checked = 2026-11-21
+
+["crest-ff0602f-example-licence"]
+url = "https://github.com/wave-harmonic/crest/blob/ff0602f07a687d47e5c803e10e3383d41c42e709/crest/Assets/Crest/Crest-Examples/Shared/Effects/LightFlares/License.txt#L1"
+section = "Crest (wave-harmonic/crest, commit ff0602f, 2026-11-17), the edition for Unity's built-in pipeline, crest/Assets/Crest/Crest-Examples/Shared/Effects/LightFlares/License.txt (L1): the licence of Unity's Standard Assets, by an example folder's notice"
+quote = '''Files in this folder are part of the Unity Standard Assets and are subject to the Unity Companion License.'''
+checked = 2026-11-21
+
+["flax-1.13-licence"]
+url = "https://github.com/FlaxEngine/FlaxEngine/blob/feb4f4d7b6e7e3d7de84f524f8c9516f48a5a991/LICENSE.md"
+section = "Flax Engine 1.13 (tag 1.13.7014.1, commit feb4f4d, 2026-11-04), LICENSE.md; the one file of that repository that was opened"
+quote = '''Use of the Flax, provided source code and binary files is governed by the terms of the Flax Engine End User License Agreement'''
+checked = 2026-11-21
+
+["flax-licensing-royalty"]
+url = "https://flaxengine.com/licensing"
+section = "Flax Engine, Licensing page, as fetched on the date checked"
+quote = '''Use Flax for free for uncommercial or educational usage [...] Ship your game and pay a 4% royalty on earnings exceeding $250,000 (per calendar quarter)'''
+checked = 2026-11-21
+
+["flax-docs-graphics"]
+url = "https://docs.flaxengine.com/manual/graphics/overview/index.html"
+section = "Flax Engine manual, Graphics: Overview; documentation only"
+quote = '''pipeline to create rich effects including deferred shading, global illumination, full-scene reflections, and post processing.'''
+checked = 2026-11-21
+
+["flax-docs-terrain"]
+url = "https://docs.flaxengine.com/manual/terrain/index.html"
+section = "Flax Engine manual, Terrain; documentation only"
+quote = '''Continous LOD system with streaming which enables to create very large landscapes and render them at high view distances with no performance drop. [...] Terrain patch is a part of terrain that contains a quad of 4x4 chunks. [...] Flax supports also creating holes in terrain for caves and tunnels (including proper collisions handling). [...] Each weight is stored in a separate texture channel (up to 2 splatmaps) and can be sampled in terrain shaders to blend between custom layers.'''
+checked = 2026-11-21
+
+["flax-docs-vehicles"]
+url = "https://docs.flaxengine.com/manual/physics/vehicles.html"
+section = "Flax Engine manual, Physics: Vehicles; documentation only"
+quote = '''Vehicles are using PhysX Vehicles SDK for driving, suspension and car components simulation (gearbox, engine, clutch, suspension, differential).'''
+checked = 2026-11-21
+
+["flax-docs-anti-aliasing"]
+url = "https://docs.flaxengine.com/manual/graphics/post-effects/anti-aliasing.html"
+section = "Flax Engine manual, Graphics: Anti-Aliasing; documentation only"
+quote = '''It applies sub-pixel jitter to a projection matrix and requires motion vectors.'''
+checked = 2026-11-21
+
+["flax-docs-foliage"]
+url = "https://docs.flaxengine.com/manual/foliage/index.html"
+section = "Flax Engine manual, Foliage; documentation only"
+quote = '''It enables you to create realistic looking outdoor scenes full of trees, bushes, rocks, and grass. [...] structure to achieve great performance in scenes that use more than 200k instances.'''
+checked = 2026-11-21
+
+["ue-eula-2026-11-engine-code"]
+url = "https://web.archive.org/web/20261105200143/https://www.unrealengine.com/eula/unreal"
+section = "Epic Games, Unreal Engine End User License Agreement, web archive snapshot of 2026-11-05"
+quote = '''However, you may need to pay Epic royalties on the worldwide gross revenue attributable to each Royalty Product. [...] in Source Code or object code to a third party who is separately licensed by us to use the same version of the Engine Code that you are Distributing. [...] You are permitted to post snippets of Engine Code, up to 30 lines of code in length, online in public forums for the sole purpose of discussing the content of the snippet'''
+checked = 2026-11-21
+
+["ue-5.9-forward-renderer"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/forward-shading-renderer-in-unreal-engine"
+section = "Unreal Engine 5.9 documentation (the page as served on the date checked), Forward Shading Renderer; documentation only"
+quote = '''By default, Unreal Engine uses a Deferred Renderer as it provides the most versatility and grants access to more rendering features. [...] The forward renderer supports both MSAA and Temporal Anti-Aliasing (TAA) [...] Screen Space Techniques (SSR, SSAO, Contact Shadows) [...] Access to the GBuffer is not available for texture sampling in the Forward Renderer and is only available with the Deferred Renderer.'''
+checked = 2026-11-21
+
+["ue-5.9-landscape-overview"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/landscape-overview"
+section = "Unreal Engine 5.9 documentation (the page as served on the date checked), Landscape Overview; documentation only"
+quote = '''Landscapes also store their data as Textures and can stream out unused LOD levels for distant areas and load them from disk in the background as you approach them. [...] Standard Texture mipmaps handle LODs for Landscape terrains. [...] the heights and X and Y offsets can be interpolated in the vertex shader creating a clean morphing effect.'''
+checked = 2026-11-21
+
+["ue-5.9-water-waves"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/simulating-waves-using-the-water-waves-asset-in-unreal-engine"
+section = "Unreal Engine 5.9 documentation (the page as served on the date checked), Simulating Waves Using the Water Waves Asset; documentation only"
+quote = '''Unreal Engine only provides the Gerstner wave simulation model. [...] However, you can implement other models or your own by using Blueprint or C++ code [...] By default 16 waves are used.'''
+checked = 2026-11-21
+
+["ue-5.9-water-mesh"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/water-meshing-system-and-surface-rendering-in-unreal-engine"
+section = "Unreal Engine 5.9 documentation (the page as served on the date checked), Water Meshing System and Surface Rendering; documentation only"
+quote = '''is handled by traversing a quadtree each frame to generate an optimized set of tiles that are visible on screen. [...] four quads morph into a single quad when switching to a lower level of detail'''
+checked = 2026-11-21
+
+["ue-5.9-single-layer-water"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/single-layer-water-shading-model-in-unreal-engine"
+section = "Unreal Engine 5.9 documentation (the page as served on the date checked), Single Layer Water Shading Model; documentation only"
+quote = '''The translucency of the material runs after the base pass and deferred lighting, but before regular translucency rendering, post-processing, and everything else that comes in the rendering pipeline. [...] All objects with SingleLayerWater are rendered into the GBuffer (including depth) using the user-defined material.'''
+checked = 2026-11-21
+
+["ue-5.9-vehicles"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/how-to-set-up-vehicles-in-unreal-engine"
+section = "Unreal Engine 5.9 documentation (the page as served on the date checked), How to Set Up Vehicles; documentation only"
+quote = '''The wheel Blueprint is where the configuration for a Wheel / Suspension / Brakes combination is set up. [...] The torque curve represents the amount of torque output from the engine at a given RPM.'''
+checked = 2026-11-21
+
+["ue-5.9-modular-vehicles"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/chaos-modular-vehicles-overview"
+section = "Unreal Engine 5.9 documentation (the page as served on the date checked), Chaos Modular Vehicles Overview; documentation only"
+quote = '''The system includes engine, chassis, transmission, clutch, suspension, wheel, thruster and aerofoil simulation components.'''
+checked = 2026-11-21
+
+["unity-terms-of-service-source"]
+url = "https://unity.com/legal/terms-of-service"
+section = "Unity, Terms of Service, as fetched on the date checked"
+quote = '''are confidential and constitute or contain trade secrets of Unity and its licensors. [...] Accordingly, you agree not to disassemble, decompile, modify or reverse engineer the Software, in whole or in part, or permit or authorize a third party to do so'''
+checked = 2026-11-21
+
+["unity-6.6-wheel-collider"]
+url = "https://docs.unity.com/en-us/engine/6000.6/manual/physics-section/physics-overview/collision-section/collider-shapes/wheel-colliders/class-wheel-collider"
+section = "Unity 6.6 manual, Wheel collider component reference; documentation only"
+quote = '''It has built-in collision detection, wheel physics, and a slip-based tire friction model.'''
+checked = 2026-11-21
+
+["unity-6.6-wheel-ray"]
+url = "https://docs.unity.com/en-us/engine/6000.6/manual/physics-section/physics-overview/collision-section/collider-shapes/wheel-colliders/introduction"
+section = "Unity 6.6 manual, Introduction to Wheel colliders; documentation only"
+quote = '''PhysX casts the ray down the local Y-axis along the direction of suspension through the center of the wheel. [...] This raycast configuration means that a Wheel collider does not actually roll across other surfaces (such as the ground) while moving.'''
+checked = 2026-11-21
+
+["unity-6.6-wind-zone"]
+url = "https://docs.unity.com/en-us/engine/6000.6/manual/creating-environments/script-terrain/terrain-trees/wind-zones/class-wind-zone"
+section = "Unity 6.6 manual, Wind Zone component reference; documentation only"
+quote = '''Trees within a wind zone bend in a realistic animated fashion, and the wind itself moves in pulses to create natural patterns of movement among the trees. [...] The main use of wind is to animate trees, but it can also affect particles in a particle system that uses the'''
+checked = 2026-11-21
+
+["unity-hdrp-17-water-limits"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/water-capabilities-of-the-water-system.html"
+section = "Unity HDRP 17.0 manual, Capabilities of the water system; documentation only"
+quote = '''water implementation does not use motion vectors. [...] Multisample anti-aliasing is entirely incompatible with water, however. [...] HDRP treats Water surfaces as refractive transparent objects.'''
+checked = 2026-11-21
+
+["unity-hdrp-17-water-cpu"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/water-quality-and-performance-decisions.html"
+section = "Unity HDRP 17.0 manual, Water: quality and performance decisions, Script interactions; documentation only"
+quote = '''Don't select CPU Simulation in Simulation Mode setting in the HDRP Asset unless you absolutely need accurate results. [...] it increases the number of calculations Unity performs because the GPU simulation has to be duplicated on the CPU.'''
+checked = 2026-11-21
+
+["unity-hdrp-17-water-bands"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/water-water-system-simulation.html"
+section = "Unity HDRP 17.0 manual, Water system simulation; documentation only"
+quote = '''Ocean, Sea, or Lake water surfaces have three simulation bands, two for'''
+checked = 2026-11-21
