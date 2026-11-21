@@ -11109,3 +11109,209 @@ url = "https://github.com/Noniv/snowflow_demo/blob/545039733b74eec742862f1619901
 section = "Noniv/snowflow_demo (commit 5450397, 2026-07-28), LICENSE (L1, L3)"
 quote = '''MIT License [...] Copyright (c) 2026 Maksymilian Dendura'''
 checked = 2026-11-21
+
+["spartan-engine-cb258a1-tyre-substeps"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/car/CarSimulation.cpp#L4331"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, source/car/CarSimulation.cpp (L4331 to L4333, L4408): the tyre and the wheel's spin substep inside one physics step; source/car/CarPresets.h (L160) sets tire_substeps to 4; read, not run"
+quote = '''// slip relaxation and a wheel locking are both far faster than one physics step, so the tire [...] // and the spin run against a frozen chassis and physx is handed the time average [...] const int substep_count = PxClamp(spec.tire_substeps, 1, 8); [...] // static friction model (dominant at rest / very low speed)'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-origin-rebase"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/physics/PhysicsSceneOrigin.h#L30"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, source/physics/PhysicsSceneOrigin.h (L30, L42 to L47): the PhysX scene's origin moves once its focus is 16 m from it; read, not run"
+quote = '''// Keep the active area local, shifting when it crosses a 16 m boundary. [...] // Center the focus itself. Grid snapping left up to 32 m of residual [...] // coordinates even immediately after a rebase, enough to perturb [...] // the small TGS suspension/steering increments at high tick rates. [...] scene.shiftOrigin(shift);'''
+checked = 2026-11-21
+
+["spartan-engine-cb258a1-cheap-mode"]
+url = "https://github.com/PanosK92/SpartanEngine/blob/cb258a1505b344d2b1f620a2f5286131cb6c70f5/source/world/components/Physics.h#L83"
+section = "Spartan Engine at commit cb258a1 (2026-09-24), the last under the MIT licence, source/world/components/Physics.h (L83 to L88): the two modes a vehicle is stepped in; source/world/components/Physics.cpp (L864 onwards) holds the cheap one, a body kept at ride height with gravity off; read, not run"
+quote = '''// full = multibody tires, cheap = arcade chassis plus visual wheels [...] enum class VehicleSimMode'''
+checked = 2026-11-21
+
+["jolt-5.7.0-spring-frequency"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Docs/Architecture.md#L547"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Docs/Architecture.md (L547): the spring frequency a step rate can hold"
+quote = '''Valid frequencies are in the range (0, 0.5 * simulation frequency]. A frequency of 0 results in no force being applied, a frequency larger than half of the physics simulation frequency will result in instability.'''
+checked = 2026-11-21
+
+["jolt-5.7.0-wheel-settings"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Vehicle/Wheel.h#L38"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Vehicle/Wheel.h (L31, L38, L39): a wheel's suspension is one direction and one spring, at 1.5 Hz by default, and its default radius 0.3 m; read, not run"
+quote = '''Direction of the suspension in local space of the body, should point down [...] SpringSettings			mSuspensionSpring { ESpringMode::FrequencyAndDamping, 1.5f, 0.5f }; ///< Settings for the suspension spring [...] float					mRadius = 0.3f;								///< Radius of the wheel (m)'''
+checked = 2026-11-21
+
+["jolt-5.7.0-vehicle-constraint"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Vehicle/VehicleConstraint.h#L44"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Vehicle/VehicleConstraint.h (L44, L52 to L53): the vehicle steps as a listener of the physics step; read, not run"
+quote = '''Note: Don't forget to register the constraint as a StepListener with the PhysicsSystem! [...] the vehicle you can use VehicleConstraintSettings::mNumVelocityStepsOverride)'''
+checked = 2026-11-21
+
+["jolt-5.7.0-virtual-wheels"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Docs/Architecture.md#L485"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Docs/Architecture.md (L485): the list of constraints"
+quote = '''This constraint adds virtual wheels or tracks to a body and allows it to behave as a vehicle.'''
+checked = 2026-11-21
+
+["jolt-5.7.0-tyre-max-impulse"]
+url = "https://github.com/jrouwe/JoltPhysics/blob/cf16769bb0ede9c45d57d06068ff0689e9702f5c/Jolt/Physics/Vehicle/WheeledVehicleController.h#L148"
+section = "Jolt Physics v5.7.0 (commit cf16769, 2026-11-14), Jolt/Physics/Vehicle/WheeledVehicleController.h (L148, L149): what the tyre callback replaces is the largest impulse a tyre may apply, which Jolt/Physics/Vehicle/WheeledVehicleController.cpp (L674, L733) hands its constraint solver as a limit; read, not run"
+quote = '''Calculate max tire impulses by combining friction, slip, and suspension impulse. Note that the actual applied impulse may be lower (e.g. when the vehicle is stationary on a horizontal surface the actual impulse applied will be 0).'''
+checked = 2026-11-21
+
+["physx-5.13.0-substep-group"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/physx/snippets/snippetvehiclecommon/enginedrivetrain/EngineDrivetrain.cpp#L98"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac, tag ovphysx-0.8.0, 2026-11-13), physx/snippets/snippetvehiclecommon/enginedrivetrain/EngineDrivetrain.cpp (L98 to L101): the substep group holds the suspension, tyre, constraint, drivetrain and rigid body components; a sample, read, not run"
+quote = '''//In this example, we allow the update of the suspensions, tires and wheels multiple times without recalculating [...] //the plane underneath the wheel.  This is useful for stability at low forward speeds and is much cheaper [...] //than setting a smaller timestep for the whole vehicle.'''
+checked = 2026-11-21
+
+["physx-5.13.0-real-is-f32"]
+url = "https://github.com/NVIDIA-Omniverse/PhysX/blob/7d6f6ac8b83e1610bdf715f1f2f1d6b718aee586/physx/include/foundation/PxSimpleTypes.h#L46"
+section = "PhysX SDK 5.13.0 (NVIDIA-Omniverse/PhysX, commit 7d6f6ac, tag ovphysx-0.8.0, 2026-11-13), physx/include/foundation/PxSimpleTypes.h (L46)"
+quote = '''typedef float PxReal;'''
+checked = 2026-11-21
+
+["physx-5.8.0-guide-spring-updates"]
+url = "https://nvidia-omniverse.github.io/PhysX/physx/5.8.0/docs/Vehicles.html"
+section = "PhysX SDK 5.8.0 documentation, the newest vehicle guide its site lists on the date checked, Vehicles, Tuning Guide, PxVehicleSuspensionForceParams: the vendor's guidance, not a measurement"
+quote = '''A smooth and stable simulation requires that the spring is updated at a frequency much greater than the spring’s natural frequency. [...] This ratio is simply the spring period divided by the timestep: [...] where sqrt(sprungMass/stiffness) is the period of the spring. [...] it is recommended that the timestep and spring properties are chosen so that they produce an alpha value greater than 5.0; that is, a minimum of five simulation updates per spring cycle. [...] The springs of a typical family car have natural frequency somewhere between 5 and 10 [...] stiffness = naturalFrequency * naturalFrequency * sprungMass'''
+checked = 2026-11-21
+
+["physx-5.8.0-guide-sticky-tyre"]
+url = "https://nvidia-omniverse.github.io/PhysX/physx/5.8.0/docs/Vehicles.html"
+section = "PhysX SDK 5.8.0 documentation, the newest vehicle guide its site lists on the date checked, Vehicles, PxVehiclePhysXConstraintComponent"
+quote = '''An observation here is that the tire model has a tendency towards instability and oscillation at low speed. This makes it difficult to bring the vehicle smoothly to rest, particularly with larger simulation timesteps. A solution to this is to replace the tire forces with custom PhysX joints that act as velocity constraints'''
+checked = 2026-11-21
+
+["physx-5.8.0-guide-components"]
+url = "https://nvidia-omniverse.github.io/PhysX/physx/5.8.0/docs/Vehicles.html"
+section = "PhysX SDK 5.8.0 documentation, the newest vehicle guide its site lists on the date checked, Vehicles: Introduction, Component Sequences and SnippetVehicleMultiThreading"
+quote = '''Another combination example could be the replacement of the tire component from a low fidelity model to a high fidelty model such as Pacejka. The low and high fidelity components consume the same state data (tire slip, load, friction) and output the same state data for the tire forces. [...] This allows small timesteps to be directed at the numerically stiffest parts of the simulation without the computational cost of simulating the entire pipeline at a small timestep. [...] The remaining component sequences are thread-safe and may be executed in parallel across multiple threads.'''
+checked = 2026-11-21
+
+["chrono-10.0.0-tyre-limits"]
+url = "https://github.com/projectchrono/chrono/blob/9faf13dd8f1128dd75ed233a9627027b0422c3f7/doxygen/documentation/manuals/vehicle/wheeled_tire.md#L11"
+section = "Project Chrono 10.0.0 (commit 9faf13d, 2026-04-07), doxygen/documentation/manuals/vehicle/wheeled_tire.md (L11, L30, L48)"
+quote = '''the semi-empirical tire models are not suitable for off-road vehicle simulation, i.e. when using a deformable terrain [...] Since a large number of vehicle dynamics maneuvers do not occur under steady-state slip conditions, the contact patch slip state equations are included to provide more accurate results under transient conditions. [...] which uses tire slip state equations to improve the model's behavior at slow to zero forward velocities.'''
+checked = 2026-11-21
+
+["chrono-10.0.0-aerodynamic-drag"]
+url = "https://github.com/projectchrono/chrono/blob/9faf13dd8f1128dd75ed233a9627027b0422c3f7/src/chrono_vehicle/ChChassis.h#L144"
+section = "Project Chrono 10.0.0 (commit 9faf13d, 2026-04-07), src/chrono_vehicle/ChChassis.h (L144 to L146): read, not run"
+quote = '''/// Set parameters and enable aerodynamic drag force calculation. [...] /// By default, aerodynamic drag force calculation is disabled.'''
+checked = 2026-11-21
+
+["zhou-2023-chrono-hil-real-time-factor"]
+url = "https://multibody2023.tecnico.ulisboa.pt/prog_MULTIBODY_WEB/MULTIBODY2023_PAPERS/ID_54_569_eccomas2023_full_ZZ.pdf"
+section = "Zhou, Unjhawala, Kamaraj, Kissel, Lee, Serban, Negrut, A Chrono-Based Framework for Large-Scale Traffic Simulation with Human In The Loop, ECCOMAS Thematic Conference on Multibody Dynamics, Lisbon, 2023, §2.1, pp. 2-3; the paper names no processor and no step size"
+quote = '''The initial benchmark shows that the simulation of one Chrono::Vehicle model on one CPU thread results in an real-time factor (RTF) of around 0.6 (RTF represents the amount of compute time required to simulate 1 second of motion of the system). [...] it remains difficult to achieve real-time performance when the amount of traffic vehicles exceeds 30 [...] The ROM provides lower-fidelity but faster simulation speed for vehicles not in focus, “background” vehicles.'''
+checked = 2026-11-21
+cost = '''one Chrono::Vehicle model on one CPU thread results in an real-time factor (RTF) of around 0.6; the processor is not named'''
+
+["bakker-1987-magic-formula"]
+url = "https://doi.org/10.4271/870421"
+section = "Bakker, Nyborg, Pacejka, Tyre Modelling for Use in Vehicle Dynamics Studies, SAE Technical Paper 870421, 1987: the abstract, as its publisher's page gives it; the paper itself was not opened"
+quote = '''The method makes use of a formula with coefficients which describe some of the typifying quantities of a tyre, such as slip stiffnesses at zero slip and force and torque peak values. [...] This mathematical representation is limited to steady-state conditions during either pure cornering or pure braking and forms the basis for a model describing tyre behaviour during combined braking and cornering.'''
+checked = 2026-11-21
+
+["bernard-clover-1995-low-speed-tyre"]
+url = "https://doi.org/10.4271/950311"
+section = "Bernard, Clover, Tire Modeling for Low-Speed and High-Speed Calculations, SAE Technical Paper 950311, 1995: the abstract, as its publisher's page gives it; the paper itself was not opened"
+quote = '''Since the longitudinal speed is in the denominator of both sideslip angle and longitudinal slip, the calculation of sideslip angle and longitudinal slip at very low longitudinal velocities leads to numerical problems. [...] This paper presents a new formulation which differs from previous work in that both longitudinal slip and slip angle become state variables rather than kinematic functions of wheel spin rate and wheel velocity.'''
+checked = 2026-11-21
+
+["dugoff-1970-tyre-traction"]
+url = "https://doi.org/10.4271/700377"
+section = "Dugoff, Fancher, Segel, An Analysis of Tire Traction Properties and Their Influence on Vehicle Dynamic Performance, SAE Technical Paper 700377, 1970: the abstract, as its publisher's page gives it; the paper itself was not opened"
+quote = '''relationships expressing the longitudinal and lateral tire shear force components as analytical functions of tire normal load, sideslip and inclination angles, and longitudinal slip.'''
+checked = 2026-11-21
+
+["monster-car-physics-traction"]
+url = "https://www.asawicki.info/Mirror/Car%20Physics%20for%20Games/Car%20Physics%20for%20Games.html"
+section = "Marco Monster, Car Physics for Games, sections Slip ratio and traction force and Weight Transfer, read from the mirror Jolt's headers link to; its author's own page was not found"
+quote = '''For a simple simulation the longtitudinal force can be approximated by a linear function: [...] Cap the force to a maximum value so that the force doesn't increase after the slip ratio passes the peak value. [...] the weight distribution dramatically affects the maximum traction force per wheel.'''
+checked = 2026-11-21
+
+["forza-motorsport-2023-tyre"]
+url = "https://forza.net/news/forza-motorsport-drivatars-tire-physics"
+section = "Turn 10 Studios, Forza Motorsport: its developers' own account of the tyre model, not measured"
+quote = '''Previous Forza Motorsport games had only a single point of tire contact on the surface that moved at 60 cycles per second. [...] Our new tire physics has 8 points of contact with the track surface running at 360 cycles per second.'''
+checked = 2026-11-21
+
+["beamng-physics-step"]
+url = "https://documentation.beamng.com/beamng_tech/tools/cosimulationeditor/tight_coupling/"
+section = "BeamNG documentation, BeamNG.tech, Tight Coupling, Physics and Graphics: its developers' own account"
+quote = '''Physics computations also run on its own thread. [...] Physics Steps compute exactly 0.5ms of simulation time (by default), often written as 2000Hz (the simulation frequency).'''
+checked = 2026-11-21
+
+["beamng-soft-body"]
+url = "https://beamng.com/game/about/physics"
+section = "BeamNG, Soft-body Physics, Node-Beam Structure: its developers' own account"
+quote = '''Nodes can be thought of as particles, each node has mass and can move freely in space. [...] They behave as springs'''
+checked = 2026-11-21
+
+["young-2019-just-cause-4-tyres"]
+url = "https://gdcvault.com/play/1026035/Vehicle-Physics-and-Tire-Dynamics"
+section = "Hamish Young (Avalanche Studios), Vehicle Physics and Tire Dynamics in 'Just Cause 4', GDC 2019: the session's abstract on GDC Vault; the talk itself was not watched"
+quote = '''The talk will take attendees through the magic formula tire model, why it may not be optimal for arcade and 'simcade' handling, and proposes a more designer friendly approach which is not semi-empirical, has considerably fewer parameters and produces more player friendly results.'''
+checked = 2026-11-21
+
+["kerner-2019-just-cause-4-physics-budget"]
+url = "https://www.gamedeveloper.com/programming/aerodynamics-of-just-cause-4"
+section = "Jacques Kerner (Avalanche Studios), Aerodynamics of Just Cause 4, Game Developer, 2019-02-22, section Damage control: a developer's own account of the game's physics budget, for every body and not per vehicle"
+quote = '''All of this on exactly the same target platforms (XBox One and PlayStation 4). [...] Our budget for physics was a generous 8.5 ms on 4 threads out of 33 ms of CPU time available to simulate a frame, to reach 30 frames per second.'''
+checked = 2026-11-21
+cost = '''8.5 ms on 4 threads out of 33 ms of CPU time available to simulate a frame, to reach 30 frames per second, on Xbox One and PlayStation 4: the budget of all physics'''
+
+["cyberpunk-2077-1.5-vehicles"]
+url = "https://www.cyberpunk.net/en/news/41435/patch-1-5-next-generation-update-list-of-changes"
+section = "CD PROJEKT RED, Cyberpunk 2077 Patch 1.5 list of changes, 2022, Vehicles (Driving model and Vehicle Traffic): the developers' own account of what the patch added"
+quote = '''ABS simulation added. [...] Engine simulation improved. Clutch simulation added. [...] Gearbox simulation improved. [...] Visual improvement to traffic movement: turning and suspension.'''
+checked = 2026-11-21
+
+["pereira-2017-uncharted-4-4x4"]
+url = "https://www.gdcvault.com/play/1024004/The-Science-of-Off-Roading"
+section = "Edward Pereira (Naughty Dog), The Science of Off-Roading: 'Uncharted 4's' 4x4, GDC 2017: the session's abstract on GDC Vault; the talk itself was not watched"
+quote = '''This session will break down individual physical elements of Uncharted 4's 4x4, such as tire collision response and the motor simulation, and explain how Naughty Dog's team tuned it to handle the rugged terrain of Madagascar.'''
+checked = 2026-11-21
+
+["unity-6.6-vehicle-substeps"]
+url = "https://docs.unity3d.com/6000.6/Documentation/ScriptReference/WheelCollider.ConfigureVehicleSubsteps.html"
+section = "Unity 6.6 scripting reference, WheelCollider.ConfigureVehicleSubsteps; documentation only; the page gives no default counts"
+quote = '''Every time a fixed update happens, the vehicle simulation splits this fixed delta time into smaller sub-steps and calculates suspension and tire forces per each smaller delta.'''
+checked = 2026-11-21
+
+["jolt-rust-937c09c-readme"]
+url = "https://github.com/SecondHalfGames/jolt-rust/blob/937c09c0686f95c87d81e5faf601e89f7f5d8e80/README.md#L2"
+section = "SecondHalfGames/jolt-rust (commit 937c09c, 2026-11-09), README.md (L2, L4, L16 to L18): the Rust binding Jolt's readme names"
+quote = '''Rust bindings for [Jolt Physics](https://github.com/jrouwe/JoltPhysics) 5.6.0 using [JoltC]. [...] This project is an early work in progress. Watch for exposed nails. [...] - `double-precision`: Enable higher precision simulation using doubles instead of floats.'''
+checked = 2026-11-21
+
+["joltc-429235d-vehicle"]
+url = "https://github.com/SecondHalfGames/JoltC/blob/429235de52d20e547cb41cfa5f602986f16c85cb/JoltC/Enums.h#L137"
+section = "SecondHalfGames/JoltC (commit 429235d, 2026-11-09), JoltC/Enums.h (L137): the one place the C interface under jolt-rust names a vehicle; JoltC/Functions.h at that commit holds no line with the word vehicle or wheel"
+quote = '''JPC_CONSTRAINT_SUB_TYPE_VEHICLE,'''
+checked = 2026-11-21
+
+["physx-rs-d0d571e-readme"]
+url = "https://github.com/EmbarkStudios/physx-rs/blob/d0d571ee61ea44750bf58df96464f49b466da46e/physx-sys/README.md#L5"
+section = "EmbarkStudios/physx-rs (commit d0d571e, 2024-02-12, its last; the repository is archived), physx-sys/README.md (L5); physx-sys/src/physx_generated.rs at that commit names five structs of the older vehicle API and no PxVehicleComponentSequence"
+quote = '''**Unsafe automatically-generated Rust bindings for [NVIDIA PhysX 5.1](https://github.com/NVIDIA-Omniverse/PhysX) C++ API.**'''
+checked = 2026-11-21
+
+["vdrift-f4767dd-car-substeps"]
+url = "https://github.com/VDrift/vdrift/blob/f4767dd0eb98f55a61d64c8c1462e254e0a23fa6/src/physics/cardynamics.cpp#L40"
+section = "VDrift (commit f4767dd, 2026-10-30), src/physics/cardynamics.cpp (L40): the car's own substeps inside one step of the world; GPL, evidence only; read, not run"
+quote = '''static const int substeps = 10;'''
+checked = 2026-11-21
+
+["vdrift-f4767dd-game-step"]
+url = "https://github.com/VDrift/vdrift/blob/f4767dd0eb98f55a61d64c8c1462e254e0a23fa6/src/game.cpp#L96"
+section = "VDrift (commit f4767dd, 2026-10-30), src/game.cpp (L96): the step the game gives its world; GPL, evidence only; read, not run"
+quote = '''timestep(1/90.0),'''
+checked = 2026-11-21
+
+["rapier-475caa3-f64"]
+url = "https://github.com/dimforge/rapier/blob/475caa3ff4646fd9a796b67d14116256f4962bc7/crates/rapier3d-f64/Cargo.toml#L2"
+section = "Rapier (commit 475caa3, 2026-10-10), crates/rapier3d-f64/Cargo.toml (L2, L27)"
+quote = '''name = "rapier3d-f64" [...] default = ["dim3", "f64", "std", "block-solver"]'''
+checked = 2026-11-21
