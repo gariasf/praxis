@@ -10147,3 +10147,493 @@ url = "https://media.gdcvault.com/gdc2026/Slides/Petr_Smrcek_SupportingThousands
 section = "Petr Smrček (Warhorse Studios), Supporting Thousands of NPCs in 'Kingdom Come: Deliverance' & 'Kingdom Come: Deliverance II', GDC 2026, slides Naive AI LOD (15), Movement vs LOD (17), Results for KCD (30)"
 quote = '''Naive AI LOD • Optimization of far NPCs Remove render, animation and physics • Breaks the script LOD branching in script [...] Movement vs LOD • No physics and animation • Teleport Consecutive small teleports • Transparent to script [...] Results for KCD • ~600 NPCs • 30 FPS • 60-90m NPC visibility • Some NPCs unloaded • Bloated scripting logic • Long faders'''
 checked = 2026-11-21
+
+["lagarde-2012-rain-depth-map-from-above"]
+url = "https://seblagarde.wordpress.com/2012/12/27/water-drop-2a-dynamic-rain-and-its-effects/"
+section = "Sébastien Lagarde (Dontnod Entertainment, on Remember Me), Water drop 2a – Dynamic rain and its effects, blog post of 27 December 2012, section Rain splashes / Falling drops splashes"
+quote = '''Instead of trying to collide some rays with the world, we can simply render a depth map view from the top in the rain direction. [...] we added an extra meshes tagging method for our artists to specify if a mesh needs to be rendered in the depth map. [...] With a 256×256 depth map and a 20m x 20m orthogonal frustum we get world cells of 7.8cm² at the height taken from the depth map.'''
+checked = 2026-11-21
+cost = '''On PS3 a 256×256 depth map rendering mainly dominated by character take around 0.32ms the rain splashes under heavy rain take around 0.33ms. [...] On XBox360 depth map take around 0.20ms the rain splashes under heavy rain take around 0.25ms.'''
+
+["lagarde-2012-raindrops-textured-layers"]
+url = "https://seblagarde.wordpress.com/2012/12/27/water-drop-2a-dynamic-rain-and-its-effects/"
+section = "Sébastien Lagarde (Dontnod Entertainment, on Remember Me), Water drop 2a – Dynamic rain and its effects, blog post of 27 December 2012, section Rain / Raindrops; the console resolution is not stated"
+quote = '''There are two methods to implement raindrop in game. Either with a particle system or with large textures. [...] The main downside of particles system is the lack of scalability. Stronger precipitation requires increasing the number of particles lowering the framerate. [...] We define four layers of rain each representing an area in front of the camera. [...] When we are under cover, we expect to not have raindrops. This could be easily achieved by reusing the depth map generated for the rain splashes. [...] We chose to perform the raindrops occlusion tests only on the first two layers and at a lower resolution.'''
+checked = 2026-11-21
+cost = '''On PS3 the low resolution pass take around 0.40ms and the full resolution (the additional cost of the rain effect in the post process pass) : 1.29ms for a total of 1.69ms. [...] On XBox360 the low resolution pass take around 0.34ms and the full resolution : 1.38ms for a total of 1.72ms. [...] Timings are the same whatever the strength of the rain.'''
+
+["lagarde-2012-camera-cover-ray-or-depth-map"]
+url = "https://seblagarde.wordpress.com/2012/12/27/water-drop-2a-dynamic-rain-and-its-effects/"
+section = "Sébastien Lagarde (Dontnod Entertainment, on Remember Me), Water drop 2a – Dynamic rain and its effects, blog post of 27 December 2012, section Droplets / Splashes on camera"
+quote = '''if it is undercover we don’t generate droplets. This can be test by throwing a ray in the opposite rain direction and testing collision with the world or more simply by reusing the depth map of the rain splashes.'''
+checked = 2026-11-21
+
+["lagarde-2013-wet-only-where-exposed"]
+url = "https://seblagarde.wordpress.com/2013/01/03/water-drop-2b-dynamic-rain-and-its-effects/"
+section = "Sébastien Lagarde (Dontnod Entertainment, on Remember Me), Water drop 2b – Dynamic rain and its effects, blog post of 3 January 2013, section Water influence on material, water accumulation and puddles"
+quote = '''A depth map generated from the rain direction, like the one use for the rain splashes, is a good candidate for this problem. [...] The main problem of the shadow map is the limited distance/resolution it covers. [...] Another way we prefer for performance reasons is to take some artists’ time to paint dry surface in vertex color’s blue channel of a mesh instance. [...] Dynamic object could be handled with the CPU by reusing the depth map of rain splashes (or by doing line check with the world in the opposite direction of the rain but this can be costly). [...] each dynamic object has its own wet level value which increment when under water and decrement when under cover.'''
+checked = 2026-11-21
+
+["lagarde-2013-flood-levels-and-ripple-map"]
+url = "https://seblagarde.wordpress.com/2013/01/03/water-drop-2b-dynamic-rain-and-its-effects/"
+section = "Sébastien Lagarde (Dontnod Entertainment, on Remember Me), Water drop 2b – Dynamic rain and its effects, blog post of 3 January 2013, sections Water influence on material, Ripple in puddles and thin water layer, and Conclusions (the performance table); the console resolution is not stated"
+quote = '''For this we provide two flood levels variable in the shader which represent the flooding level of hole/gap/cracks and the flooding level of puddles. [...] These flood levels are control on the CPU by the amount of rain precipitation. [...] The flooding levels do not decrease when the rain stop. They decrease with time. [...] A single ripple normal map is use for the entire world for performance reasons. [...] A budget of 3ms (on a base of a 30 fps game) for all the rain core effects is reasonable.'''
+checked = 2026-11-21
+cost = '''Platform: PS3: XBOX360 [...] Texture ripples generation (256×256): 0.14: 0.15'''
+
+["lagarde-2013-rain-control-panel"]
+url = "https://seblagarde.wordpress.com/2013/01/03/water-drop-2b-dynamic-rain-and-its-effects/"
+section = "Sébastien Lagarde (Dontnod Entertainment, on Remember Me), Water drop 2b – Dynamic rain and its effects, blog post of 3 January 2013, section Rain effects control panel (bis), the table's header and its Heavy row"
+quote = '''Rain type: Rain Intensity: Number splashes: Flood puddle speed (Inc/Dec): Flood heightmap speed (Inc/Dec): Wet level speed (Inc/Dec): Fog amount [...] Heavy: 1.0: 60: 0.7 / 0.05: 0.85 / 0.1: 1.0 / 0.2: 1.0'''
+checked = 2026-11-21
+
+["lagarde-2013-wet-surfaces-by-brdf-inputs"]
+url = "https://seblagarde.wordpress.com/2013/04/14/water-drop-3b-physically-based-wet-surfaces/"
+section = "Sébastien Lagarde (Dontnod Entertainment, on Remember Me), Water drop 3b – Physically based wet surfaces, blog post of 14 April 2013 (revised to V1.3), sections on the game approach and Conclusion"
+quote = '''Almost all games I know chose to follow this BRDF parameters’ tweaking path [...] it fit very well with a deferred shading renderer: You can tweak dry BRDF parameters in the G-buffer without complicating the lighting systems. [...] This layer could not be simulated by tweaking BRDF parameters and require a dual layer BRDF. But as we see, a dual layer lighting model is expensive. [...] So for rough/porous material handling double layering is not really needed. [...] we are not forced to construct a complex lighting model to get good wet surface feelings, simply tweaking BRDF parameters from dry material do the job.'''
+checked = 2026-11-21
+
+["lagarde-2013-porosity-input"]
+url = "https://seblagarde.wordpress.com/2013/04/14/water-drop-3b-physically-based-wet-surfaces/"
+section = "Sébastien Lagarde (Dontnod Entertainment, on Remember Me), Water drop 3b – Physically based wet surfaces, blog post of 14 April 2013 (revised to V1.3), sections 1. With a porosity scalar, 2. With a porosity mask, Metallic and smooth material, and Conclusion"
+quote = '''The porosity is a grey texture which can be include in a free channel of any texture at low resolution. [...] Adding a new porosity texture may not always be possible and this require to author an additional texture. In this case I suggest a coarse approximation based on the correlation between roughness and porosity. [...] float factor = lerp(1, 0.2, (1 - Metalness) * Porosity); [...] There still other subjects which have not be taken into account here. The translucency of material when wet (cloth, paper…) and more complex lighting for dual layering like rough coating.'''
+checked = 2026-11-21
+
+["wronski-2014-ac4-gpu-rain"]
+url = "https://bartwronski.com/wp-content/uploads/2014/03/ac4_gdc.pdf#page=86"
+section = "Bartlomiej Wronski (Ubisoft Montreal), Assassin's Creed 4: Black Flag – Road to Next-Gen Graphics, GDC 2014, slides Procedural Rain, Rain simulation and Summary, PDF pages 85, 86 and 89; the Summary slide names no hardware or resolution for its timings"
+quote = '''Fully GPU-driven – compute and geometry shaders [...] Simulate 3x3 grid of rain clusters around the camera [...] Rain-map for simple sky occlusion [...] Top-down 128x128 “shadowmap” [...] Screen-space collisions using depth buffer [...] Geometry Shaders were the performance bottleneck'''
+checked = 2026-11-21
+cost = '''CS: Update rain drops (up to 320k particles) <0.1ms [...] CS: Screenspace collision 0.2ms [...] CS: Update bounced drops <0.05ms [...] GS/VS/PS: Draw rain drops 0.4-4.0ms'''
+
+["tatarchuk-2006-toyshop-rain"]
+url = "https://advances.realtimerendering.com/s2006/Chapter3-Artist-Directable_Real-Time_Rain_Rendering_in_City_Environments.pdf"
+section = "Natalya Tatarchuk (ATI Research), Artist-Directable Real-Time Rain Rendering in City Environments, chapter 3 of the SIGGRAPH 2006 course Advanced Real-Time Rendering in 3D Graphics and Games, sections 3.1, 3.2 and 3.6.1 (the ToyShop demo)"
+quote = '''Some games which incorporate rain rendering in their worlds use a very straight-forward approach: rendering stretched, alpha-blended particles to simulate falling raindrops. [...] We present a number of novel techniques for rendering both particle-based rain and rain based on a post-processing image-space technique [...] specifically targeted to push the limitations of ATI Radeon X1800 XT graphics card. [...] We render a composite layer of falling rain as a full-screen pass before'''
+checked = 2026-11-21
+
+["tatarchuk-2006-lightning-lightmaps"]
+url = "https://advances.realtimerendering.com/s2006/Chapter3-Artist-Directable_Real-Time_Rain_Rendering_in_City_Environments.pdf"
+section = "Natalya Tatarchuk (ATI Research), Artist-Directable Real-Time Rain Rendering in City Environments, chapter 3 of the SIGGRAPH 2006 course Advanced Real-Time Rendering in 3D Graphics and Games, section 3.3.4 Lightning System and Integration"
+quote = '''Illumination from the lightning flashes needs to affect every object in the scene. [...] Computing lightning shadows for each additional lightning ‘light’ can significantly impact performance and memory footprint (with additional shadow maps). [...] Lightning is a strong directional light that affects every object in the scene. [...] Our solution lies in special lightning lightmaps for the illumination due to lightning flashes.'''
+checked = 2026-11-21
+
+["garg-nayar-2006-rain-streak-model"]
+url = "https://www1.cs.columbia.edu/CAVE/publications/pdfs/Garg_TOG06.pdf"
+section = "Kshitiz Garg and Shree K. Nayar (Columbia University), Photorealistic Rendering of Rain Streaks, ACM Transactions on Graphics 25(3), SIGGRAPH 2006, abstract"
+quote = '''we propose a new model for rain streak appearance that captures the complex interactions between the lighting direction, the viewing direction and the oscillating shape of the drop.'''
+checked = 2026-11-21
+
+["tariq-2007-rain-gpu-particles"]
+url = "https://developer.download.nvidia.com/SDK/10/direct3d/Source/rain/doc/RainSDKWhitePaper.pdf"
+section = "Sarah Tariq (NVIDIA), Rain, NVIDIA Direct3D 10 SDK white paper, 2007, Abstract and Performance (Table 2); a vendor's figures for its own sample"
+quote = '''Rain particles are animated over time using Stream Out, and at each frame they are expanded into billboards to be rendered using the Geometry Shader. Finally, the rendering of the rain particles uses a library of textures stored in a Texture Array, which encodes the appearance of different rain drops under different viewpoint and lighting directions.'''
+checked = 2026-11-21
+cost = '''Intel Core 2 CPU, 2.93 GHz, 2046 MB RAM, NVIDIA GeForce 8800 GTX. For table 2 the camera is at the center of the particle system, with a field of view of 45 degrees, a screen resolution of 1280 x 1024, and the simple shader turned on. [...] Number of particles: 200,000: 1,000,000: 5,000,000 [...] Frame rate: 545: 126: 26'''
+
+["zhou-weick-2022-fc6-rain-shadow-map"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=118"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes page 118 (Rain Shadow Map)"
+quote = '''we created a rain shadow map that we can reference to determine if a rain streak or splash was occluded. [...] This was a directional shadow set up to cover the playable area near the camera, parallel to the rain direction [...] We then stored this in our regular sun shadow atlas [...] This rain shadow map only contains static scene elements and is updated a few sections each frame.'''
+checked = 2026-11-21
+
+["zhou-weick-2022-fc6-wetness-static-and-dynamic"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=32"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes pages 32, 33 and 44 (the two wetness types, the wetness shadow map, the wetness component)"
+quote = '''Static wetness applies mostly to our Object Bank assets which includes props and structures. [...] We also use a wetness shadow map to mask out wetness where appropriate. [...] Dynamic wetness is reserved primarily for weapons, vehicles, and characters. [...] Since our static wetness is applied in the deferred lighting pass, we stored the wetness shadow in our deferred shadow pass. [...] Characters and weapons perform a raycast every few frames to check their exposure to rain. [...] When exposed to rain, dynamic assets will increase in wetness level slowly before they are fully wet and, when no longer exposed, they will also dry slowly.'''
+checked = 2026-11-21
+
+["zhou-weick-2022-fc6-apply-wetness-porosity"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=38"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes pages 37, 38 and 40 (Static Wetness: Porosity, Porosity Factors, ApplyWetness())"
+quote = '''Not every material has the budget for a texture dedicated to porosity [...] Porosity = PorosityFactors.x * smoothness + PorosityFactors.y [...] Darken the albedo according to porosity, except for if the material is metallic [...] Boost the smoothness, note that we used porosity again to get even more control [...] And replace the specular reflectance value with that of water'''
+checked = 2026-11-21
+
+["zhou-weick-2022-fc6-wet-cloth-hair-skin"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=46"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes pages 46 and 47 (Dynamic Wetness: Characters)"
+quote = '''For character clothing, we utilized the same approach as for our props. [...] Character hair was the simplest change we made; we only used one set of porosity factors. [...] We went with a subtle approach by using a single texture, which contained a droplets normal map and a wetness mask.'''
+checked = 2026-11-21
+
+["zhou-weick-2022-fc6-puddles-and-ripples"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=57"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes pages 57, 58 and 59 (Terrain: Puddles, Puddle Effects, Puddle Effects Texture)"
+quote = '''A puddle itself was a terrain decal, but all it contained was an alpha gradient and a checkbox to only write to terrain porosity. [...] We calculated the puddle wetness based on the terrain porosity and the PuddleFactor provided by the weather manager. [...] we generated a tiling animated texture, updated every frame, to be used for all puddles. [...] Output animated normal texture: RGBA8 256x256 [...] These are faded in based on the weather manager’s RainEffectsFactor, which will ensure that these ripples only appear when it is actively raining.'''
+checked = 2026-11-21
+
+["zhou-weick-2022-fc6-rain-particles"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=117"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes pages 115 to 117, 119 and 120 (the GPU particle system, its sorting, rain streaks, splashes, rain lighting); no timing is given for rain"
+quote = '''we use compute shaders to emit, simulate, sort and render all the particles all on the GPU [...] Universal sorting with other GPU particles using Bitonic Sort [...] We recycle the rain streaks in a cylinder around the player to ensure the number of rain particles remains consistent, regardless of how fast the camera moves. [...] the emission rate and direction of the rain is determined by rain and wind values provided by the weather manager. [...] emits new particles when a parent particle hits a surface on the depth buffer, terrain or water. [...] Wanted pixel lighting for rain at night [...] Too expensive [...] Used Spherical Harmonic probes'''
+checked = 2026-11-21
+
+["openpbr-1.1.2-coat-darkening-and-porosity"]
+url = "https://academysoftwarefoundation.github.io/OpenPBR/"
+section = "Academy Software Foundation, OpenPBR Surface specification v1.1.2 (2026-10-28), section Coat, its Darkening subsection and that subsection's footnote on porosity"
+quote = '''The observed color of the coated base is darkened and saturated due to multiple internal reflections from the inside of the coat, which causes light to strike the underlying material multiple times and undergo more absorption. [...] In reality, coats can also darken the underlying surface due to a different mechanism where the coat modifies the Fresnel factor of the base due to the coat material filling in air gaps between granules or threads of a porous base material, which reduces the relative IORs at the internal interfaces. This occurs e.g. on adding water to sand or fabric, or adding a penetrating wood finish. We assume here that this effect explicitly does _not_ occur, at present, since we do not have enough knowledge about the properties of the underlying substance to model it.'''
+checked = 2026-11-21
+
+["khr-materials-clearcoat-layered-brdf"]
+url = "https://github.com/KhronosGroup/glTF/blob/5b00b913b74c8f0260c64578b98a09ef2dde0b41/extensions/2.0/Khronos/KHR_materials_clearcoat/README.md#L86"
+section = "Khronos Group, glTF extension KHR_materials_clearcoat, README.md at commit 5b00b91 (L78, L86, L117)"
+quote = '''If `clearcoatNormalTexture` is not given, no normal mapping is applied to the clear coat layer, even if normal mapping is applied to the base material. [...] The clearcoat effect is modeled via a microfacet BRDF. The BRDF is layered on top of the glTF 2.0 Metallic-Roughness material, including emission and all extensions, using a new `fresnel_coat` function: [...] The specular BRDF for the clearcoat layer `clearcoat_brdf` is computed using the specular term from the glTF 2.0 Metallic-Roughness material'''
+checked = 2026-11-21
+
+["pan-2025-wet-porous-micro-ellipsoid"]
+url = "https://arxiv.org/abs/2401.15628v3"
+section = "Gaole Pan, Yuang Cui, Jian Yang and Beibei Wang, A Micro-Ellipsoid Model for Wet Porous Materials Rendering, arXiv:2401.15628v3 (6 February 2025), abstract and the results section's first paragraph"
+quote = '''a physically based model for wet porous materials is still absent. [...] We have implemented our algorithm inside the Mitsuba renderer [...] All timings in this section are measured on a 2.20GHz Intel'''
+checked = 2026-11-21
+
+["barre-brisebois-2014-arkham-snow-heightmaps"]
+url = "https://colinbarrebrisebois.com/wp-content/uploads/2022/06/gdc2014-deformable_snow_rendering.pdf#page=12"
+section = "Colin Barré-Brisebois (WB Games Montréal), Deformable Snow Rendering in Batman: Arkham Origins, GDC 2014, slides 8, 12, 19, 27, 28 and 36"
+quote = '''Consoles: virtual displacement via Relief Mapping [...] PC: DirectX 11 version with tessellation [...] Render snow-affecting objects looking from under the surface using an ankle-high orthogonal frustum [...] Filter and accumulate (ping/pong) in a texture [...] During this stage, you can also subtract a small value to the heightmap to make snow gradually replenish (since it’s snowing) [...] Min(512, ¼ * (SurfaceX, SurfaceY)) [...] Only render 2 surfaces/frame'''
+checked = 2026-11-21
+cost = '''Heightmaps update < 1.0ms GPU on PS3/360 [...] 2 MB (360 / PS3 / WiiU)'''
+
+["barre-brisebois-2014-arkham-snow-limits"]
+url = "https://colinbarrebrisebois.com/wp-content/uploads/2022/06/gdc2014-deformable_snow_rendering.pdf#page=34"
+section = "Colin Barré-Brisebois (WB Games Montréal), Deformable Snow Rendering in Batman: Arkham Origins, GDC 2014, slides 7, 34, 37 and 38"
+quote = '''Raycast on a terrain / Modify terrain mesh. [...] Real geometry means: [...] Works with Dynamic Shadows [...] Character shadows now follows the surface and shift with the deformation [...] Deformation looks great, but will never be as thick as tessellation. [...] Save the heightmaps and reload them?'''
+checked = 2026-11-21
+
+["brinck-2020-tlou2-snow-deformation"]
+url = "https://s3.amazonaws.com/nd.images/research/2020_siggraph/NaughtyDog_TechArt_TLOU2-final.pptx"
+section = "Waylon Brinck and Qingzhou Steven Tang (Naughty Dog), The Technical Art of The Last of Us Part II, SIGGRAPH 2020, speaker notes of slides 93 Particle Render Target, 94 Parallax Occlusion Mapping With Depth Output, 97 and 99 Getting Creative"
+quote = '''For each piece of mesh of deformable snow, we assign it to a particle render target. [...] In each frame, we do a mesh ray cast from characters knees to a little bit below their feet. If the ray cast hits a snow surface, we draw a footprint particle into the particle render targets. [...] This depth is written into the depth buffer by a special custom depth pixel shader before the gbuffer pass. [...] Since the parallax is only applied in the gbuffer and custom depth pass, when sunlight is casting shadow, what it’s “seeing” is the undeformed snow. [...] we turn off shadow casting for the snow geometry altogether, and add a fake shadow using parallax projection based on sun direction. [...] Deformation revealing mud beneath the snow'''
+checked = 2026-11-21
+
+["surricchio-2023-gowr-snow-tessellation"]
+url = "https://80.lv/articles/santa-monica-s-senior-programmer-on-how-god-of-war-ragnar-k-s-snow-system-was-made"
+section = "Paolo Surricchio (Santa Monica Studio) interviewed by Arti Sergeev, 80 Level, 16 October 2023, sections God of War Ragnarök's Snow System and the one on performance"
+quote = '''Instead of using Screen Space Parallax Mapping (a version of parallax mapping created by our at-the-time Technical Director), we decided to use geometry displacement with hardware tessellation. [...] It's hard to give exact numbers for hardware tessellation since there are many control variables that can change the performance profile [...] Each terrain mesh was, in fact, 2 draw calls, one with hardware tessellation, and one with regular vertex shader pipeline. A compute shader was able to do both camera culling and decide which chunks fell into the displacement area and which didn't.'''
+checked = 2026-11-21
+
+["bentley-2025-yotei-snow-displacement-buffer"]
+url = "https://blog.playstation.com/2025/10/23/ghost-of-yotei-tech-deep-dive/"
+section = "Adrian Bentley (Director of Programming, Sucker Punch), Ghost of Yōtei – tech deep dive, PlayStation Blog, 23 October 2025, the paragraph on deep snow"
+quote = '''we built a terrain tessellation system that both increases the amount of detail that can be represented by the terrain, and which can be dynamically deformed at runtime. To achieve this, particles and geometry are rendered to a displacement buffer as characters walk, roll and fight through it. [...] a new snow sparkle effect using stable screen-space noise'''
+checked = 2026-11-21
+
+["fei-2021-realtime-mpm-snow"]
+url = "https://arxiv.org/abs/2111.00699v1"
+section = "Yun (Raymond) Fei, Yuhan Huang and Ming Gao, Principles towards Real-Time Simulation of Material Point Method on Modern GPUs, arXiv:2111.00699v1 (1 November 2021), abstract"
+quote = '''We demonstrate our pipeline by simulating a snow scenario with 1.33M particles and a fountain scenario with 143K [...] in real-time (on average, 68.5 and 55.9 frame-per-second, respectively) on four NVIDIA Tesla V100 GPUs interconnected with NVLinks.'''
+checked = 2026-11-21
+
+["alvarado-2022-soft-ground-footprints"]
+url = "https://arxiv.org/abs/2209.10215v1"
+section = "Eduardo Alvarado, Chloé Paliard, Damien Rohmer and Marie-Paule Cani, Real-Time Locomotion on Soft Grounds With Dynamic Footprints, Frontiers in Virtual Reality 3 (28 March 2022), doi 10.3389/frvir.2022.801856, read as arXiv:2209.10215v1, abstract and section 6; the grid of 256² prints as 2562 in the PDF's text"
+quote = '''We rely on a standard stress-strain relationship to compute the dynamic deformation of the soil under this force [...] fully coded in high-level C# scripts but still runs in real time at about 65 fps on a standard laptop (CPU: Intel Core i7, eight cores, 3.10 GHz) for a resolution of 4 cm [...] and 30 fps for a resolution of 2 cm per cell.'''
+checked = 2026-11-21
+
+["alvarado-2022-footprints-code-licence"]
+url = "https://github.com/edualvarado/unity-footprints/blob/8a7396dedd3ed25582c30d98f0c067f7dcddcd79/LICENSE#L1"
+section = "edualvarado/unity-footprints (commit 8a7396d), LICENSE (L1, L3): the repository the paper names for its Unity implementation; only the licence file was opened"
+quote = '''MIT License [...] Copyright (c) 2021 Eduardo Alvarado'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-weather-component"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiScene_Components.h#L1929"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), WickedEngine/wiScene_Components.h (L1929, L1933, L1934, L1935, L1936, L1940, L1941, L1942, L1943, L1944, L1947, L1949): WeatherComponent holds sun, sky, fog, wind, gravity, six rain fields, ocean, atmosphere and cloud parameters, and no snow or wetness field; read, not run"
+quote = '''float fogStart = 100; [...] XMFLOAT3 windDirection = XMFLOAT3(0, 0, 0); [...] float windRandomness = 5; [...] float windWaveSize = 1; [...] float windSpeed = 1; [...] float rain_amount = 0; [...] float rain_length = 0.04f; [...] float rain_speed = 1; [...] float rain_scale = 0.005f; [...] float rain_splash_scale = 0.1f; [...] wi::Ocean::OceanParameters oceanParameters; [...] VolumetricCloudParameters volumetricCloudParameters;'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-rain-emitter"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiScene.cpp#L5465"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), WickedEngine/wiScene.cpp (L5465, L5467, L5469, L5474, L5481, L5482, L5523, L5524, L5529): rain is one GPU particle emitter of up to 1,000,000 particles in a 30-unit volume placed 10 units ahead of the camera, its count scaled by rain_amount, its velocity the wind direction times wind speed and the rain speed down, with the blocker flag set and colliders off; read, not run"
+quote = '''rainEmitter._flags |= wi::EmittedParticleSystem::FLAG_USE_RAIN_BLOCKER; [...] rainEmitter.SetCollidersDisabled(true); [...] constexpr uint32_t target_max_particle_count = 1000000; [...] rainEmitter.count = wi::math::Lerp(0, (float)target_max_particle_count, weather.rain_amount); [...] weather.windDirection.x * weather.windSpeed, [...] -weather.rain_speed, [...] transform.scale_local = XMFLOAT3(30, 30, 30); [...] transform.translation_local.x = camera.Eye.x + camera.At.x * 10; [...] rain_blocker_dummy_light.cascade_distances[0] = transform.scale_local.x;'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-rain-blocker-draw"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiRenderer.cpp#L2977"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), WickedEngine/wiRenderer.cpp (L2977, L3071, L4029, L7176, L7185, L7216): the rain blocker is a 128x128 rectangle packed into the shadow atlas, drawn in the shadow pass whenever rain_amount is above zero, as one orthographic directional-light cascade looking straight down (the dummy light keeps the identity rotation of wiScene_Components.h L1392), from every renderable object whose bounds meet that cascade's frustum; read, not run"
+quote = '''const XMVECTOR to = XMVector3TransformNormal(XMVectorSet(0.0f, -1.0f, 0.0f, 0.0f), lightRotation); [...] const XMMATRIX lightProjection = XMMatrixOrthographicOffCenterLH(_min.x, _max.x, _min.y, _max.y, _max.z, _min.z); // notice reversed Z! [...] rect.w = rect.h = 128; [...] CreateDirLightShadowCams(vis.scene->rain_blocker_dummy_light, *vis.camera, &shcam, 1, vis.rain_blocker_shadow_rect); [...] if (object.IsRenderable() && shcam.frustum.CheckBoxFast(aabb)) [...] RenderMeshes(vis, renderQueue, RENDERPASS_RAINBLOCKER, FILTER_OBJECT_ALL, cmd);'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-particle-reads-rain-blocker"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/shaders/emittedparticle_simulateCS.hlsl#L63"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), WickedEngine/shaders/emittedparticle_simulateCS.hlsl (L63, L69, L74, L76, L78, L82, L84): the particle simulation compares each rain particle's depth with one point sample of the previous frame's blocker map and turns a particle below the blocker into a splash placed on the blocker surface with 0.15 s of life; read, not run"
+quote = '''// Blocker shadow map check using previous frame: [...] float3 shadow_pos = mul(GetFrame().rain_blocker_matrix_prev, float4(particle.position, 1)).xyz; [...] float shadow = texture_shadowatlas.SampleLevel(sampler_point_clamp, shadow_uv.xy, 0).r; [...] if(shadow > shadow_pos.z) [...] // Under blocker, make a splash by placing above blocker and modulating some params: [...] particle.position = blockerPos + float3(0, splashSize * 0.5, 0); [...] particle.life = 0.15;'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-wet-shading-inputs"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/shaders/objectHF.hlsli#L811"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), WickedEngine/shaders/objectHF.hlsli (L811, L814, L815, L816, L817): the wet value changes the shading inputs only (albedo darkened, roughness lowered, reflectance lowered, normal blended to the vertex normal); no lobe is added; read, not run"
+quote = '''half wet = input.ao_wet.y; [...] surface.albedo = lerp(surface.albedo, 0, wet); // darken color when wet [...] surface.roughness = clamp(surface.roughness * saturate(sqr((1 - wet) * 2 - 1)), 0.01, 1); [...] surface.f0 = lerp(surface.f0, 0, wet); // decrease reflectance when wet (not shiny when fully underwater) [...] surface.N = normalize(lerp(surface.N, input.nor, wet)); // blend to vertex normal when wet'''
+checked = 2026-11-21
+
+["wicked-engine-fc8385b-wetmap-per-vertex"]
+url = "https://github.com/turanszkij/WickedEngine/blob/fc8385b88c812ca258a6db66a896ad95323e74c2/WickedEngine/wiScene.cpp#L4597"
+section = "Wicked Engine v0.72.139 (commit fc8385b, 2026-11-03), WickedEngine/wiScene.cpp (L4597, L4600, L4601, L5594, L5596): a wetmap is one 16-bit value per vertex of an object that has wetmaps enabled, created on first use, and wetmaps keep updating for 60 s after the rain or ocean is turned off; read, not run"
+quote = '''if (object.IsWetmapEnabled() && !object.wetmap.IsValid()) [...] desc.size = mesh.vertex_positions.size() * sizeof(uint16_t); [...] desc.format = Format::R16_UNORM; [...] if (weather.IsOceanEnabled() || weather.rain_amount > 0) [...] wetmap_fadeout_time = 60; // allow 60 sec for remaining wetmaps to fade out'''
+checked = 2026-11-21
+
+["godot-4.7.2-height-field-follow-camera"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/scene/3d/gpu_particles_collision_3d.cpp#L674"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), scene/3d/gpu_particles_collision_3d.cpp (L674, L678, L690, L691, L704, L706): the height field asks for an update every frame in the Always mode, on every transform change, and in follow-camera mode only when the camera leaves the node's scale along x or z, when the node jumps by that scale; read, not run"
+quote = '''if (update_mode == UPDATE_MODE_ALWAYS) { [...] if (follow_camera_mode && get_viewport()) { [...] while (x_axis.dot(cam_pos - new_xform.origin) > x_len) { [...] new_xform.origin += x_axis * x_len; [...] if (new_xform != xform) { [...] RS::get_singleton()->particles_collision_height_field_update(_get_collision());'''
+checked = 2026-11-21
+
+["godot-4.7.2-height-field-texture"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/servers/rendering/renderer_rd/storage_rd/particles_storage.cpp#L1057"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), servers/rendering/renderer_rd/storage_rd/particles_storage.cpp (L1057, L1879, L1890, L1894): the height field is one 32-bit float depth texture whose longer side is 256 to 8192 texels, and a particle system uses the first height field it meets and skips the others; read, not run"
+quote = '''if (collision_heightmap_texture != RID()) { //already taken [...] const int resolutions[RSE::PARTICLES_COLLISION_HEIGHTFIELD_RESOLUTION_MAX] = { 256, 512, 1024, 2048, 4096, 8192 }; [...] tf.format = RD::DATA_FORMAT_D32_SFLOAT; [...] tf.usage_bits = RD::TEXTURE_USAGE_SAMPLING_BIT | RD::TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;'''
+checked = 2026-11-21
+
+["godot-4.7.2-height-field-render"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/servers/rendering/renderer_rd/renderer_scene_render_rd.cpp#L1517"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), servers/rendering/renderer_rd/renderer_scene_render_rd.cpp (L1517, L1520, L1523, L1525): the height field is drawn with an orthographic camera placed at the top of the collider's box and looking down its local y axis over the box's full height (the geometry drawn is every non-particle instance in the box, renderer_scene_cull.cpp L4134-L4147, in the shadow pass mode, render_forward_clustered.cpp L2939); read, not run"
+quote = '''cm.set_orthogonal(-extents.x, extents.x, -extents.z, extents.z, 0, extents.y * 2.0); [...] cam_pos.y += extents.y; [...] cam_xform.set_look_at(cam_pos, cam_pos - p_transform.basis.get_column(Vector3::AXIS_Y), -p_transform.basis.get_column(Vector3::AXIS_Z).normalized()); [...] RID fb = particles_storage->particles_collision_get_heightfield_framebuffer(p_collider);'''
+checked = 2026-11-21
+
+["godot-4.7.2-particle-height-field-collision"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/servers/rendering/renderer_rd/shaders/particles.glsl#L624"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), servers/rendering/renderer_rd/shaders/particles.glsl (L624, L631, L635, L637, L644, L648): a particle collides when the bilinear height sample at its position is at or above the particle's bottom, and the collision normal comes from two more height samples 1/8192 of the texture apart; read, not run"
+quote = '''case COLLIDER_TYPE_HEIGHT_FIELD: { [...] const float DELTA = 1.0 / 8192.0; [...] float y = texture(sampler2D(height_field_texture, SAMPLER_LINEAR_CLAMP), uvw_pos.xz).r; [...] if (y + EPSILON >= uvw_pos.y) { [...] normal = normalize(cross(pos1 - pos2, pos1 - pos3)); [...] depth = dot(normal, pos1) - dot(normal, local_pos_bottom);'''
+checked = 2026-11-21
+
+["godot-4.7.2-height-field-documented-costs"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/doc/classes/GPUParticlesCollisionHeightField3D.xml#L35"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), doc/classes/GPUParticlesCollisionHeightField3D.xml (L35, L42, L43, L48, L78): the class reference states that following the camera and updating every frame cost performance, that 1024x1024 is the default resolution (value 2) and that the default update mode is When Moved; read, not run"
+quote = '''Following the camera has a performance cost, as it will force the heightmap to update whenever the camera moves. [...] enum="GPUParticlesCollisionHeightField3D.Resolution" default="2"> [...] If [member update_mode] is [constant UPDATE_MODE_ALWAYS], consider using the lowest resolution possible. [...] enum="GPUParticlesCollisionHeightField3D.UpdateMode" default="0"> [...] Update the heightmap every frame. This has a significant performance cost.'''
+checked = 2026-11-21
+
+["torque3d-9521d43-precipitation-drop-ray-and-count"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/T3D/fx/precipitation.cpp#L248"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/T3D/fx/precipitation.cpp (L248, L355, L1120, L1123, L1135, L1142, L1432, L1433): drops are CPU objects, 1024 by default and at most 100,000; each drop casts one ray along its wind-adjusted fall direction when it is placed, stores the hit point, and each tick moves by the wind over its mass and by its fall speed; read, not run"
+quote = '''mNumDrops   = 1024; [...] IRangeValidator ValidNumDropsRange(1, 100000); [...] VectorF velocity = windVel / drop->mass - VectorF(0, 0, drop->velocity); [...] Point3F end   = drop->position + 100 * velocity; [...] if (getContainer()->castRay(start, end, mDropHitMask, &rInfo)) [...] drop->hitPos = rInfo.point; [...] curr->position += windVel / curr->mass; [...] curr->position.z -= curr->velocity;'''
+checked = 2026-11-21
+
+["torque3d-9521d43-forest-wind-emitter"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/forest/forestWindEmitter.cpp#L91"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/forest/forestWindEmitter.cpp (L91, L104, L117, L247, L249, L251): a wind emitter is either a global direction or a local radial emitter with a radius, with strength, gust and turbulence fields; its tick uses a fixed 0.032 s step and a random generator seeded from the real-time clock; read, not run"
+quote = '''mRandom( Platform::getRealMilliseconds() + 1 ), [...] const F32 deltaTime = 0.032f; [...] Point2F gustVec = (mRandom.randF() * mParent->mWindGustStrength + mRandom.randF() * mParent->mWindGustWobbleStrength) * windDir; [...] Determines if the emitter is a global direction or local radial emitter. [...] The radius of the emitter for local radial emitters. [...] The frequency of gusting in seconds.'''
+checked = 2026-11-21
+
+["torque3d-9521d43-accumulation-shader-feature"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/shaderGen/HLSL/accuFeatureHLSL.cpp#L156"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/shaderGen/HLSL/accuFeatureHLSL.cpp (L156, L165, L168, L179): accumulation is a generated pixel-shader step that samples one accumulation texture with the mesh's own texture coordinates and blends it over the pixel colour by how far the bump normal faces the object's up vector, scaled by strength and coverage uniforms; it reads no time or weather value; read, not run"
+quote = '''meta->addStatement(new GenOp("   @ = @.Sample(@, @ * @);\r\n", colorAccuDecl, accuMapTex, accuMap, inTex, accuScale)); [...] meta->addStatement( new GenOp( "   @ = saturate( dot( @.xyz, @.xyz * pow(@, 5) ) );\r\n", plcAccu, bumpNorm, accuVec, accuStrength ) ); [...] meta->addStatement( new GenOp( "   @.a += (2 * pow(@/2, 5)) - 0.5;\r\n", accuPlc, accuCoverage ) ); [...] meta->addStatement( new GenOp( "   @ = lerp( @, @, @.a * @.a);\r\n", color, color, accuColor, accuPlc, accuColor ) );'''
+checked = 2026-11-21
+
+["torque3d-9521d43-accumulation-volume"]
+url = "https://github.com/TorqueGameEngines/Torque3D/blob/9521d4361aa5b0f1dde484e2e8652cd856670476/Engine/source/T3D/accumulationVolume.cpp#L55"
+section = "Torque3D (commit 9521d43, 2026-11-19), Engine/source/T3D/accumulationVolume.cpp (L55, L58, L60, L305, L306): an accumulation volume hands its texture to each registered object whose position lies inside it, and the class text names sand and snow as its use; read, not run"
+quote = '''An invisible shape that allow objects within it to have an accumulation map. [...] where objects could benefit from overlaying environment accumulation textures such as sand, snow, etc. [...] Objects within the volume must have accumulation enabled in their material. [...] if ( volume->containsPoint(object->getPosition()) ) [...] object->mAccuTex = volume->getTexture();'''
+checked = 2026-11-21
+
+["bevy-hanabi-738b353-kill-modifiers"]
+url = "https://github.com/djeedai/bevy_hanabi/blob/738b353d9e1120c817099244c7b35091c1af635c/src/modifier/kill.rs#L17"
+section = "bevy_hanabi (djeedai, commit 738b353, 2026-11-01), src/modifier/kill.rs (L17, L102, L187, L190): kill.rs defines three region tests, each killing a particle: a sphere, an axis-aligned box and the camera frustum; read, not run"
+quote = '''/// A modifier killing all particles that enter or exit a sphere. [...] /// A modifier killing all particles that enter or exit an AABB. [...] /// A modifier killing all particles that exit the camera's frustum. [...] /// to avoid simulating them for nothing. The camera frustum is read from the'''
+checked = 2026-11-21
+
+["bevy-feronia-0.8.4-global-wind"]
+url = "https://github.com/NicoZweifel/bevy_feronia/blob/9533d0fe6cfe896b8824c2e8630e4bbba77bbcfb/src/wind/resources.rs#L25"
+section = "bevy_feronia v0.8.4 (NicoZweifel, commit 9533d0f, 2026-06-22), src/wind/resources.rs (L25, L26, L27, L28, L29, L30, L41, L42, L43, L44): the global wind resource is a preset plus a current and a previous Wind, each a direction, a strength, a noise scale, a scroll speed and seven sway amplitudes and speeds; read, not run"
+quote = '''pub struct Wind { [...] pub direction: Vec2, [...] pub strength: f32, [...] pub noise_scale: f32, [...] pub scroll_speed: f32, [...] pub micro_strength: f32, [...] pub struct GlobalWind { [...] pub preset: WindPreset, [...] pub current: Wind, [...] pub previous: Wind,'''
+checked = 2026-11-21
+
+["bevy-0.20.1-decal-module-names-snow"]
+url = "https://github.com/bevyengine/bevy/blob/a0577b5c6a7b208719dd761c5c6a7a539e472a97/crates/bevy_pbr/src/decal/mod.rs#L3"
+section = "Bevy v0.20.1 (commit a0577b5, 2026-10-28), crates/bevy_pbr/src/decal/mod.rs (L3, L4): the decal module's own documentation lists snow among the uses of decals; it says nothing of wetness or rain; read, not run"
+quote = '''//! Decals are a material that render on top of the surface that they're placed above. [...] //! They can be used to render signs, paint, snow, impact craters, and other effects on top of surfaces.'''
+checked = 2026-11-21
+
+["terrain3d-1.1.0-paint-wetness"]
+url = "https://github.com/TokisanGames/Terrain3D/blob/629bbd65526bbdc3d1aa371840c7028055c30b02/doc/docs/texture_painting.md#L108"
+section = "Terrain3D v1.1.0-stable (commit 629bbd6, 2026-11-02), doc/docs/texture_painting.md (L108, L110, L112): wetness on the terrain is a painted roughness offset, with darkening done separately on the colour map; read, not run"
+quote = '''Use the `Paint Wetness` tool to modify the roughness of the textures. Reduce the roughness percentage to say -30% and wherever you paint the textures will become more glossy. [...] If you wish to turn dirt into mud, try painting a light/medium grey on the colormap to darken it, then paint a -30% on the wetness. [...] Paint 0 to reset.'''
+checked = 2026-11-21
+
+["renard-2019-gow-wind-three-tiers"]
+url = "https://media.gdcvault.com/gdc2019/presentations/Renard_Rupert_Wind_Simulation.pdf#page=7"
+section = "Rupert Renard (Sony Santa Monica Studio), Wind Simulation in 'God of War', GDC 2019, slides PDF with speaker notes, notes page 7 (three tiers of wind)"
+quote = '''Static wind is a global vector applied uniformly to everything in the scene. [...] We feed static wind sometimes with a scrolling noise texture. [...] it’s a 3d volume that contains the detailed fluid simulation that surrounds the player. [...] It’s always aligned to world coordinates, and shifts as the player moves. [...] It’s simply the negative velocity vector of the object that is moving.'''
+checked = 2026-11-21
+
+["renard-2019-gow-wind-fluid-grid"]
+url = "https://media.gdcvault.com/gdc2019/presentations/Renard_Rupert_Wind_Simulation.pdf#page=9"
+section = "Rupert Renard (Sony Santa Monica Studio), Wind Simulation in 'God of War', GDC 2019, slides PDF with speaker notes, notes pages 9-10 (volume size, diffusion, advection, pressure dropped)"
+quote = '''Our 3D volume is 32x16x32 texels. [...] Which covers about 1 meter^3 per texel. [...] We have 5 iterations of diffusion each frame. [...] We have full forward and reverse advection. [...] We also used to simulate pressure, which was eventually scrapped.'''
+checked = 2026-11-21
+
+["renard-2019-gow-wind-motors"]
+url = "https://media.gdcvault.com/gdc2019/presentations/Renard_Rupert_Wind_Simulation.pdf#page=22"
+section = "Rupert Renard (Sony Santa Monica Studio), Wind Simulation in 'God of War', GDC 2019, slides PDF with speaker notes, notes pages 22-23 and 35 (motors, aliasing of small motors)"
+quote = '''Motors are the main source of generating wind in our volume. [...] A moving motor generates wind purely based on its movement. [...] Designers were creating very small motors which the large 1 meter^3 resolution of the wind volume couldn’t properly handle. [...] Kratos’ axe swings also generate wind, as do his axe throws.'''
+checked = 2026-11-21
+
+["renard-2019-gow-wind-readers"]
+url = "https://media.gdcvault.com/gdc2019/presentations/Renard_Rupert_Wind_Simulation.pdf#page=37"
+section = "Rupert Renard (Sony Santa Monica Studio), Wind Simulation in 'God of War', GDC 2019, slides PDF with speaker notes, notes pages 4 and 37 (customers of the simulation; CPU readers one frame late)"
+quote = '''Audio emitters changed the way they behaved based on the intensity of the wind. [...] Most read the simulation results on the GPU in the same frame. [...] Things such as Hair, Leaves, Fur, and Particles were all able to update their simulation immediately after the wind. [...] The Audio and Cloth simulations which ran on the CPU had to read from the previous frames wind results, but this was acceptable to us.'''
+checked = 2026-11-21
+
+["renard-2019-gow-wind-cost"]
+url = "https://media.gdcvault.com/gdc2019/presentations/Renard_Rupert_Wind_Simulation.pdf#page=29"
+section = "Rupert Renard (Sony Santa Monica Studio), Wind Simulation in 'God of War', GDC 2019, slides PDF with speaker notes, notes pages 11 and 29-30 (memory, scheduling, timings; the deck names no console or resolution, the grid is 32x16x32)"
+quote = '''we ended up with about 384KB worth of storage. [...] The wind simulation is quite literally the first thing that is run on our GPU frame. [...] But it’s actually run asynchronously, at the same time as Pose Space Deformers, Custom Render Targets, and some Particle maintenance shaders. [...] A reminder that the diffusion pass is 5 iterations, so the total is 43.2 microseconds, averages out to around 8.64 microseconds per iteration.'''
+checked = 2026-11-21
+cost = '''It takes about one tenth of a millisecond if it’s run on the main graphics pipe.'''
+
+["renard-2019-gow-wind-fixed-point-atomic-add"]
+url = "https://media.gdcvault.com/gdc2019/presentations/Renard_Rupert_Wind_Simulation.pdf#page=27"
+section = "Rupert Renard (Sony Santa Monica Studio), Wind Simulation in 'God of War', GDC 2019, slides PDF with speaker notes, notes pages 24 and 27-28 (scatter writes of forward advection summed with atomic integer adds in 16.16 fixed point)"
+quote = '''In our case, we have potentially multiple threads trying to write to the same texel at the same time. [...] in our case we simply need to sum the results. [...] We used 16.16 fixed point format, which gave us plenty of precision in both the upper and lower end. [...] then use the atomic integer add available to us.'''
+checked = 2026-11-21
+
+["rockenbeck-2021-got-wind-model"]
+url = "https://media.gdcvault.com/GDC+2021/Rockenbeck-Bill-Blowing+from+the+West.pdf#page=4"
+section = "Bill Rockenbeck (Sucker Punch Productions), Blowing from the West: Simulating Wind in 'Ghost of Tsushima', GDC 2021, slides PDF (no speaker notes), slides 3, 4 and 6"
+quote = '''PS4 [...] Volume Over Accuracy [...] WIND MODEL [...] Vector [...] + Noise [...] + “Vorticles” [...] (+ Displacement) [...] Particles emitted, updated, and rendered entirely on the GPU [...] ~100K particles [...] New extensions for wind and terrain'''
+checked = 2026-11-21
+
+["rockenbeck-2021-got-wind-press-report"]
+url = "https://www.gamedeveloper.com/design/using-vorticles-to-simulate-wind-in-i-ghost-of-tsushima-i-"
+section = "Game Developer (press report quoting Bill Rockenbeck's GDC 2021 talk), Using vorticles to simulate wind in Ghost of Tsushima, 23 July 2021; secondary source for the spoken part the slides PDF lacks"
+quote = '''We're not doing any real modeling of fluid dynamics, [...] The main wind vector has a constant direction, but we varied the magnitude a bit from place to place using time-varying Perlin noise. [...] They're basically like little spheres of wind. They output a position, an orientation, and a radius, and also a vector which determines the direction of the wind, [...] just running down the whole list and adding up all of the contributions. It somewhat amazingly works even up to hundreds of vorticles,'''
+checked = 2026-11-21
+
+["vainio-2021-got-wind-readers-and-gusts"]
+url = "https://blog.playstation.com/2021/01/12/how-stunning-visual-effects-bring-ghost-of-tsushima-to-life/"
+section = "Matt Vainio (Sucker Punch Productions), How stunning visual effects bring Ghost of Tsushima to life, PlayStation.Blog, 12 January 2021, sections on wind, foliage, grass, cloth and duels"
+quote = '''Aside from the particles, there are trees, grass, cloth, and ropes that all move with the wind. [...] We integrated this global wind direction into nearly every single effect in the game [...] With foliage, the plants are all rigged with joints that respond to the local wind speed. [...] we added two layers of procedural gusts to the environment. The first is a large noise pattern that scrolls with the wind direction; layered on top is a texture that scrolls across the terrain for smaller details on the grass. [...] Each of the rope and cloth simulations uses the same wind inputs as the foliage and particles [...] we added wind emitters to the sword swings and sampled those on the candles'''
+checked = 2026-11-21
+
+["sanders-2018-hzd-global-wind-force-field"]
+url = "https://media.gdcvault.com/gdc2018/presentations/gilbert_sanders_between_tech_and.pdf#page=10"
+section = "Gilbert Sanders (Guerrilla Games), Between Tech and Art: The Vegetation of Horizon Zero Dawn, GDC 2018, slides PDF, slides 10, 12 and 20 (the slide names no hardware for the timing)"
+quote = '''All Movement is driven by a Global Wind Force Field [...] Local Around the Player / Camera [...] Supports up to 4 Different Categories of Spring Settings [...] Sampled by Banners, Tarps, Canvas, etc. [...] Sample from our Global Wind at Object Center'''
+checked = 2026-11-21
+cost = '''Compute Shader: around 150 microseconds'''
+
+["naughtydog-2016-u4-wind-gust-texture"]
+url = "https://advances.realtimerendering.com/other/2016/naughty_dog/NaughtyDog_TechArt_Final.pdf#page=96"
+section = "Naughty Dog technical art team, The Technical Art of Uncharted 4, SIGGRAPH 2016, slides PDF with speaker notes, pages 96 and 133"
+quote = '''We had a set of similar level-wide parameters that would control the wind globally. [...] we had our global 2d Wind Gust function which was in essence a wave-pattern texture projected top-down into the world. It was sampled in every wind type creating consistent motion across varied surfaces and objects. [...] but doing joint rotation looks much better'''
+checked = 2026-11-21
+
+["sousa-2007-crysis-wind-per-instance"]
+url = "https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-16-vegetation-procedural-animation-and-shading-crysis"
+section = "Tiago Sousa (Crytek), Vegetation Procedural Animation and Shading in Crysis, GPU Gems 3 (2007), chapter 16, section 16.1 Procedural Animation"
+quote = '''A wind vector is computed per-instance, in world space, by summing up the wind forces affecting the instance. A wind area can be a directional or an omnidirectional wind source. [...] Designers can place wind sources at specific locations, attach them to an entity (for example, helicopters), and attach then to particle systems as well. [...] while keeping the per-vertex cost constant, although with some extra linear per-instance CPU'''
+checked = 2026-11-21
+
+["stam-1999-stable-fluids-unconditionally-stable"]
+url = "https://www.dgp.toronto.edu/public_user/stam/reality/Research/pdf/ns.pdf#page=1"
+section = "Jos Stam (Alias wavefront), Stable Fluids, SIGGRAPH 1999, abstract and section 4 (text copy made with pdftotext without -layout, as the paper is two-column)"
+quote = '''we propose an unconditionally stable model which still produces complex fluid-like flows. [...] The stability of our model allows us to take larger time steps and therefore achieve faster simulations. [...] All of our animations were created on an SGI Octane workstation with a R10K processor and 192 Mbytes of memory.'''
+checked = 2026-11-21
+
+["unreal-5.9-dynamic-wind-inputs"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/dynamic-wind-for-nanite-foliage-in-unreal-engine?application_version=5.9"
+section = "Epic Games, Dynamic Wind for Nanite Foliage in Unreal Engine, Unreal Engine 5.9 documentation, sections How Dynamic Wind Works and Wind Parameters"
+quote = '''Every frame, Dynamic Wind works out a bending force for each bone from the global wind, any force sources and push capsules that reach it, and any external velocity volumes. [...] Wind speed in meters per second. Doubling it pushes four times as hard. [...] A 2D noise texture that varies the wind across the world. [...] call Update Wind Parameters whenever your weather changes'''
+checked = 2026-11-21
+
+["unreal-5.9-dynamic-wind-local-forces"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/dynamic-wind-for-nanite-foliage-in-unreal-engine?application_version=5.9"
+section = "Epic Games, Dynamic Wind for Nanite Foliage in Unreal Engine, Unreal Engine 5.9 documentation, sections on the two simulation tiers, forces and push capsules, external velocity volumes"
+quote = '''Plants that only feel the global wind share a small set of simulations, one per wind direction. When a force source, push capsule or external velocity volume reaches a plant, that plant is promoted to its own simulation [...] Each mesh has a budget of individually simulated instances [...] you can register a volume texture of air velocities with the Dynamic Wind subsystem [...] Up to four volumes can be active at once.'''
+checked = 2026-11-21
+
+["bauer-2019-rdr2-wind-in-volumetrics-and-taa"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Fabian Bauer (Rockstar Games), Creating the Atmospheric World of Red Dead Redemption 2, SIGGRAPH 2019 Advances in Real-Time Rendering in Games, PPTX speaker notes, slides 17, 45, 46 and 48 (wind offsets cloud and fog noise, wind velocity as reprojection vector, TAA)"
+quote = '''which is then used alongside wind velocity to offset a 3D noise volume lookup. [...] And of course each material source comes with tiling noise lookups, animated with wind. [...] Since we animate tiling noise lookups with wind, we are using the wind velocity as our reprojection motion vector. [...] Instead, we rely on dithered lookups of the accumulation volume in conjunction with TAA.'''
+checked = 2026-11-21
+
+["bauer-2019-rdr2-lightning-point-lights"]
+url = "https://advances.realtimerendering.com/s2019/slides_public_release.pptx"
+section = "Fabian Bauer (Rockstar Games), Creating the Atmospheric World of Red Dead Redemption 2, SIGGRAPH 2019 Advances in Real-Time Rendering in Games, PPTX speaker notes, slides 40 and 68 (lightning strikes as point lights in the scattering march; left out of the sky irradiance probes)"
+quote = '''Lightning strikes are implemented in a brute force way. [...] Each strike adds a point light to a list, over which we iterate for each sample point. [...] No rainbows/lightning strikes'''
+checked = 2026-11-21
+
+["zhou-weick-2022-fc6-weather-state-flow"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=29"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes page 29 (Weather State Flow)"
+quote = '''we first consult the forecast to get the weather preset at the current time of day. Then, based on where the player is, we apply regional adjustments. This gives us the current weather state, which can be overridden for gameplay. [...] we use this weather state to update the wetness, rain and lightning with time, and output the final parameters. These are variables like WetnessFactor, RainFactor, etc., which we can now access to drive visuals, audio, gameplay and so on.'''
+checked = 2026-11-21
+
+["zhou-weick-2022-fc6-presets-and-forecast"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=25"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes pages 16-25 (weather presets and the hourly forecast)"
+quote = '''These are defined in the weather database using the exposed parameters from the weather manager. [...] Which leaves us with our most intense preset, the Thunderstorm, which adds lightning. [...] Kept the text file format with weather defined by the hour [...] Each game region can have a looping forecast of 5 days'''
+checked = 2026-11-21
+
+["zhou-weick-2022-fc6-regions-overrides-replication"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=27"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes pages 27-28 (regional limits, overrides, co-op replication)"
+quote = '''For each region, we exposed min and max curves to limit certain weather properties. [...] Our weather manager then took in all the potentially overlapping regions around the player, and interpolated the curves accordingly to output the adjusted weather. [...] The weather manager also needed to allow for overrides, such as for gameplay missions [...] so weather needed to be replicated for all players.'''
+checked = 2026-11-21
+
+["zhou-weick-2022-fc6-wind-readers"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=117"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes pages 81, 117, 118, 123 and 136 (what reads the weather manager's wind)"
+quote = '''scrolled in the wind direction from our weather manager. [...] the emission rate and direction of the rain is determined by rain and wind values provided by the weather manager. [...] the ocean still needed to be affected by weather in two ways, Beaufort level and wind direction. [...] tree bending, which works in conjunction with the wind direction and magnitude that comes from the weather manager.'''
+checked = 2026-11-21
+
+["zhou-weick-2022-fc6-lightning-omni-light"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=122"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes pages 121-122 (Lightning and Clouds)"
+quote = '''First, we generated an omni light and placed it in the scene so that the lightning would light the environment. [...] We applied the lightning to the clouds in the upsample pass so that the lightning doesn’t end up in the history buffer and cause ghosting. [...] Our implementation functions essentially like a column light.'''
+checked = 2026-11-21
+
+["zhou-weick-2022-fc6-temporal-reliance"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/SimulatingTropicalWeather_Weick_Colin_Zhou_Emily.pdf#page=109"
+section = "Emily Zhou (Ubisoft Montreal) and Colin Weick (Ubisoft Toronto), Simulating Tropical Weather in 'Far Cry 6', GDC 2022, slides PDF with speaker notes, notes pages 92, 100 and 109 (cloud history reprojection, fog temporal filter on last gen, TAA in the composite)"
+quote = '''as well as history radiance and transmittance textures, which we temporally reproject from the last frame. [...] Note that we use a temporal filtering on last gen instead of the upcoming bilateral blur. [...] This, when combined with the temporal AA post process, further eliminates raymarching artifacts visible in the clouds.'''
+checked = 2026-11-21
+
+["schneider-2022-hfw-local-weather-event"]
+url = "https://media.gdcvault.com/GDC+2022/Speaker+Slides/TheReal-timeVolumetricSuperstormsOfHorizonForbiddenWest_Schneider_Andrew.pdf#page=102"
+section = "Andrew Schneider (Guerrilla), The Real-Time Volumetric Superstorms of 'Horizon Forbidden West', GDC 2022, slides PDF with speaker notes, pages 98-104"
+quote = '''We defined a local weather event by Position, Radius and blend factor, which were animated over time to produce a gradual transition. [...] 5 different locations in the world where the superstorm can randomly form and override the local climate. [...] begins to load a superstorm there over a period of 2 minutes. [...] For Snowy environments, Heavy haze and snow particle effects to go with windspeed increases.'''
+checked = 2026-11-21
+
+["schneider-2022-nubis-weather-states"]
+url = "https://d3d3g8mu99pzk9.cloudfront.net/AndrewSchneider/NubisEvolved-1080p.pptx"
+section = "Andrew Schneider (Guerrilla), Nubis, Evolved: Real-Time Volumetric Clouds for Skies, Environments, and VFX, SIGGRAPH 2022 Advances in Real-Time Rendering in Games, PPTX speaker notes, slides 37, 77 and 78 (weather states select cloudscapes; wind scrolls the noise)"
+quote = '''We can simulate the movement of clouds by adding an offset in the wind direction which is incremented in time [...] Cloudscapes are members of what we call weather states. [...] We use a weather system to switch between weather states,'''
+checked = 2026-11-21
+
+["schneider-2022-nubis-lightning-sequence"]
+url = "https://d3d3g8mu99pzk9.cloudfront.net/AndrewSchneider/NubisEvolved-1080p.pptx"
+section = "Andrew Schneider (Guerrilla), Nubis, Evolved: Real-Time Volumetric Clouds for Skies, Environments, and VFX, SIGGRAPH 2022 Advances in Real-Time Rendering in Games, PPTX speaker notes, slides 176-178 (intra-cloud and ground-discharge flashes, their sequence)"
+quote = '''we just fed it a variable position for each flash and animated the intensity over the lifetime of the flash in patterns that matched those found in Martin Uman’s research material. [...] The ground discharge effects were the combination of a particle bolt [...] First, the system would execute several intra-cloud effects while increasing the intensity of the flashes each time. [...] Then it would fire off 1 to 2 Ground discharge effects.'''
+checked = 2026-11-21
+
+["patry-2021-got-weather-states-and-probes"]
+url = "https://advances.realtimerendering.com/s2021/jpatry_advances2021.pdf#page=10"
+section = "Jasmin Patry (Sucker Punch Productions), Real-Time Samurai Cinema: Lighting, Atmosphere, and Tonemapping in Ghost of Tsushima, SIGGRAPH 2021 Advances in Real-Time Rendering in Games, slides PDF with speaker notes, pages 10 and 23"
+quote = '''Our indirect lighting consists of dynamically updated spherical harmonics and reflection probes, based on the current sky and directional light, plus local light transfer data. [...] the weather and time of day states in our weather system. [...] Because of the game's dynamic time of day cycle and dynamic weather, we need to update our irradiance probes at runtime.'''
+checked = 2026-11-21
+
+["hao-2025-thunderscapes-offline-thunderstorm"]
+url = "https://arxiv.org/abs/2412.00703"
+section = "Tianchen Hao, Jinxian Pan, Yangcheng Xiang, Xiangda Shen, Xinsheng Li and Yanci Zhang (Sichuan University; Hokkaido University), Thunderscapes: Simulating the Dynamics of Mesoscale Convective System, Proc. ACM Comput. Graph. Interact. Tech. 8(1), May 2025, arXiv:2412.00703v4, section 5.2 Implementation and Table 1"
+quote = '''Our tool is implemented as a Houdini Digital Asset (HDA) using Houdini 20.0.625’s microsolver framework, with OpenCL for GPU acceleration. [...] To simulate horizontal thunderstorm movement, we apply a uniform horizontal wind field. [...] Lightning channel growth during hydrometeor discharge events is modeled using the Dielectric Breakdown Model (DBM)'''
+checked = 2026-11-21
+cost = '''The hardware setup comprises an NVIDIA® GeForce® RTX A6000 GPU, a 13th Gen Intel® Core™ i9-13900 processor, and 128GB of RAM. [...] measured in seconds per frame are listed. [...] Super Cell 30 × 15 × 30 500 × 251 × 500 0.68'''
+
+["wgpu-30-shader-stages"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/binding.rs#L211"
+section = "wgpu 30.0.1, wgpu-types/src/binding.rs (L211 to L231), the ShaderStages flags: vertex, fragment, compute, task, mesh and four ray tracing stages, and no tessellation stage"
+quote = '''const VERTEX = 1 << 0; [...] const FRAGMENT = 1 << 1; [...] const COMPUTE = 1 << 2; [...] const TASK = 1 << 3; [...] const MESH = 1 << 4; [...] const RAY_GENERATION = 1 << 5; [...] const MISS = 1 << 8;'''
+checked = 2026-11-21
+
+["snowflow-5450397-deformation-buffer"]
+url = "https://github.com/Noniv/snowflow_demo/blob/545039733b74eec742862f161990142c7ca7c7ec/README.md"
+section = "Noniv/snowflow_demo (commit 5450397, 2026-07-28), README.md, sections Terrain, Deformation, the post chain and Performance: a WebGPU demo in WGSL, its author's own figures; the readme was read, the code was not, and nothing was run"
+quote = '''A nested-ring geometry clipmap: 8 rings, 8.5 cm inner spacing [...] world placement, CDLOD morphing and displacement all happen in the vertex shader [...] two 2048² RGBA16F targets covering 80 m (3.9 cm texels), ping-ponged by a single full-screen pass per frame [...] The displacement is real geometry in the beauty pass *and* in all three shadow cascades through one shared include [...] Depth-based reprojection, variance clipping, and a five-tap Catmull-Rom'''
+checked = 2026-11-21
+cost = '''Measured with WebGPU timestamp queries at 2560×1440 on Chrome / Windows 11 / RTX 5070 Ti, with every system running: [...] base scene (clipmap, snow, 3 cascades, sky, character, deformation, prepass) | 1.64 ms'''
+
+["snowflow-5450397-licence"]
+url = "https://github.com/Noniv/snowflow_demo/blob/545039733b74eec742862f161990142c7ca7c7ec/LICENSE#L1"
+section = "Noniv/snowflow_demo (commit 5450397, 2026-07-28), LICENSE (L1, L3)"
+quote = '''MIT License [...] Copyright (c) 2026 Maksymilian Dendura'''
+checked = 2026-11-21
