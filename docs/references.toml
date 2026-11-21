@@ -1978,7 +1978,7 @@ checked = 2026-11-21
 
 ["std-1.96.0-pthread-mutex-boxed-on-first-use"]
 url = "https://github.com/rust-lang/rust/blob/1.96.0/library/std/src/sys/sync/mutex/pthread.rs#L19-L28"
-section = "Rust 1.96.0 std, sys/sync/mutex/pthread.rs, Mutex::get, the Mutex mod.rs selects on Unix targets without futexes, macOS among them"
+section = "Rust 1.96.0 std, sys/sync/mutex/pthread.rs, Mutex::get, the Mutex mutex/mod.rs selects on Unix targets without futexes, macOS among them"
 quote = '''fn get(&self) -> Pin<&pal::Mutex> { [...] self.pal.get_or_init(|| {
             let mut pal = Box::pin(pal::Mutex::new());'''
 checked = 2026-11-21
