@@ -848,7 +848,7 @@ checked = 2026-11-22
 
 ["meshoptimizer-1.3-vertex-block"]
 url = "https://github.com/zeux/meshoptimizer/blob/v1.3/src/vertexcodec.cpp#L701-L721"
-section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), getVertexBlockSize (L140-L147) and decodeVertexBlock's control bytes (L719-L721); codec 0 spends a header byte per byte of vertex instead (decodeBytes, L648-L650)"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), getVertexBlockSize (L140-L147) and decodeVertexBlock's control bytes (L719-L721; decodeVertexBlockSimd, which NEON and SSE builds call, L1531-L1533); codec 0 spends a header byte per byte of vertex instead (decodeBytes, L648-L650; decodeBytesSimd, L1374-L1376)"
 quote = '''size_t result = (kVertexBlockSizeBytes / vertex_size) & ~(kByteGroupSize - 1);
 
 	return (result < kVertexBlockMaxSize) ? result : kVertexBlockMaxSize; [...] size_t control_size = version == 0 ? 0 : vertex_size / 4;
@@ -5835,6 +5835,14 @@ quote = '''* Mesh simplifier
  * The resulting index buffer references vertices from the original vertex buffer.'''
 checked = 2026-11-21
 
+["meshoptimizer-1.3-simplify-original-vertices"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/src/meshoptimizer.h#L501-L508"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), src/meshoptimizer.h, meshopt_simplify documentation"
+quote = '''* Mesh simplifier
+ * Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible [...]
+ * The resulting index buffer references vertices from the original vertex buffer.'''
+checked = 2026-11-22
+
 ["meshoptimizer-0.25-simplify-sloppy"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L452"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2, which exposes simplify_sloppy), README, Simplification (L452, L544) and experimental API list (L716)"
@@ -6607,6 +6615,17 @@ quote = '''Kind_Border,   // not on an attribute seam, has exactly two open edge
 	Kind_Locked,   // none of the above; these vertices can't move [...] // seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap [...] // more than one vertex maps to this one; we don't have classification available
 				result[i] = Kind_Locked;'''
 checked = 2026-11-21
+
+["meshoptimizer-1.3-vertex-kinds"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/src/simplifier.cpp#L296-L461"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), src/simplifier.cpp, enum VertexKind (L296-L306) and classifyVertices (L445, L460-L461)"
+quote = '''Kind_Border,   // not on an attribute seam, has exactly two open edges
+	Kind_Seam,     // on an attribute seam with exactly two attribute seam edges
+	Kind_Complex,  // none of the above; these vertices can move as long as all wedges move to the target vertex
+	Kind_Fringe,   // complex vertex on a geometric border; can only move to another fringe vertex
+	Kind_Locked,   // none of the above; these vertices can't move [...] // seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap [...] // more than one vertex maps to this one; we don't have classification available
+				result[i] = Kind_Locked;'''
+checked = 2026-11-22
 
 ["meshoptimizer-1.3-vertex-lock"]
 url = "https://github.com/zeux/meshoptimizer/blob/v1.3/src/meshoptimizer.h#L488-L536"
