@@ -3,7 +3,7 @@
 use std::num::NonZeroUsize;
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::ExecutorKind;
+use bevy_ecs::schedule::SingleThreadedExecutor;
 use bevy_tasks::{TaskPool, TaskPoolBuilder};
 
 /// A compute pool with one worker per core but the main thread's, which
@@ -23,7 +23,7 @@ pub(crate) fn compute_pool() -> TaskPool {
 /// Baseline shows otherwise (ADR 0016).
 pub(crate) fn single_threaded_schedule() -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule
 }
 

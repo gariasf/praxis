@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::Context;
+// Shadows the prelude's `ContextExt`, whose `context` and `with_context` make anyhow's ambiguous.
+use anyhow::Context as ContextExt;
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::RunSystemOnce;
 
@@ -421,21 +422,38 @@ fn simulation_schedules(recorder: &FrameRecorder) -> (Schedule, Schedule) {
 
 #[cfg(test)]
 mod tests {
-    use bevy_ecs::schedule::ExecutorKind;
-
     use super::*;
     use crate::assets::MeshHandle;
+    use crate::camera::Camera;
     use crate::components::Bend;
     use crate::time::{TICK, TICK_SECONDS};
     use crate::transform::{PreviousWorldTransform, Teleported, WorldTransform};
 
+    #[derive(Resource, Default)]
+    struct SystemThreads(Vec<std::thread::ThreadId>);
+
+    fn record_thread(mut threads: ResMut<SystemThreads>) {
+        threads.0.push(std::thread::current().id());
+    }
+
     #[test]
     fn simulation_schedules_run_single_threaded() {
-        let (schedule, fixed_schedule) = simulation_schedules(&FrameRecorder::new());
-        assert_eq!(schedule.get_executor_kind(), ExecutorKind::SingleThreaded);
+        let (mut frame_schedule, mut fixed_schedule) = simulation_schedules(&FrameRecorder::new());
+        let mut world = World::new();
+        world.insert_resource(Input::default());
+        world.insert_resource(Time::default());
+        world.insert_resource(FixedTime::default());
+        world.insert_resource(Camera::new());
+        world.insert_resource(SystemThreads::default());
+        for schedule in [&mut frame_schedule, &mut fixed_schedule] {
+            schedule.add_systems(record_thread);
+            schedule.run(&mut world);
+        }
+        // The multi-threaded executor runs a `Send` system that is not exclusive on a thread of the
+        // process-global pool, never the caller's [ref:bevy-ecs-0.20.1-multi-threaded-executor-spawns-on-the-pool].
         assert_eq!(
-            fixed_schedule.get_executor_kind(),
-            ExecutorKind::SingleThreaded
+            world.resource::<SystemThreads>().0,
+            [std::thread::current().id(); 2]
         );
     }
 

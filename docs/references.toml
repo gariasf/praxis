@@ -1905,35 +1905,44 @@ quote = '''#[cfg(target_os = "macos")] { [...] if let Some(window) = hosting_win
 /// layer with a delegate is the backing `NSView`, and we return its `window`. [...] if let Some(delegate) = layer.delegate() { return unsafe { objc2::msg_send![&*delegate, window] }; }'''
 checked = 2026-11-21
 
-["bevy-tasks-0.18.1-default-threads"]
-url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_tasks/src/task_pool.rs#L165-L167"
-section = "bevy_tasks 0.18.1, task_pool.rs, TaskPool::new_internal, which TaskPool::default reaches through new() (L603-L606); available_parallelism in lib.rs L167-L172"
-quote = '''let num_threads = builder
+["bevy-tasks-0.20.1-default-threads"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_tasks/src/task_pool.rs#L165-L167"
+section = "bevy_tasks 0.20.1, task_pool.rs, TaskPool::new_internal, which TaskPool::default reaches through new() (L610-L613) and which starts that many threads outside the crate's own tests (L173-L174); available_parallelism in lib.rs L128-L139"
+quote = '''let num_requested_threads = builder
             .num_threads
             .unwrap_or_else(crate::available_parallelism);'''
-checked = 2026-11-21
+checked = 2026-11-22
 
-["bevy-ecs-0.18.1-executor-default"]
-url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_ecs/src/schedule/executor/mod.rs#L45-L66"
-section = "bevy_ecs 0.18.1, schedule/executor/mod.rs, enum ExecutorKind"
-quote = '''/// The default depends on the target platform: [...] [`MultiThreaded`](ExecutorKind::MultiThreaded) everywhere else. [...] not(feature = "multi_threaded") ), default )] SingleThreaded, [...] #[cfg_attr(all(not(target_arch = "wasm32"), feature = "multi_threaded"), default)] MultiThreaded,'''
-checked = 2026-10-27
+["bevy-ecs-0.20.1-executor-default"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_ecs/src/schedule/executor/mod.rs#L46-L48"
+section = "bevy_ecs 0.20.1, schedule/executor/mod.rs, default_executor, the executor Schedule::new gives a schedule (schedule/schedule.rs L421) until Schedule::set_executor replaces it (L555-L557)"
+quote = '''/// On Wasm or when the `multi_threaded` feature is disabled, this returns a
+/// [`SingleThreadedExecutor`]. Otherwise it returns a [`MultiThreadedExecutor`].
+pub fn default_executor() -> Box<dyn SystemExecutor> {'''
+checked = 2026-11-22
 
-["bevy-ecs-0.18.1-par-iter-multi-threaded"]
-url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_ecs/src/query/par_iter.rs#L86-L104"
-section = "bevy_ecs 0.18.1, query/par_iter.rs, QueryParIter::for_each_init: a serial fold without multi_threaded, compute pool batches with it"
+["bevy-ecs-0.20.1-multi-threaded-executor-spawns-on-the-pool"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_ecs/src/schedule/executor/multi_threaded.rs#L667-L668"
+section = "bevy_ecs 0.20.1, schedule/executor/multi_threaded.rs, ExecutorState::spawn_system_task; the scope is the process-global ComputeTaskPool's, opened with tick_task_pool_executor false (L274-L275), so the calling thread runs only its own thread executor's tasks: bevy_tasks 0.20.1's scope ticks the pool's executor there only when asked to or when the pool has no thread (task_pool.rs L436, L466)"
+quote = '''if system_meta.is_send {
+            context.scope.spawn(task);'''
+checked = 2026-11-22
+
+["bevy-ecs-0.20.1-par-iter-multi-threaded"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_ecs/src/query/par_iter.rs#L87-L105"
+section = "bevy_ecs 0.20.1, query/par_iter.rs, QueryParIter::for_each_init: a serial fold without multi_threaded, compute pool batches with it"
 quote = '''#[cfg(any(target_arch = "wasm32", not(feature = "multi_threaded")))] [...] .fold(init, func); [...] #[cfg(all(not(target_arch = "wasm32"), feature = "multi_threaded"))] { let thread_count = bevy_tasks::ComputeTaskPool::get().thread_num();'''
-checked = 2026-11-21
+checked = 2026-11-22
 
-["bevy-tasks-0.18.1-multi-threaded-pool"]
-url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_tasks/src/lib.rs#L103-L115"
-section = "bevy_tasks 0.18.1, lib.rs: the threaded TaskPool and Scope with multi_threaded, the single-threaded ones without; bevy_ecs Cargo.toml L20 forwards the feature"
+["bevy-tasks-0.20.1-multi-threaded-pool"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_tasks/src/lib.rs#L93-L105"
+section = "bevy_tasks 0.20.1, lib.rs: the threaded TaskPool and Scope with multi_threaded, the single-threaded ones without; bevy_ecs Cargo.toml L20 forwards the feature"
 quote = '''cfg::multi_threaded! { if { mod task_pool; [...] pub use task_pool::{Scope, TaskPool, TaskPoolBuilder}; [...] } else { mod single_threaded_task_pool; pub use single_threaded_task_pool::{Scope, TaskPool, TaskPoolBuilder, ThreadExecutor};'''
-checked = 2026-10-27
+checked = 2026-11-22
 
-["bevy-tasks-0.18.1-scope-polls-results-first"]
-url = "https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_tasks/src/task_pool.rs#L512-L530"
-section = "bevy_tasks 0.18.1, task_pool.rs, TaskPool::execute_global_scope, which TaskPool::scope waits through on the main thread: it polls the spawned tasks' results first, and runs the pool's executor only while one is pending"
+["bevy-tasks-0.20.1-scope-polls-results-first"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_tasks/src/task_pool.rs#L519-L537"
+section = "bevy_tasks 0.20.1, task_pool.rs, TaskPool::execute_global_scope, which TaskPool::scope waits through on the main thread: it polls the spawned tasks' results first, and runs the pool's executor only while one is pending"
 quote = '''async fn execute_global_scope<'scope, 'ticker, T>( [...] let _result = AssertUnwindSafe(executor.run(tick_forever))
                     .catch_unwind()
                     .await
@@ -1941,7 +1950,7 @@ quote = '''async fn execute_global_scope<'scope, 'ticker, T>( [...] let _result 
             }
         };
         get_results.or(execute_forever).await'''
-checked = 2026-11-20
+checked = 2026-11-22
 
 ["futures-lite-2.6.1-or-polls-first-future-first"]
 url = "https://github.com/smol-rs/futures-lite/blob/v2.6.1/src/future.rs#L448-L458"
@@ -1963,12 +1972,12 @@ checked = 2026-11-20
 
 ["futures-lite-2.6.1-block-on-caches-a-parker"]
 url = "https://github.com/smol-rs/futures-lite/blob/v2.6.1/src/future.rs#L70-L73"
-section = "futures-lite 2.6.1, future.rs, block_on, which bevy_tasks 0.18.1 re-exports as its block_on without the async-io feature: one parker per thread, kept for the thread's lifetime"
+section = "futures-lite 2.6.1, future.rs, block_on, which bevy_tasks 0.20.1 re-exports as its block_on (lib.rs L107) from bevy_platform's (future.rs L7-L9) without the async-io feature: one parker per thread, kept for the thread's lifetime"
 quote = '''thread_local! {
         // Cached parker and waker for efficiency.
         static CACHE: RefCell<(Parker, Waker)> = RefCell::new(parker_and_waker());
     }'''
-checked = 2026-11-21
+checked = 2026-11-22
 
 ["parking-2.2.1-park-locks-and-waits"]
 url = "https://github.com/smol-rs/parking/blob/v2.2.1/src/lib.rs#L355-L377"
@@ -1993,13 +2002,13 @@ checked = 2026-11-21
 
 ["async-executor-1.14.0-global-queue"]
 url = "https://github.com/smol-rs/async-executor/blob/v1.14.0/src/lib.rs#L357-L364"
-section = "async-executor 1.14.0, lib.rs, Executor::schedule, which every spawned task's Runnable goes through; State::new (L675-L677) makes the queue ConcurrentQueue::unbounded(); bevy_tasks 0.18.1's Scope::spawn (task_pool.rs L646-L650) spawns on the pool's Executor, a wrapper of this one (executor.rs L19)"
+section = "async-executor 1.14.0, lib.rs, Executor::schedule, which every spawned task's Runnable goes through; State::new (L675-L677) makes the queue ConcurrentQueue::unbounded(); bevy_tasks 0.20.1's Scope::spawn (task_pool.rs L653-L657) spawns on the pool's Executor, a wrapper of this one (executor.rs L19)"
 quote = '''move |runnable| {
             let result = state.queue.push(runnable);
             debug_assert!(result.is_ok()); // Since we use unbounded queue, push will never fail.
             state.notify();
         }'''
-checked = 2026-11-21
+checked = 2026-11-22
 
 ["concurrent-queue-2.5.0-push-allocates-block"]
 url = "https://github.com/smol-rs/concurrent-queue/blob/v2.5.0/src/unbounded.rs#L192-L196"
