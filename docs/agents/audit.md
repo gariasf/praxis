@@ -84,7 +84,7 @@ Prose names no ticket or PR number except in a Finding's `placement`.
 
 ### Lane 3, performance, where we left off
 
-- Scope: each timed pass on each scene against (i) its source's published cost, as a 2x profiling trigger only, and (ii) its own hardware floor on the measuring adapter, as the verdict; the "revive when" fog lines on the ladder's map issue (#17; 27 of them at `M3.5`) re-judged `fired`, `waiting` or `dead`; `town`'s remaining gap decomposed into named options with a cost estimate each.
+- Scope: each timed pass on each scene against (i) its source's published cost, as a 2x profiling trigger only, and (ii) its own hardware floor on the measuring adapter, as the verdict; the "revive when" fog lines on the ladder's map issue (#17; 27 of them at `M3.5`), those in its body and those under the still-open headings of the archive comment its body links, re-judged `fired`, `waiting` or `dead`; `town`'s remaining gap decomposed into named options with a cost estimate each.
 - Evidence: bench JSON on the frozen commit, Apple M4 Pro, three rounds interleaved, the machine's quiet stated (load average, `pmset -g batt`, no peer benching), plus the floor's arithmetic. RTX figures only where an RTX Baseline already exists.
 - Severity: `budget` when over a Budget or gate, else `health`. A pass within 2x of its floor but over 2x its source is an architectural note, closed in the report, not a Finding.
 - Split: dense scenes (`town`, `texture-wall`); the rest. One verifier re-runs every quoted line.
