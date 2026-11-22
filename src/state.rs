@@ -438,19 +438,19 @@ mod tests {
 
     #[test]
     fn simulation_schedules_run_single_threaded() {
-        let (mut schedule, mut fixed_schedule) = simulation_schedules(&FrameRecorder::new());
+        let (mut frame_schedule, mut fixed_schedule) = simulation_schedules(&FrameRecorder::new());
         let mut world = World::new();
         world.insert_resource(Input::default());
         world.insert_resource(Time::default());
         world.insert_resource(FixedTime::default());
         world.insert_resource(Camera::new());
         world.insert_resource(SystemThreads::default());
-        for schedule in [&mut schedule, &mut fixed_schedule] {
+        for schedule in [&mut frame_schedule, &mut fixed_schedule] {
             schedule.add_systems(record_thread);
             schedule.run(&mut world);
         }
-        // The multi-threaded executor runs a `Send` system on a thread of the process-global
-        // pool, never on the caller's [ref:bevy-ecs-0.20.1-multi-threaded-executor-spawns-on-the-pool].
+        // The multi-threaded executor runs a `Send` system that is not exclusive on a thread of the
+        // process-global pool, never the caller's [ref:bevy-ecs-0.20.1-multi-threaded-executor-spawns-on-the-pool].
         assert_eq!(
             world.resource::<SystemThreads>().0,
             [std::thread::current().id(); 2]
