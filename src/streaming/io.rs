@@ -8,7 +8,8 @@ use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use anyhow::Context;
+// Shadows the prelude's `ContextExt`, whose `context` and `with_context` make anyhow's ambiguous.
+use anyhow::Context as ContextExt;
 use bevy_ecs::prelude::*;
 use glam::DVec3;
 

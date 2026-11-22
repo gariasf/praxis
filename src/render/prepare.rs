@@ -256,7 +256,7 @@ fn run_on_pool_and_main_thread(
             scope.spawn(async move { work() });
         }
         // A task only the main thread runs stays pending, so every run allocates the executor's
-        // Runner [ref:bevy-tasks-0.18.1-scope-polls-results-first]
+        // Runner [ref:bevy-tasks-0.20.1-scope-polls-results-first]
         // [ref:futures-lite-2.6.1-or-polls-first-future-first] [ref:async-executor-1.14.0-run-makes-a-runner].
         scope.spawn_on_scope(async {});
         work();
