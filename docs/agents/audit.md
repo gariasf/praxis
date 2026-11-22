@@ -1,14 +1,15 @@
 # Audit
 
-How an Audit lane runs: one shared brief, parallel read-only readers that file Findings with evidence, an adversarial verifier that reopens every one, a report that lands by PR, and a triage with the owner that places each Finding. Run it for each lane of a Consolidation milestone (`M3.5` first, phase A, every lane on one frozen commit), and afterwards as the standing form of every milestone exit's visual audit and source check (`docs/agents/workflow.md`, The ladder). Start with "Audit lane <n> per docs/agents/audit.md", or `/audit <lane>` where that skill is installed. One lane per session; a lane larger than one session splits by module as its brief says, one session per module, one verifier over all of them.
+How an Audit lane runs: one shared brief, parallel read-only readers that file Findings with evidence, an adversarial verifier that reopens every one, a report that lands by PR, and a triage with the owner that places each Finding. Run it for each lane a Consolidation milestone's opening decision names (all eight at `M3.5`; lanes 1, 4 and 7 at `M5.5`), every lane on one frozen commit, and afterwards as the standing form of every milestone exit's visual audit and source check (`docs/agents/workflow.md`, The ladder). Start with "Audit lane <n> per docs/agents/audit.md", or `/audit <lane>` where that skill is installed. One lane per session; a lane larger than one session splits by module as its brief says, one session per module, one verifier over all of them.
 
-The lane briefs below were decided for `M3.5` and name its referents (its spec issue, its map's fog lines). A later audit replaces those referents with its own in the PR that opens it, and keeps the rest.
+A lane brief names the referents (spec issues, fog lines, the next milestone's scope) of the audit that last ran it: lanes 1, 4 and 7 `M5.5`'s, the others `M3.5`'s. A later audit replaces those referents with its own in the PR that opens it, and keeps the rest.
 
 ## Inputs
 
 Every reader and the verifier receive the same things, and nothing from chat:
 
 - **The frozen commit**: the commit of `main` the audit reads, named on the milestone's spec issue. Every `where` is a `path:line` at that commit. A reader works in a worktree checked out at it, never at `main`'s tip, so a fix landing mid-audit moves no line.
+- **The scope**: what landed on `main` between the last Consolidation milestone's frozen commit and this one (for `M5.5`, since `8bc34eb18fcfb79307193551e96619316aef566c`; everything, at `M3.5`). A reader opens older code only to judge an ADR clause or a doc against it, and files a Finding there only when what landed since made it false.
 - **The lane brief** below: scope, evidence kind, tolerance, severity default and module split.
 - `docs/audit/deviations.md`: where the code should not match the literature, and why. A reader who finds the code matching an entry files nothing; one who finds an entry wrong files a Finding against the entry, not the code.
 - `scripts/cycles-reference/DIFFERENCES.md`: the image half of the same list; a Cycles difference it describes is known, not a defect.
@@ -69,11 +70,11 @@ Prose names no ticket or PR number except in a Finding's `placement`.
 
 ### Lane 1, correctness against intent
 
-- Scope: every ADR's decision clauses against the code, a verdict per clause (`holds`, `broken`, `superseded by ADR n`); the milestone spec's stories (for `M3.5`, #188); every function under an oracle against its literature number, with the WGSL accuracy floor for its expression chain written beside the test's constant; every registry key cited in code implemented as the registry's quote says.
+- Scope: every ADR's decision clauses against the code, a verdict per clause (`holds`, `broken`, `superseded by ADR n`), whenever the ADR was written; the stories of the specs the audited milestones were built from (for `M5.5`, #611 and #804); every function under an oracle that is in the audit's scope against its literature number, with the WGSL accuracy floor for its expression chain written beside the test's constant; every registry key cited in code in the audit's scope implemented as the registry's quote says.
 - Evidence: `path:line` plus the source quote with its key; for a number, the test's constant and the measured error.
 - Tolerance: the oracle's own named constant. A deviation past it that the owner accepts goes to `deviations.md`.
 - Severity default: `correctness`; `image` when a capture shows it.
-- Split: render; shaders; cook with assets and scenes; tooling (bench, capture, preflight, scripts). Four readers, one verifier.
+- Split: render; shaders; streaming with `src/state.rs`; cook with assets and scenes; tooling (bench, capture, preflight, stats, scripts). Five readers, at most three running at once, one verifier.
 
 ### Lane 2, image quality
 
@@ -91,8 +92,8 @@ Prose names no ticket or PR number except in a Finding's `placement`.
 
 ### Lane 4, scalability and reality check against the milestones ahead
 
-- Scope: every fixed capacity, binding floor and buffer size with its arithmetic at target scale (10 × 10 km, streaming Chunks, LOD, GI on the same TLAS); per ADR, `survives` or `must change`, with the clause; which of the audited milestones' choices the next milestone must undo.
-- Evidence: `path:line` of the constant or clause plus the arithmetic.
+- Scope: every fixed capacity, binding floor and buffer size the next milestone's scope touches, with its arithmetic at that scope (for `M5.5`, M6's: probe GI, Interior volumes and reflection cubemaps, their rays traced in the static TLAS, Far proxies included, and in the dynamic TLAS at its capacity; at `M3.5` it was the target scale: 10 × 10 km, streaming Chunks, LOD, GI on the same TLAS); per ADR, `survives` or `must change`, with the clause; which of the audited milestones' choices the next milestone must undo.
+- Evidence: `path:line` of the constant or clause plus the arithmetic. Where arithmetic from another kind of work would mislead (a probe ray priced from a shadow ray), a measurement from a prototype ticket instead, on the M4 Pro and the RTX 2070 SUPER from one engine source (ADR 0013). The lane prices; it sets no threshold and decides no ADR clause.
 - Output: a decision comment on the ladder's map issue that the next milestone's charting consumes, written with the owner in the room; readers prepare the table AFK. It does not chart that milestone.
 - Placement default: `fog` with the trigger "<next milestone> charting"; `fix` only where code must change before the next milestone can start.
 
@@ -113,7 +114,7 @@ Prose names no ticket or PR number except in a Finding's `placement`.
 
 ### Lane 7, docs and rules drift
 
-- Scope: the ADRs, `CONTEXT.md`, `CLAUDE.md`, `docs/agents/*` and `docs/references.toml` against the code, the code winning; the references by the source-check rubric (#90: load-bearing claims in full, every fifth of the rest, a wrong sample opening its section; verdicts `confirmed`, `wrong`, `unsupported`, `stale`, `dead`).
+- Scope: the ADRs, `CONTEXT.md`, `CLAUDE.md`, `docs/agents/*` and `docs/references.toml` against the code, the code winning; the references by the source-check rubric (#90: load-bearing claims in full, every fifth of the rest, a wrong sample opening its section; verdicts `confirmed`, `wrong`, `unsupported`, `stale`, `dead`). The reference half is skipped when the exit before the audit ran it on the same documents, as M5's did for `M5.5` (`docs/audit/m5/sources.md`).
 - Rule candidates: a slip a reader sees twice goes in the report's Rule candidates section with both Findings' ids; the milestone's rules ticket decides, each rule backed by at least two Findings of its kind.
 - Evidence: the doc heading and quote beside `path:line`.
 - Severity: `drift`.
