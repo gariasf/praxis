@@ -47,13 +47,27 @@ Fresnel moves light between the diffuse and specular lobes. Shows as praxis
 a few 8-bit steps brighter wherever only the ambient lights a surface, most
 on rough metals and towards rims (`pbr-sweep`, `orrery`, `shadows`).
 
-The response has no specular lobe either: Cycles reflects its sky off
-smooth surfaces, most at grazing angles, where praxis's ambient adds
-nothing. Shows as Cycles the brighter one in a band inside the silhouette
-of a smooth metal (`pbr-sweep`) and across car paint seen at a low angle
-(`town`), the opposite sign to the rough metals above.
+The response has no specular lobe either: Cycles reflects its white world
+off every surface, most at grazing angles, where praxis's ambient adds
+nothing. Shows as Cycles the brighter one, the opposite sign to the rough
+metals above: in a band inside the silhouette of a smooth metal
+(`pbr-sweep`), and across car paint seen at a low angle and window glass
+seen along its wall (`town`). On a rough dielectric the reflection is faint
+and colourless, so it shows in the channels a base colour leaves dark:
+about two 8-bit steps on the shaded half of `orrery`'s large sphere, and up
+to five on `uv-grid`'s saturated cells, each of which carries an even tint.
+Eight of those cells fit Cycles' colour as praxis's scaled by 0.98 to 1.02
+plus one white light, each within an 8-bit step, which leaves the Texture's
+BC compression under a step. `texture-wall`'s flat cells, of roughness 1 and
+seen from above, stay within two steps of Cycles'.
 
 ![A metal of roughness 0.9: praxis brighter where only the ambient reaches it](differences/ambient-response.png)
+
+![Town's windows at frame 59, seen along their walls: Cycles' glass reflects its world](differences/ambient-glass.png)
+
+![Orrery's large sphere at its shaded rim, at 4x: Cycles two steps brighter in the red and green its blue cells leave dark](differences/ambient-rough-dielectric.png)
+
+![Uv-grid's flat cells: Cycles brighter in each cell's dark channels](differences/ambient-flat-cells.png)
 
 ## Highlights widened by specular antialiasing and Toksvig
 
@@ -69,9 +83,19 @@ floor as a broad sheen where Cycles keeps a narrow streak: its whole floor
 is brighter in praxis, more so with distance, the source of its large mean
 difference.
 
+Nearer than the mirror point of `minification`'s raking light, that sheen
+dims and then brightens into a second highlight at the frame's centre,
+where Cycles' streak falls steadily: down the frame's middle 80 columns praxis reads 219 near row 640
+of 1440, 247 near row 720 and 198 near row 752 (mean of RGB, 8-bit), against
+Cycles' 249, 243 and 235. The data Channels' 4x anisotropic filtering reads
+finer mips there than Toksvig widened the roughness for; a capture with the
+data Channels at 1x falls steadily from the mirror point.
+
 ![A metal of roughness 0.1: praxis's highlights wider](differences/widened-highlights.png)
 
-![Minification's floor at the sun's reflection: praxis's sheen against Cycles' streak](differences/toksvig-sheen.png)
+![Minification's floor at its light's reflection: praxis's sheen against Cycles' streak](differences/toksvig-sheen.png)
+
+![Minification's floor at the frame's centre: praxis's second highlight under Cycles' streak](differences/anisotropic-second-highlight.png)
 
 ## 4x MSAA against supersampling
 
@@ -81,7 +105,34 @@ praxis resolves edges from four samples per pixel; Cycles averages
 hundreds. Shows as one-pixel lines along silhouettes, and along wires and
 other geometry thinner than a pixel, whose coverage four samples quantise.
 
+A line that slants slowly across the pixel rows holds each split of its
+covered samples for a run of pixels, then steps to the next. Shows as
+darker dashes along a wire against the sky, about a pixel and a half wide
+(`town` frame 300): runs where one row holds all four samples, between
+lighter runs where two rows share them. Its darkest row steps from 14 to 54
+(mean of RGB, 8-bit) in one pixel, where Cycles' ramps between 17 and 58
+over about twenty.
+
 ![Town's wires and window edges](differences/msaa-edges.png)
+
+![A wire against the sky at town's frame 300, at 6x: praxis's dashes where Cycles grades](differences/msaa-coverage-dashes.png)
+
+## A point light's shadow edge at one ray per surface
+
+Tag: `deliberate until ADR 0020's one shadow ray per point light is superseded`.
+
+praxis traces one hard shadow ray per pixel toward each point light, and a
+second where the pixel's samples show another surface, so the light reaches
+all of a surface's samples in a pixel or none. Only the first seven
+directional lights get more: at a shadow's edge, a ray from each other
+sample (ADR 0020). Cycles averages hundreds of samples. Shows as a point
+light's shadow edge stepping by whole pixels where Cycles grades it
+(`shadows`, `pbr-sweep`, `normal-tangent`'s tiles); the sun's edge in the
+same frame is graded as Cycles' is.
+
+![Shadows' point light's shadow edge, at 6x: praxis steps by whole pixels](differences/point-light-shadow-edge.png)
+
+![The sun's shadow edge in the same frame, at 6x: graded in both](differences/sun-shadow-edge.png)
 
 ## A Thin Primitive shaded at its kept samples
 
