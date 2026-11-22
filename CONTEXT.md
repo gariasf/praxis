@@ -308,8 +308,12 @@ The GPU features and limits the engine requires to start. An adapter below it is
 _Avoid_: Minimum spec, requirements, baseline
 
 **Consolidation milestone**:
-A milestone on the ladder that implements no ADR: it audits everything on `main` that the milestones before it built, along fixed Audit lanes, re-verifies the ADRs they implemented, fixes or places every Finding, and closes by its exit criteria like any other milestone. `M3.5` is the first.
+A milestone on the ladder that implements no ADR: it audits what landed on `main` since the last Consolidation milestone's Frozen commit, along the Audit lanes the decision that opens it names, gives every ADR's clauses a verdict against that code, fixes or places every Finding, and closes by its exit criteria like any other milestone. `M3.5` is the first: it audited everything on `main`, along all eight lanes.
 _Avoid_: Cleanup milestone, hardening, tech-debt sprint
+
+**Frozen commit**:
+The one commit of `main` an audit reads. Every Finding's `where` is a line at it, so a fix that lands while the audit runs moves none.
+_Avoid_: Snapshot, baseline commit (a Baseline is a bench record)
 
 **Audit lane**:
 One axis of a Consolidation milestone's audit, with its own brief: what it checks, the kind of evidence a Finding must carry, its tolerance, its default Severity class and how it splits by module. Read-only readers file its Findings, an adversarial verifier reopens each one, and its report lands at `docs/audit/<milestone>/<lane>.md`.
