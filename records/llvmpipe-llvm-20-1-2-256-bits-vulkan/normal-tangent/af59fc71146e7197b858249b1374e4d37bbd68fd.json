@@ -1,0 +1,381 @@
+{
+  "adapter": "llvmpipe (LLVM 20.1.2, 256 bits)",
+  "arena_bytes_in_use": 312892,
+  "backend": "vulkan",
+  "bends_left_out": 0,
+  "bytes_read": 0,
+  "chunks_loaded": 0,
+  "chunks_unloaded": 0,
+  "committed_unix_seconds": 1795387695,
+  "counter_frames": {
+    "arena_bytes_in_use": 312892,
+    "bends_left_out": 0,
+    "bytes_read": 0,
+    "chunks_loaded": 0,
+    "chunks_unloaded": 0,
+    "draw_calls": 8,
+    "frames": {
+      "end": 72,
+      "start": 8
+    },
+    "froxel_lights_overflowed": 0,
+    "gpu_memory_bytes": 488940928,
+    "heap_allocations": 390,
+    "instance_slots_in_use": 1,
+    "instances_drawn": 1,
+    "instances_overflowed": 0,
+    "late_chunks": 0,
+    "late_far_proxies": 0,
+    "late_mips": 0,
+    "lights_overflowed": 0,
+    "moving_instances_left_out": 0,
+    "pool_entries_freed": 0,
+    "renderables_refused": 0,
+    "shadow_mask_lights_overflowed": 0,
+    "static_instances_left_out": 0,
+    "tlas_build_allocations": 0,
+    "triangles_drawn": 3886,
+    "uploaded_bytes": 416
+  },
+  "cpu_frame_hitches": 0,
+  "cpu_frame_microseconds": {
+    "maximum": 123109.701,
+    "median": 111336.598,
+    "p95": 117288.305,
+    "p99": 123109.701
+  },
+  "cpu_time_microseconds": {
+    "any_with_component": {
+      "maximum": 0.8220000000000001,
+      "median": 0.561,
+      "p95": 0.781,
+      "p99": 0.8220000000000001
+    },
+    "clear_just_pressed": {
+      "maximum": 0.811,
+      "median": 0.451,
+      "p95": 0.711,
+      "p99": 0.811
+    },
+    "dynamic_tlas": {
+      "maximum": 1.293,
+      "median": 0.721,
+      "p95": 1.223,
+      "p99": 1.293
+    },
+    "dynamic_tlas_submit": {
+      "maximum": 0.04,
+      "median": 0.03,
+      "p95": 0.04,
+      "p99": 0.04
+    },
+    "encode": {
+      "maximum": 328.746,
+      "median": 247.132,
+      "p95": 319.42199999999997,
+      "p99": 328.746
+    },
+    "fly_camera": {
+      "maximum": 1.932,
+      "median": 1.222,
+      "p95": 1.6920000000000002,
+      "p99": 1.932
+    },
+    "prepare_frame": {
+      "maximum": 21.473,
+      "median": 10.677,
+      "p95": 13.59,
+      "p99": 21.473
+    },
+    "propagate_world_transforms": {
+      "maximum": 5.007,
+      "median": 2.714,
+      "p95": 3.7560000000000002,
+      "p99": 5.007
+    },
+    "record_previous_curvatures": {
+      "maximum": 1.031,
+      "median": 0.771,
+      "p95": 0.911,
+      "p99": 1.031
+    },
+    "record_previous_world_transforms": {
+      "maximum": 1.7420000000000002,
+      "median": 1.292,
+      "p95": 1.653,
+      "p99": 1.7420000000000002
+    },
+    "reset_teleported": {
+      "maximum": 11.838000000000001,
+      "median": 1.512,
+      "p95": 1.924,
+      "p99": 11.838000000000001
+    },
+    "resource_exists": {
+      "maximum": 1.973,
+      "median": 0.28,
+      "p95": 0.461,
+      "p99": 1.973
+    },
+    "spin": {
+      "maximum": 2.894,
+      "median": 1.0410000000000001,
+      "p95": 1.2810000000000001,
+      "p99": 2.894
+    },
+    "static_tlas_update": {
+      "maximum": 1.793,
+      "median": 1.262,
+      "p95": 1.492,
+      "p99": 1.793
+    },
+    "stream_chunks": {
+      "maximum": 20.281000000000002,
+      "median": 15.593000000000002,
+      "p95": 19.108999999999998,
+      "p99": 20.281000000000002
+    },
+    "submit": {
+      "maximum": 122677.489,
+      "median": 110983.27500000001,
+      "p95": 116900.009,
+      "p99": 122677.489
+    },
+    "sway": {
+      "maximum": 2.694,
+      "median": 0.912,
+      "p95": 1.302,
+      "p99": 2.694
+    },
+    "upload": {
+      "maximum": 38.668000000000006,
+      "median": 18.979,
+      "p95": 24.457,
+      "p99": 38.668000000000006
+    }
+  },
+  "culling_per_slot_microseconds": {
+    "maximum": 1107.2810000000002,
+    "median": 894.249,
+    "p95": 953.098,
+    "p99": 1107.2810000000002
+  },
+  "draw_calls": 8,
+  "dynamic_tlas_cpu_microseconds": {
+    "maximum": 1.333,
+    "median": 0.741,
+    "p95": 1.2530000000000001,
+    "p99": 1.333
+  },
+  "froxel_lights_overflowed": 0,
+  "gate_microseconds": {
+    "maximum": 87448.859,
+    "median": 81929.228,
+    "p95": 85979.05799999999,
+    "p99": 87448.859
+  },
+  "gate_pass_microseconds": {
+    "culling_phase_one_slots": {
+      "maximum": 1475.135,
+      "median": 606.038,
+      "p95": 695.785,
+      "p99": 1475.135
+    },
+    "culling_phase_one_triangles": {
+      "maximum": 1947.808,
+      "median": 154.964,
+      "p95": 241.394,
+      "p99": 1947.808
+    },
+    "culling_phase_two_slots": {
+      "maximum": 290.40799999999996,
+      "median": 243.44699999999997,
+      "p95": 264.83000000000004,
+      "p99": 290.40799999999996
+    },
+    "culling_phase_two_triangles": {
+      "maximum": 117.527,
+      "median": 83.06500000000001,
+      "p95": 112.83,
+      "p99": 117.527
+    },
+    "depth_prepass": {
+      "maximum": 1455.51,
+      "median": 1308.579,
+      "p95": 1413.807,
+      "p99": 1455.51
+    },
+    "depth_pyramid_pass": {
+      "maximum": 4318.093,
+      "median": 2499.185,
+      "p95": 3103.021,
+      "p99": 4318.093
+    },
+    "froxel_pass": {
+      "maximum": 428.436,
+      "median": 250.17699999999996,
+      "p95": 377.449,
+      "p99": 428.436
+    },
+    "lit_pass": {
+      "maximum": 81362.754,
+      "median": 76106.931,
+      "p95": 80166.55500000001,
+      "p99": 81362.754
+    }
+  },
+  "gpu_frame_hitches": 0,
+  "gpu_frame_microseconds": {
+    "maximum": 124347.027,
+    "median": 111335.785,
+    "p95": 117333.322,
+    "p99": 124347.027
+  },
+  "gpu_memory_bytes": 488940928,
+  "gpu_memory_bytes_by_kind": {
+    "acceleration_structures": 130274184,
+    "geometry_arenas": 83886072,
+    "render_targets": 24268660,
+    "resident_tails": 611880,
+    "scene_and_pass_buffers": 230629476,
+    "staging": 3072,
+    "texture_pool": 19267584
+  },
+  "gpu_pass_microseconds": {
+    "bend_pass": {
+      "maximum": 0.0,
+      "median": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "blas_refit": {
+      "maximum": 0.0,
+      "median": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "culling_phase_one_slots": {
+      "maximum": 877.7840000000001,
+      "median": 657.081,
+      "p95": 721.7289999999999,
+      "p99": 877.7840000000001
+    },
+    "culling_phase_one_triangles": {
+      "maximum": 4267.387,
+      "median": 160.292,
+      "p95": 202.85600000000002,
+      "p99": 4267.387
+    },
+    "culling_phase_two_slots": {
+      "maximum": 270.71799999999996,
+      "median": 236.236,
+      "p95": 264.129,
+      "p99": 270.71799999999996
+    },
+    "culling_phase_two_triangles": {
+      "maximum": 132.179,
+      "median": 89.876,
+      "p95": 120.622,
+      "p99": 132.179
+    },
+    "depth_prepass": {
+      "maximum": 2102.687,
+      "median": 1891.724,
+      "p95": 2039.682,
+      "p99": 2102.687
+    },
+    "depth_pyramid_pass": {
+      "maximum": 3142.039,
+      "median": 2088.95,
+      "p95": 2688.569,
+      "p99": 3142.039
+    },
+    "dynamic_tlas_build": {
+      "maximum": 0.0,
+      "median": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    },
+    "froxel_pass": {
+      "maximum": 416.45799999999997,
+      "median": 248.114,
+      "p95": 292.771,
+      "p99": 416.45799999999997
+    },
+    "lit_pass": {
+      "maximum": 81832.647,
+      "median": 76372.618,
+      "p95": 79371.99799999999,
+      "p99": 81832.647
+    },
+    "phase_two_depth_pass": {
+      "maximum": 124.698,
+      "median": 90.932,
+      "p95": 119.14999999999999,
+      "p99": 124.698
+    },
+    "shadow_mask_pass": {
+      "maximum": 35600.787000000004,
+      "median": 25064.927,
+      "p95": 28516.029,
+      "p99": 35600.787000000004
+    },
+    "tonemapping_pass": {
+      "maximum": 4100.374000000001,
+      "median": 3229.255,
+      "p95": 3550.99,
+      "p99": 4100.374000000001
+    }
+  },
+  "heap_allocations": 390,
+  "height": 360,
+  "instance_slots_in_use": 1,
+  "instances_drawn": 1,
+  "instances_overflowed": 0,
+  "late_chunks": 0,
+  "late_far_proxies": 0,
+  "late_mips": 0,
+  "lights_overflowed": 0,
+  "lit_pass_wait_microseconds": {
+    "maximum": 140.632,
+    "median": 100.872,
+    "p95": 129.305,
+    "p99": 140.632
+  },
+  "measured_frames": 64,
+  "moving_instances_left_out": 0,
+  "pool_entries_freed": 0,
+  "profile": "release",
+  "provenance": {
+    "branch": "main",
+    "busy_processes": [],
+    "commit": "e718943866d7a9d2272e46a9e837cc0dbbbcf9ce",
+    "dirty": false,
+    "driver": "llvmpipe",
+    "driver_info": "Mesa 25.2.8-0ubuntu0.24.04.5 (LLVM 20.1.2)",
+    "gpu_frame_p95_over_median": 1.0538689065694375,
+    "gpu_frame_p95_over_neighbours": 1.053863018949408,
+    "gpu_load_percent": null,
+    "harness_version": 14,
+    "one_minute_load_average": 3.28,
+    "other_processes": [],
+    "quiet": false,
+    "scene_content_hash": "b362177d641f35edd27ddb731d16001b50b651b08558537419be5fbf2b975299",
+    "source_hash": "af59fc71146e7197b858249b1374e4d37bbd68fd",
+    "started_unix_seconds": 1795387793
+  },
+  "renderables_refused": 0,
+  "scene": "normal-tangent",
+  "shadow_mask_lights_overflowed": 0,
+  "shadow_ray_microseconds": {
+    "maximum": 37488.48299999999,
+    "median": 26307.259000000005,
+    "p95": 32033.959000000003,
+    "p99": 37488.48299999999
+  },
+  "static_instances_left_out": 0,
+  "tlas_build_allocations": 0,
+  "triangles_drawn": 3886,
+  "uploaded_bytes": 416,
+  "width": 640
+}
