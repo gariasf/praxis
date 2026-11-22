@@ -8,7 +8,7 @@ A lane brief names the referents (spec issues, fog lines, the next milestone's s
 
 Every reader and the verifier receive the same things, and nothing from chat:
 
-- **The frozen commit**: the commit of `main` the audit reads, named on the milestone's spec issue. Every `where` is a `path:line` at that commit. A reader works in a worktree checked out at it, never at `main`'s tip, so a fix landing mid-audit moves no line.
+- **The frozen commit**: the commit of `main` the audit reads, named on the milestone. Every `where` is a `path:line` at that commit. A reader works in a worktree checked out at it, never at `main`'s tip, so a fix landing mid-audit moves no line.
 - **The scope**: what landed on `main` between the last Consolidation milestone's frozen commit and this one (for `M5.5`, since `8bc34eb18fcfb79307193551e96619316aef566c`; everything, at `M3.5`). A reader opens older code only to judge an ADR clause or a doc against it, and files a Finding there only when what landed since made it false.
 - **The lane brief** below: scope, evidence kind, tolerance, severity default and module split.
 - `docs/audit/deviations.md`: where the code should not match the literature, and why. A reader who finds the code matching an entry files nothing; one who finds an entry wrong files a Finding against the entry, not the code.
@@ -17,7 +17,7 @@ Every reader and the verifier receive the same things, and nothing from chat:
 
 ## The pipeline
 
-1. **Brief.** The session writes the lane's brief into each reader's prompt verbatim from this file, adding only the frozen commit, the module that reader owns, the report's path and the Finding template. The brief is shared: every reader of a lane reads the same one, so no reader's findings are shaped by a prompt the others lacked.
+1. **Brief.** The session writes the lane's brief into each reader's prompt verbatim from this file, adding only the frozen commit, the scope, the module that reader owns, the report's path and the Finding template. The brief is shared: every reader of a lane reads the same one, so no reader's findings are shaped by a prompt the others lacked.
 2. **Readers.** One read-only sub-agent per module in the lane's split, in parallel, at high effort (`docs/agents/sessions.md`, Effort). Each files Findings in the template below, every one with evidence in the lane's kind; a claim without that evidence is not filed. Readers change no file and run nothing that writes to the tree. A lane whose evidence is a measurement benches on the frozen commit, on a quiet machine with no peer benching, and keeps the bench JSON beside the report; `docs/agents/workflow.md`, Performance and memory, says how a figure is quoted.
 3. **Verifier.** One sub-agent after the readers, independent of them, at high effort, adversarial: it reopens every Finding's evidence itself (re-runs the bench line, opens the source, reads the code at the line), trusts no reader's quote, and writes `confirmed`, `narrowed` (the claim rewritten) or `killed`, with one reason each. A Finding without evidence in its lane's kind is killed on form. Killed Findings stay in the report's closing Killed section with their reason, so the next audit does not re-find them.
 4. **Report.** `docs/audit/<milestone>/<lane>.md` on `main`, by PR that closes the lane's ticket, in the form below. The PR's own review (`docs/agents/workflow.md`, Review) runs as for any docs PR.
