@@ -10,6 +10,7 @@ use crate::cooked::{AssetId, CookedTexture, resident_tail_level};
 use crate::gpu::{FLOOR_BINDING_ARRAY_ELEMENTS_PER_STAGE, FLOOR_TEXTURE_ARRAY_LAYERS};
 use crate::render::LoadStaging;
 use crate::render::bind_groups::MATERIALS;
+use crate::stats::gpu_memory::level_bytes;
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// Texture classes each Channel's binding array can hold: the Channels split
@@ -21,6 +22,13 @@ pub(crate) const CLASSES_PER_CHANNEL: u32 =
 /// The most slices a Texture class holds, the floor's array layers, and the
 /// Layers each class spans: a Layer is its class times this plus its slice.
 pub(crate) const SLICES_PER_CLASS: u32 = FLOOR_TEXTURE_ARRAY_LAYERS;
+
+/// The most bytes a Texture class's array holds for its view to span it
+/// whole: the first submit that draws with a view bound has wgpu zero-fill
+/// the slices it spans that nothing wrote
+/// [ref:wgpu-core-30-bound-view-needs-initialised]
+/// [ref:wgpu-core-30-submit-initialises-textures].
+const WHOLE_VIEW_ARRAY_BYTES: u64 = 32 << 20;
 
 /// The colour Channels' anisotropy (albedo, emissive) and the data
 /// Channels' (normal, metallic-roughness, occlusion), the owner's pick from
@@ -313,6 +321,8 @@ struct ChannelTextures {
     /// Each Texture class's array and its view, at the class's index.
     textures: Vec<Counted<wgpu::Texture>>,
     views: Vec<wgpu::TextureView>,
+    view_slices: Vec<u32>,
+    views_changed: bool,
 }
 
 impl ChannelTextures {
@@ -323,6 +333,8 @@ impl ChannelTextures {
             table: ClassTable::new(classes),
             textures: Vec::new(),
             views: Vec::new(),
+            view_slices: Vec::new(),
+            views_changed: false,
         }
     }
 
@@ -401,7 +413,8 @@ impl ChannelTextures {
     }
 
     /// A free slice of `shape`'s Texture class, its array created when the
-    /// class opens, or `None`, logged, when the Channel has no room for it.
+    /// class opens and, past `WHOLE_VIEW_ARRAY_BYTES`, its view widened to
+    /// the slice, or `None`, logged, when the Channel has no room for it.
     fn place(&mut self, device: &wgpu::Device, shape: TextureShape) -> Option<ClassAndSlice> {
         let Some(placement) = self.table.place(shape) else {
             tracing::error!(
@@ -433,13 +446,30 @@ impl ChannelTextures {
                     view_formats: &[],
                 },
             );
-            // An array of one slice would otherwise get a 2D view.
-            self.views
-                .push(array.create_view(&wgpu::TextureViewDescriptor {
-                    dimension: Some(wgpu::TextureViewDimension::D2Array),
-                    ..Default::default()
-                }));
             self.textures.push(array);
+        }
+        let (class, slices_placed) = (placement.class as usize, placement.slice + 1);
+        if class == self.views.len() || self.view_slices[class] < slices_placed {
+            let array = &self.textures[class];
+            let spanned_slices = if level_bytes(array).sum::<u64>() <= WHOLE_VIEW_ARRAY_BYTES {
+                array.depth_or_array_layers()
+            } else {
+                slices_placed
+            };
+            // An array of one slice would otherwise get a 2D view.
+            let view = array.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                array_layer_count: Some(spanned_slices),
+                ..Default::default()
+            });
+            if class == self.views.len() {
+                self.views.push(view);
+                self.view_slices.push(spanned_slices);
+            } else {
+                self.views[class] = view;
+                self.view_slices[class] = spanned_slices;
+            }
+            self.views_changed = true;
         }
         Some(placement)
     }
@@ -484,8 +514,6 @@ pub struct MaterialPool {
     data_sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
-    /// Set when a load opens a Texture class the bind group lacks.
-    bind_group_is_stale: bool,
     /// The residency switch: every Texture loads its Resident tail alone.
     holds_back_finer_mips: bool,
 }
@@ -564,6 +592,7 @@ impl MaterialPool {
         for channel in MaterialChannel::ALL {
             let neutral = Self::neutral_texture(channel);
             channels[channel as usize].push(device, staging, &neutral, holds_back_finer_mips);
+            channels[channel as usize].views_changed = false;
         }
 
         let colour_sampler = trilinear_sampler(device, "Colour Channel Sampler", COLOUR_ANISOTROPY);
@@ -598,7 +627,6 @@ impl MaterialPool {
             data_sampler,
             bind_group_layout,
             bind_group,
-            bind_group_is_stale: false,
             holds_back_finer_mips,
         }
     }
@@ -954,13 +982,11 @@ impl MaterialPool {
             && self.free_for_room(reader, make_room)
         {}
         let channel_textures = &mut self.channels[channel as usize];
-        let classes_before = channel_textures.views.len();
         let Some((placement, resident_level)) =
             channel_textures.push(device, staging, &texture, holds_back_finer_mips)
         else {
             return Ok(Self::DEFAULT_LAYER);
         };
-        self.bind_group_is_stale |= channel_textures.views.len() != classes_before;
         let loaded = LoadedTexture {
             channel,
             shape: TextureShape::of(&texture),
@@ -1032,11 +1058,9 @@ impl MaterialPool {
             );
         }
         let channel = &mut self.channels[texture_channel as usize];
-        let classes_before = channel.views.len();
         let Some(target) = channel.place(device, target_shape) else {
             return StreamedMips::Refused;
         };
-        self.bind_group_is_stale |= channel.views.len() != classes_before;
         let target_array = &channel.textures[target.class as usize];
         for (level, bytes) in levels.iter().enumerate() {
             staging.write_texture(target_array, level as u32, target.slice, bytes);
@@ -1160,13 +1184,11 @@ impl MaterialPool {
         let tail_level = loaded.shape.resident_tail_level();
         let next_shape = loaded.shape.mips_from(next_level);
         let channel = &mut self.channels[loaded.channel as usize];
-        let classes_before = channel.views.len();
         let coarser_chain = if next_level < tail_level && channel.table.has_room(&[next_shape]) {
             channel.place(device, next_shape)
         } else {
             None
         };
-        self.bind_group_is_stale |= channel.views.len() != classes_before;
         if let Some(target) = coarser_chain {
             staging.copy_texture(
                 &channel.textures[chain.class as usize],
@@ -1214,9 +1236,13 @@ impl MaterialPool {
     }
 
     /// Rebuilds the bind group when loads since the last call opened Texture
-    /// classes, so a scene's loads build it once: bind groups are snapshots.
+    /// classes or widened a class's view, so a scene's loads build it once:
+    /// bind groups are snapshots.
     pub fn refresh_bind_group(&mut self, device: &wgpu::Device) {
-        if std::mem::take(&mut self.bind_group_is_stale) {
+        let views_changed = (self.channels.iter_mut()).fold(false, |changed, channel| {
+            changed | std::mem::take(&mut channel.views_changed)
+        });
+        if views_changed {
             let started = Instant::now();
             self.bind_group = create_bind_group(
                 device,
@@ -1387,6 +1413,45 @@ mod tests {
             })
             .collect();
         assert_eq!(shapes, [first, second]);
+    }
+
+    /// A class whose array holds `WHOLE_VIEW_ARRAY_BYTES` or fewer is viewed
+    /// whole from its opening; a larger one's view spans the slices placed in
+    /// it, and only a placement that widens one or opens a class leaves the
+    /// bind group to rebuild.
+    #[test]
+    fn a_large_classes_view_spans_only_the_slices_placed() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        // 16 MiB a slice: the class of two slices is the last viewed whole.
+        let shape = TextureShape {
+            width: 4096,
+            height: 4096,
+            mip_level_count: 1,
+            format: wgpu::TextureFormat::Bc7RgbaUnormSrgb,
+        };
+        let mut channel = ChannelTextures::new("test", &gpu_memory(&context), CLASSES_PER_CHANNEL);
+        let place = |channel: &mut ChannelTextures| {
+            let placement = channel.place(&context.device, shape).unwrap();
+            (placement, std::mem::take(&mut channel.views_changed))
+        };
+        let placed: Vec<(ClassAndSlice, bool)> = (0..4).map(|_| place(&mut channel)).collect();
+
+        let array_slices: Vec<u32> = (channel.textures.iter())
+            .map(|array| array.depth_or_array_layers())
+            .collect();
+        assert_eq!(array_slices, [1, 2, 4]);
+        assert_eq!(channel.view_slices, [1, 2, 1]);
+        let views_changed: Vec<bool> = placed.iter().map(|&(_, changed)| changed).collect();
+        assert_eq!(views_changed, [true, true, false, true]);
+
+        channel.table.release(placed[1].0);
+        assert_eq!(place(&mut channel), (placed[1].0, false));
+        assert_eq!(channel.view_slices, [1, 2, 1]);
+
+        assert!(place(&mut channel).1);
+        assert_eq!(channel.view_slices, [1, 2, 2]);
     }
 
     /// Two Materials sampling one Texture load it once, and a Material

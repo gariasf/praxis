@@ -258,7 +258,6 @@ self.requests
 <pre class="code"><code>let Some(target) = channel.place(device, target_shape) else {
     return StreamedMips::Refused;
 };
-self.bind_group_is_stale |= channel.views.len() != classes_before;
 let target_array = &amp;channel.textures[target.class as usize];
 for (level, bytes) in levels.iter().enumerate() {
     staging.write_texture(target_array, level as u32, target.slice, bytes);
@@ -303,7 +302,6 @@ evictable.then(|| EvictionRank {
 } else {
     None
 };
-self.bind_group_is_stale |= channel.views.len() != classes_before;
 if let Some(target) = coarser_chain {
     staging.copy_texture(
         &amp;channel.textures[chain.class as usize],

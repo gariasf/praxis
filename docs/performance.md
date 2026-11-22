@@ -33,6 +33,124 @@ its commit.
 | `LOADS_PER_FRAME` (`src/streaming/io.rs`) | A frame that loads and places Chunks of one Placement, each with a Mesh of 5,832 triangles, a Material and two Textures of its own, costs 336 to 393 µs of CPU more than a frame that loads none, and 95 to 115 µs more a Chunk, where `main` read 3.73 to 3.83 ms and 542 to 576 µs; `world`'s slowest frame reads 8.3 to 8.4 ms at 3 loads a frame, 12.1 to 12.4 ms at 8 and 12.4 to 13.1 ms at 16, so the count stays 3 | M4 Pro, Metal | b2fe0a38 and 94273c1f, each with #851's change (2026-11-15) | The probe of #811 on `world`'s State at 2560×1440, 1 to 16 loads a frame, three interleaved runs of `main` and the branch; `world`'s bench, three rounds each of `main` and the branch at 3, 8 and 16 loads a frame; "A streamed load is placed once its BLASes are ready" below |
 | `LOD_ERROR_MARGIN` (`src/render/shaders/shadow_mask.wgsl`) | `orrery` frame 59 at 2560×1440: 870 shadow mask pixels differ from LOD 0 forced at a margin of 1.0, 522 at 1.5 and 500 at 2.0 and at 3.0, against 4,100 with a pixel's width along the ray and 16,426 with no rule. With time held at frame 59 and the camera 2.25 m further back along its view, where a sphere has just stepped to LOD 1: 1,759 at 1.0, 714 at 2.0 with two triangles of patch on that sphere, and 623 at 3.0, 4.0, 8.0 and 1,000.0; 6 m back, where the next steps: 2,285, 761 and 711. Over the 33 frames from 0 to 8 m back, 3.0 and 1,000.0 read the same count on every frame. `world`'s frames 59, 300 and 599 change by no pixel from no rule at 3.0, at 2560×1440 and at 640×360, and `pbr-sweep`'s Golden keeps specks on its spheres at 1.5 that 2.0 clears | M4 Pro, Metal | 34cea25e (2026-11-16, #880) | `praxis shadow-mask-difference orrery <png> 2560x1440 --frame <n>`, a build per margin; for the camera further back, a probe that advances no Tick past frame 59 and moves the camera back 0.25 m a frame; `praxis capture world` at each rule and `praxis difference` of the pairs |
 | `FAR_GROUND_DEPTH_METRES` (`src/scenes/world.rs`) | `world` frames 59 and 1500 at 2560×1440, with the ground past the View distance, 1,024 km from the world's middle to its edge, given another Material: it shows in 107,414 and 107,233 pixels, one band under the horizon, at 0.5, 0.1 and 0.02 m under the tiles, and on frame 59 as many pixels show the background without it; at 0.005 m it shows in 107,414 and 2,538,251, through the tiles. Reaching 102.4 km, it shows in 104,854 and 104,673 pixels, a row fewer, at 0.05, 0.01 and 0.002 m, and through the tiles at 0.0005 m | M4 Pro, Metal | 13fa4920 with #815's change (2026-11-18) | A probe that draws the ground past the View distance with `slate` and reads its reach and its depth from the environment; `praxis capture world <png> 2560x1440 --frame 59,1500` at each depth, and `praxis difference` against the capture that draws it with `grass` |
+| `WHOLE_VIEW_ARRAY_BYTES` (`src/assets/material.rs`) | wgpu's zero-fill of a new Texture class's array took 6.6 to 7.1 µs of `submit` and 18.0 to 21.5 µs of GPU a MiB (two 2,048² classes of 64 slices, 672 MiB: 4.4 and 12.1 ms; of 128 slices, 1,344 MiB: 9.6 and 28.9 ms); a view of the slices placed on every array instead cost 509 to 510 bind group builds a traversal against 173 to 175, and `world`'s `encode` median 4 to 30 µs | M4 Pro, Metal | f24809ca with the change (2026-11-22, #988) | "The traversal's fill frame" below |
+
+## The traversal's fill frame: wgpu zero-filled a new Texture class's whole array (2026-11-22, #988)
+
+**Summary.** The traversal's 37 to 39 ms GPU frame, frame 11986 in the Far
+field's fill, is the frame that opens two Texture classes of 2,048² Textures
+at 128 slices: 1,344 MiB of arrays. Each array was bound through a view of
+all its slices, and in the first submit that draws with a view bound
+wgpu-core zero-fills every mip and slice the view spans that nothing wrote
+[ref:wgpu-core-30-bound-view-needs-initialised]
+[ref:wgpu-core-30-submit-initialises-textures]. The main thread spent 9.6 of
+that `submit`'s 9.7 ms recording the fills, and the depth pre-pass, the first
+pass that samples Materials, waited 28.9 ms for them. An array of more than
+32 MiB (`WHOLE_VIEW_ARRAY_BYTES`) is now bound through a view of the slices
+placed in it, widened as slices are placed, so nothing unwritten lies under
+it. In three probed traversals of the change no frame passes 16,667 µs: the
+hold and the fill read at most 8.9 ms of CPU and 8.8 ms of GPU, and the
+traversal's maxima are 7.3 to 8.9 ms of CPU and 10.7 to 11.0 ms of GPU.
+`world`'s bench segment reads as on `main`; its Baseline's `heap_allocations`
+rises from 10,529 to 10,670 over frames 8 to 72, the bind group builds that
+follow a widened view.
+
+Apple M4 Pro, Metal, release builds, 2560×1440, on AC power under
+`caffeinate -dims`, in two quiet turns, each after three quiet preflight
+reads in a row. The first turn ran one probe binary of the change's first
+form on `b9cb5185`, whose environment switch picks what a view spans: the
+array, as on `main`, the control below; the slices placed, on every array;
+or the array up to 2^25 texels. The second turn ran release builds of
+`f24809ca` (`main`) and of the change, and the change with the probe. The
+probe adds a row per traversal frame with the texture pool's bytes, a line
+per submit whose textures wgpu-core zero-filled with the time
+`initialize_texture_memory` took, and each pass's timestamps for a frame
+whose GPU time exceeds its passes' sum by 1 ms. The bench stamps every round
+after its first not quiet: the GPU load reads 98% straight after the run
+before, and the one-minute load 1.9 to 2.4 from the runs themselves; no
+round lists a busy process.
+
+### What the frame waited on
+
+In the control, the submit of frame 11986 zero-fills 1,524 mip-slices of
+each of the two arrays, 127 slices of 12 mips, in 9,570 µs of its 9,749 µs.
+On the GPU, culling phase one ends 5.1 ms after the frame's first timestamp
+and the depth pre-pass starts at 34.1 ms. The dynamic TLAS's build, 0.8 and
+1.3 ms in the frames either side, reads 4.7 ms there, and the fills do not
+explain it: with the change, the build of the frame that opens the two
+classes reads 0.8 ms in two runs and 4.1 ms in the third, whose 8.8 ms is the
+fill's largest GPU frame. That reading is not placed. Every frame that opens
+a class of 64 MiB or more shows the fills' two costs, in proportion:
+
+| Texture pool added, MiB | Frame | `submit`, µs | GPU frame, µs | GPU frame less its passes, µs | `submit` with the change | GPU frame with the change | Less its passes, with the change |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1,344 | 11986 | 9,749.3 | 37,490.5 | 28,939.8 | 55.0 to 61.1 | 4,347.8 to 8,772.6 | 5.3 to 6.7 |
+| 672 | 4133 | 4,593.2 | 16,798.0 | 12,079.0 | 74.1 to 96.8 | 4,663.8 to 4,700.6 | 2.3 to 8.9 |
+| 336 | 1225 | 2,213.3 | 11,087.9 | 5,673.5 | 56.8 to 61.3 | 5,367.9 to 5,389.3 | 6.2 to 8.3 |
+| 160 | 7388 | 1,813.9 | 7,025.9 | 2,076.5 | 70.5 to 73.0 | 4,848.2 to 4,852.0 | 1.6 to 6.5 |
+| 80 | 2539 | 947.5 | 4,841.2 | 274.0 | 71.1 to 85.4 | 4,098.8 to 4,316.8 | 0.9 to 2.6 |
+
+Frame 4133, the 672 MiB of two 64-slice classes, is the traversal's other
+frame past 16,667 µs, outside the hold and the fill. The bench segment's
+fill opens 16 and 160 MiB, which is why it read 7.8 to 8.8 ms there and not
+this.
+
+### The traversal and the bench segment
+
+| `praxis traverse` | Views span arrays | The change, runs 1 / 2 / 3 |
+|---|---:|---:|
+| CPU frame maximum, µs | 15,353.0 | 8,915.8 / 7,478.7 / 7,325.9 |
+| CPU frame p99, µs | 3,063.4 | 3,051.4 / 3,076.0 / 3,098.5 |
+| GPU frame maximum, µs | 37,490.5 | 10,742.7 / 10,951.1 / 10,715.2 |
+| GPU frame p99, µs | 5,804.7 | 5,740.1 / 5,744.4 / 5,743.5 |
+| Late Chunks | 0 | 0 |
+| Late Far proxies | 0 | 0 |
+| Late mips | 4 | 4 |
+| Peak GPU memory, bytes | 4,339,241,284 | 4,339,241,284 |
+| Frames of the hold | 3 | 3 / 2 / 2 |
+| Largest CPU frame of the hold, µs | 4,747.0 | 4,529.3 / 4,551.7 / 4,573.1 |
+| Largest GPU frame of the hold, µs | 4,363.2 | 4,355.2 / 4,402.3 / 4,403.2 |
+| Frames of the fill | 26 | 26 / 26 / 26 |
+| Largest CPU frame of the fill, µs | 15,353.0 | 8,915.8 / 7,478.7 / 6,975.3 |
+| Largest GPU frame of the fill, µs | 37,490.5 | 8,772.6 / 6,038.0 / 5,901.4 |
+| Frames past 16,667 µs after the warm-up | 2 | 0 / 0 / 0 |
+
+| `world`'s bench segment, rounds 1 / 2 / 3 | `main` | The change |
+|---|---:|---:|
+| CPU frame median, µs | 1,634.6 / 1,631.6 / 1,654.1 | 1,626.7 / 1,632.0 / 1,629.2 |
+| CPU frame p99, µs | 4,944.9 / 4,932.7 / 5,023.5 | 4,945.9 / 4,742.0 / 4,869.0 |
+| CPU frame maximum, µs | 8,913.5 / 9,155.5 / 8,740.7 | 9,747.4 / 9,014.6 / 9,260.8 |
+| GPU frame median, µs | 6,048.9 / 6,039.9 / 6,046.1 | 6,050.5 / 6,044.9 / 6,045.6 |
+| GPU frame p99, µs | 9,318.0 / 9,407.0 / 9,184.8 | 9,263.3 / 9,070.6 / 9,127.8 |
+| GPU frame maximum, µs | 13,040.8 / 13,575.5 / 12,768.4 | 13,425.5 / 13,498.3 / 13,346.0 |
+| Far-field fill, ms | 600.0 / 598.1 / 601.0 | 597.7 / 601.2 / 602.8 |
+| Far-field fill, frames | 79 | 79 |
+| Fast-travel hold, ms | 25.0 / 25.6 / 24.6 | 25.8 / 25.0 / 25.2 |
+| `heap_allocations`, frames 8..72 | 10,529 | 10,670 |
+
+### Why a view spans a small array whole
+
+A view of the slices placed on every array removes every fill but one block
+of a compressed mip smaller than a block, which wgpu-core fills before the
+copy that writes it. It costs elsewhere: a widened view is a new bind group,
+and wgpu-core tracks an array used through part of its slices by mip and
+slice in every pass that binds it. On `world`'s bench that form read 4 to 30
+µs more of `encode` at the median than the control in each of three rounds,
+where the form that keeps small arrays whole read within 3 µs of it. The
+first three rows are the first turn's; the last is the second turn's, whose
+`main` read 241.8, 244.8 and 250.2 µs of `encode`.
+
+| A view spans | Bind group builds a traversal | Their median / largest, µs | Submits that zero-fill | Zero-fills recorded, µs a traversal | Largest, µs | `world`'s `encode` median, rounds 1 / 2 / 3, µs | `world`'s CPU frame median, µs |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| its array (`main`) | 20 | 50 / 86 | 40 | 27,687 | 9,570 | 236.9 / 241.7 / 243.2 | 1,613.4 / 1,619.7 / 1,626.7 |
+| the slices placed, every array | 509 to 510 | 44 to 45 / 79 to 115 | 510 to 511 | 7,477 to 7,597 | 409 to 413 | 260.1 / 246.1 / 273.5 | 1,657.8 / 1,615.5 / 1,690.5 |
+| its array up to 2^25 texels, else the slices placed | 144 to 145 | 45 to 47 / 81 to 103 | 160 to 161 | 10,977 to 11,183 | 1,524 to 1,558 | 239.9 / 241.8 / 244.6 | 1,611.5 / 1,621.4 / 1,621.8 |
+| its array up to 32 MiB, else the slices placed (the change) | 173 to 175 | 46 to 47 / 74 to 86 | 187 to 189 | 9,700 to 9,776 | 1,462 to 1,531 | 247.3 / 246.2 / 246.4 | 1,626.7 / 1,632.0 / 1,629.2 |
+
+What is left: the largest fill the change still records, 1.46 to 1.53 ms of
+one submit, is the 256-slice class of 256² Textures, 22 MiB in 2,142
+mip-slices, as on `main`. Recording a fill costs by the mip-slice as well as
+by the byte, so a bound in bytes leaves that one.
 
 ## M5 exit (2026-11-21, #826)
 
