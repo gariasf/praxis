@@ -56,7 +56,7 @@ desktop only: Windows, Linux, macOS
 | M2 | Cooked assets | done |
 | M3 | Main pass: culling, MSAA, lighting, ray-traced shadows, HDR | done |
 | M4 | Streamed world: Chunk streaming and texture residency | done |
-| M5 | Far field: LOD, HLOD and the 2 km view | |
+| M5 | Far field: LOD, HLOD and the 2 km view | done |
 | M6 | Global illumination: ray-traced probes | |
 | M7 | World content | |
 | M8 | Gameplay core and physics | |
