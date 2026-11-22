@@ -45,7 +45,8 @@ not hold as written. Criterion 4's clause that no frame of the Fast travel's
 hold or fill passes 16,667 µs holds on the bench segment but not on the
 traversal, where a fill frame of the probed run reads 38.8 ms of GPU (#988).
 Criterion 9's thin-feature bias reads −0.66 and +1.44 of 255 against 0.58
-and 0.39; the owner's ruling is on the milestone. `town`'s gate reads 6.80 ms
+and 0.39. The owner accepted both for M5 (2026-11-22, on the milestone).
+`town`'s gate reads 6.80 ms
 in the fast state, within its 6.93 ms figure. No Budget is newly breached.
 The top three offenders are the traversal's fill frame (#988), `town`'s GPU
 frame and gate (#602), and the far-field fill's `stream_chunks`, which sets
