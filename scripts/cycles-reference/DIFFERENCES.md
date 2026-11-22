@@ -177,9 +177,10 @@ Tag: `deliberate until ADR 0026's Far proxies are superseded`.
 
 Past the Load radius praxis draws and traces each Chunk's Far proxy, its
 Placements merged and simplified to within a pixel at the Load radius, under
-a Material baked for it; `praxis export-scene world` writes the Chunks within
-the View distance whole, each Placement's own Mesh and Material at LOD 0, so
-Cycles renders and traces those. Shows past the Load radius as a line along
+a Material baked for it; `praxis export-scene world` writes what stands in
+the Chunks within the View distance, each building whole with its windows,
+each Placement's own Mesh and Material at LOD 0, so Cycles renders and traces
+those. Shows past the Load radius as a line along
 each roof's edge, Cycles brighter above it and praxis below, where the
 proxy's roof sits a pixel off the Placements' (`world`). The shadows Far
 proxies cast and take match the Placements' at the gallery's frames. praxis

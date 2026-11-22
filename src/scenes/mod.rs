@@ -459,6 +459,22 @@ impl ReferenceScene {
         Some((placements, lights))
     }
 
+    /// What stands in the scene's Chunk at `coordinates`, where its
+    /// generator makes one Chunk alone: `chunk_content`'s Placements and
+    /// lights, but each building whole where the Chunk holds its walls'
+    /// pivot, with each window of its own whichever Chunk holds that
+    /// window's pivot, and nothing of it where the Chunk does not.
+    #[cfg(feature = "cook")]
+    pub(crate) fn chunk_standing_content(
+        self,
+        coordinates: [i32; 2],
+    ) -> Option<(Vec<CookedPlacement>, Vec<CookedLight>)> {
+        match self {
+            Self::World => Some(world::static_content_standing(coordinates)),
+            _ => None,
+        }
+    }
+
     /// The camera at `frame`, moved by `shift` metres. The path is a function
     /// of the frame number, not of time, so it does not depend on machine
     /// speed.

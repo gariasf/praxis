@@ -41,9 +41,10 @@ pub const SCENE_FORMAT_VERSION: u32 = 1;
 /// Renderables use. The World runs as a capture runs it, through the fixed
 /// schedule, and the manifest sources in `assets` are read for their
 /// names; nothing is cooked into the Cooked cache and no GPU is used.
-/// A scene with a Far field writes, of its Chunks, those within its View
-/// distance of the camera at `frame`, each whole, where praxis draws Far
-/// proxies past the Load radius, and its ground past the View distance.
+/// A scene with a Far field writes what stands in its Chunks within its
+/// View distance of the camera at `frame`, each building whole or not at
+/// all, where praxis draws Far proxies past the Load radius, and its ground
+/// past the View distance.
 /// `crowd` is refused: its figures' shapes exist only on the GPU.
 pub fn export_scene(
     scene: ReferenceScene,
@@ -239,8 +240,11 @@ pub fn export_scene(
     Ok(())
 }
 
-/// The Chunks of `scene` within its View distance of `camera`, each
-/// generated alone and loaded through `loader`.
+/// What stands in the Chunks of `scene` within its View distance of
+/// `camera`, each generated alone and loaded through `loader`: a building
+/// whose walls one of them holds brings its windows past the View distance,
+/// each in a Chunk of its own pivot's coordinates, and a building past it
+/// leaves none of its windows.
 fn chunks_in_view(
     scene: ReferenceScene,
     camera: glam::DVec3,
@@ -251,13 +255,12 @@ fn chunks_in_view(
         if distance_metres(camera, coordinates) > scene.view_distance_metres() {
             continue;
         }
-        let (placements, lights) = (scene.chunk_content(coordinates))
+        let (placements, lights) = (scene.chunk_standing_content(coordinates))
             .with_context(|| format!("{}'s generator makes no Chunk alone", scene.name()))?;
-        let Some(chunk) = chunk::split(placements, lights).remove(&coordinates) else {
-            continue;
-        };
-        let id = scene.chunk_id(coordinates);
-        chunks.push(load_cooked_chunk(loader, id, coordinates, &chunk)?);
+        for (pivots_in, chunk) in chunk::split(placements, lights) {
+            let id = scene.chunk_id(pivots_in);
+            chunks.push(load_cooked_chunk(loader, id, pivots_in, &chunk)?);
+        }
     }
     Ok(LoadedChunks(chunks))
 }
@@ -1034,12 +1037,15 @@ mod tests {
         }
     }
 
-    /// world at its first Golden's frame: the 2,198,407 Placements of the
-    /// 225 Chunks within the 2 km View distance of its camera, as its whole
-    /// static content counts them, besides its 10,000 birds and the ground
-    /// past the View distance, and each name and file they use.
+    /// world at its first Golden's frame: the ground tiles and the 23,542
+    /// buildings of the 225 Chunks within the 2 km View distance of its
+    /// camera, each building with the windows its shape gives, a window
+    /// every 1.6 m along each wall on each storey, and no window without its
+    /// walls, whichever Chunk holds a window's pivot; besides its 10,000
+    /// birds and the ground past the View distance, and each name and file
+    /// they use.
     #[test]
-    fn world_exports_the_chunks_within_the_view_distance() {
+    fn world_exports_the_buildings_within_the_view_distance_whole() {
         #[derive(serde::Deserialize)]
         struct Renderable {
             translation: [f64; 3],
@@ -1053,6 +1059,23 @@ mod tests {
             materials: Value,
             renderables: Vec<Renderable>,
         }
+        let windows_of = |walls: &str| {
+            Some(match walls {
+                "cottage" => 28,
+                "house" => 60,
+                "terrace" => 72,
+                "hall" => 66,
+                "townhouse" => 96,
+                "tower" => 180,
+                "shop" => 36,
+                "block" => 192,
+                _ => return None,
+            })
+        };
+        const WIDEST_BUILDING_METRES: f64 = 10.0;
+        const CELL_METRES: f64 = 16.0;
+        let cell = |[x, _, z]: [f64; 3]| [x, z].map(|metres| (metres / CELL_METRES).floor() as i64);
+        let reach_metres = WIDEST_BUILDING_METRES / 2.0 + 0.01;
         let directory = scratch("world");
         export_scene(ReferenceScene::World, Some(59), &assets(), &directory).unwrap();
         let file = std::fs::File::open(directory.join("scene.json")).unwrap();
@@ -1066,7 +1089,10 @@ mod tests {
             1e-9,
             "camera",
         );
-        let (mut birds, mut far_ground) = (0, 0);
+        let (mut birds, mut far_ground, mut ground_tiles) = (0, 0, 0);
+        let (mut buildings, mut roofs) = (0, 0);
+        let mut walls: HashMap<[i64; 2], Vec<([f64; 3], i32)>> = HashMap::new();
+        let mut windows = Vec::new();
         let mut chunks = std::collections::BTreeSet::new();
         for renderable in &exported.renderables {
             assert!(exported.meshes.get(&renderable.mesh).is_some());
@@ -1074,12 +1100,24 @@ mod tests {
                 birds += 1;
             } else if renderable.mesh == "ground" && renderable.scale[0] > 1_000.0 {
                 far_ground += 1;
+            } else if renderable.mesh == "window" {
+                windows.push(renderable.translation);
             } else {
                 chunks.insert(crate::cooked::chunk_holding(renderable.translation.into()));
+                if let Some(count) = windows_of(&renderable.mesh) {
+                    buildings += 1;
+                    let pivots = walls.entry(cell(renderable.translation)).or_default();
+                    pivots.push((renderable.translation, count));
+                } else if renderable.mesh == "ground" {
+                    ground_tiles += 1;
+                } else {
+                    assert!(renderable.mesh.ends_with(" roof"), "{}", renderable.mesh);
+                    roofs += 1;
+                }
             }
         }
         assert_eq!((birds, far_ground), (10_000, 1));
-        assert_eq!(exported.renderables.len(), 2_198_407 + 10_000 + 1);
+        assert_eq!((ground_tiles, buildings, roofs), (900, 23_542, 23_542));
         assert_eq!(chunks.len(), 225);
         for coordinates in chunks {
             let distance_metres = distance_metres(camera, coordinates);
@@ -1087,6 +1125,28 @@ mod tests {
                 distance_metres <= 2_000.0,
                 "{coordinates:?} at {distance_metres} m"
             );
+        }
+        for window in windows {
+            let [cell_x, cell_z] = cell(window);
+            let nearby = (-1..=1).flat_map(|x| (-1..=1).map(move |z| [cell_x + x, cell_z + z]));
+            let its_walls = nearby
+                .flat_map(|cell| {
+                    let pivots = walls.get(&cell).into_iter().flatten();
+                    pivots
+                        .enumerate()
+                        .map(move |(index, (pivot, _))| (cell, index, *pivot))
+                })
+                .find(|(_, _, pivot)| {
+                    (pivot[0] - window[0]).abs() <= reach_metres
+                        && (pivot[2] - window[2]).abs() <= reach_metres
+                });
+            let Some((cell, index, _)) = its_walls else {
+                panic!("the window at {window:?} has no walls");
+            };
+            walls.get_mut(&cell).unwrap()[index].1 -= 1;
+        }
+        for (pivot, missing_windows) in walls.values().flatten() {
+            assert_eq!(*missing_windows, 0, "the building at {pivot:?}");
         }
         let names = serde_json::json!({
             "meshes": exported.meshes,
