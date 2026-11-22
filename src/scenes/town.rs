@@ -772,7 +772,7 @@ fn flocks(grid: &FlockGrid) -> Vec<Flock> {
                     + stray * (2.0 * flock_random(Choice::Flock, 0) - 1.0),
                 grid.height_metres
                     .start
-                    .lerp(grid.height_metres.end, flock_random(Choice::Flock, 1)),
+                    .lerp_monotonic(grid.height_metres.end, flock_random(Choice::Flock, 1)),
                 offset(grid.middle.z, row) + stray * (2.0 * flock_random(Choice::Flock, 2) - 1.0),
             );
             let turning = if flock_random(Choice::Flock, 3) < 0.5 {
@@ -783,7 +783,7 @@ fn flocks(grid: &FlockGrid) -> Vec<Flock> {
             let radians_per_second = turning
                 * FLOCK_SPIN
                     .start
-                    .lerp(FLOCK_SPIN.end, flock_random(Choice::Flock, 4));
+                    .lerp_monotonic(FLOCK_SPIN.end, flock_random(Choice::Flock, 4));
             let birds = (0..BIRDS_PER_FLOCK)
                 .map(|bird| {
                     let bird_random =
@@ -793,7 +793,9 @@ fn flocks(grid: &FlockGrid) -> Vec<Flock> {
                     let [inner_squared, outer_squared] =
                         [grid.radius_metres.start, grid.radius_metres.end]
                             .map(|radius| radius * radius);
-                    let radius = inner_squared.lerp(outer_squared, bird_random(0)).sqrt();
+                    let radius = inner_squared
+                        .lerp_monotonic(outer_squared, bird_random(0))
+                        .sqrt();
                     let angle = std::f64::consts::TAU * bird_random(1);
                     // A turn about +Y by the flock's spin moves this point
                     // along (−sin, 0, −cos) of its angle.
