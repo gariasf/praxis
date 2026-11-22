@@ -16,9 +16,9 @@ use crate::camera::Camera;
 use crate::components::Transform;
 use crate::cooked::CHUNK_EDGE_METRES;
 #[cfg(feature = "cook")]
-use crate::cooked::chunk_origin;
-#[cfg(feature = "cook")]
 use crate::cooked::{CookedLight, CookedPlacement};
+#[cfg(feature = "cook")]
+use crate::cooked::{chunk_holding, chunk_origin};
 use crate::streaming::chunks::ChunkPlacement;
 use crate::streaming::{FarGround, LoadedChunk};
 
@@ -279,7 +279,9 @@ pub(crate) fn spawn_world(world: &mut World, loader: &mut dyn AssetLoader) -> an
 }
 
 #[cfg(feature = "cook")]
-pub(crate) use generators::{materials, meshes, static_content, static_content_reaching, textures};
+pub(crate) use generators::{
+    materials, meshes, static_content, static_content_reaching, static_content_standing, textures,
+};
 
 #[cfg(feature = "cook")]
 mod generators {
@@ -493,7 +495,7 @@ mod generators {
     }
 
     pub(crate) fn static_content() -> (Vec<CookedPlacement>, Vec<CookedLight>) {
-        (placements_reaching(&|_, _| true), Vec::new())
+        (placements_reaching(&|_, _| true, &|_| true), Vec::new())
     }
 
     /// The Placements of each ground tile, lot and farm that reaches the
@@ -502,50 +504,73 @@ mod generators {
     pub(crate) fn static_content_reaching(
         coordinates: [i32; 2],
     ) -> (Vec<CookedPlacement>, Vec<CookedLight>) {
+        let placements = placements_reaching(&reaching(coordinates), &|_| true);
+        (placements, Vec::new())
+    }
+
+    /// The ground tiles and buildings that stand in the Chunk at
+    /// `coordinates`, in `static_content`'s order: each whose pivot the
+    /// Chunk holds, a building whole, with each of its windows whichever
+    /// Chunk holds that window's pivot.
+    pub(crate) fn static_content_standing(
+        coordinates: [i32; 2],
+    ) -> (Vec<CookedPlacement>, Vec<CookedLight>) {
+        let stands = |pivot: glam::DVec3| chunk_holding(pivot) == coordinates;
+        let placements = placements_reaching(&reaching(coordinates), &stands);
+        (placements, Vec::new())
+    }
+
+    /// Whether a square reaches the Chunk at `coordinates`, given its centre
+    /// and how far it lies from it on either axis.
+    fn reaching(coordinates: [i32; 2]) -> impl Fn(glam::DVec3, f64) -> bool {
         let lowest = chunk_origin(coordinates);
         let highest = lowest + glam::DVec3::splat(CHUNK_EDGE_METRES);
-        let reaches = |centre: glam::DVec3, reach_metres: f64| {
+        move |centre: glam::DVec3, reach_metres: f64| {
             let above_lowest = centre - lowest + reach_metres;
             let below_highest = highest - centre + reach_metres;
             above_lowest.x >= 0.0
                 && above_lowest.z >= 0.0
                 && below_highest.x >= 0.0
                 && below_highest.z >= 0.0
-        };
-        (placements_reaching(&reaches), Vec::new())
+        }
     }
 
     /// The Placements of each ground tile, settlement lot and farm for which
     /// `reaches` holds, given the centre of its square and how far its
-    /// Placements' pivots lie from it at most on either axis.
-    fn placements_reaching(reaches: &dyn Fn(glam::DVec3, f64) -> bool) -> Vec<CookedPlacement> {
+    /// Placements' pivots lie from it at most on either axis, and `stands`
+    /// holds, given the pivot of the tile or of the building's walls.
+    fn placements_reaching(
+        reaches: &dyn Fn(glam::DVec3, f64) -> bool,
+        stands: &dyn Fn(glam::DVec3) -> bool,
+    ) -> Vec<CookedPlacement> {
         let scene = ReferenceScene::World;
         let ground = scene.mesh_id("ground");
         let mut placements: Vec<_> = ground_tile_centres(GROUND_TILE_METRES, GROUND_TILES_PER_SIDE)
-            .filter(|centre| reaches(*centre, 0.0))
+            .filter(|centre| reaches(*centre, 0.0) && stands(*centre))
             .map(|centre| placement(ground, None, centre, Quat::IDENTITY))
             .collect();
         for row in 0..SETTLEMENTS_PER_SIDE {
             for column in 0..SETTLEMENTS_PER_SIDE {
                 let region = [column, row];
                 if reaches(settlement_centre(region), SETTLEMENT_HALF_SIZE_METRES) {
-                    place_settlement(region, reaches, &mut placements);
+                    place_settlement(region, reaches, stands, &mut placements);
                 }
             }
         }
         for centre in ground_tile_centres(GROUND_TILE_METRES, GROUND_TILES_PER_SIDE) {
             if reaches(centre, GROUND_TILE_METRES / 2.0) {
-                place_farm(centre, &mut placements);
+                place_farm(centre, stands, &mut placements);
             }
         }
         placements
     }
 
     /// Places the settlement of `region`: blocks of lots between streets,
-    /// a building on each lot `reaches` holds for.
+    /// a building on each lot `reaches` and `stands` hold for.
     fn place_settlement(
         region: [u32; 2],
         reaches: &dyn Fn(glam::DVec3, f64) -> bool,
+        stands: &dyn Fn(glam::DVec3) -> bool,
         placements: &mut Vec<CookedPlacement>,
     ) {
         let settlement = settlement_index(region);
@@ -566,7 +591,7 @@ mod generators {
                         + (within + 0.5) * LOT_PITCH_METRES
                 };
                 let centre = corner + glam::dvec3(offset(lot_column), 0.0, offset(lot_row));
-                if !reaches(centre, LOT_PITCH_METRES / 2.0) {
+                if !reaches(centre, LOT_PITCH_METRES / 2.0) || !stands(centre) {
                     continue;
                 }
                 let pick = |choice: Choice| {
@@ -584,9 +609,13 @@ mod generators {
     }
 
     /// Places a farm on the ground tile at `centre`, by `FARM_CHANCE`, unless
-    /// a settlement reaches the tile; it is clad in its region's
-    /// settlement's facades.
-    fn place_farm(centre: glam::DVec3, placements: &mut Vec<CookedPlacement>) {
+    /// a settlement reaches the tile or `stands` does not hold for it; it is
+    /// clad in its region's settlement's facades.
+    fn place_farm(
+        centre: glam::DVec3,
+        stands: &dyn Fn(glam::DVec3) -> bool,
+        placements: &mut Vec<CookedPlacement>,
+    ) {
         let region = [centre.x, centre.z]
             .map(|metres| ((metres + WORLD_HALF_SIZE_METRES) / REGION_METRES).floor() as u32);
         let reach_metres = SETTLEMENT_HALF_SIZE_METRES + GROUND_TILE_METRES / 2.0;
@@ -606,6 +635,9 @@ mod generators {
                 0.0,
                 spread_metres * (2.0 * pick(Choice::FarmZ) - 1.0),
             );
+        if !stands(position) {
+            return;
+        }
         let settlement = settlement_index(region);
         place_building(&BUILDINGS[FARM], settlement, position, pick, placements);
     }
