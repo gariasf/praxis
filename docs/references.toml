@@ -436,11 +436,11 @@ section = "Metal Shading Language Specification 4.1 (2026-06-04), §8.4, Table 8
 quote = '''sin(x): For x in the domain [-pi, pi], the maximum absolute error is <= 2⁻¹³ and larger otherwise.'''
 checked = 2026-10-26
 
-["glam-0.32.1-perspective-infinite-reverse-rh"]
-url = "https://github.com/bitshifter/glam-rs/blob/e8ed32dcd0232b8078b2be91d6fd8f3b99c28842/src/f32/neon/mat4.rs#L1186-L1204"
-section = "glam 0.32.1, Mat4::perspective_infinite_reverse_rh (the sse2 and scalar forms match)"
-quote = '''maps `Z = z_near` to a depth of `1` and `Z = infinity` to a depth of `0`. [...] Vec4::new(0.0, 0.0, 0.0, -1.0), Vec4::new(0.0, 0.0, z_near, 0.0),'''
-checked = 2026-10-26
+["glam-0.34.3-perspective-infinite-reverse"]
+url = "https://github.com/bitshifter/glam-rs/blob/26f184cbb7e6e71c35c624aad1eeb5e33d6ac88d/src/camera/camera_impl.rs#L206-L237"
+section = "glam 0.34.3, camera_impl::perspective_infinite_reverse, which camera::rh::proj::directx::perspective_infinite_reverse calls with RH true and YFLIP false"
+quote = '''Infinite perspective with reversed Z: near maps to depth 1, infinity to 0. [...] let zw = if RH { -1.0 } else { 1.0 }; let tz = near; [...] Vec4::new(0.0, 0.0, 0.0, zw), Vec4::new(0.0, 0.0, tz, 0.0),'''
+checked = 2026-11-22
 
 ["metal-feature-set-tables-msaa-max"]
 url = "https://web.archive.org/web/20260924114533/https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=9"

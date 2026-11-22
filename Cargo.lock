@@ -952,9 +952,9 @@ dependencies = [
 
 [[package]]
 name = "glam"
-version = "0.32.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
+checksum = "627003914c6057c9c8f0832ee4f870b5a4f599d0cfa83f4072675114860cd0ff"
 
 [[package]]
 name = "gltf"
@@ -1968,7 +1968,7 @@ dependencies = [
  "bevy_mikktspace",
  "bevy_tasks",
  "bytemuck",
- "glam 0.32.1",
+ "glam 0.34.3",
  "gltf",
  "image",
  "intel_tex_2",

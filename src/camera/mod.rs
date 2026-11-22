@@ -82,7 +82,7 @@ impl Camera {
     /// (ADR 0014), so the camera sits at the origin of view space and of
     /// every position the shaders see.
     pub fn view_matrix(&self) -> glam::Mat4 {
-        glam::Mat4::look_at_rh(glam::Vec3::ZERO, self.forward(), glam::Vec3::Y)
+        glam::camera::rh::view::look_at_mat4(glam::Vec3::ZERO, self.forward(), glam::Vec3::Y)
     }
 }
 
@@ -95,9 +95,13 @@ const NEAR_PLANE: f32 = 0.1;
 /// front of the camera, measured along the view axis, lands at depth `NEAR_PLANE / distance`, so depth is 1
 /// at the near plane and falls towards 0 at infinity. Pair it with a depth
 /// buffer cleared to 0 and compared with `Greater`
-/// [ref:glam-0.32.1-perspective-infinite-reverse-rh].
+/// [ref:glam-0.34.3-perspective-infinite-reverse].
 pub fn projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
-    glam::Mat4::perspective_infinite_reverse_rh(FIELD_OF_VIEW, aspect_ratio, NEAR_PLANE)
+    glam::camera::rh::proj::directx::perspective_infinite_reverse(
+        FIELD_OF_VIEW,
+        aspect_ratio,
+        NEAR_PLANE,
+    )
 }
 
 pub fn fly_camera(input: Res<Input>, time: Res<Time>, mut camera: ResMut<Camera>) {

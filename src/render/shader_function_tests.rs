@@ -1706,7 +1706,7 @@ fn position_at_rebuilds_the_point_a_depth_shows_through_a_pixel() {
         return;
     };
     let size = [2560.0_f32, 1440.0];
-    let view = glam::Mat4::look_to_rh(
+    let view = glam::camera::rh::view::look_to_mat4(
         glam::Vec3::ZERO,
         glam::vec3(0.3, -0.5, -0.8).normalize(),
         glam::Vec3::Y,
