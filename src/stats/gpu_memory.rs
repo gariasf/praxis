@@ -294,7 +294,7 @@ fn texture_bytes(texture: &wgpu::Texture, transient_saves_memory: bool) -> u64 {
 }
 
 /// Bytes of each level of `texture`'s mip chain at one sample.
-fn level_bytes(texture: &wgpu::Texture) -> impl Iterator<Item = u64> + '_ {
+pub(crate) fn level_bytes(texture: &wgpu::Texture) -> impl Iterator<Item = u64> + '_ {
     (0..texture.mip_level_count()).map(|level| {
         let size = texture.size().mip_level_size(level, texture.dimension());
         texture.format().theoretical_memory_footprint(size)

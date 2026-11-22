@@ -6125,6 +6125,32 @@ section = "Unity 6.0 Scripting API, Mesh.GetUVDistributionMetric: description, r
 quote = '''The UV distribution metric can be used to calculate the desired mipmap level based on the position of the camera. [...] Average of triangle area / uv area. [...] // uvDistributionMetric is the average of triangle area / uv area (a ratio from world space triangle area to normalised uv area) // - triangle area is in world space // - uv area is in normalised units (0->1 rather than 0->texture size)'''
 checked = 2026-11-21
 
+["wgpu-core-30-bound-view-needs-initialised"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-core/src/device/resource.rs#L3203-L3213"
+section = "wgpu-core 30.0.2, device/resource.rs L3203-L3213, Device::create_texture_binding: a texture view bound in a bind group asks for initialised memory over the mips and array layers the view spans"
+quote = '''        texture_init_actions.push(TextureInitTrackerAction {
+            texture: texture.clone(),
+            range: TextureInitRange {
+                mip_range: view.desc.range.mip_range(texture.desc.mip_level_count),
+                layer_range: view
+                    .desc
+                    .range
+                    .layer_range(texture.desc.array_layer_count()),
+            },
+            kind: MemoryInitKind::NeedsInitializedMemory,
+        });'''
+checked = 2026-11-22
+
+["wgpu-core-30-submit-initialises-textures"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-core/src/command/memory_init.rs#L257-L261"
+section = "wgpu-core 30.0.2, command/memory_init.rs L257-L261, BakedCommands::initialize_texture_memory, which Queue::submit calls for each command buffer (device/queue.rs L1463): the mips and layers a command buffer needs initialised and nothing wrote are cleared in that submit"
+quote = '''    // inserts all texture initializations that are going to be needed for
+    // executing the commands and updates resource init states accordingly any
+    // textures that are left discarded by this command buffer will be marked as
+    // uninitialized
+    pub(crate) fn initialize_texture_memory('''
+checked = 2026-11-22
+
 ["wgpu-core-30-lose-if-oom"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L688-L699"
 section = "wgpu-core 30.0.1, device/resource.rs L688-L699: Device::lose_if_oom, called at the end of every poll (poll_and_return_closures, L800) and every submit (Queue::submit, queue.rs L1567); handle_hal_error (L701-L710) loses the device on OutOfMemory"
