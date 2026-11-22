@@ -815,6 +815,14 @@ quote = '''int used_extra = (av < 0) + (bv < 0) + (cv < 0);
 if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles || split)'''
 checked = 2026-10-26
 
+["meshoptimizer-1.3-scan-meshlets"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/src/clusterizer.cpp#L259-L261"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), appendMeshlet (L243), called per triangle by meshopt_buildMeshletsScan (L1264)"
+quote = '''int used_extra = (av < 0) + (bv < 0) + (cv < 0);
+
+if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles || split)'''
+checked = 2026-11-22
+
 ["meshoptimizer-0.25-cluster-bounds"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L721-L744"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), meshoptimizer.h, the documentation of meshopt_computeClusterBounds and meshopt_computeMeshletBounds"
@@ -832,15 +840,21 @@ section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), the default vertex 
 quote = '''static int gEncodeVertexVersion = 0; [...] return meshopt_encodeVertexBufferLevel(buffer, buffer_size, vertices, vertex_count, vertex_size, meshopt::kEncodeDefaultLevel, meshopt::gEncodeVertexVersion);'''
 checked = 2026-10-26
 
-["meshoptimizer-0.25-vertex-block"]
-url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/vertexcodec.cpp#L701-L713"
-section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), getVertexBlockSize (L140-L147) and decodeVertexBlock's control bytes (L711-L713); codec 0 spends a header byte per byte of vertex instead (decodeBytes, L648-L650)"
+["meshoptimizer-1.3-vertex-codec"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/src/vertexcodec.cpp#L125"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), the default vertex codec version, which meshopt_encodeVertexBuffer uses (L1750)"
+quote = '''static int gEncodeVertexVersion = 1; [...] return meshopt_encodeVertexBufferLevel(buffer, buffer_size, vertices, vertex_count, vertex_size, meshopt::kEncodeDefaultLevel, meshopt::gEncodeVertexVersion);'''
+checked = 2026-11-22
+
+["meshoptimizer-1.3-vertex-block"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/src/vertexcodec.cpp#L701-L721"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), getVertexBlockSize (L140-L147) and decodeVertexBlock's control bytes (L719-L721); codec 0 spends a header byte per byte of vertex instead (decodeBytes, L648-L650)"
 quote = '''size_t result = (kVertexBlockSizeBytes / vertex_size) & ~(kByteGroupSize - 1);
 
 	return (result < kVertexBlockMaxSize) ? result : kVertexBlockMaxSize; [...] size_t control_size = version == 0 ? 0 : vertex_size / 4;
 	if (size_t(data_end - data) < control_size)
 		return NULL;'''
-checked = 2026-11-03
+checked = 2026-11-22
 
 ["reuse-3.3-globbing"]
 url = "https://reuse.software/spec-3.3/"
@@ -5783,17 +5797,35 @@ section = "meshoptimizer 0.25 README, Simplification (L521), Simplification with
 quote = '''All simplification functions described so far reuse the original vertex buffer and only produce a new index buffer. This means that the resulting mesh will have the same vertex positions and attributes as the original mesh; this is optimal for minimizing the memory consumption [...] Using unique vertex data for each LOD in a chain can improve visual quality, but it comes at a cost of ~doubling vertex memory used (if each LOD is using half the triangles of the previous LOD). [...] When generating a LOD chain, you can either re-simplify each LOD from the original mesh or use the previous LOD as the starting point for the next level. The latter approach is more efficient and produces smoother visual transitions between LOD levels while preserving mesh attributes better. With this method, resulting error values from previous levels should be accumulated for LOD selection.'''
 checked = 2026-11-21
 
+["meshoptimizer-1.3-lod-chain"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/README.md?plain=1#L634-L674"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), README, Simplification with vertex update (L634, L649) and Advanced simplification (L674)"
+quote = '''All simplification functions described so far reuse the original vertex buffer and only produce a new index buffer. This means that the resulting mesh will have the same vertex positions and attributes as the original mesh; this is optimal for minimizing the memory consumption [...] Using unique vertex data for each LOD in a chain can improve visual quality, but it comes at a cost of ~doubling vertex memory used (if each LOD is using half the triangles of the previous LOD). [...] When generating a LOD chain, you can either re-simplify each LOD from the original mesh or use the previous LOD as the starting point for the next level. The latter approach is more efficient and produces smoother visual transitions between LOD levels while preserving mesh attributes better. With this method, resulting error values from previous levels should be accumulated for LOD selection.'''
+checked = 2026-11-22
+
 ["meshoptimizer-0.25-lod-selection"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L454-L460"
 section = "meshoptimizer 0.25 README, Basic simplification, LOD selection example, lines 454-460"
 quote = '''The algorithm can also return the resulting normalized deviation that can be used to choose the correct level of detail based on screen size or solid angle [...] float d = max(0, distance(camera_position, mesh_center) - mesh_radius); float e = d * (tan(camera_fovy / 2) * 2 / screen_height); // 1px in mesh space bool lod_ok = e * lod_factor >= lod_error;'''
 checked = 2026-11-21
 
+["meshoptimizer-1.3-lod-selection"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/README.md?plain=1#L571-L577"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), README, Basic simplification, LOD selection example, lines 571-577"
+quote = '''The algorithm can also return the resulting normalized deviation that can be used to choose the correct level of detail based on screen size or solid angle [...] float d = max(0, distance(camera_position, mesh_center) - mesh_radius); float e = d * (tan(camera_fovy / 2) * 2 / screen_height); // 1px in mesh space bool lod_ok = e * lod_factor >= lod_error;'''
+checked = 2026-11-22
+
 ["meshoptimizer-0.25-simplify-error"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L446-L452"
 section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), README, Simplification: Basic simplification, lines 446-452"
 quote = '''Target error is an approximate measure of the deviation from the original mesh using distance normalized to `[0..1]` range (e.g. `1e-2f` means that simplifier will try to maintain the error to be below 1% of the mesh extents). [...] To disable the error limit, `target_error` can be set to `FLT_MAX`. [...] setting `target_index_count` to 0 will simplify the input mesh as much as possible within the specified error limit; this can be useful for generating LODs that should look good at a given viewing distance.'''
 checked = 2026-11-21
+
+["meshoptimizer-1.3-simplify-error"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/README.md?plain=1#L563-L565"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), README, Simplification: Basic simplification, lines 563-565"
+quote = '''Target error is an approximate measure of the deviation from the original mesh using distance normalized to `[0..1]` range (e.g. `1e-2f` means that simplifier will try to maintain the error to be below 1% of the mesh extents). [...] To disable the error limit, `target_error` can be set to `FLT_MAX`. [...] setting `target_index_count` to 0 will simplify the input mesh as much as possible within the specified error limit; this can be useful for generating LODs that should look good at a given viewing distance.'''
+checked = 2026-11-22
 
 ["meshoptimizer-0.25-simplify-original-vertices"]
 url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L433-L439"
@@ -5809,23 +5841,23 @@ section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2, which exposes simpli
 quote = '''`meshopt_simplifySloppy`, which doesn't follow the topology of the original mesh. This means that it doesn't preserve attribute seams or borders, but it can collapse internal details that are too small to matter because it can merge mesh features that are topologically disjoint but spatially close. [...] `meshopt_SimplifyPrune` allows the simplifier to remove isolated components regardless of the topological restrictions inside the component. [...] - `meshopt_simplifySloppy`'''
 checked = 2026-11-21
 
-["meshoptimizer-0.25-attribute-weights"]
-url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L470-L480"
-section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), README, Attribute-aware simplification: the example's normal weight (L470) and what a weight means (L480)"
+["meshoptimizer-1.3-attribute-weights"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/README.md?plain=1#L587-L597"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), README, Attribute-aware simplification: the example's normal weight (L587) and what a weight means (L597)"
 quote = '''const float nrm_weight = 0.5f; [...] attribute weights are used to control the importance of each attribute in the simplification process. For normalized attributes like normals and vertex colors, a weight around 1.0 is usually appropriate; internally, a change of `1/weight` in attribute value over a distance `d` is approximately equivalent to a change of `d` in position.'''
-checked = 2026-11-14
+checked = 2026-11-22
 
-["meshoptimizer-0.25-simplify-scale"]
-url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L540-L546"
-section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/meshoptimizer.h, the documentation of meshopt_simplifyScale"
+["meshoptimizer-1.3-simplify-scale"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/src/meshoptimizer.h#L609-L615"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), src/meshoptimizer.h, the documentation of meshopt_simplifyScale"
 quote = '''Returns the error scaling factor used by the simplifier to convert between absolute and relative extents [...] Relative error returned by meshopt_simplify via result_error must be *multiplied* by the scaling factor to get absolute error.'''
-checked = 2026-11-14
+checked = 2026-11-22
 
-["meshoptimizer-0.25-simplify-materials"]
-url = "https://github.com/zeux/meshoptimizer/blob/v0.25/README.md?plain=1#L552"
-section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), README, Advanced simplification, a mesh of several materials (L552)"
-quote = '''An alternative approach is to encode information about the material into the vertex buffer, ensuring that all three vertices referencing the same triangle have the same material ID; this may require duplicating vertices on the boundary between materials. After this, simplification can be performed as usual, and after simplification per-triangle material information can be computed from the vertex material IDs. There is no need to inform the simplifier of the value of the material ID: the implicit boundaries created by duplicating vertices with conflicting material IDs will be preserved automatically (unless permissive simplification is used, in which case material boundaries should be protected via `vertex_lock`).'''
-checked = 2026-11-14
+["meshoptimizer-1.3-simplify-materials"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/README.md?plain=1#L672"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), README, Advanced simplification, a mesh of several materials (L672)"
+quote = '''An alternative approach is to encode information about the material into the vertex buffer, ensuring that all three vertices referencing the same triangle have the same material ID; this may require duplicating vertices on the boundary between materials. After this, simplification can be performed as usual, and after simplification per-triangle material information can be computed from the vertex material IDs. There is no need to inform the simplifier of the value of the material ID: the implicit boundaries created by duplicating vertices with conflicting material IDs will be preserved automatically [...] If the source mesh is already split into subsets with non-overlapping vertex indices, and permissive simplification is not used, it should be sufficient to concatenate the subsets into a single vertex/index buffer and simplify the entire mesh at once; the result can be split back into subsets after simplification.'''
+checked = 2026-11-22
 
 ["meshoptimizer-1.3-voxel-remesh"]
 url = "https://github.com/zeux/meshoptimizer/blob/v1.3/README.md?plain=1#L691"
@@ -6576,12 +6608,12 @@ quote = '''Kind_Border,   // not on an attribute seam, has exactly two open edge
 				result[i] = Kind_Locked;'''
 checked = 2026-11-21
 
-["meshoptimizer-0.25-vertex-lock"]
-url = "https://github.com/zeux/meshoptimizer/blob/v0.25/src/meshoptimizer.h#L421-L467"
-section = "meshoptimizer 0.25 (vendored by `meshopt` 0.6.2), src/meshoptimizer.h, the vertex lock flags (L421-L427) and the documentation of meshopt_simplifyWithAttributes (L467)"
-quote = '''Experimental: Simplification vertex flags/locks, for use in `vertex_lock` arrays in simplification APIs [...] /* Do not move this vertex. */
-	meshopt_SimplifyVertex_Lock = 1 << 0, [...] vertex_lock can be NULL; when it's not NULL, it should have a value for each vertex; 1 denotes vertices that can't be moved'''
-checked = 2026-11-21
+["meshoptimizer-1.3-vertex-lock"]
+url = "https://github.com/zeux/meshoptimizer/blob/v1.3/src/meshoptimizer.h#L488-L536"
+section = "meshoptimizer 1.3 (vendored by `meshopt` 0.7.0), src/meshoptimizer.h, the vertex lock flags (L488-L498) and the documentation of meshopt_simplifyWithAttributes (L536)"
+quote = '''Simplification vertex flags/locks, for use in `vertex_lock` arrays in simplification APIs [...] /* Do not move this vertex. */
+	meshopt_SimplifyVertex_Lock = 1 << 0, [...] vertex_lock can be NULL; when it's not NULL, it should have a value for each vertex composed of meshopt_SimplifyVertex_* flags'''
+checked = 2026-11-22
 
 ["meshopt-0.6.2-simplify-options"]
 url = "https://docs.rs/crate/meshopt/0.6.2/source/src/simplify.rs"

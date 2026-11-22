@@ -31,7 +31,7 @@ const OVERDRAW_THRESHOLD: f32 = 1.05;
 pub(super) const LOD_KEPT_INDICES_CEILING: f32 = 0.85;
 
 /// The simplifier's weight of each component of a vertex's normal, as in
-/// its README's example [ref:meshoptimizer-0.25-attribute-weights].
+/// its README's example [ref:meshoptimizer-1.3-attribute-weights].
 const LOD_NORMAL_WEIGHT: f32 = 0.5;
 
 /// The simplifier's weight of each component of a vertex's UV, once that is
@@ -39,12 +39,12 @@ const LOD_NORMAL_WEIGHT: f32 = 0.5;
 const LOD_UV_WEIGHT: f32 = 1.0;
 
 /// Every encoder version and setting a Mesh Blob depends on, for its Cook key.
-/// The meshoptimizer version is the one `meshopt` 0.6.2 vendors, whose vertex
-/// encoder writes codec 0 by default [ref:meshoptimizer-0.25-vertex-codec]:
+/// The meshoptimizer version is the one `meshopt` 0.7.0 vendors, whose vertex
+/// encoder writes codec 1 by default [ref:meshoptimizer-1.3-vertex-codec]:
 /// update them and the `bevy_mikktspace` version with their dependencies.
 pub(super) fn encoder_settings() -> String {
     format!(
-        "bevy_mikktspace 1.0.0, meshoptimizer 0.25, vertex codec 0, overdraw {OVERDRAW_THRESHOLD}, meshlets of {MESHLET_MAX_VERTICES} vertices and {MESHLET_MAX_TRIANGLES} triangles cut in index order, at most {MESH_MAX_LODS} LODs each simplified to half the one before with normals weighted {LOD_NORMAL_WEIGHT} and UVs {LOD_UV_WEIGHT} and kept up to {LOD_KEPT_INDICES_CEILING} of it, zstd {} level {}",
+        "bevy_mikktspace 1.0.0, meshoptimizer 1.3, vertex codec 1, overdraw {OVERDRAW_THRESHOLD}, meshlets of {MESHLET_MAX_VERTICES} vertices and {MESHLET_MAX_TRIANGLES} triangles cut in index order, at most {MESH_MAX_LODS} LODs each simplified to half the one before with normals weighted {LOD_NORMAL_WEIGHT} and UVs {LOD_UV_WEIGHT} and kept up to {LOD_KEPT_INDICES_CEILING} of it, zstd {} level {}",
         zstd::zstd_safe::version_number(),
         CookedMesh::ZSTD_LEVEL
     )
@@ -292,13 +292,13 @@ pub(super) fn push_lod(
 /// triangles, the whole Mesh in one call so that a border between Primitives
 /// collapses on both sides alike, until `MESH_MAX_LODS` or a LOD that keeps
 /// more than `LOD_KEPT_INDICES_CEILING` of the one before, or nothing. A
-/// Thin Primitive's vertices are locked [ref:meshoptimizer-0.25-vertex-lock],
+/// Thin Primitive's vertices are locked [ref:meshoptimizer-1.3-vertex-lock],
 /// so each LOD keeps its whole tube and the halving falls on the Mesh's other
 /// Primitives. A
 /// LOD's error is the sum of the simplifier's errors down to it
-/// [ref:meshoptimizer-0.25-lod-chain], each relative to the Mesh's extent
+/// [ref:meshoptimizer-1.3-lod-chain], each relative to the Mesh's extent
 /// and so times `simplify_scale` in metres
-/// [ref:meshoptimizer-0.25-simplify-scale].
+/// [ref:meshoptimizer-1.3-simplify-scale].
 fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
     let positions = meshopt::VertexDataAdapter::new(
         bytemuck::cast_slice(&mesh.vertices),
@@ -362,7 +362,7 @@ fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
             size_of::<[f32; 5]>(),
             &locked,
             finer.len() / 6 * 3,
-            // No error limit [ref:meshoptimizer-0.25-simplify-error].
+            // No error limit [ref:meshoptimizer-1.3-simplify-error].
             f32::MAX,
             meshopt::SimplifyOptions::None,
             Some(&mut relative_error),
@@ -380,7 +380,7 @@ fn coarser_lods(mesh: &CookedMesh) -> anyhow::Result<Vec<CookedLod>> {
         };
         for (primitive_index, primitive) in mesh.primitives.iter().enumerate() {
             // The simplifier keeps a triangle on its Primitive's vertices
-            // [ref:meshoptimizer-0.25-simplify-materials].
+            // [ref:meshoptimizer-1.3-simplify-materials].
             let mut indices: Vec<u32> = simplified
                 .as_chunks::<3>()
                 .0
@@ -497,7 +497,7 @@ fn cook_primitive(geometry: &Geometry) -> (Vec<CookedVertex>, Vec<u32>) {
 /// vertices, are cut in order into the longest runs the Meshlet limits
 /// allow, like meshoptimizer's `meshopt_buildMeshletsScan`, which `meshopt`
 /// binds only as an `unsafe` call and which counts a degenerate triangle's
-/// repeated corner twice [ref:meshoptimizer-0.25-scan-meshlets]. Kept in
+/// repeated corner twice [ref:meshoptimizer-1.3-scan-meshlets]. Kept in
 /// order, the indices stay as the vertex cache and overdraw passes left
 /// them, and so does every image.
 fn meshlet_triangle_counts(triangles: &[[u32; 3]], vertex_count: usize) -> Vec<usize> {
@@ -992,7 +992,7 @@ pub(crate) mod tests {
     #[test]
     fn the_reference_scenes_meshes_cook_to_the_same_blobs_on_every_machine() {
         const BLOBS_SHA256: &str =
-            "a34f18a84ad9d729079298ca8ceb1cb434e3987a9e786baf63dd29b6f277ae63";
+            "e0b71ece5a57993e4222a3b3983122e85e557cf77d3e3b31fae646c07c72c486";
         let committed_gltf_meshes = reference_gltf_meshes()
             .into_iter()
             .filter(|(path, _)| path.starts_with("assets/NormalTangentTest/"));
