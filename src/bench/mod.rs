@@ -268,6 +268,8 @@ pub struct Measurements {
     pub frames_until_traced: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub probe_ray_frame_growth_microseconds: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub probe_ray_pass_alone_microseconds: Option<f64>,
     /// The waits for BLAS compaction, over the measured frames that waited.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blas_compaction_microseconds: Option<Spread>,
@@ -1088,6 +1090,7 @@ fn measure(
                 .collect();
             frame_growth(&traced, &frame_microseconds)
         },
+        probe_ray_pass_alone_microseconds: crate::render::probe_ray_pass::alone_microseconds(),
         frames_until_traced: (measured.iter())
             .filter_map(|stats| stats.frames_until_traced)
             .max(),
@@ -1191,6 +1194,9 @@ impl std::fmt::Display for Measurements {
         }
         if let Some(growth) = self.probe_ray_frame_growth_microseconds {
             write!(formatter, " probe_ray_frame_growth_us={growth:.1}")?;
+        }
+        if let Some(alone) = self.probe_ray_pass_alone_microseconds {
+            write!(formatter, " probe_ray_pass_alone_us={alone:.1}")?;
         }
         if let Some(frames) = self.frames_until_traced {
             write!(formatter, " frames_until_traced={frames}")?;
@@ -1853,6 +1859,7 @@ mod tests {
             far_field_fill: None,
             frames_until_traced: None,
             probe_ray_frame_growth_microseconds: None,
+            probe_ray_pass_alone_microseconds: None,
             blas_compaction_microseconds: None,
             aliasing: None,
             provenance: None,

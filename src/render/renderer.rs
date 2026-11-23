@@ -1023,6 +1023,7 @@ impl Renderer {
     pub fn flush_gpu_frame_stats(&mut self) -> anyhow::Result<()> {
         if let Some(probe_ray_pass) = self.probe_ray_pass.as_ref().filter(|_| self.shadow_rays) {
             probe_ray_pass.log_hits(&self.device, &self.queue);
+            probe_ray_pass.time_alone(&self.device, &self.queue, self.static_tlas.bound_index());
         }
         self.gpu_stats.flush(&self.device, &self.queue)
     }

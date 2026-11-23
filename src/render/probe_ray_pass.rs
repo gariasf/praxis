@@ -21,6 +21,7 @@ pub(crate) struct ProbeRaySwitches {
     repeats: u32,
     verify_hits: bool,
     block_frames: Option<u32>,
+    direct_dispatch: bool,
 }
 
 impl ProbeRaySwitches {
@@ -33,6 +34,7 @@ impl ProbeRaySwitches {
             repeats: number("PRAXIS_PROBE_REPEATS").unwrap_or(1),
             verify_hits: std::env::var_os("PRAXIS_PROBE_VERIFY").is_some(),
             block_frames: number("PRAXIS_PROBE_BLOCK_FRAMES"),
+            direct_dispatch: std::env::var_os("PRAXIS_PROBE_DIRECT_DISPATCH").is_some(),
         })
     }
 }
@@ -46,6 +48,20 @@ fn number<T: std::str::FromStr>(variable: &str) -> Option<T> {
 }
 
 pub(crate) const HELD_MEASURED_FRAMES: u32 = 600;
+
+const ALONE_REPEATS: u32 = 8;
+const ALONE_SUBMISSIONS: u32 = 45;
+const ALONE_WARM_UP_SUBMISSIONS: u32 = 5;
+
+// ponytail: a global, as one Renderer times the pass alone in a process; carry it in the frame stats if this leaves the prototype.
+static ALONE_NANOSECONDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub(crate) fn alone_microseconds() -> Option<f64> {
+    match ALONE_NANOSECONDS.load(std::sync::atomic::Ordering::Relaxed) {
+        0 => None,
+        nanoseconds => Some(nanoseconds as f64 / 1e3),
+    }
+}
 
 pub(crate) fn held_camera_position() -> Option<glam::DVec3> {
     let value = std::env::var("PRAXIS_PROBE_CAMERA").ok()?;
@@ -69,6 +85,8 @@ pub struct ProbeRayPass {
     ray_scenes: [wgpu::BindGroup; 2],
     bind_group: wgpu::BindGroup,
     results: wgpu::Buffer,
+    // Metal can run a queued frame's passes one after another unless its ray-query compute pass dispatches indirectly.
+    dispatch: wgpu::Buffer,
     switches: ProbeRaySwitches,
     frames: u32,
 }
@@ -100,6 +118,19 @@ impl ProbeRayPass {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
+        let dispatch = wgpu::util::DeviceExt::create_buffer_init(
+            device,
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Probe Ray Dispatch"),
+                contents: wgpu::util::DispatchIndirectArgs {
+                    x: PROBES * switches.rays_per_probe / WORKGROUP_SIZE,
+                    y: 1,
+                    z: 1,
+                }
+                .as_bytes(),
+                usage: wgpu::BufferUsages::INDIRECT,
+            },
+        );
         let bind_group = PROBE_RAY_TRACE.bind_group(
             device,
             &layout,
@@ -146,6 +177,7 @@ impl ProbeRayPass {
             ray_scenes,
             bind_group,
             results,
+            dispatch,
             switches,
             frames: 0,
         }
@@ -166,19 +198,120 @@ impl ProbeRayPass {
     ) {
         let mut timestamp_writes = timestamp_writes;
         for _ in 0..self.switches.repeats {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some(PROBE_RAY_PASS),
-                timestamp_writes: timestamp_writes.take(),
-            });
-            pass.set_pipeline(&self.pipeline);
-            pass.set_bind_group(
-                SHADOW_RAY_SCENE.index,
-                &self.ray_scenes[static_tlas_index],
-                &[],
-            );
-            pass.set_bind_group(PROBE_RAY_TRACE.index, &self.bind_group, &[]);
-            pass.dispatch_workgroups(PROBES * self.switches.rays_per_probe / WORKGROUP_SIZE, 1, 1);
+            self.record_once(encoder, static_tlas_index, timestamp_writes.take());
         }
+    }
+
+    fn record_once(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        static_tlas_index: usize,
+        timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
+    ) {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some(PROBE_RAY_PASS),
+            timestamp_writes,
+        });
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(
+            SHADOW_RAY_SCENE.index,
+            &self.ray_scenes[static_tlas_index],
+            &[],
+        );
+        pass.set_bind_group(PROBE_RAY_TRACE.index, &self.bind_group, &[]);
+        if self.switches.direct_dispatch {
+            pass.dispatch_workgroups(PROBES * self.switches.rays_per_probe / WORKGROUP_SIZE, 1, 1);
+        } else {
+            pass.dispatch_workgroups_indirect(&self.dispatch, 0);
+        }
+    }
+
+    pub(crate) fn time_alone(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        static_tlas_index: usize,
+    ) {
+        let query_set = device.create_query_set(&wgpu::QuerySetDescriptor {
+            label: Some("Probe Ray Alone Queries"),
+            ty: wgpu::QueryType::Timestamp,
+            count: 2,
+        });
+        let buffer = |label, size, usage| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size,
+                usage,
+                mapped_at_creation: false,
+            })
+        };
+        let submission_bytes = 2 * u64::from(wgpu::QUERY_SIZE);
+        let resolved = buffer(
+            "Probe Ray Alone Resolve",
+            submission_bytes,
+            wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+        );
+        let read = buffer(
+            "Probe Ray Alone Read",
+            u64::from(ALONE_SUBMISSIONS) * submission_bytes,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        );
+        let wait = || device.poll(wgpu::PollType::wait_indefinitely());
+        for submission in 0..ALONE_SUBMISSIONS {
+            let mut encoder =
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            for repeat in 0..ALONE_REPEATS {
+                let (first, last) = (repeat == 0, repeat + 1 == ALONE_REPEATS);
+                let timestamp_writes =
+                    (first || last).then_some(wgpu::ComputePassTimestampWrites {
+                        query_set: &query_set,
+                        beginning_of_pass_write_index: first.then_some(0),
+                        end_of_pass_write_index: last.then_some(1),
+                    });
+                self.record_once(&mut encoder, static_tlas_index, timestamp_writes);
+            }
+            queue.submit(std::iter::once(encoder.finish()));
+            // Metal reads a timestamp resolved before its submission completed as 0 or stale.
+            if let Err(error) = wait() {
+                tracing::error!(%error, "probe rays not timed alone");
+                return;
+            }
+            let mut encoder =
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            encoder.resolve_query_set(&query_set, 0..2, &resolved, 0);
+            let offset = u64::from(submission) * submission_bytes;
+            encoder.copy_buffer_to_buffer(&resolved, 0, &read, offset, submission_bytes);
+            queue.submit(std::iter::once(encoder.finish()));
+        }
+        read.map_async(wgpu::MapMode::Read, .., |_| {});
+        let view = match wait().map(|_| read.get_mapped_range(..)) {
+            Ok(Ok(view)) => view,
+            _ => {
+                tracing::error!("probe rays' times alone not read");
+                return;
+            }
+        };
+        let ticks: &[u64] = bytemuck::cast_slice(&view);
+        let nanoseconds_per_tick = f64::from(queue.get_timestamp_period());
+        let mut microseconds: Vec<f64> = ticks
+            .chunks_exact(2)
+            .skip(ALONE_WARM_UP_SUBMISSIONS as usize)
+            .map(|pair| {
+                pair[1].saturating_sub(pair[0]) as f64 * nanoseconds_per_tick
+                    / (1e3 * f64::from(ALONE_REPEATS))
+            })
+            .collect();
+        microseconds.sort_by(f64::total_cmp);
+        let at =
+            |fraction: f64| microseconds[(fraction * (microseconds.len() - 1) as f64) as usize];
+        let median = at(0.5);
+        ALONE_NANOSECONDS.store((median * 1e3) as u64, std::sync::atomic::Ordering::Relaxed);
+        tracing::info!(
+            median_microseconds = median,
+            p10_microseconds = at(0.1),
+            p90_microseconds = at(0.9),
+            "probe ray pass alone"
+        );
     }
 
     pub(crate) fn log_hits(&self, device: &wgpu::Device, queue: &wgpu::Queue) {
