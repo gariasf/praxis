@@ -2731,3 +2731,531 @@ tests; `exact` 7, `explained` 5, `tight` 3 (the neutral normal's
 `sqrt(1)`, `position_at` as its comment says, the octahedral 8-bit bound,
 L1-S09), `loose` 1 (`thin_drawn_radius`, about 40×), `unexplained` 0;
 the 36 tests of the file pass on the M4 Pro.
+
+## tooling
+
+Scope: `src/bench/` with `history/`, `src/stats/`, `src/bin/`,
+`src/capture/`, `src/preflight/`, `scripts/` with the Cycles reference,
+`tests/` but the Goldens' PNGs, and `.github/` for the clauses of ADR 0025
+that scripts and workflows carry, as far as they changed after `8bc34eb1`:
+4,952 changed lines under `src/bench/`, 716 under `src/stats/`, 583 in
+`src/bin/praxis.rs`, 463 in `src/capture/mod.rs`, 266 in
+`src/preflight/mod.rs`, 896 under `scripts/`, 1,810 under `tests/` and 293
+under `.github/`. Four readers at high effort shared the module by file,
+each with the lane brief verbatim: the bench's run, report and provenance;
+the Bench history with the night's sweep; Frame stats, the GPU memory
+ledger, capture, preflight and the CLI with their tests; and the other
+scripts, the Cycles reference, the workflows and the tests that enforce
+written rules. Each read its files' diff since `8bc34eb1` hunk by hunk and
+the code around every hunk, most files in full (their statements precede
+the Counts). ADRs read clause by clause: 0013 and 0024 by every reader,
+0025 by the history and scripts readers; read for the clauses that fall
+here: 0004, 0014, 0015, 0016, 0017, 0018, 0019, 0021, 0022 and 0023. The
+`CLAUDE.md` review checklist and conventions, and `docs/agents/workflow.md`'s
+Session start, Tickets, PRs, Review, Performance and memory and Correctness
+sections, were read as the operational form of what bench, preflight, the
+scripts and the workflows must do. Every `where` is `path:line` at the
+frozen commit. Two Findings count their magnitude on the published `bench-history`
+branch as read on 2026-11-23, after the frozen commit, as the record of
+what the frozen import code wrote. `deviations.md` holds no row at a site in these
+files; `DIFFERENCES.md` was read beside the Cycles reference. Of M3.5's
+eleven tooling Findings, all are found fixed: L1-T01, L1-T02, L1-T05 and
+L1-T08 in code, L1-T03, L1-T04, L1-T06 and L1-T07 by an ADR amendment,
+and L1-T09 to L1-T11 in the workflows and scripts (rows marked below).
+The `uploaded_bytes` lead the render section handed to tooling is settled as L1-T05.
+
+### Clause verdicts
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0004 | "every Frame data must reach the renderer, in order" | holds for capture: drawn and held frames ascending, each prepared then rendered; undrawn frames run the simulation alone and build no Frame data | `src/capture/mod.rs:354-394` |
+| 0013 | "Budgets are judged on an Apple M4 Pro ... the RTX 2070 SUPER is the hardware floor, benched for comparison on Vulkan and on DX12" | holds (bench half): Baselines are keyed by adapter, and by backend unless Vulkan or Metal, so the RTX's DX12 runs have a directory of their own; CI's lavapipe judges counters and memory only; `compare` still applies the Budgets to any adapter's Local run (the last audit's note stands) | `src/bench/mod.rs:146-164`, test `:3118`; `bench/baselines/nvidia-geforce-rtx-2070-super-dx12/`; `.github/workflows/ci.yml:286-296` |
+| 0013 | "the reference machine ... gates regressions, the Budgets being judged on it" | holds in the history's half: Suspects are marked on every non-lavapipe Series, but only the M4 Pro runs a sweep, so only its Regressions are filed; the history judges no Budget | `src/bench/history.rs:391-394`; `scripts/sweep.sh:16-18` |
+| 0013 | "a technique rejected for its cost ... is final only with the figure on both adapters ... from one engine source, their `provenance.source_hash` equal" and "(the Bench records of source hash `6a91ca76`)" | holds: every result carries `source_hash` in its Provenance, and a record holds the run's whole result keyed by source hash; `records/<adapter>/town/6a91ca76….json` exists on `bench-history` for the M4 Pro, the RTX 2070 SUPER on Vulkan and on DX12, and lavapipe; the judging is process | `src/bench/provenance.rs:238-248`, `:276-281`; `src/bench/history.rs:755-794` |
+| 0013 | "When the owner owns target-class hardware, the Baselines are re-recorded on it" | not applicable yet | — |
+| 0013 | "60 fps at 1440p native with CPU at most 6 ms and GPU at most 12 ms per frame" | holds: `REFERENCE` is 2560x1440, frames step at `SIXTY_HERTZ`, Budgets 6000 and 12000 | `src/bench/mod.rs:61-67`, `:893-894`; `bench/budgets.json:2-3` |
+| 0013 | "CPU time summed across threads is neither measured nor budgeted yet, Frame stats holding wall-clock times per system, stage and frame only" | holds: `cpu_times` are system spans and named stages on the frame's thread, `cpu_frame_time` the frame's wall time, `static_tlas_build_time` the worker's wall time on one build (a field ADR 0020 asks for); the bench keeps each system's and stage's time per frame and sums nothing across threads | `src/stats/mod.rs:16-20`, `:47-50`, `:303-318`, `:410-420`; `src/bench/mod.rs:240-244`, `:1022-1035`, test `:2845` |
+| 0013 | "the 6 ms bounds the wall time of each pipeline stage's critical path, waits on worker threads included" | holds at the seam: a stage's time is the wall-clock span on the main thread from its start, so a wait on the compute pool inside it counts | `src/stats/mod.rs:300-310`; `src/state.rs:278-300` |
+| 0013 | "the CPU frame, the GPU frame and ADR 0019's gate answer to their Budgets at the p99 as at the median, the CPU frame at its p95 too" | holds (M3.5's L1-T01 fixed): median, p95 and p99 of the CPU frame, median and p99 of the GPU frame and the gate; the report's note on it is L1-T06 | `src/bench/mod.rs:1270-1273`, `:1301-1311`, `:1331-1334`; tests `:2036`, `:2198` |
+| 0013 | "no CPU or GPU frame lasts longer than 16,667 µs, one 60 Hz period" | holds over the measured frames: `maximum_frame_microseconds` 16667 against both maximums; warm-up frames are not judged | `bench/budgets.json:8`; `src/bench/mod.rs:1274-1281`, `:1312-1318`; test `:2072` |
+| 0013 | "Input latency at most 2 frame periods ... judged at p95" | not implemented: no metric and no `budgets.json` key; the glossary's Budget entry says one "is planned, once it is measured" | `bench/budgets.json:1-19`; `CONTEXT.md:303` |
+| 0013 | "a 2 km LOD'd view distance (drawn past the Load radius as a Far proxy per Chunk, ADR 0026)" | falls in render and streaming | — |
+| 0013 | "GPU memory at most 8 GB at 1440p, counted as the bytes of the buffers and textures the engine has created, summed by the engine itself on every backend" | holds: each buffer, texture and TLAS created through `GpuMemory` adds its bytes to its kind's running total until dropped, and `gpu_memory_bytes` is the sum of the seven totals; `compare` judges it against 8,000,000,000 at the measured frames' median in every mode, which verify and CI run with `--ci`; the load staging's belt, which bypasses the ledger, is L1-R04, and `gpu_memory_bytes`'s doc omits it the same way (Notes) | `src/stats/gpu_memory.rs:109-164`, `:211-249`, tests `:315-337`; `src/state.rs:369-372`; `src/bench/mod.rs:1227-1232`; `bench/budgets.json:9`; `scripts/verify.sh:55`; `.github/workflows/ci.yml:296` |
+| 0013 | "because wgpu has no allocator report on Metal"; "wgpu's allocator report and Metal's `currentAllocatedSize` are diagnostics only" | holds: an `Option`, printed only, never budgeted, and in no `Measurements` field; `currentAllocatedSize` is read nowhere | `src/stats/mod.rs:76-78`, `:249-259`; `src/bench/mod.rs:189-274` |
+| 0013 | "the GPU stats readback's buffers are left out of that sum" | holds at the seam (documented); the exclusion falls in render | `src/stats/mod.rs:65-67` |
+| 0013 | "so are the target the frame is presented into, a window's surface textures or capture's stand-in for them, and capture's read-back buffer" | holds: capture creates its target and every read-back buffer on the device directly, outside the ledger, and the field's doc says so; M3.5's L1-T07 is closed by this amendment | `src/capture/mod.rs:332-345`, `:465-470`; `src/stats/mod.rs:64-65` |
+| 0013 | "the 8 GB splits into Budgets for geometry arenas, the texture pool, Resident tails, render targets, acceleration structures and staging ... a seventh Budget covers the scene and pass buffers" | holds: seven `GpuMemoryKind`s, each named as `bench/budgets.json` keys it, `GpuMemoryBudgets` denying unknown fields; Frame stats carry and print each kind; `compare` judges each at its measured frames' median in every mode | `src/stats/gpu_memory.rs:9-66`; `src/stats/mod.rs:69-72`, `:252-255`; `bench/budgets.json:10-18`; `src/bench/mod.rs:1036-1047`, `:1233-1238`, test `:2167` |
+| 0013 | "83,886,080 bytes for geometry arenas, 4,294,967,296 ..., 234,881,024 for the scene and pass buffers, 5,955,911,680 in all" | holds: the seven values equal the ADR's and, recomputed, sum to 5,955,911,680, under the 8,000,000,000 the test checks | `bench/budgets.json:11-17`; test `src/bench/mod.rs:2182` |
+| 0013 | "acceleration structures join the count (amended 2026-10-12, ADR 0017)" | holds: the `AccelerationStructures` kind, `create_tlas`, and `charge` for BLASes | `src/stats/gpu_memory.rs:17-20`, `:188-220` |
+| 0013 | "each capacity is its share of its kind's Budget at its real bytes per entry" | falls in render and assets (`PoolCapacities::from_budgets`, `RenderCapacities::from_budgets`), which read `bench/budgets.json` compiled in | `src/bench/mod.rs:731-736`; `src/assets/pools.rs:75-107`; `src/render/renderer.rs:259-291` |
+| 0013 | "Budgets were re-decided ... each stays as written ... and so do the dynamic TLAS's ceilings of 1.1 ms of CPU and 1.0 ms of GPU" | holds: 6000, 12000, 6000, 1100 and 1000 unchanged since `8bc34eb1` (the diff adds keys only); the TLAS ceilings judged at the median | `bench/budgets.json:2-6`; `src/bench/mod.rs:1335-1348`; test `:2324` |
+| 0013 | "what `town` breaches is ticketed as an offender, not budgeted away" | holds: no Budget rose | `bench/budgets.json` (diff since `8bc34eb1`) |
+| 0013 | "A budget moves down freely and up only through an ADR or a map comment" | holds: the three keys added (guard, maximum, kinds) each came with an ADR 0013 amendment | `bench/budgets.json:7-18` |
+| 0013 | the guard: "the median time of both culling phases' per-slot stages (`offset_slots`, `offset_blocks` and `append_records`, timed apart from `append_triangles`) stays at or under 1,000 µs" | holds: each frame sums the two phases' `_slots` passes, which run the three stages and nothing else (pinned by Frame stats' pass list test); failed only when the median is over 1000 | `src/bench/mod.rs:1010-1020`, `:1349-1361`, tests `:2272`, `:2735`; `src/render/culling_pass.rs:47-52`, `:359-371`; `tests/frame_stats.rs:283-300`; `bench/budgets.json:7` |
+| 0013 | "`praxis compare` fails a scene past it, on the adapter its Baseline is from, as it does one past a Budget" | holds: Local mode only, after the adapter and backend check; `--ci` passes it, so neither verify nor CI judges it | `src/bench/mod.rs:1239-1261`, `:1349-1361`; test `:2315-2318` |
+| 0013 | "the Bench record's counters hold the Instance slots in use" | holds: `instance_slots_in_use` per frame in Frame stats, the median of its frames in the record, judged as any counter, and in `Counters::NAMES`, which the Series row's `measured_counters` reads | `src/stats/mod.rs:32-34`; `src/bench/mod.rs:334-336`, `:384`, `:411-436`; `src/bench/history.rs:1222-1228` |
+| 0014, checklist | "No World position reaches the GPU in f32" | holds as tested: every Golden scene, `world` included, must match its Golden shifted 100,032 m, 1,563 whole 64 m anchor cells | `tests/goldens.rs:58-64`, `:197`, `:225-231` |
+| 0015, checklist | "Depth has no far plane" | holds (test): a depth clear passes only as a zero literal, a `Less` comparison never | `tests/conventions.rs:410-446`; tests `:448-461` |
+| 0016 | "Only the main thread submits, presents or polls the wgpu `Queue` and `Device`" | holds for the bench (`run` and `traverse` render through `render_frames` on the calling thread) and for capture (submits, polls and maps on the calling thread); each Goldens capture owns its device, read as the device's owning thread, as the last audit noted | `src/bench/mod.rs:836-900`; `src/capture/mod.rs:366-388`, `:506-519`; `tests/goldens.rs:285-297` |
+| 0016 | "no stage runs a frame behind another" | holds for capture: each drawn or held frame runs `update` then `render` | `src/capture/mod.rs:383-388` |
+| 0016 | "`desired_maximum_frame_latency` stays 2" | holds at capture: at most `FRAMES_IN_FLIGHT` (2) in flight, the window's swapchain latency | `src/capture/mod.rs:352`, `:366-382`; `src/render/mod.rs:44`; `src/lib.rs:166` |
+| 0017 | "The Renderer and its Pools create the buffers, textures and TLASes they count through one ledger, and charge it their BLASes' bytes; it keeps a running total per kind from creation until drop, and `gpu_memory_bytes` is the sum of those totals" | holds | `src/stats/gpu_memory.rs:104-117`, `:211-249`; `src/state.rs:369-372`; tests `src/stats/gpu_memory.rs:315-337`, `:428-460` |
+| 0017 | "What ADR 0013 leaves out, the GPU stats readback and the load staging, bypasses it" | holds in code: neither is created through the ledger; that ADR 0013 does not name the load staging is L1-R04 | `src/render/staging.rs:344-353` |
+| 0017, 0013 | "A `TRANSIENT_ATTACHMENT` counts as zero only when `transient_saves_memory` is `Some(true)`" | holds; the pbr-sweep test pins the 4x colour at 0 on Metal and full elsewhere | `src/stats/gpu_memory.rs:128-131`, `:282-294`; `tests/frame_stats.rs:134-137` |
+| 0017, checklist | "each BLAS and TLAS at the size its driver gives through wgpu-hal's build-sizes query ... and each TLAS with wgpu-core's buffer of its Instances, 72 bytes a slot on Metal and 64 elsewhere" | holds for the TLAS through the ledger: `create_tlas` charges `tlas_bytes`, and the test asks the driver through wgpu-hal itself and adds 72 or 64 a slot; the BLAS's size falls in render | `src/stats/gpu_memory.rs:188-209`; test `:339-426` |
+| 0017, checklist | "A compacted BLAS's size stays an estimate ... picked by the adapter's vendor, then its backend" | falls in render (`compacted_blas_fraction`); the ledger takes it per adapter | `src/stats/gpu_memory.rs:128-138`; `src/render/acceleration_structures.rs:36-51` |
+| 0017 | "an empty slice still holds memory, which `gpu_memory_bytes` counts" | holds: a Texture class's array is charged for every slice | `src/stats/gpu_memory.rs:166-186` |
+| 0017 | "Each texture's Resident tail (mips of 64 KiB and smaller)" | holds in the ledger's split: a level of at most `RESIDENT_TAIL_LEVEL_BYTES` (64 KiB) a slice goes to `resident_tails`; the test's 128² RGBA8 level, exactly 64 KiB, counts as tail | `src/stats/gpu_memory.rs:106-107`, `:175-181`; test `:451-457` |
+| 0017 | "A capture's Settled wait loads past the cap, so its load order stays fixed" | holds on capture's side: `capture` and `capture_frames` settle every drawn frame; the cap falls in streaming | `src/capture/mod.rs:160-177`, `:266-283`, `:383-387` |
+| 0018 | "The runtime loads cooked Blobs only and references Assets by Asset ID, never by source path" | holds (CI's proof): a build without `cook` links none of the four decoders and renders every CI Golden with `assets/` removed | `.github/workflows/ci.yml:197-247`; `Cargo.toml:41` |
+| 0019 | "the opaque main pass takes more than 6 ms of GPU ... as the median over the scene's camera path, timed from the first culling dispatch to the end of the lit pass with shadow rays off" | holds (bench half): `gate_microseconds` from the rays-off run's measured frames, judged at its median and p99 against 6000; the span from `culling_phase_one_slots`' start falls in render | `src/bench/mod.rs:793-801`, `:991-996`, `:1331-1334`; `bench/budgets.json:4`; `src/render/readback.rs:739-745` |
+| 0019 | "Shadow-ray time is reported beside the gate as its own line" | holds: each path frame's GPU frame with rays on less the same path frame's with them off, judged against its Baseline, its own row in the report | `src/bench/mod.rs:997-1002`, `:1076-1083`, `:1321-1330`; `src/bench/report.rs:91-96`; test `src/bench/mod.rs:2907` |
+| 0021 | "the binary logs it with `tracing::error!` and exits non-zero" | holds | `src/bin/praxis.rs:24-29` |
+| 0021 | "`praxis capabilities` runs without the floor" | holds; preflight's adapter line also reads the adapter without requesting the device | `src/bin/praxis.rs:121`, `:459-463`; `src/preflight/mod.rs:118-144` |
+| 0021 | "Headless contexts, tests and Goldens included, use the same floor" | holds: every capture in the Goldens and Frame stats tests goes through `GpuContext::headless` | `tests/goldens.rs:294-297`; `tests/frame_stats.rs:30` |
+| 0021 | "CI's software Vulkan jobs request the floor's device on lavapipe"; "CI proves it on lavapipe" | holds: the Goldens run on lavapipe with `PRAXIS_REQUIRE_GOLDENS=1`, under which the test fails rather than skips without an adapter | `.github/workflows/ci.yml:173-187`; `tests/goldens.rs:88-97`, `:101-108` |
+| 0022 | "Budgets stay judged at 60 Hz, the display the measurements ran on" | holds: `render_run` and `traverse` step at `SIXTY_HERTZ` | `src/bench/mod.rs:848`, `:893-894` |
+| 0023, checklist | sRGB "encoded once: the tonemapping pass alone ... into 8-bit UNORM targets" | holds for capture (`Rgba8Unorm` target, PNGs written as the raw RGBA8 bytes) and as tested (no `*Srgb` format outside assets and the cooker) | `src/capture/mod.rs:11-13`, `:332-345`; `src/bin/praxis.rs:936-943`; `tests/conventions.rs:384-399` |
+| 0023 | "`DirectionalLight` gives illuminance in lux and a `PointLight` luminous intensity in candela" | holds in the Cycles reference; its point light now always casts a shadow, as every praxis point light traces one | `scripts/cycles-reference/render.py:30`, `:95-122`, `:125-135`, `:403`; `scripts/cycles-reference/calibrate.py:67-77` |
+| 0023 | "a Reference scene's ambient term gives illuminance in lux" | holds: world radiance E/π | `scripts/cycles-reference/render.py:137-146` |
+| 0023 | "Exposure is an EV100, which scales luminance by 1/(1.2 · 2^EV100)" | holds | `scripts/cycles-reference/render.py:343`, `:380`, `:396-403` |
+| 0023 | "Point lights fall off by inverse square inside KHR_lights_punctual's range window" | holds | `scripts/cycles-reference/render.py:95-122`; `scripts/cycles-reference/calibrate.py:72-74` |
+| 0023 | "the tonemapping pass then maps it through GT7 for display", sRGB encoded once | holds: `compare.py` now splits the display transform into `tonemap` then `srgb_encode`, equal to `display`, and decodes praxis's capture with the sRGB EOTF for the linear RMSE | `scripts/cycles-reference/compare.py:143-163`, `:209-216`, `:275-276` |
+| 0023 | "clamped to 65504" | not applicable to the Cycles reference: float EXR and f64 arrays | — |
+| 0024 | "Every bench run is kept as a Bench record. A record is a file on an orphan branch, `bench-history`" | holds: with no remote tip a publish adds an empty worktree and commits with no parent | `src/bench/history.rs:962-999`, `:1150-1167` |
+| 0024 | "keyed by source hash × adapter × backend × scene; the Harness version is defined under `src/`, so the source hash names it, and the record holds it" | holds: `HARNESS_VERSION` in `src/bench/provenance.rs`, written into every Provenance; the path is `<dir>/<adapter>-<backend>/<scene>/<source hash>.json`; a re-recorded Baseline's record is keyed by the commit that landed it, not the source the Baseline measured (Notes) | `src/bench/provenance.rs:22`, `:54`, `:138`; `src/bench/history.rs:221-229`, `:280-282` |
+| 0024 | "The source hash covers `src/`, `assets/`, `Cargo.toml`, `Cargo.lock`, `.cargo/` and `vendor/`, a list held in one place in code, and a test fails when a new top-level path is classified neither way" | holds: `MEASURED_PATHS` is the ADR's six, and the test lists the other twelve tracked top-level paths at the frozen commit (Notes on `bench/budgets.json`); no path CI skips lies under a measured one | `src/bench/provenance.rs:27-34`, `:410-444`; `.github/workflows/ci.yml:13-28` |
+| 0024 | "The source hash is one git hash over the paths that can change a measurement" | holds in practice (Notes: `bench/budgets.json` is compiled in, and the pinned capacity tests force a `src/` change with any Budget change that moves a capacity) | `src/bench/provenance.rs:320-337` |
+| 0024 | "A commit whose source hash didn't change inherits the record before it" | holds: `mktree` over `ls-tree` of the measured paths, tested; `unrecorded_scenes` looks up `main`'s source hash, not its commit; pushes to `main` that change only skipped paths run nothing, and none of those is measured | `src/bench/provenance.rs:320-337`, tests `:481`, `:496`; `src/bench/history.rs:671-690`; `.github/workflows/ci.yml:11-28` |
+| 0024 | "Only clean, release-profile records of `main`'s source taken by a quiet machine form a Series" | holds for published records: the bench's record carries `dirty` (untracked measured files included), `branch`, `profile` and `quiet`, and the history tags on them; broken for the import of re-recorded Baselines: L1-T02 | `src/bench/provenance.rs:143-150`, `:238-282`, test `:520`; `src/bench/mod.rs:966-971`; `src/bench/history.rs:875-920`; `src/bench/history/import.rs:374-394` |
+| 0024 | "the machine quiet (preflight warned of none of the GPU load, the CPU load, other praxis processes, the power and the display, its assets warning not counting" | holds for published records, the history's tag reading the bench's `provenance.quiet` and the branch README stating the same rule and thresholds; broken for the import: L1-T02. `is_quiet` reads the GPU load against `BUSY_GPU_PERCENT`, the one-minute load average against `BUSY_LOAD_AVERAGE`, other praxis processes and `machine_warnings`, with preflight's own readers, thresholds and directions (warn above 10 % GPU, above a 2.0 load average, on any other praxis process, on battery, on a full-screen application), and the assets check feeds none of them; M3.5's L1-T06 is closed by this amendment | `src/bench/provenance.rs:221-235`, test `:548`; `src/preflight/mod.rs:13-25`, `:304-337`, `:367-399`, `:416-447`, `:479-510` |
+| 0024 | "and p95/median below about 1.06 ... the p95 being that of each GPU frame over the median of the 31 frames around it, not over the run's" | holds: `NEIGHBOUR_FRAMES` 31, 15 a side, fewer at the ends, quiet only when `< 1.06`; a run with no ratio is not quiet | `src/bench/provenance.rs:36-43`, `:171-191`, `:234`; test `:631` |
+| 0024 | "and no process outside praxis at or over half a core at the scene's start or end, read per scene ... where the process listing gives CPU shares, which Windows' does not" | holds: `busy_processes` at `BUSY_PROCESS_PERCENT` 50 of a core, at or over, `None` on Windows, read before the scene's first render and after its aliasing captures | `src/bench/mod.rs:786`, `:825`; `src/bench/provenance.rs:193-213`, `:232`, test `:669`; `src/preflight/mod.rs:23-25`, `:512-527`, `:600-616` |
+| 0024 | "The Harness version rises whenever a change alters what a metric means" | holds for the times: four bumps since `8bc34eb1`, at the p99, maximum and refusal counters (10 to 11), the per-slot passes' split (12), Late Far proxies (13) and the far field's fill (14), and the history breaks a line on each; two counter changes kept their version (Notes) | `src/bench/provenance.rs:18-22`; `src/bench/history.rs:399`, `:1238-1243` |
+| 0024 | "each record carries its scene's content hash" | holds for published records: `render_frames` returns the Cooked cache's content hash of the Blobs the run loaded, read after its last frame, into the Provenance; broken for re-recorded Baselines' records: L1-T03 | `src/capture/mod.rs:294`, `:409`; `src/state.rs:321-324`; `src/bench/mod.rs:792`, `:820-826`; `src/bench/provenance.rs:55-56`; `src/bench/history/import.rs:323-335`, `:362-373` |
+| 0024 | "A chart breaks its line where either changes, so a new definition never reads as a Regression" | holds for Suspects: `same_definition` starts a line; the chart falls outside tooling; a re-recorded record without a content hash joins either neighbour (L1-T03) | `src/bench/history.rs:395-404`, `:1235-1243` |
+| 0024 | "When two records share a key on a Series, or both tagged, the quieter one stays: the one with the lower GPU p95/median; a record on a Series holds its key against a tagged one" (amended 2026-11-04) | holds; M3.5's L1-T04 is settled by the amendment | `src/bench/history.rs:1027-1034`, `:1050-1056`, `:1074-1077` |
+| 0024 | "lavapipe's records are the exception to the quiet test ... a record from CI's configuration joins them whether or not the runner was quiet, and the first record on a Series under a key stays" | holds: `CI_COUNTERS` as lavapipe's configuration, no quiet tag, `publishes_once`; lavapipe rows are never Suspects | `src/bench/history.rs:177`, `:391-394`, `:895-905`, `:1051` |
+| 0024 | "Every other record is kept, tagged with its reasons, and drawn only on request" | holds: under `tagged/` with `tags` | `src/bench/history.rs:183-185`, `:1022-1026` |
+| 0024 | "An Experiment's records are kept under its name and never join a Series" | holds | `src/bench/history.rs:200-219`, `:1019-1026`, `:1079-1080` |
+| 0024 | "The commits that touched `bench/baselines/` before the history existed, 64 on `main`'s first-parent line before `HISTORY_STARTED` ... each with the Harness version in force at its commit" (amended 2026-11-04) | holds: `git log --first-parent --format=%H 3c6b9d92 -- bench/baselines` lists 64, recounted; the version steps at each of the nine breaks and the import checks it ends at 10; M3.5's L1-T03 is settled by the amendment | `src/bench/history/import.rs:24`, `:30-67`, `:156-193` |
+| 0024 | "Baselines are still chosen by hand, and a re-recorded Baseline's record is marked as one" | holds: commits after `HISTORY_STARTED` give records with `provenance.source` `baseline-rerecorded`; a quieter record that holds the key takes `rerecorded_baseline`; either starts the line; tested; M3.5's L1-T02 fixed (a tagged one's mark can be lost: Notes) | `src/bench/history/import.rs:72-80`, `:194-220`; `src/bench/history.rs:313-321`, `:400-401`, `:1042-1060`, `:1982-2022` |
+| 0024 | "A timing record far from its Series' recent median is a suspect" | holds: a window of 8, from 3, ± max(4 MAD, smallest shift), CPU frame 3 %, GPU frame 1.25 %, as the glossary's Suspect | `src/bench/history/suspects.rs:7-15`, `:47-101`; `src/bench/history.rs:429-453` |
+| 0024 | "The sweep re-benches it, bisects the commits behind it" | holds: two interleaved runs per end, good first, `holds` at max(shift/2, smallest shift), bisect by source hash; `--no-publish` only for a commit descended from `3c6b9d92`, so M3.5's L1-T08 is fixed | `src/bench/history/verdicts.rs:216-308`, `:360-432`, `:766-772`; `src/bench/history/night.rs:21-23`, `:56-91`; `scripts/sweep.sh:151-190` |
+| 0024 | "and files a confirmed Regression that no re-recorded Baseline covers as one `needs-triage` issue" | holds: `covered_by_baseline` from `remeasured` on the adapter and backend's Baseline at the pinned commit and its parent; one issue per scene and commit, an existing title reused, label `needs-triage`; run every night | `src/bench/history/verdicts.rs:394-427`, `:435`, `:452-554`, `:732-747`; `scripts/sweep.sh:198-200` |
+| 0024 | "A bad publish is undone with `git revert` on `bench-history`" | not applicable (process); every write is one commit on the tip | `src/bench/history.rs:712-751`, `:1150-1167` |
+| 0024 | "A page in `docs/` draws the Series" | falls outside tooling (`docs/bench/`) | — |
+| 0024 | "The history observes and never gates: Baselines stay in `bench/baselines/` on `main`, and `verify` and `compare` judge against them as before" | holds: `compare` reads only a Baseline and the Budgets, and no history type reaches it; `history rerecord` writes a Baseline's counters only when a session runs it, and the session commits it; verify and CI compare counters against `bench/baselines/` with `--ci` | `src/bench/mod.rs:33-40`, `:1184-1189`; `src/bench/history/rerecord.rs:182-244`; `src/bin/praxis.rs:738-749`; `scripts/verify.sh:54-55`; `.github/workflows/ci.yml:293-296` |
+| 0024 | "a nightly sweep on the reference machine that benches `main` only when its source has no quiet record and the machine is quiet" | holds: import, then `history unrecorded` (the scenes without a Series record of `main`'s source hash), then a wait until preflight warns of nothing, then each bench after a wait for the GPU and CPU load; `world` is never benched by the sweep (Notes) | `scripts/sweep.sh:80-81`, `:109-113`, `:123-128`, `:204-207`; `src/bench/history.rs:665-691`; `src/bin/praxis.rs:656-675` |
+| 0024 | "The RTX 2070 SUPER has no sweep ... its Goldens and Baselines are recorded by hand at each milestone's exit" (amended 2026-11-21) | holds in the scripts: `scripts/sweep-task.xml` is gone and `sweep.sh` installs only as a launchd job on the M4 Pro; two documents still say otherwise: L1-T08, L1-T09 | `scripts/sweep.sh:16-34`; `scripts/sweep.plist:1-29` |
+| 0024 | Considered options: "A local scheduled task runs no code from a pull request" | holds: the clone moves to `origin/main` only; a bisect benches `main`'s first-parent commits between the Verdict's ends | `scripts/sweep.sh:67-72`; `src/bench/history/verdicts.rs:603-625` |
+| 0024 | "Records publish themselves: ... `praxis bench` by default in sessions"; "Publishing never blocks work. A failed publish warns and the bench still succeeds" | holds; the night logs a failed `publish-night` and goes on | `src/bin/praxis.rs:231`, `:291`, `:596-610`; `scripts/sweep.sh:191` |
+| 0024 | "Records publish themselves: CI's lavapipe on every push to `main`" | holds | `.github/workflows/ci.yml:11-28`, `:329-353` |
+| 0024 | "The branch holds only data and a README, is never merged, and CI writes it only from pushes to `main`, never from a pull request" | holds: every publish, import and Verdict rewrites `README.md` beside the data; `github.event_name == 'push'` on a `main`-only push trigger; the new recording workflow holds `contents: read` | `src/bench/history.rs:1086`; `src/bench/history/verdicts.rs:644`; `.github/workflows/ci.yml:3-12`, `:331`, `:335-336`; `.github/workflows/lavapipe-files.yml:9-10` |
+| 0024 | "lavapipe's records ... build time, which a shared runner's load and cache hits move" | holds (CI half): the release build is timed and published beside the records | `.github/workflows/ci.yml:280-284`, `:352-353` |
+| 0024 | "`verify` never publishes" | holds | `scripts/verify.sh:54` |
+| 0025 | "everything in it is published under the MIT licence (`LICENSE`, `Cargo.toml`)" | holds | `LICENSE:1`; `Cargo.toml:5` |
+| 0025 | "Anything the owner would not publish, on any branch, issue or PR: a credential, a token" | holds for the workflows: no `secrets.` is read anywhere; the one token, `github.token`, reaches `gh` through the environment only | `.github/workflows/pr-lint.yml:43-61` |
+| 0025 | "A Bench record and a PR's images are published as a commit is" | holds: every record is pushed to the public `bench-history`, and in CI only `publish-bench` writes, only on a push to `main`; what a record names is a note for the owner (Notes) | `src/bench/history.rs:726-735`; `.github/workflows/ci.yml:329-353` |
+| 0025 | "Every file under `assets/` has a manifest entry and a credit, which `cargo test` checks" | holds, with planted cases | `tests/asset_manifest.rs:97-106`, `:194-196`, `:209-214` |
+| 0025 | "a larger source is fetched from its publisher into a git-ignored cache" | holds: the helmet's six files are `fetched: true` and `/assets/SciFiHelmet/` is ignored | `assets/manifest.json:3-66`; `.gitignore:17` |
+| 0025 | "a file under a noncommercial or restrictive term is dev-only: never committed, and no committed Golden is rendered from it" | holds today: every manifest entry is `CC0-1.0`, none `dev_only`; the test enforces only `-NC-` → `dev_only` (Notes) | `tests/asset_manifest.rs:190-193` |
+| 0025, checklist | "Adapted code cites its source and licence" | holds for the Cycles reference: the GT7 port names its source, key and the MIT notice | `scripts/cycles-reference/compare.py:36-60` |
+| 0025 | "a vendored crate keeps its licence files (`vendor/README.md`)" | holds: `LICENSE.MIT` and `LICENSE.APACHE` beside `vendor/wgpu-core` | `vendor/README.md:22-23` |
+| 0025 | "every dependency's licence expression is on the allowlist in `tests/dependency_licences.rs`" | holds: `cargo metadata --locked` over every package; the one expression added since, "BSD-3-Clause AND BSD-2-Clause", is permissive | `tests/dependency_licences.rs:8-34`, `:37-55`, `:74-89` |
+| 0025 | "Self-hosted Actions runners on the owner's machines ... CI runs on GitHub's hosted runners, without a GPU, and local scheduled tasks bench the real ones" | holds for the runners: every `runs-on` is `ubuntu-24.04`, `ubuntu-latest` or `windows-2025`, the new workflow included, and the sweep is a launchd job; the plural "scheduled tasks" is L1-T09 | `.github/workflows/ci.yml:60`, `:103`, `:133`, `:160`, `:204`, `:261`, `:333`; `.github/workflows/lavapipe-files.yml:23`, `:69`; `.github/workflows/pr-lint.yml:26` |
+| checklist | "Workflows keep least-privilege permissions and pin each action to a commit SHA with its version in a comment, as `pr-lint.yml` does" | holds: every workflow defaults to `contents: read` (with `pull-requests: read` for the lint), `contents: write` only in `publish-bench`; all 31 `uses:` lines are SHA-pinned, the four versioned pins resolve to their commented tags, and the seven `dtolnay/rust-toolchain` pins carry `# stable`, a branch (Notes) | `.github/workflows/ci.yml:37-38`, `:335-336`; `.github/workflows/lavapipe-files.yml:9-10`; `.github/workflows/pr-lint.yml:14-16`, `:29` |
+| checklist | "Frame stats still see new work: GPU buffers, textures and acceleration structures are created through the GPU memory ledger (`GpuMemory`) under their kind ...; the GPU stats readback's buffers stay out ...; per-frame GPU writes add to `uploaded_bytes`, and systems are added inside `SystemTimer::scope`" | holds for the ledger and `SystemTimer` these files define, and every Frame stats CPU stage reaches the bench's `cpu_time_microseconds` by name; `uploaded_bytes` misses the static TLAS's staged records (L1-R02), and its doc is L1-T05 | `src/stats/gpu_memory.rs:109-226`; `src/stats/mod.rs:338-363`; `src/state.rs:287`; `src/bench/mod.rs:1022-1035` |
+| checklist | "Every name the change renames, removes or changes the behaviour of ... is grepped in comments, ADRs, `CONTEXT.md` ...; each clause the change makes false ... is rewritten or dated in the same PR" | broken for the RTX 2070 SUPER sweep's removal: L1-T08, L1-T09; the glossary's Night, ADR 0024 and the bench-history guide (stale by rule) were updated | `docs/agents/project-shape.md:24-27`; `docs/adr/0025-the-repo-is-public-under-mit.md:17` |
+| checklist | "Outside `src/render/`, no `unwrap()` on a GPU operation that could fail at runtime" | holds: capture's polls, map and mapped range go through `?`; the ledger and the CLI unwrap no GPU operation | `src/capture/mod.rs:373-380`, `:492-500`, `:511-518` |
+| conventions | "never `println!` or `log` (tested)" | holds | `tests/conventions.rs:156-168` |
+| conventions | "Identifiers are full words, WGSL included (... shading names tested)" | holds: now over `src/` and `tests/`, with suffixed spellings and tangent and bitangent initials; red-capable | `tests/conventions.rs:322-367`; tests `:370-383` |
+| conventions | "Comments ... citing no ticket, PR or decision ... (ticket numbers tested)" | holds: `#n`, `PR n`, `issue n`, `issues/n` and `pull/n` links outside upstream repositories, now in scripts, workflows, `Cargo.toml` and `.gitignore` with `#` comments; red-capable | `tests/conventions.rs:48-58`, `:76-97`, `:176-232`, `:272-294`; tests `:296-321` |
+| workflow, Session start | preflight "prints ... in ten lines or fewer: the adapter and which machine it is, whether its Goldens, Baselines, fetched files and Cooked cache are present, GPU load, the one-minute load average, other praxis processes and any other process at half a core or more, the open PRs and the live milestone's assigned tickets" | holds: 10 lines on macOS, 9 on Linux and on Windows; the live milestone now parses `M<n>.<m>` (M3.5's L1-T05 fixed, tested with `M3.5`, `M3.9`, `M3.10`) | `src/preflight/mod.rs:112-148`, `:699-767`; test `:964-971` |
+| workflow, Session start | "A `FAIL` line blocks `scripts/verify.sh` and names its fix" | holds: each `Fail` names its fix, the assets check's included now (the last audit's note), and the binary exits non-zero on any; each `FAIL` (no adapter, Goldens or Baselines absent) fails verify through the Goldens test under `PRAXIS_REQUIRE_GOLDENS=1` or through `compare` | `src/preflight/mod.rs:139-143`, `:196-206`, `:230-242`, `:253-257`; `src/bin/praxis.rs:467-482`; `scripts/verify.sh:55`, `:63` |
+| workflow, PRs | lavapipe's files: "`scripts/lavapipe-files.sh` has CI record them in a run that judges nothing and copies into the tree the Goldens and Baselines CI would fail, and the Baselines a judged counter fell below" | broken: L1-T01 (a LOD 0 Golden the recording removes fails the run); the Baselines half holds (`compare --recording` fails on any judged counter that differs) | `.github/workflows/lavapipe-files.yml:42-65`, `:93-105`; `src/bench/mod.rs:1193-1196`; `scripts/lavapipe-files.sh:44-63` |
+| workflow, PRs | "CI never commits them: a PR that moves one without committing it fails, but for a Baseline's counter that only fell, which CI passes" | holds: `compare --ci` fails only `current > baseline`; no workflow commits to the PR | `src/bench/mod.rs:1195`; `.github/workflows/lavapipe-files.yml:9-10` |
+| workflow, PRs | verify: "formatting, lint, build, tests (Goldens required) and the bench counters against Baselines and Budgets, one line per step" | holds | `scripts/verify.sh:47-80` |
+| workflow, ladder | "the verify command (`scripts/verify.sh`) exits 0 within 30 lines" | holds: 7 lines on success | `scripts/verify.sh:74-80` |
+| workflow, PRs | "CI's PR form check (`scripts/pr-lint.sh`) fails a title, description or commit that breaks this section's rules or Review's counts and 'Sources checked' line, and a PR over the size ceiling" | holds: ticket line, template sections, counts, 30 pasted lines, Sources checked, images, size, subject length and attribution, the squash commit included | `scripts/pr-lint.sh:36-73`, `:88-114`, `:116-144`; `.github/workflows/pr-lint.yml:5-8`, `:42-61` |
+| workflow, Tickets | "Size ceiling: 800 changed lines of code ... outside `docs/`, the root's `.md` files, Goldens, the lockfile, `bench/baselines/`, `bench/cycles/` and `vendor/`" | holds: the uncounted pattern lists the same seven; additions plus deletions from the API's `changes` | `scripts/pr-lint.sh:108-113`; `.github/workflows/pr-lint.yml:57-59` |
+| workflow, PRs | images: "asks a PR that changes those paths for the three links when a Golden moves or a `.wgsl` file changes, and otherwise takes either the three or that line with its two counts equal" | holds; its example count is stale: L1-T11 | `scripts/pr-lint.sh:93-106` |
+| workflow, PRs | "Commit subject 72 characters at most ... the title is 72 characters at most with that number, and the description carries no such line" | holds | `scripts/pr-lint.sh:116-135` |
+| workflow, PRs | field guides: a stale list that fails nothing; links and images; the Describes commit an ancestor of `main`; code-font identifiers on `main`; no ticket or PR in prose; the Files row's files exist | holds clause by clause (Notes on the identifier set) | `tests/field_guides.rs:33-99`, `:205-236`, `:261-269`, `:275-300`, `:351-376`, `:387-436` |
+| workflow, Review | "`cargo test --test references` fails on a dangling key or an unused entry" | broken: L1-T04 (the Python scripts are not read) | `tests/references.rs:235-237` |
+| workflow, PRs and Correctness | gallery: "prints for each image how many pixels differ from the base's and the largest channel delta"; "`town` at the Goldens test's eight frames, `world` at its four Goldens' frames, `crowd` in both shadow forms" | holds: the frames equal `TOWN_FRAMES` and `WORLD_FRAMES` | `scripts/gallery.sh:42-44`, `:136-139`, `:147-159`; `tests/goldens.rs:313`, `:319`, `:373` |
+| workflow, Performance | "The sweep files a Regression only for a commit that did not re-record its scene's Baseline for the Series' adapter and backend" | holds | `src/bench/history/verdicts.rs:396-427`; `src/bench/mod.rs:146-152` |
+| `ci.yml`'s own rule | "Each entry is one of `changes`' `skipped_paths`, in the same order" | holds, now tested | `.github/workflows/ci.yml:10`, `:13-28`, `:77-93`; `tests/conventions.rs:595-612` |
+| `ci.yml`'s own rule | "A path may skip only if no engine job reads it, or only tests `check` runs" | holds: of the skipped paths only `check`'s tests read any (conventions, references, field guides); the GPU test's `display-ramp.txt` is not skipped | `.github/workflows/ci.yml:50-56`; `src/render/shader_function_tests.rs:1163` |
+| glossary | "Cycles Baseline ... The gallery with `PRAXIS_BLENDER` fails a scene whose run exceeds either figure by its tolerance" | holds: judged at the Goldens' frame, scene, frame and size checked, a FAIL line and exit 1 at the end; the tolerances are global, not per scene (Notes) | `scripts/gallery.sh:94-115`, `:160`; `scripts/cycles-reference/compare.py:85-92`, `:238-258` |
+
+### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| M4 story 18 (captures and Goldens render Settled frames) | holds on capture's side: every `capture` and `capture_frames` frame is settled, and a failed load fails the render | `src/capture/mod.rs:160-177`, `:266-283`, `:383-384` |
+| M4 story 22 (a Late Chunk counted in Frame stats) | holds: a Frame stats field, summed over the bench's frames; on `world` compared on the Settled counter frames, so its measured frames' Late Chunks are reported, not judged | `src/stats/mod.rs:89-90`; `src/bench/mod.rs:319`, `:376`, `:1448-1465`; `src/bench/report.rs:239` |
+| M4 story 25 (fast travel holds until the Load radius is loaded, every frame of the hold within Budget) | holds on capture's side: the camera path pauses while the hold lasts, held frames drawn and counted, bounded at 3,600 frames, tested on a jump away and back and on a jump in an undrawn frame; in the bench the hold's frames are measured frames, whose maximum `compare` judges against 16,667 µs, the 6 ms Budget being judged at the median, p95 and p99, not per frame, a per-frame clause the M4 exit accepted failing | `src/capture/mod.rs:354-394`, `:412-413`, tests `:660-751`; `src/bench/mod.rs:1274-1281`, `:1312-1318` |
+| M4 story 26 (the time from a Fast travel until its Chunks load measured and kept as a ceiling) | holds as a measurement: `fast_travel_hold` in Frame stats, the Baseline and the report; the 50 ms ceiling is a milestone criterion no command judges (Notes) | `src/stats/mod.rs:116-117`; `src/bench/mod.rs:584-592`, `:1055`; `src/bench/report.rs:247-256` |
+| M4 story 39 (late mips counted and reported by the bench, not gated) | holds | `src/stats/mod.rs:110-112`; `src/bench/mod.rs:331`, `:382`, `:395`, test `:1961`; `src/bench/report.rs:245` |
+| M4 stories 41 and 42 (the 8 GB split into Budgets per kind, their sizes decided) | holds | `src/stats/gpu_memory.rs:9-66`; `bench/budgets.json:10-18` |
+| M4 story 44 (GPU memory counted by kind where it is created, so that no buffer or texture escapes `gpu_memory_bytes`, each kind compared against its Budget) | holds for everything created through the ledger, and each kind is judged; capture's target and read-back buffer stay out as ADR 0013 now records; the load staging escapes (L1-R04) | `src/stats/gpu_memory.rs:140-186`; `src/capture/mod.rs:332-345`, `:465-470`; `src/bench/mod.rs:1036-1047`, `:1233-1238`, test `:2167` |
+| M4 story 45 (acceleration-structure bytes counted exactly once M4 can read their sizes) | holds for TLASes (the driver's size plus wgpu-core's Instance buffer); a compacted BLAS stays an estimate, as ADR 0017 records | `src/stats/gpu_memory.rs:188-209`; test `:339-374` |
+| M4 story 47 (a request past any capacity refused, logged and counted in Frame stats) | holds at the seam, a Frame stats field per refusal kind, and in the bench for its eight refusal counters, failed on any rise; Meshes and Materials refused and Chunks not loaded reach the traversal only (Notes); the mip move's refusal is L1-F02 | `src/stats/mod.rs:39-46`, `:56-61`, `:104-109`; `src/bench/mod.rs:397-408`, `:1208-1226`, tests `:1975`, `:3094` |
+| M4 story 51 (the frames until a newly loaded Chunk casts shadows measured and kept as a ceiling) | holds as a measurement, tested (pbr-sweep's Chunk traced from frame 1), and `frames_until_traced` reports the most over the measured frames; the ceiling N = 10 is a milestone criterion (Notes) | `src/stats/mod.rs:51-55`, `:231-233`; `tests/frame_stats.rs:577-612`; `src/bench/mod.rs:1057-1059`; `src/bench/report.rs:263-267` |
+| M4 story 53 (waits on BLAS compaction measured) | holds as a measurement: a CPU stage of its own, spread over the frames that waited | `src/bench/mod.rs:1060-1067`; `src/bench/report.rs:116-120`, `:273-276` |
+| M4 story 61 (a camera path of about 60 s for the bench) | holds (bench half): the reference configuration runs the world's whole `BENCH_SEGMENT_FRAMES`; the path falls in scenes | `src/bench/mod.rs:100-123`; test `:1612` |
+| M4 story 62 (a full traversal with p99, maximum, Late Chunks and peak GPU memory pasted) | holds: `praxis traverse` measures and prints them; the route falls in scenes | `src/bin/praxis.rs:411`, `:859-866`; `src/bench/mod.rs:614-688`, `:836-863`, test `:2945`; `src/bench/report.rs:321-397` |
+| M4 story 63 (CI cooks only what its frames load, runs the world's Settled Goldens at a few frames and its counters on a short stretch) | holds: four `world` Golden frames; `praxis cook` cooks every scene but `world`, the dev Goldens cook `world` on a miss, the shipping job cooks it through the Goldens test's two capture routes; counters on `CI_COUNTERS`' Settled frames through `--ci-counters` | `tests/goldens.rs:315-328`; `.github/workflows/ci.yml:181-187`, `:231-247`, `:291-296`; `src/bin/praxis.rs:492-497`; `src/bench/mod.rs:93-98`, `:131-137` |
+| M4 story 65 (the same Chunk content at the origin and at the far corner gives identical images) | holds through the 100 km check, which shifts every Golden scene, `world` included, by whole anchor cells and allows 0 pixels | `tests/goldens.rs:58-64`, `:197`, `:225-231` |
+| M4 story 66 (nothing drawn past the Load radius, the pop recorded as a known difference until M5) | superseded by M5 story 18: `DIFFERENCES.md` holds the Far proxies' difference instead of the pop | `scripts/cycles-reference/DIFFERENCES.md:174-191` |
+| M4 story 67 (p99 and the maximum beside the median and p95, with a Harness version bump) | holds: nearest rank, 10 to 11 at that change; a Series row carries each Spread whole for the CPU frame, GPU frame, gate and CPU times | `src/bench/mod.rs:690-701`, `:1560-1575`; `src/bench/history.rs:498-504`, `:1200-1212` |
+| M4 story 68 (`compare` judges the p99 against the CPU, GPU and gate Budgets and the maximum against 16.7 ms on the world scene) | holds, on every scene, not only `world` | `src/bench/mod.rs:1270-1334` |
+| M4 story 69 (Late Chunks, late mips, Chunks loaded and unloaded, bytes read and pool entries freed in Frame stats and every Bench record) | holds: Frame stats fields, bench counters, and the Series row names them through `Counters::NAMES` | `src/stats/mod.rs:89-112`; `src/bench/mod.rs:319-331`, `:376-382`, `:427-433`; `src/bench/history.rs:1215-1228` |
+| M4 story 70 (the static TLAS's build time reported apart from the frame's critical path) | holds in Frame stats, printed only when non-zero and tested; the bench's `Measurements` do not carry it (Notes) | `src/stats/mod.rs:47-50`, `:224-230`; `tests/frame_stats.rs:602-605` |
+| M4 story 71 (GPU memory a running total updated at load and eviction, costing nothing per frame) | holds: seven relaxed atomic loads per read | `src/stats/gpu_memory.rs:222-225`, `:234-249` |
+| M4 spec, testing decision: "every scene's Goldens on Metal and software Vulkan through the Chunk path" | holds (CI half) | `.github/workflows/ci.yml:156-195`; `tests/goldens/vulkan-cpu/` (23 files) |
+| M5 story 10 (a Render switch forcing LOD 0 and one forcing a given LOD) | holds in the CLI and tests: `--lod <n>` on `capture` and on a bench with `--no-publish`; the Goldens check every Golden frame at LOD 0 forced | `src/bin/praxis.rs:213-218`, `:269-276`; `tests/goldens.rs:198`, `:232-241`, `:356-362` |
+| M5 story 14 (the shadow mask pixels that differ from LOD 0 counted and limited) | holds for the count (`praxis shadow-mask-difference`, tested on four words); no code holds a limit (Notes) | `src/capture/mod.rs:91-130`, `:208-239`, test `:773-795`; `src/bin/praxis.rs:975-1009` |
+| M5 story 15 (the weights and threshold tuned on the gallery) | holds (tooling half): the gallery captures every Reference scene at 2560x1440, `world` at its four Golden frames | `scripts/gallery.sh:147-159` |
+| M5 story 23 (a Late Far proxy counted) | holds | `src/stats/mod.rs:91-93`; `src/bench/mod.rs:321`, `:377`; `src/bench/report.rs:240-244` |
+| M5 story 29 (shadow-ray time reported with Far proxies traced and not) | not in tooling as a standing measure: it was measured once with binaries built apart, in the change that traced Far proxies; no Render switch or CLI mode untraces them (Notes) | `src/render/renderer.rs:78-115` |
+| M5 story 31 (the far field's fill after a Fast travel measured and kept as a ceiling) | holds as a measurement: `far_field_filling` and `far_field_fill`, with a Harness version bump; the ceiling (80 frames, 650 ms) is a milestone criterion (Notes) | `src/stats/mod.rs:118-123`; `src/bench/mod.rs:594-599`, `:1056`; `src/bench/report.rs:257-262` |
+| M5 story 32 (the full traversal reports Late Far proxies beside Late Chunks) | holds | `src/bench/mod.rs:624`, `:665`; `src/bench/report.rs:336-337` |
+| M5 story 40 (the Instance slots in use in the Bench record, the per-slot stages judged against 1 ms) | holds; `culling_per_slot_microseconds` stays in the record without a Series column | `src/stats/mod.rs:32-34`; `src/bench/mod.rs:334-336`, `:1010-1020`, `:1349-1361`; `src/bench/history.rs:1222-1228`; `bench/budgets.json:7` |
+| M5 story 42 (the RTX 2070 SUPER's Baselines re-recorded at the exit, reported and not gated) | holds: its two directories exist, a re-recorded RTX Baseline becomes a record on Vulkan and DX12 keys, and no sweep runs there; `compare` would judge Budgets on it if run Locally (the last audit's note) | `bench/baselines/nvidia-geforce-rtx-2070-super/`, `bench/baselines/nvidia-geforce-rtx-2070-super-dx12/`; `src/bench/history/import.rs:194-220`, `:399-409` |
+| M5 spec, testing decisions: "LOD 0 stays bit-identical ...: Goldens bit-exact"; "Captures and Goldens render Settled frames" | holds in the test: each Golden frame is compared at LOD 0 forced with its Golden, or its `-lod-0` twin where selection changes the image, at 0 pixels; capture settles; the Far proxies' wait falls in streaming | `tests/goldens.rs:198-242`, `:499-515` |
+| M5 spec decision: "each PR carries gallery before, after and difference images" for selection, the swap and widening | holds: such a PR moves Goldens or a `.wgsl` file, and the lint then asks for all three | `scripts/pr-lint.sh:101-102` |
+| M4 stories 24, 35 to 38, 48 to 50, 52, 54 and 55; M5 stories 18 to 22, 24 to 28 and 30 | fall in streaming, render, assets or cook; nothing in tooling implements them | — |
+
+### Registry keys
+
+| File | Keys | Verdict |
+|---|---|---|
+| `src/bench/mod.rs:493` | `khronos-dfs-srgb-eotf` | matches: quote "R = R′ / 12.92, R′ ≤ 0.04045; ((R′ + 0.055) / 1.055)^2.4, R′ > 0.04045"; `encoded <= 0.04045` gives `encoded / 12.92`, else `((encoded + 0.055) / 1.055).powf(2.4)` (`:494-501`), the knee's ≤ as quoted |
+| `src/bench/history/night.rs:94` | `git-merge-base-is-ancestor` | matches: "exit with status 0 if true, or with status 1 if not. Errors are signaled by a non-zero status that is not 1"; `is_ancestor` maps 0 to true, 1 to false and anything else to an error (`:104-108`) |
+| `src/stats/mod.rs:77` | `wgpu-hal-30-allocator-report-default` | matches: the quote's default returns `None`; wgpu-hal 30.0.2, which `Cargo.lock` pins, has the same lines at `lib.rs:1210-1212`; the field is an `Option` printed as `none` |
+| `src/capture/mod.rs:441` | `apple-tech-talk-110147-busy-waits` | matches: the quote ("Avoid busy waits ... lock a P core ... thermal headroom") is why only the bench spins; `capture` and `read_frames` pass `FrameWait::Block` (`:175`, `:281`) |
+| `src/preflight/mod.rs:478` | `microsoft-query-user-notification-state` | matches: 2 (`QUNS_BUSY`) and 3 (`QUNS_RUNNING_D3D_FULL_SCREEN`) warn, 1 to 7 pass, anything else is a note (`:480-492`), tested (`:895-903`) |
+| `scripts/sweep.sh:24` | `apple-launchd-start-calendar-interval-sleep` | matches: "your job will run when the computer wakes up"; the comment says "04:00 local, or on the next wake when asleep then", and the plist sets `StartCalendarInterval` 4:00 (`scripts/sweep.plist:17-23`) |
+| `scripts/sweep.sh:148` | `gnu-bash-news-4.0-mapfile` | matches: mapfile is new in 4.0, so the `/bin/bash` 3.2 the plist runs (`scripts/sweep.plist:10`) lacks it; the job's three lines are read with `read -r` (`:160-164`), the comment sitting above the night's directory instead (Notes) |
+| `scripts/cycles-reference/compare.py:39` | `gt7-tone-mapping-cpp` | matches: the quote's 250 over 100 cd/m² is `GT7_PAPER_WHITE = 2.5` (`:63`); `initializeCurve(..., 0.25f, 0.538f, 0.444f, 1.280f)` is `:101`; the 100 cd/m² reference is `100.0 / 10000.0` (`:114`) |
+| `scripts/cycles-reference/compare.py:155` (new) | `khronos-dfs-srgb-eotf` | matches: `np.where(clamped <= 0.04045, clamped / 12.92, np.power((clamped + 0.055) / 1.055, 2.4))` (`:157`), the knee's ≤ as quoted |
+| `scripts/cycles-reference/render.py:99` | `khr-lights-punctual-range` | matches: quote `max( min( 1.0 - ( current_distance / range )⁴, 1 ), 0 ) / current_distance²`; the node tree is `1 − (Ray Length / range)⁴` clamped (`:108-121`), Cycles' point light giving `1/d²`; `calibrate.py:72-74` checks 0.9375 |
+| `scripts/cycles-reference/render.py:303` | `gltf-2.0-metallic-roughness` | matches: green to Roughness, blue to Metallic, each times its factor (`:304-308`, `:315`) |
+| `scripts/cycles-reference/render.py:312` | `gltf-2.0-zero-roughness` | matches: the clamp path, `MAXIMUM` with `MINIMUM_ROUGHNESS` (`:313-317`) |
+
+No other file in tooling cites a key: `src/bench/report.rs`, `src/bench/provenance.rs`, the rest of `src/bench/history/`, `src/stats/gpu_memory.rs`, `src/bin/praxis.rs`, the other scripts, the workflows and the tests cite none (`tests/references.rs` holds only planted fixtures). The wgpu-hal quote was opened in the 30.0.2 sources.
+
+### Findings
+
+| id | claim | severity | where | evidence | expected | verifier | placement |
+|---|---|---|---|---|---|---|---|
+| L1-T01 | The recording workflow fails, and copies nothing, whenever the Goldens update removes a lavapipe LOD 0 Golden: `git ls-files --modified` lists the deleted file, `praxis difference` cannot open it, and `cp --parents` of the absent path fails the step | correctness: the documented route for lavapipe Goldens fails on every change that makes one of the 9 `vulkan-cpu` LOD 0 Goldens redundant, and the removal is left to be found and made by hand | `.github/workflows/lavapipe-files.yml:49-58` | block below | `docs/agents/workflow.md:29`: `scripts/lavapipe-files.sh` "has CI record them in a run that judges nothing and copies into the tree the Goldens and Baselines CI would fail" | | |
+| L1-T02 | The import makes a re-recorded Baseline's record clean and judges it quiet by its GPU frame spread alone, ignoring the `dirty` and `quiet` stamps the Baseline's own provenance holds, so the M3.5 exit's M4 Pro Baselines, measured from a dirty tree, sit on their Series as clean records of a source they did not measure | correctness: clause broken; 10 M4 Pro Series records on `bench-history` (`daaba8ce`'s Baselines but texture-wall, which its spread tags); no record today whose Baseline stamped `quiet: false` with a spread under 1.06 | `src/bench/history/import.rs:374-394` | block below | ADR 0024:17: "A record joins a Series only if its tree was clean, its profile release, the machine quiet (preflight warned of none of ...)" | | |
+| L1-T03 | A re-recorded Baseline's record drops the scene content hash its Baseline holds, since the import replaces the Baseline's provenance with one that has no such field | correctness: clause broken for 164 records on `bench-history` (128 of them the M4 Pro's) and 306 import candidates at the frozen commit, every one holding a hash; a content change next to a re-recorded Baseline draws without a line break | `src/bench/history/import.rs:323-335` | block below | ADR 0024:18: "each record carries its scene's content hash. A chart breaks its line where either changes" | | |
+| L1-T04 | `tests/references.rs` reads no Python file, so a dangling key cited in the Cycles reference scripts passes the test that the workflow says fails on one | correctness: a check not red-capable for 5 citations in 2 files, one of them added since the last audit; none dangles today | `tests/references.rs:235-237` | block below | `docs/agents/workflow.md:43`: "`cargo test --test references` fails on a dangling key or an unused entry"; `tests/references.rs:215`: "The text files that may cite the registry: code, shaders, scripts and Markdown" | | |
+| L1-T05 | `uploaded_bytes`'s doc says "The pools' own loads are not counted" and lists what is counted without them, while every frame adds the bytes its streamed Chunk loads and mips write into the pools through the load staging, which the Frame stats test pins | drift: load-bearing for reading the counter, which `compare` judges against each Baseline and the Bench history publishes; in a streaming frame the undescribed part is up to `load_bytes_per_frame`, 26,640,177 bytes at the checked-in Budgets, and uncapped in a Settled frame | `src/stats/mod.rs:25-31` | block below | the doc names the streamed Chunk loads and mips among what is counted, and says only loads outside the Chunk streamer (a spawn's) are not | | |
+| L1-T06 | The note `praxis report` prints under its times table says the Budget column bounds the median and p99, but `compare` judges the two dynamic TLAS rows' Budgets at the median alone | drift: a sentence printed in every report pasted into a PR misstates the rule for 2 of the 5 rows that show a Budget (`Dynamic TLAS, CPU` at 1,100 µs, `dynamic_tlas_build` at 1,000 µs) | `src/bench/report.rs:149-153` | block below | the note names the statistics `compare` judges per row: median and p99 for the CPU frame, GPU frame and gate (the CPU frame's p95 too), the median alone for the dynamic TLAS's ceilings (`src/bench/mod.rs:1335-1348`) | | |
+| L1-T07 | `compare`'s doc says every median counts against its Baseline but the dynamic TLAS's CPU median, yet the lit pass's wait, the gate's passes, each system's and stage's CPU time and the BLAS compaction waits are compared with no Baseline | drift: not load-bearing; a reader expects a per-system CPU or lit-pass-wait regression to fail `compare` | `src/bench/mod.rs:1169-1173` | block below | the doc names the medians `compare` judges against Baselines: the CPU frame, the GPU frame, each pass, the gate, shadow-ray time (and aliasing) | | |
+| L1-T08 | `docs/agents/project-shape.md` says `history rerecord` is run by "a sweep's runs", but no sweep runs it since the RTX 2070 SUPER's sweep stopped | drift: not load-bearing; misleads a reader of the project map about who re-records counters | `docs/agents/project-shape.md:24-27` | block below | the map names what the module does: a session runs `praxis history rerecord` on runs of `main` (`src/bench/history/rerecord.rs:1-6`) | | |
+| L1-T09 | ADR 0025 says local scheduled tasks bench the real GPUs, but since 2026-11-21 one scheduled task benches one machine and the RTX 2070 SUPER is benched by hand | drift: not load-bearing; one plural | `docs/adr/0025-the-repo-is-public-under-mit.md:17` | block below | ADR 0024:3 (amended 2026-11-21): "The RTX 2070 SUPER has no sweep ... its Goldens and Baselines are recorded by hand at each milestone's exit" | | |
+| L1-T10 | The Frame stats test spells the geometry Arenas' bytes as five summands of the shares before 2026-11-16 (34,225,520 for the vertex Arena), while the code sizes them from `[658, 130, 11, 133, 68]` thousandths (55,197,040 for the vertex Arena); the kind's total is 83,886,072 either way, so the test passes on summands that name no Arena the code builds | drift: not load-bearing (the assertion is the kind's total, which holds); each summand is off by up to 20,971,520 bytes | `tests/frame_stats.rs:117-122` | block below | the summands are the shares `ARENA_PER_MILLE` gives (`src/assets/pools.rs:19`), or the test states the kind's total alone | | |
+| L1-T11 | The lint's example of the identical-images line, "22 of 22", no longer matches the gallery, which writes 23 images since `world` gained its fourth frame | drift: not load-bearing (the lint takes any equal pair); one example in three places | `scripts/pr-lint.sh:104` | block below | the example count equals what `scripts/gallery.sh` writes | | |
+
+#### L1-T01
+
+```yaml
+# .github/workflows/lavapipe-files.yml:42-59
+      - name: Record the Goldens CI would fail
+        env:
+          PRAXIS_UPDATE_GOLDENS: "1"
+          PRAXIS_REQUIRE_GOLDENS: "1"
+        run: |
+          cargo test --test goldens reference_scenes_match_their_goldens
+          mkdir -p target/lavapipe-files
+          git ls-files --modified --others --exclude-standard tests/goldens |
+            while read -r golden; do
+              if git show "HEAD:$golden" > target/committed-golden.png 2>/dev/null; then
+                difference=$(RUST_LOG=error target/debug/praxis difference \
+                  target/committed-golden.png "$golden" target/golden-difference.png || true)
+                if [[ $difference == "0 pixels differ"* ]]; then
+                  continue
+                fi
+              fi
+              cp --parents "$golden" target/lavapipe-files
+            done
+```
+
+```rust
+// tests/goldens.rs:511-512 (update_goldens)
+            let differs = lod_0.as_raw() != actual.as_raw();
+            update_golden(directory, &lod_0_label(&label), differs.then_some(lod_0));
+// tests/goldens.rs:519-523 (update_golden)
+fn update_golden(directory: &Path, label: &str, actual: Option<&image::RgbaImage>) {
+    let path = directory.join(format!("{label}.png"));
+    let Some(actual) = actual else {
+        if std::fs::remove_file(&path).is_ok() {
+            writeln!(std::io::stderr(), "removed Golden {label}").ok();
+```
+
+`docs/agents/workflow.md:29`: "on a pushed branch at `main`'s head, `scripts/lavapipe-files.sh` has CI record them in a run that judges nothing and copies into the tree the Goldens and Baselines CI would fail". When a change makes a scene's LOD 0 capture equal its capture (LOD selection no longer changes that frame), the update removes `<label>-lod-0.png`. `git ls-files --modified` counts an unstaged deletion as a modification (confirmed in a scratch repository outside the tree on git 2.54.0). For that path `git show HEAD:` succeeds, `praxis difference` fails on the absent file (`src/bin/praxis.rs:1028-1033`), so `$difference` is empty, and `cp --parents` of the absent file exits non-zero. The step runs under the workflow's `shell: bash` (`.github/workflows/lavapipe-files.yml:15-17`), which GitHub runs as `bash --noprofile --norc -eo pipefail`, so the piped loop's failure ends the step; `upload-artifact` (`:61-65`) has no `if:` and is skipped, and `scripts/lavapipe-files.sh:49` (`gh run watch "$run_id" --exit-status`) exits under `set -e` before downloading either artifact, the Baselines' included. Even with the copy guarded, the script only copies (`scripts/lavapipe-files.sh:58-61`), so a removal never reaches the tree, while CI fails the stale LOD 0 Golden whenever it differs from the new LOD 0 capture (`tests/goldens.rs:232-241`). Magnitude: `tests/goldens/vulkan-cpu/` holds 9 LOD 0 Goldens among its 23 files. Not visible in images; it costs a failed recording run and a deletion by hand. Fix: in the loop, `[ -e "$golden" ] || { echo "$golden" >> target/lavapipe-files/removed; continue; }`, uploaded with the Goldens, and `lavapipe-files.sh` removing each path that list names.
+
+#### L1-T02
+
+```rust
+// src/bench/history/import.rs:337-342
+/// The Baseline `json` that `commit` committed at `path`, as a Bench
+/// record of that commit's source: the file as it was, with the backend it
+/// ran on and an imported provenance. Baselines were recorded on a quiet
+/// machine, so only their own GPU frame spread can tag one as not quiet:
+/// against each frame's neighbours where the Baseline recorded that, else
+/// against the run's median.
+```
+
+```rust
+// src/bench/history/import.rs:374-394
+    let quiet = p95_over_neighbours
+        .or(p95_over_median)
+        .is_none_or(|ratio| ratio < QUIET_P95_OVER_MEDIAN);
+    BenchRecord::new(
+        file,
+        &baseline.scene,
+        &commit.source_hash,
+        commit.committed_unix_seconds,
+        tags(
+            false,
+            true,
+            Some(Run {
+                scene: &baseline.scene,
+                adapter: &baseline.adapter,
+                profile: &baseline.profile,
+                quiet,
+```
+
+`tags`' first argument is `dirty` (`src/bench/history.rs:880-883`). The rule fits the Baselines imported from before the history, which carry no provenance. A Baseline re-recorded since carries the bench's own stamps (`checkout.dirty`, `quiet`), and `imported` replaces that provenance wholesale (`src/bench/history/import.rs:362-373`), so neither reaches `tags`. The 11 M4 Pro Baselines committed by `daaba8ce` (the M3.5 exit) hold `"dirty": true`, `"commit": "8a1bfc2c…"`, `"source_hash": "919be01e…"` (`git show daaba8ce:bench/baselines/apple-m4-pro/town.json`, lines 134-136). The import keys their records by `daaba8ce`'s source hash, `4da82f0c…`; `8a1bfc2c`'s own is `a51401c4…`, and the two commits differ in 10 files under `src/` (the three source hashes recomputed from `git ls-tree` without writing objects; the method reproduces the `3d64bb23…` that `99f46267`'s Baseline records). All 11 have GPU frame spreads under 1.06 but texture-wall. On `bench-history` (the local `origin/bench-history` at `472a27c6`, 2026-11-23, read as the record of what the import wrote), `records/apple-m4-pro-metal/<scene>/4da82f0c….json` exists for the other 10 scenes, each with `provenance.source` `baseline-rerecorded`, no `tags` and no trace of `dirty`; texture-wall's is under `tagged/` as "machine not quiet". ADR 0024:17 keeps a record off its Series unless "its tree was clean". The same path also drops a Baseline's `quiet: false` (load, busy processes, power) when its spread is under 1.06; every hardware Baseline committed since `3c6b9d92` with `quiet: false` (`6ebb45fb`, `f806b46c`, `d3f7d0a7`, `61acdc8d`, `fe39acef`, on `world` or `helmet`) also has a spread of 1.07 to 1.16, so it is tagged anyway and none is counted. Magnitude: 10 Series records claim a clean measurement of a source other than the one measured; each starts its line as a Baseline, so the error is in that record's level, not in a Suspect. Fix: in `imported`, read `provenance.checkout.dirty` and `provenance.quiet` when the Baseline holds them and pass them to `tags`, keeping the spread rule for Baselines without provenance, with a test of a dirty re-recorded Baseline expecting the `dirty tree` tag.
+
+#### L1-T03
+
+```rust
+// src/bench/history/import.rs:323-335
+#[derive(serde::Serialize)]
+struct ImportedProvenance<'baseline> {
+    source: &'static str,
+    baseline: &'baseline str,
+    commit: &'baseline str,
+    source_hash: &'baseline str,
+    harness_version: u32,
+    gpu_frame_p95_over_median: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    gpu_frame_p95_over_neighbours: Option<f64>,
+}
+```
+
+ADR 0024:18: "The Harness version rises whenever a change alters what a metric means, and each record carries its scene's content hash. A chart breaks its line where either changes, so a new definition never reads as a Regression." Every Baseline file `main` committed since `3c6b9d92` that the import turns into a record (306 by `remeasured`, 137 of them the M4 Pro's) holds `provenance.scene_content_hash` (`daaba8ce`'s `town.json`, line 141). The import overwrites `provenance` with `ImportedProvenance` (`src/bench/history/import.rs:362-373`), which has no such field, so `StoredProvenance.scene_content_hash` reads `None` (`src/bench/history.rs:286-287`) and the Series row writes null. On `bench-history` at `472a27c6`, all 164 records whose `provenance.source` is `baseline-rerecorded` lack the hash, and every one of the 1,781 records a bench published holds it. The branch README says a row holds null for "a time, Aliasing figure or scene content hash it lacks" (`src/bench/history.rs:128-129`); these records do not lack it, the import drops it. `same_definition` lets a null hash join either neighbour (`src/bench/history.rs:1238-1243`), so a cooker or scene change that lands next to a re-recorded Baseline draws on one line, and the record after the Baseline does not start one. Suspects change little, since the Baseline starts its own line (`:400-401`). The test of a current Baseline's record checks eight metrics and not the hash (`src/bench/history/import.rs:576-599`). Fix: add `scene_content_hash: Option<&str>` to `ImportedProvenance`, taken from the Baseline's provenance when present, and assert it in that test.
+
+#### L1-T04
+
+```rust
+// tests/references.rs:215-218
+/// The text files that may cite the registry: code, shaders, scripts and
+/// Markdown, outside hidden directories, build output and cooked data. The
+/// registry itself and this file, whose planted citations are its tests,
+/// are left out.
+// tests/references.rs:235-237
+        let is_text = ["rs", "wgsl", "md", "sh", "toml"]
+            .iter()
+            .any(|extension| path.extension().is_some_and(|found| found == *extension));
+```
+
+`docs/agents/workflow.md:43` (Review, Sources): "a new source joins the registry in the same diff (`cargo test --test references` fails on a dangling key or an unused entry)". The Cycles reference's Python scripts cite five keys: `scripts/cycles-reference/compare.py:39` `[ref:gt7-tone-mapping-cpp]`, `compare.py:155` `[ref:khronos-dfs-srgb-eotf]` (added since `8bc34eb1`), `render.py:99` `[ref:khr-lights-punctual-range]`, `render.py:303` `[ref:gltf-2.0-metallic-roughness]` and `render.py:312` `[ref:gltf-2.0-zero-roughness]`; `git grep -n "\[ref:"` outside `.rs`, `.wgsl`, `.md`, `.sh`, `.toml` and `docs/guides/` lists exactly these. The `py` extension is not on the list, so a misspelled or removed key there passes. All five exist today, and each is also cited from a scanned file (`gt7.wgsl`, `src/bench/mod.rs`, `shading.wgsl`, `src/cook/export.rs`, `docs/research/source-audit.md`), which is why no entry reads as unused. The extension list is older than the last audit; what landed since is a new citation in a file the test does not read. Fix: add `"py"` to the list.
+
+#### L1-T05
+
+```rust
+// src/stats/mod.rs:25-31
+    /// Bytes the frame's uploads wrote to GPU buffers: the camera and light
+    /// uniforms, the light buffer, the bends, the Instances it wrote, the
+    /// Instance slot count when it changed, and the dynamic TLAS's instances
+    /// its build uploads; and the bytes that the moves of Textures between
+    /// Texture classes staged since the frame before copy. The pools' own
+    /// loads are not counted.
+    pub uploaded_bytes: u64,
+```
+
+```rust
+// src/state.rs:287
+        self.recorder.counters.uploaded_bytes += streamed.written_bytes;
+```
+
+`streamed.written_bytes` is "Bytes the frame's loads wrote into the load staging" (`src/streaming/io.rs:652-653`): each Chunk load adds what `load_into_pools` wrote (`src/streaming/io.rs:1330-1341`) and each streamed mip what `material_pool.stream_mips` wrote (`:1150-1163`), both loads into the Mesh and Material pools. The test pins it (`tests/frame_stats.rs:62-72`): "only the first also writes the ten 128-byte Instances and the 4-byte count of Instance slots in use, and streams the Chunks: the sphere Mesh's bytes in the Arenas, ..., its 220-byte Mesh table entry and ten 80-byte Materials", with `frames[0].uploaded_bytes` asserted equal to the uploads plus `streamed_bytes`. The doc's last sentence was written on 2026-11-06 (`2b207766`); the line in `src/state.rs` landed on 2026-11-08 (`02fcac89`, "uploaded_bytes counts what streamed loads write"), after `8bc34eb1`, and did not touch the doc. What the sentence still describes truly is a spawn's loads, which go through the pools outside the streamer and are added nowhere (the orrery test's frame 0, `tests/frame_stats.rs:502-516`, counts no Mesh bytes for its spheres). The counter is one of the bench's (`src/bench/mod.rs:357`, `:416`), and `compare` fails a scene whose counter moves (test `src/bench/mod.rs:2135-2145`). Magnitude: `load_bytes_per_frame` is 26,640,177 bytes at the checked-in Budgets (`src/render/renderer.rs:1095`), the most a frame's streamed loads write that is not Settled, by ADR 0017's cap; a Settled frame writes past it. Not visible in an image. The render section handed this lead to tooling. Fix: replace the last sentence with "and the bytes the frame's streamed Chunk loads and mips wrote into the load staging; a spawn's loads are not counted".
+
+#### L1-T06
+
+```rust
+// src/bench/report.rs:149-153
+    writeln!(
+        report,
+        "\nThe Budget column bounds the median and p99; the CPU and GPU frames' maximum answers to {} µs. The culling phases' per-slot stages answer to a guard, at the median alone.",
+        grouped(budgets.maximum_frame_microseconds, 1)
+    )?;
+```
+
+```rust
+// src/bench/mod.rs:1335-1348
+    check_budget(
+        &mut findings,
+        "dynamic_tlas_cpu_microseconds",
+        current.dynamic_tlas_cpu_microseconds.median,
+        budgets.dynamic_tlas_cpu_microseconds,
+    );
+    if let Some(build) = passes.get(DYNAMIC_TLAS_BUILD) {
+        check_budget(
+            &mut findings,
+            "dynamic_tlas_gpu_microseconds",
+            build.median,
+            budgets.dynamic_tlas_gpu_microseconds,
+        );
+    }
+```
+
+The rows that show a Budget are built at `src/bench/report.rs:66-97` (`CPU frame`, `Dynamic TLAS, CPU`, `GPU frame`, `Gate, rays off`) and `:109-114` (the `dynamic_tlas_build` pass row with `budgets.dynamic_tlas_gpu_microseconds`). ADR 0013 names the p99 for three metrics only: "the CPU frame, the GPU frame and ADR 0019's gate answer to their Budgets at the p99 as at the median, the CPU frame at its p95 too"; the glossary's Budget entry likewise lists "the dynamic TLAS's CPU and GPU ms" with no statistic beside the three that carry "each at its median and p99" (`CONTEXT.md:303`). The report's test pins the sentence (`src/bench/report.rs:574`). `docs/agents/workflow.md` (Performance and memory) makes the report the one source of figures quoted in PRs: "Figures quoted from bench results, in a PR or `docs/performance.md`, are pasted from `praxis report <results directory>`". Visible in every pasted report: a reader of a crowd run whose dynamic TLAS p99 is over 1,100 µs would expect a failure `compare` does not give. Fix: "bounds the median, and the p99 of the CPU frame, GPU frame and gate (the CPU frame's p95 too)".
+
+#### L1-T07
+
+```rust
+// src/bench/mod.rs:1169-1173
+/// Compares `current` with its `baseline` and the Budgets. Medians count
+/// against Baselines, the GPU frame's and each pass's included, except the
+/// dynamic TLAS's CPU median; counters count too, but the late mips, which
+/// depend on when the IO pool's reads land, and the TLAS build's
+/// allocations, which the heap allocations already hold, are reported only.
+```
+
+`compare` calls `check_regression` on the CPU frame median (`src/bench/mod.rs:1263-1269`), each `gpu_pass_microseconds` median (`:1291-1300`), the GPU frame median (`:1303-1309`), the gate and shadow-ray medians (`:1321-1330`) and aliasing (`:1239`, `:1488-1491`). It never reads `lit_pass_wait_microseconds` (`:225`), `gate_pass_microseconds` (`:231`), `cpu_time_microseconds` (`:244`) or `blas_compaction_microseconds` (`:265`), each a median-bearing `Spread` the record holds; `culling_per_slot_microseconds` meets its guard only (`:1349-1361`), as the doc's later sentence says. The change that added `cpu_time_microseconds` says in its message "Nothing new is judged by compare", so the code is as intended and the doc overstates. Visible only to a reader of the doc. Fix: "The CPU frame's, the GPU frame's, each pass's, the gate's and shadow-ray time's medians count against Baselines".
+
+#### L1-T08
+
+```
+docs/agents/project-shape.md:24-27
+                                 history/rerecord.rs, `praxis history
+                                 rerecord`: a sweep's runs re-record the
+                                 counters of the Baselines they moved,
+                                 timings kept, with the commits between
+```
+
+```rust
+// src/bench/history/rerecord.rs:1-6
+//! `praxis history rerecord`: runs of `main` re-record the
+//! counters of this machine's Baselines where they moved. A re-recorded
+//! Baseline keeps its timings and Harness version, which a person chooses,
+//! so its record starts no line on its Series; where those timings no
+//! longer compare with the run, the Baseline is left for a person to
+//! re-record whole.
+```
+
+The project map's line was written when the RTX 2070 SUPER's sweep ran the re-record and opened a pull request with it (`605f40b7`). The commit that stopped that sweep (`372ce4a0`) removed the re-record from `scripts/sweep.sh`, says in its body "Its module doc no longer says a sweep runs it", and changed the map's `sweep.sh` entry (`docs/agents/project-shape.md:178-185`) but not this one. `scripts/sweep.sh` at the frozen commit calls `history import`, `unrecorded`, `bisect`, `publish-night`, `regressions` and `publish`, never `rerecord` (`:80-81`, `:152`, `:191`, `:200`, `:209`). The bench-history guide already says "A session runs `praxis history rerecord <directory>` on runs of `main` whose counters moved" (`docs/guides/bench-history.html:124`). Fix: "`praxis history rerecord`: runs of `main` re-record the counters of the Baselines they moved, timings kept, with the commits between".
+
+#### L1-T09
+
+```
+docs/adr/0025-the-repo-is-public-under-mit.md:17
+- Self-hosted Actions runners on the owner's machines, which a pull request from anyone could run code on (ADR 0024). CI runs on GitHub's hosted runners, without a GPU, and local scheduled tasks bench the real ones.
+```
+
+ADR 0025 was accepted on 2026-11-14, when the M4 Pro ran `sweep.plist` and the RTX 2070 SUPER ran `sweep-task.xml`. `372ce4a0` (2026-11-21) deleted `scripts/sweep-task.xml` and amended ADR 0024:3: "The RTX 2070 SUPER has no sweep: it was rarely on, so its sweep published on few days, and its Goldens and Baselines are recorded by hand at each milestone's exit". ADR 0025 was not touched (its last commit is `300116fb`, 2026-11-14). Magnitude: one plural; the clause's point, that no self-hosted runner exists, holds. Fix: "and a local scheduled task benches the M4 Pro; the RTX 2070 SUPER is benched by hand".
+
+#### L1-T10
+
+```rust
+// tests/frame_stats.rs:117-122
+    // GPU memory by kind. The geometry Arenas: the Mesh pool's five, each its
+    // share of the 80 MiB Budget in whole 4-byte words. ...
+    let geometry_arenas = 34_225_520 + 22_229_808 + 838_860 + 12_163_480 + 14_428_404;
+```
+
+```rust
+// src/assets/pools.rs:19
+const ARENA_PER_MILLE: [u64; 5] = [658, 130, 11, 133, 68];
+```
+
+`src/assets/pools.rs:82-85` sizes each Arena as `budgets.geometry_arenas * per_mille / 1000` rounded down to 4 bytes. Recomputed from 83,886,080: 55,197,040, 10,905,188, 922,744, 11,156,848 and 5,704,252, summing to 83,886,072. The test's summands are those of 408, 265, 10, 145 and 172 thousandths, each rounded down to 4 bytes, the shares ADR 0017 records as in force from 2026-11-14 to 2026-11-16; they also sum to 83,886,072. The summands were written in `d3f7d0a7` (2026-11-14) and the shares changed in `308e7c67` (2026-11-16), both after `8bc34eb1`. The assertion reads the kind's total (`tests/frame_stats.rs:202-209`), so the test passes and cannot tell the Arenas apart; a reader takes the vertex Arena for 34,225,520 bytes, which ADR 0017 says it was "until those of 2026-11-16". Not visible. Fix: write the summands from the current shares, or state the total 83,886,072, the comment saying that the five Arenas' rounding loses 8 bytes of the Budget.
+
+#### L1-T11
+
+```bash
+# scripts/pr-lint.sh:104
+        miss "$linking, or gives the gallery's count on one line when no image differs, as \"22 of 22 gallery images identical to the base's\" (workflow.md, PRs)"
+```
+
+The gallery captures `town` at 8 frames (`scripts/gallery.sh:147-149`), 9 scenes at the Goldens' frame (`:150-153`), `crowd` in 2 forms (`:154-156`) and `world` at 4 frames (`:44`, `:157-159`): 23 images. The example was written at `888b0152` (2026-11-14), when `world_frames` was `(59 300 599)` and the gallery wrote 22; `b434f5e1` (2026-11-18) added frame 1500. The same "22 of 22" stands in `docs/agents/workflow.md:35` and the fixture `scripts/pr-lint-test.sh:210`. The lint takes any equal pair (`scripts/pr-lint.sh:103`), so no verdict changes; a reader copying the example writes a count the gallery never prints. Fix: 23 in the three places, or an example without a figure.
+
+### Notes for the verifier
+
+Not filed, since each needs a run, an owner's reading or another lane, or has no instance; recorded so the next audit does not find them again.
+
+- Two counter changes kept their Harness version. `02fcac89` (2026-11-08) made `uploaded_bytes` count streamed loads (L1-T05's evidence) and did not raise `HARNESS_VERSION`, which next rose at `31fae9d1` (2026-11-14) for another reason; no Baseline changed in `02fcac89`, and the bench reads the median frame's counter (`src/bench/mod.rs:357`), so the Baselined scenes' medians did not move then. `4c65546d` moved acceleration-structure bytes from an estimate to wgpu-hal's exact size, re-recorded only that counter (−28,698 to −34,377 bytes on the M4 Pro) and kept version 11; the counter's meaning did not change, only its accuracy. Counters are judged by no Suspect. Run: on `bench-history`, compare `uploaded_bytes` across version 11 records whose sources straddle `02fcac89`; the owner says whether a counter's change of meaning or accuracy bumps the version.
+- `bench/budgets.json` is compiled in (`src/bench/mod.rs:731-736`) and sizes the pools and the Renderer's capacities, yet `bench` is in `UNMEASURED_PATHS` under the comment "the bench reads none of them" (`src/bench/provenance.rs:408-419`). Not filed: a Budget change that moves a capacity breaks the pinned tests `the_checked_in_budgets_give_these_pool_capacities` (`src/assets/pools.rs:1412`) or `the_checked_in_budgets_give_these_render_capacities` (`src/render/renderer.rs:1088`), so the same commit edits `src/`; all four commits since `8bc34eb1` that touched the file also changed `src/`. The owner may want it listed as a measured path.
+- A re-recorded Baseline's record is keyed by, and takes the Harness version of, the commit that landed it (`src/bench/history/import.rs:207-213`), as the branch README says (`src/bench/history.rs:130-132`), not the source and version its Baseline measured; about half the commits that re-recorded a Baseline since `3c6b9d92` landed another source than the one measured. One record's version differs: `0c133356` committed a `town` Baseline measured on `1cb7bb5b` under version 12, and its record says 13; `308e7c67`'s bump changed `world` only, so no line is wrong. The owner says whether a re-recorded Baseline should be keyed by its measured source; L1-T02 is the part that contradicts a clause.
+- A tagged re-recorded Baseline loses its mark when a Series record holds its key (`src/bench/history.rs:1027-1034`, `:1074-1077`; the mark is carried only between records in one directory, `:1042-1060`), against the README's promise to "a quieter record of its source that holds the key in its place" (`:133-134`). No instance on `bench-history` at `472a27c6`.
+- A held Verdict whose ends no longer show the shift judges nothing and stays held (`src/bench/history/verdicts.rs:236-241`), and every night resumes a held unpinned Verdict before any new Suspect (`:368-383`), so one shift that never reproduces would block every later Suspect on that machine. Liveness is the owner's call.
+- The night's runs feed a Verdict whatever their own `provenance.quiet`: `may_start` waits only for preflight's `gpu load` and `cpu load` warnings (`scripts/sweep.sh:123-128`), and `night::runs` reads medians without the stamp (`src/bench/history/night.rs:130-151`). The owner says whether `step` should skip runs stamped not quiet.
+- A Series record whose commit is not on `main` (a branch bench whose source hash equals `main`'s, `src/bench/history.rs:847-862`) would make `first_parent` and the sweep's worktree fail every night if it became a Suspect's end (`scripts/sweep.sh:67`, `:138`). Nine RTX 2070 SUPER rows name the vanished `109e1c85`; no M4 Pro row does, and the RTX has no sweep.
+- Re-benches of commits older than a change of the quiet rule (`ce265e4c`, `4abdfd44`, `3c908961`) carry that binary's quiet verdict into their records; the version 14 era began after the last change, so only Suspects on older lines are affected. `publish-night` parses an old binary's results as today's `Measurements`, every field added since `3c6b9d92` being an `Option` or defaulted (`src/bench/mod.rs:190-273`), which settles the last audit's note on record shapes.
+- The sweep never benches `world`: `history unrecorded` lists every Reference scene but it (`src/bin/praxis.rs:656-675`), so `world`'s M4 Pro Series grows only from sessions. ADR 0024's "benches `main` only when its source has no quiet record" is a condition, not a promise to bench every scene; `scripts/sweep.sh:52-53` records the timing behind it, `:2-3` does not say so.
+- Records name, on the public `bench-history`, other processes at or over half a core with their ids (`busy_processes`) and the bench's branch. ADR 0025 rules out "private data"; whether process names are that is the owner's reading.
+- `scripts/sweep.sh:192-196` removes the trees whenever `history bisect` prints nothing, also when a held Verdict's ends did not hold, so the comment "No bisect waits for a later night" is then false and the next night rebuilds them; `:148`'s mapfile comment sits above `night=`, not the `read -r` lines it explains (`:160-164`). Health. The cap comment (`:49-55`, 299 s plus 495 s under 900 s) needs a night's log to re-confirm.
+- The ceilings of M4 stories 26 and 51 and M5 story 31 (the Fast travel hold 50 ms, N = 10 frames, the far field's fill 80 frames and 650 ms) are milestone criteria. The bench measures each and the Baselines hold them (`bench/baselines/apple-m4-pro/world.json`: hold 28.1 ms over 4 frames, fill 602.8 ms over 79 frames, 7 frames until traced), but `compare` reads none, and the report's Streamed table has no Baseline column (`src/bench/report.rs:231-277`); after the milestones closed a regression of any fails no command. M5 story 14's limit on shadow mask pixels that differ from LOD 0 is likewise in no code (`docs/performance.md:34` records the counts by hand). The owner says whether "kept as a ceiling" and "limited" meant the exit only.
+- M5 story 29's shadow-ray time with Far proxies traced and not was a report in the change that traced them; no Render switch or CLI mode untraces them (`src/render/renderer.rs:78-115`), so it cannot be measured again without a patch. The render section marked the story for tooling; nothing in tooling implements it.
+- M4 story 70: `static_tlas_build_time` is in Frame stats and printed, but not in `Measurements`, so no Bench record carries it.
+- Meshes refused, Materials refused and Chunks not loaded are in Frame stats (`src/stats/mod.rs:104-109`) and the traversal (`src/bench/mod.rs:630-636`, `:679-683`) but not bench `Counters`, while `Counters::REFUSALS`' doc says "one refusal on any frame is a defect" (`:397-398`). The M4 spec's decision lists only the refusals Frame stats held then, all present; a run would show whether a refused Mesh also counts as a refused Renderable.
+- `compare` judges `gpu_memory_bytes` and each kind at the measured frames' median (`src/bench/mod.rs:358`, `:1227-1238`); ADR 0013's "at most 8 GB" reads as every frame, which the M4 and M5 exits checked on the traversal's peak (`:667-678`). No frame shown over. The maximum frame is likewise judged over the measured frames only, the warm-up's 248 frames by design not.
+- `gpu_memory_bytes`'s doc (`src/stats/mod.rs:62-67`) lists what the sum leaves out and omits the load staging's belt, the omission L1-R04 records in ADR 0013; fix it with L1-R04 rather than file it twice.
+- `Budgets::dynamic_tlas_cpu_microseconds`' doc names "its build's recording and submit on the CPU" (`src/bench/mod.rs:714-717`) while the metric also sums `BLAS_REFIT` (`:981-985`); the last audit's note stands. The `Display` doc of `Measurements` (`:1085-1092`) and the report's doc (`src/bench/report.rs:20-23`) omit the far field's fill, which both print: omissions, not filed.
+- `path_frame_times` pairs the two runs' frames from the first measured frame (`src/bench/mod.rs:1076-1083`); a hold inside the warm-up would offset the pairing. No Reference scene holds before frame 248 (the world's Fast travel is at frame 1800).
+- `compare` of a `--lod` bench (`<scene>-lod-<n>.json`) finds no Baseline and names `praxis bench <dir> <scene>-lod-<n>` as the fix (`src/bin/praxis.rs:770-777`), a scene name the parser refuses. Health.
+- `State::frame_stats` calls `generate_allocator_report` on every read (`src/state.rs:374`), which walks the allocator on Vulkan and DX12, after the measured frame. Performance lane.
+- `FrameStats::cpu_times` is documented "in run order" (`src/stats/mod.rs:16-18`) but built as every system span, then every stage (`:303-310`, `:321-335`); every system runs before the first stage today. The Goldens test compares `capture_frames` renders with Goldens that `update_goldens` records through `praxis::capture` (`tests/goldens.rs:200-224`, `:333-346`), so it also requires the two paths to agree at frame 59, which its header does not state. Neither is a defect.
+- `scripts/verify.sh:38` measures aliasing only for a diff under `src/render`, `src/cook`, `src/scenes` or `assets`; `vendor/` and `src/streaming/`, both new since `8bc34eb1`, are not on the list, while `src/bench/provenance.rs` counts `vendor/` among the measured paths. The same class as M3.5's L1-T11, whose fix chose a list; a diff touching only `vendor/` that moves a Golden would settle it.
+- The seven `dtolnay/rust-toolchain@b725eda5… # stable` pins name a branch, which `gh api` reports as diverged from the pinned commit; it still resolves and installs whatever stable is current. The owner says whether a branch name satisfies "its version in a comment". The new workflow's claim that its job ids let rust-cache restore CI's caches holds (rust-cache v2.9.3 keys on `GITHUB_JOB`, `src/config.ts:73-95` at that tag).
+- `tests/asset_manifest.rs:190-193` requires `dev_only` for an `-NC-` licence only; nothing requires a `dev_only` entry to be fetched, and an `ND` licence or a `LicenseRef-` is not caught. No such entry exists, and ADR 0025 claims a test only for the manifest entry and the credit.
+- `tests/field_guides.rs:351-376` counts as "on `main`" every token of every tracked file outside `docs/` and Markdown, now `vendor/wgpu-core`'s source, JSON Baselines and `Cargo.lock` included, so a removed engine name found there still passes. The owner's reading.
+- `tests/references.rs:219-243` walks the file system, not `git ls-files`, so an untracked `pending-artifacts/` is read: a local false failure, never CI's. `docs/guides/prepare.html:678` cites `[ref:bevy-tasks-0.18.1-scope-polls-results-first]`, absent from the registry; the page quotes code at its Describes commit, and HTML is not read by the test. Docs lane.
+- `tests/conventions.rs:42` names its rule "measured timing or ratio", but `has_measured_figure` (`:562-580`) catches ratios only as `%`; no shipping comment says "N times" or "Nx faster".
+- `scripts/pr-lint.sh:93` asks a PR that moves a Golden from outside the rendering paths (a scene generator, a transform change) for no images, though `CLAUDE.md` says a PR that moves a Golden shows before and after; the workflow's lint claim covers only the rendering paths. Owner.
+- `compare --recording` judges the Budgets too (`src/bin/praxis.rs:755`), so a lavapipe run past a memory Budget would be copied as a Baseline at every recording; lavapipe is far under the Budgets.
+- `.github/workflows/ci.yml:234-235` says the shipping job's capture runs "must be the Goldens test's: the Golden's frame alone, then the later WORLD_FRAMES together"; the test also renders `world`'s four frames in one `capture_frames` route (`tests/goldens.rs:142-198`). The job is green; a run from a cold cache would confirm. Pushes to `main` that change only skipped paths skip `check` too (`ci.yml:8-28`), so a docs-only PR not up to date with `main` merges without the field guides and references tests running on the merged commit; documented in the comment.
+- `CONTEXT.md:259` says of the Cycles Baseline's tolerance "each scene has its own", while `compare.py:91-92` gives every scene the same two; the tolerances (`:85-92`) are ten times the Baseline's rounding, justified by a three-run spread only a run with Blender re-measures. `src/cook/mod.rs:585` says "`praxis cook` cooks every Reference scene's" while `src/bin/praxis.rs:494-496` leaves `world` out: the cook reader's. `.gitignore:19-20` ignores `/bench/baselines/helmet.json` as "local-only" while helmet Baselines are committed per adapter. Docs lane.
+- `tests/compute_pool.rs` was deleted with the pool's move into each `FramePreparer`; ADR 0016's `available_parallelism() − 1` clause is tested in `src/threading.rs:36`.
+
+### Reader scope statements
+
+**The bench: run, report and provenance.** Read at the frozen commit in the worktree: `src/bench/mod.rs` (3,270 lines) in full from line 1 to 1581, its test module by test name and wherever a row cites a test; `src/bench/report.rs` (759) from 1 to 399 with its tests by name; `src/bench/provenance.rs` (705) in full. `git diff 8bc34eb1..HEAD` for the three files, `bench/budgets.json` and ADRs 0013 and 0024, and the first-parent log of every commit since `8bc34eb1` touching them, `src/stats`, `src/render/readback.rs` or `src/capture/mod.rs`, with `HARNESS_VERSION` at each. Opened to confirm what they read: `bench/budgets.json`, the M4 Pro's `town`, `helmet` and `world` Baselines, and the render, stats, pools and preflight lines each row cites. ADRs read whole: 0013 and 0024 clause by clause; 0019, 0020, 0022, 0026 and 0027 searched for bench clauses. The closed M4 and M5 milestones' exit criteria were read with `gh api`.
+
+**The Bench history and the night.** Read in full, non-test code: `src/bench/history.rs` (lines 1-1245 of 2,253), `src/bench/history/import.rs` (1-477 of 751), `night.rs` (1-189 of 345), `rerecord.rs` (1-349 of 556), `suspects.rs` (1-102 of 210), `verdicts.rs` (1-773 of 1,513), `scripts/sweep.sh` (213) and `scripts/sweep.plist` (29); each file's diff since `8bc34eb1`; test modules where cited. Opened to confirm: `src/bench/provenance.rs:1-350`, the parts of `src/bench/mod.rs` the history reads, `src/bin/praxis.rs:367-392`, `:620-749`, preflight's labels and thresholds, `docs/agents/project-shape.md`, `docs/guides/bench-history.html`, `CONTEXT.md:254-304`. ADRs read whole: 0024, 0013 and 0025. Git read only: the Baselines at every commit since `3c6b9d92`, the commits each Finding names, and the local `origin/bench-history` at `472a27c6` (2026-11-23, after the frozen commit, read as the record of what the import wrote, not as the frozen code). Source hashes were recomputed from `git ls-tree` in Python, never with `git mktree`.
+
+**Frame stats, the GPU memory ledger, capture, preflight and the CLI.** Read in full: `src/stats/mod.rs` (543), `src/stats/gpu_memory.rs` (461), `src/capture/mod.rs` (796), `src/preflight/mod.rs` (979), `src/bin/praxis.rs` (1,472), `tests/frame_stats.rs` (612) and `tests/goldens.rs` (539): 5,402 lines, every hunk since `8bc34eb1` among them. Opened to confirm: `src/state.rs:250-330`, `:360-378`, the streaming, staging, renderer, pools and provenance lines each row cites, `bench/budgets.json`, and `git show 02fcac89`. ADRs read whole with their diffs: 0013, 0016, 0017, 0021, 0024; 0004, 0014, 0023 and 0026 where a clause falls here. Registry quotes were confirmed in wgpu-hal 30.0.1 and 30.0.2 and wgpu-types 30.0.2 under `~/.cargo/registry/src/`.
+
+**The scripts, the Cycles reference, the workflows and the rule tests.** Read in full: `scripts/verify.sh` (80), `gallery.sh` (160), `pr-lint.sh` (146), `pr-lint-test.sh` (271), `lavapipe-files.sh` (63), the three workflows (353, 111, 61), `.github/pull_request_template.md` (25), `tests/field_guides.rs` (631), `tests/references.rs` (243), `tests/dependency_licences.rs` (89) and `scripts/cycles-reference/DIFFERENCES.md` (203). By changed hunk with the code around them: `tests/conventions.rs` (664), `tests/cook.rs` (918), `compare.py` (299), `render.py` (449), `calibrate.py` (93). Opened to confirm a script's contract: `tests/goldens.rs`, the CLI's parsing and subcommands, `src/bench/mod.rs`'s Baseline paths and modes, `src/scenes/mod.rs`, `tests/asset_manifest.rs`, `assets/manifest.json`, `.gitignore`, `Cargo.toml`, `vendor/README.md`, the `bench/baselines/` and `bench/cycles/` listings and the history of `scripts/gallery.sh`. ADRs read whole: 0013, 0024 and 0025 with their diffs, and ADR 0016's compute pool clause. Outside the tree, read-only: a scratch git repository to confirm `ls-files --modified` on a deletion, and `gh api` reads of the actions' tags and rust-cache's source.
+
+No reader ran `cargo`, `praxis` or a script, or wrote in either checkout. The other lane 1 sections (streaming, render, shaders) were grepped before filing: L1-R02, L1-R04 and L1-F02 touch tooling clauses and are cited, not filed again.
+
+### Counts
+
+| Severity class | Findings |
+|---|---|
+| `image` | 0 |
+| `budget` | 0 |
+| `correctness` | 4 (L1-T01, L1-T02, L1-T03, L1-T04) |
+| `drift` | 7 (L1-T05, L1-T06, L1-T07, L1-T08, L1-T09, L1-T10, L1-T11) |
+| `health` | 0 |
+
+Before the verifier. Clause verdicts: 120 rows; 6 are broken, each naming
+its Finding (three of them holding for published records and broken for the
+import of re-recorded Baselines); 106 hold, 5 of them with a `drift`
+Finding on a document's text (L1-T05, L1-T06, L1-T08, L1-T09, L1-T11); 4
+fall in another module; 3 are not applicable; 1 is not implemented (ADR
+0013's Input latency Budget, as M3.5 recorded); none is `superseded`. Spec
+stories: 34 rows, one of them superseded by an M5 story and one (M5 story
+29) not implemented in tooling as a standing measure. Registry keys: 12
+citations of 11 keys, all matching their quotes.
