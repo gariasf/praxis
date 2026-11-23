@@ -2435,8 +2435,9 @@ The hit's Instance is whatever the nearest-hit query found (`:182-186`); nothing
 ### Notes for the verifier
 
 Two Findings are drift in documents lane 7 also reads: L1-S05, ADR 0003's
-and ADR 0017's slot figures, and L1-S12, `CONTEXT.md`'s Thin Primitive
-entry; where lane 7 files the same sentence, the triage keeps one. Two
+and ADR 0017's slot figures, which the render section files as L1-R03,
+and L1-S12, `CONTEXT.md`'s Thin Primitive entry; where another section or
+lane files the same sentence, the triage keeps one. Two
 leads the render reader passed on, the `unsafe` creation of the main and
 culling modules with wgpu's loop bounding off and the culling pass's 256
 invocations a workgroup, were judged by reader B and filed as neither;
