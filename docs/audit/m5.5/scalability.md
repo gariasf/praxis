@@ -3,10 +3,13 @@
 Lane 4 of `docs/agents/audit.md` (scalability and reality check), run against
 M6's scope only: probe GI, Interior volumes and reflection cubemaps, their rays
 traced in the static TLAS, Far proxies included, and in the dynamic TLAS at
-its capacity. This is the draft the readers prepared AFK for the owner's
-session, which writes the decision comment on the ladder's map issue that M6's
-charting consumes and fills each Finding's `placement`; nothing here decides,
-charts M6 or sets a threshold, and every verdict is provisional.
+its capacity. The readers prepared it AFK; on 2026-11-23 the owner confirmed
+every verdict below and every choice M6 must undo, none struck; the decision
+is the
+[decision comment on the ladder's map issue](https://github.com/gariasf/praxis/issues/17#issuecomment-7109367684),
+which M6's charting consumes. No ADR is amended here and no threshold is set:
+each amendment, and each option a verdict is split by, is decided at M6's
+charting.
 
 Every unprefixed `path:line` is at the frozen commit
 `e5c55a8da2a59db2f09c99c8ea4522987d5354ac`. "Prototype `path:line`" is the
@@ -55,7 +58,11 @@ mask's eight bits all taken, and the birds that fill the dynamic TLAS to its
 buys 1.33 to 1.80 million probe rays a frame, ray length changing nothing on
 `world`, while `town`'s GPU frame already breaches its 12 ms Budget, so any
 probe pass widens a breach that stands; the one Finding is a drift in the GI
-survey's account of what a hit can read.
+survey's account of what a hit can read, placed in fog until M6's charting.
+No code must change before M6 can start, so the lane files no fix; the owner
+confirmed every verdict and all eighteen choices in the
+[decision comment](https://github.com/gariasf/praxis/issues/17#issuecomment-7109367684),
+and nothing here charts M6.
 
 ## Counts
 
@@ -91,7 +98,7 @@ Rows, after the verifier's 31 corrections and 7 merges:
 
 | id | claim | severity | where | evidence | expected | verifier | placement |
 |---|---|---|---|---|---|---|---|
-| L4-B1 | The survey's account of what a hit can read says the vertex Arena is bound "for the vertex stage only". At the frozen commit, and at the survey's own commit `300116fb`, the bend pass binds the vertex Arena to the compute stage read-write. The buffer no stage can bind is the index Arena, which the account does not name. | drift; not load-bearing for any priced figure; names the wrong buffer as the one a probe hit lacks, misleading one reader, M6's charting | `docs/research/global-illumination-and-lighting.md:193` | block below | `CLAUDE.md`'s review checklist rewrites "a research note's account of Praxis" that a change makes false. The sentence should say the vertex Arena is bound to compute in the bend pass, and the index Arena to no stage (B14, B17) | `confirmed`: line 193 says it; the bend pass binds `vertices` with `storage` (read-write, compute) at the frozen commit (`src/render/bind_groups.rs:190-200`, `:605-613`) and at `300116fb` (its lines 186-196), the refresh's stated commit (survey `:188`); the bend pass dates from before M3.5's frozen commit (`5c570f7e`) and the refresh from M5 (`99b4141b`), so the sentence was false when it landed, in scope. What holds of the sentence is the scene geometry group's binding alone (`:80-84`) | |
+| L4-B1 | The survey's account of what a hit can read says the vertex Arena is bound "for the vertex stage only". At the frozen commit, and at the survey's own commit `300116fb`, the bend pass binds the vertex Arena to the compute stage read-write. The buffer no stage can bind is the index Arena, which the account does not name. | drift; not load-bearing for any priced figure; names the wrong buffer as the one a probe hit lacks, misleading one reader, M6's charting | `docs/research/global-illumination-and-lighting.md:193` | block below | `CLAUDE.md`'s review checklist rewrites "a research note's account of Praxis" that a change makes false. The sentence should say the vertex Arena is bound to compute in the bend pass, and the index Arena to no stage (B14, B17) | `confirmed`: line 193 says it; the bend pass binds `vertices` with `storage` (read-write, compute) at the frozen commit (`src/render/bind_groups.rs:190-200`, `:605-613`) and at `300116fb` (its lines 186-196), the refresh's stated commit (survey `:188`); the bend pass dates from before M3.5's frozen commit (`5c570f7e`) and the refresh from M5 (`99b4141b`), so the sentence was false when it landed, in scope. What holds of the sentence is the scene geometry group's binding alone (`:80-84`) | `fog`, trigger "M6 charting" |
 
 **L4-B1.** Quoted, `docs/research/global-illumination-and-lighting.md:193`: "A hit's TLAS entry gives its Instance slot, but the Material table and Channel textures are bound for the fragment stage only and the vertex Arena for the vertex stage only (`src/render/bind_groups.rs`)". The section's own line 188: "From the code and documents on `main` at 300116fb". Beside it, `src/render/bind_groups.rs:190-200`: `BENDS`, group 3 of the bend pass, holds `storage("vertices", "array<CookedVertex>")`, and `storage` is a read-write binding visible to `wgpu::ShaderStages::COMPUTE` (`:605-613`). `git show 300116fb:src/render/bind_groups.rs` holds the same group at lines 186-196. The index Arena is created with `wgpu::BufferUsages::BLAS_INPUT` alone (`src/assets/pools.rs:248-255`), so no binding of any stage can name it; the vertex Arena is created `STORAGE | BLAS_INPUT` (`:242-247`). The same misstatement sat in reader A's older-choices item 3, corrected above.
 
