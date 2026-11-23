@@ -500,6 +500,7 @@ mod tests {
             fast_travel_hold: None,
             far_field_fill: None,
             frames_until_traced: None,
+            probe_ray_frame_growth_microseconds: None,
             blas_compaction_microseconds: None,
             aliasing: None,
             provenance: None,

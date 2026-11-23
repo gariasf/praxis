@@ -1,0 +1,38 @@
+"""Usage: python3 scripts/probe-1006-table.py <results directory>
+
+Prints, per variant of scripts/probe-1006.sh, each round's medians in
+microseconds and the median of the rounds.
+"""
+
+import json
+import pathlib
+import statistics
+import sys
+
+results = pathlib.Path(sys.argv[1])
+rounds = sorted(results.glob("round-*"))
+variants = sorted({directory.name for round in rounds for directory in round.iterdir()})
+
+metrics = {
+    "frame_growth": lambda run: run.get("probe_ray_frame_growth_microseconds"),
+    "probe_ray_pass": lambda run: run["gpu_pass_microseconds"].get("probe_ray_pass", {}).get("median"),
+    "gpu_frame": lambda run: run["gpu_frame_microseconds"]["median"],
+    "tlas_build_gpu": lambda run: run["gpu_pass_microseconds"]["dynamic_tlas_build"]["median"],
+    "tlas_build_cpu": lambda run: run["dynamic_tlas_cpu_microseconds"]["median"],
+}
+
+print("| variant | metric | rounds | median | quiet |")
+print("|---|---|---|---|---|")
+for variant in variants:
+    runs = []
+    for round in rounds:
+        files = list((round / variant).glob("*.json"))
+        if files:
+            runs.append(json.loads(files[0].read_text()))
+    for metric, read in metrics.items():
+        values = [read(run) for run in runs]
+        if any(value is None for value in values) or not values:
+            continue
+        quiet = sum(bool(run.get("provenance", {}).get("quiet")) for run in runs)
+        listed = ", ".join(f"{value:.1f}" for value in values)
+        print(f"| {variant} | {metric} | {listed} | {statistics.median(values):.1f} | {quiet}/{len(runs)} |")

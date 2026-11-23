@@ -21,6 +21,7 @@ use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::culling_pass::CullingPhase;
 use crate::render::main_pass::LIT_PASS;
+use crate::render::probe_ray_pass::PROBE_RAY_PASS;
 use crate::render::{
     BLAS_COMPACTION, BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, RenderSwitches,
     TIMED_PASSES,
@@ -265,6 +266,8 @@ pub struct Measurements {
     /// in the measured frames, when a static TLAS build brought one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frames_until_traced: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub probe_ray_frame_growth_microseconds: Option<f64>,
     /// The waits for BLAS compaction, over the measured frames that waited.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blas_compaction_microseconds: Option<Spread>,
@@ -944,6 +947,9 @@ fn measure(
             .map(|&pass| {
                 let times = frames
                     .iter()
+                    .filter(|gpu| {
+                        TIMED_PASSES[pass] != PROBE_RAY_PASS || gpu.pass_log.get(pass).is_some()
+                    })
                     .map(|gpu| microseconds(gpu.pass_times[pass].1));
                 (TIMED_PASSES[pass].to_owned(), spread(times.collect()))
             })
@@ -951,7 +957,7 @@ fn measure(
     };
     let every_pass: Vec<usize> = (0..TIMED_PASSES.len())
         .filter(|&pass| {
-            TIMED_PASSES[pass] != crate::render::probe_ray_pass::PROBE_RAY_PASS
+            TIMED_PASSES[pass] != PROBE_RAY_PASS
                 || measured_gpu
                     .iter()
                     .any(|gpu| gpu.pass_log.get(pass).is_some())
@@ -1072,6 +1078,16 @@ fn measure(
         },
         fast_travel_hold: FastTravelSpan::hold(measured),
         far_field_fill: FastTravelSpan::fill(measured),
+        probe_ray_frame_growth_microseconds: {
+            let probe_ray_pass = TIMED_PASSES.iter().position(|&pass| pass == PROBE_RAY_PASS);
+            let traced: Vec<bool> = (measured_gpu.iter())
+                .map(|gpu| probe_ray_pass.is_some_and(|pass| gpu.pass_log.get(pass).is_some()))
+                .collect();
+            let frame_microseconds: Vec<f64> = (measured_gpu.iter())
+                .map(|gpu| microseconds(gpu.frame_time))
+                .collect();
+            frame_growth(&traced, &frame_microseconds)
+        },
         frames_until_traced: (measured.iter())
             .filter_map(|stats| stats.frames_until_traced)
             .max(),
@@ -1172,6 +1188,9 @@ impl std::fmt::Display for Measurements {
                 " far_field_fill_ms={:.1} far_field_fill_frames={}",
                 fill.milliseconds, fill.frames
             )?;
+        }
+        if let Some(growth) = self.probe_ray_frame_growth_microseconds {
+            write!(formatter, " probe_ray_frame_growth_us={growth:.1}")?;
         }
         if let Some(frames) = self.frames_until_traced {
             write!(formatter, " frames_until_traced={frames}")?;
@@ -1592,6 +1611,23 @@ fn percentile(mut values: Vec<f64>, fraction: f64) -> f64 {
     values[rank.clamp(1, values.len()) - 1]
 }
 
+const BLOCK_EDGE_FRAMES: usize = 3;
+
+fn frame_growth(traced: &[bool], frame_microseconds: &[f64]) -> Option<f64> {
+    let median_of = |traces: bool| {
+        let times: Vec<f64> = (BLOCK_EDGE_FRAMES..traced.len().saturating_sub(BLOCK_EDGE_FRAMES))
+            .filter(|&frame| {
+                traced[frame - BLOCK_EDGE_FRAMES..=frame + BLOCK_EDGE_FRAMES]
+                    .iter()
+                    .all(|&neighbour| neighbour == traces)
+            })
+            .map(|frame| frame_microseconds[frame])
+            .collect();
+        (!times.is_empty()).then(|| percentile(times, 0.5))
+    };
+    Some(median_of(true)? - median_of(false)?)
+}
+
 fn hitches(times: &[f64]) -> u64 {
     let median = percentile(times.to_vec(), 0.5);
     times.iter().filter(|&&time| time > 2.0 * median).count() as u64
@@ -1600,6 +1636,20 @@ fn hitches(times: &[f64]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frame_growth_is_the_traced_blocks_median_over_the_others_away_from_block_edges() {
+        let traced: Vec<bool> = (0..80).map(|frame| (frame / 10) % 2 == 1).collect();
+        let frame_microseconds: Vec<f64> = (0..80)
+            .map(|frame| {
+                let near_edge = frame % 10 < 3 || frame % 10 > 6;
+                let own = if traced[frame] { 130.0 } else { 100.0 };
+                if near_edge { own + 500.0 } else { own }
+            })
+            .collect();
+        assert_eq!(frame_growth(&traced, &frame_microseconds), Some(30.0));
+        assert_eq!(frame_growth(&[false; 80], &frame_microseconds), None);
+    }
     use crate::render::readback::tests::RecordedFrame;
     use crate::stats::GpuFrameStats;
 
@@ -1802,6 +1852,7 @@ mod tests {
             fast_travel_hold: None,
             far_field_fill: None,
             frames_until_traced: None,
+            probe_ray_frame_growth_microseconds: None,
             blas_compaction_microseconds: None,
             aliasing: None,
             provenance: None,

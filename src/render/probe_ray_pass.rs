@@ -20,6 +20,7 @@ pub(crate) struct ProbeRaySwitches {
     unchecked: bool,
     repeats: u32,
     verify_hits: bool,
+    block_frames: Option<u32>,
 }
 
 impl ProbeRaySwitches {
@@ -31,6 +32,7 @@ impl ProbeRaySwitches {
             unchecked: std::env::var_os("PRAXIS_PROBE_UNCHECKED").is_some(),
             repeats: number("PRAXIS_PROBE_REPEATS").unwrap_or(1),
             verify_hits: std::env::var_os("PRAXIS_PROBE_VERIFY").is_some(),
+            block_frames: number("PRAXIS_PROBE_BLOCK_FRAMES"),
         })
     }
 }
@@ -68,6 +70,7 @@ pub struct ProbeRayPass {
     bind_group: wgpu::BindGroup,
     results: wgpu::Buffer,
     switches: ProbeRaySwitches,
+    frames: u32,
 }
 
 impl ProbeRayPass {
@@ -144,7 +147,15 @@ impl ProbeRayPass {
             bind_group,
             results,
             switches,
+            frames: 0,
         }
+    }
+
+    pub(crate) fn next_frame_traces(&mut self) -> bool {
+        let frame = self.frames;
+        self.frames += 1;
+        (self.switches.block_frames)
+            .is_none_or(|block_frames| (frame / block_frames).is_multiple_of(2))
     }
 
     pub(crate) fn record(

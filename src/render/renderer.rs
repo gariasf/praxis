@@ -941,7 +941,9 @@ impl Renderer {
                     .as_mut()
                     .map(|timestamps| timestamps.pass(SHADOW_MASK_PASS).compute()),
             );
-            if let Some(probe_ray_pass) = &self.probe_ray_pass {
+            if let Some(probe_ray_pass) = &mut self.probe_ray_pass
+                && probe_ray_pass.next_frame_traces()
+            {
                 probe_ray_pass.record(
                     &mut encoder,
                     self.static_tlas.bound_index(),
