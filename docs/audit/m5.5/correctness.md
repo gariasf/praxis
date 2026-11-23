@@ -3259,3 +3259,2071 @@ fall in another module; 3 are not applicable; 1 is not implemented (ADR
 stories: 34 rows, one of them superseded by an M5 story and one (M5 story
 29) not implemented in tooling as a standing measure. Registry keys: 12
 citations of 11 keys, all matching their quotes.
+
+## cook
+
+Scope: `src/cook/`, `src/assets/` and `src/scenes/`, as far as they
+changed after `8bc34eb1`: 11,797 changed lines at the frozen commit
+(`git diff --numstat 8bc34eb1..e5c55a8d`). `src/cook/` 4,755 (`mod.rs`
+937, `far_proxy.rs` 833, `mesh.rs` 740, `far_proxy/bake.rs` 638,
+`launch.rs` 557, `chunk.rs` 405, `export.rs` 351, `texture.rs` 294),
+`src/assets/` 4,983 (`material.rs` 1,884, `pools.rs` 1,746, `cooked.rs`
+712, `loader.rs` 587, `mesh.rs` 46, `mod.rs` 8) and `src/scenes/` 2,059
+(`world.rs` 998, `mod.rs` 647, `town.rs` 414), with the cook's seam tests
+in `tests/cook.rs` (183). `src/cook/fetch.rs` did not change and was
+opened only to judge a clause. Four readers at high effort shared the
+module by file, each with the lane brief verbatim: A, the cooker's Meshes,
+Textures, scene cook and export (`src/cook/mod.rs`, `mesh.rs`,
+`texture.rs`, `export.rs`, `tests/cook.rs` and the writer's half of
+`src/assets/cooked.rs`); B, the world's cook (`src/cook/chunk.rs`,
+`launch.rs`, `far_proxy.rs`, `far_proxy/bake.rs`); C, assets (all of
+`src/assets/`, `cooked.rs` for its reader's half); D, the Reference scenes
+(all of `src/scenes/`). Each reader's scope, clause verdicts, stories,
+registry keys and oracles are a subsection below, its oracle floors in
+blocks numbered by its letter (A1, B1, ...). Their Findings are one table,
+numbered from `L1-C01` in the readers' order; "M3.5's L1-C0n" names that
+report's Finding. Readers A and D filed the same drift of ADR 0018's
+sentence on a Thin Primitive's cap normals, which is one Finding here,
+L1-C01, under reader A, whose clause it is. ADRs read whole and judged
+clause by clause: 0002, 0011 and 0018, and the cook and Arena clauses of
+0017, 0025 and 0026; and, where a clause's implementation lies in these
+files, 0001, 0003, 0006, 0008, 0013, 0014, 0016, 0019, 0020, 0021, 0022,
+0023 and 0027, with the `CLAUDE.md` review checklist's cook, pool and
+scene lines as their operational form. One clause handed to the module as
+known broken, ADR 0017's capacity clause (the texture pool's Channels are
+capped in Texture classes, not bytes), carries `broken, known` and is
+under reader C's *Open issues read*; ADR 0022's determinism, which the
+streaming section filed as L1-F41, carries `broken, known` in reader D's
+rows and is not filed again. `deviations.md` holds one row in these files,
+`src/cook/mesh.rs:meshlet_triangle_counts`, which the code matches. Every
+`where` is `path:line` from the repository root at the frozen commit.
+
+Oracles: 39 rows over the tests added or changed in scope (A 7, B 11, C
+16, D 5); one states its floor beside its constant (A's LOD chain test).
+The session ran the module's tests on the frozen tree before assembling
+the section, at `e5c55a8d` on the Apple M4 Pro, battery charged at 100%,
+no peer session benching or holding a quiet turn (each asked beforehand).
+A first run without SciFiHelmet in the worktree (load average 5.22 at the
+start) passed; with SciFiHelmet fetched in (load average 2.10 at the
+start), `cargo test --lib -- cook:: assets:: scenes::` passed 95 of 95 in
+14.51 s (cook 49, assets 36, scenes 10) and `cargo test --test cook`
+passed 16 of 16 in 8.52 s. One measurement was taken for a Finding, with
+a temporary print, reverted after the run: SciFiHelmet's Mesh Blob is
+353,120 bytes (L1-C02). The readers ran no project code; reader D
+recomputed the world generator's `random` in a standalone script and
+reader B one bake read in Python.
+
+### the cooker's Meshes, Textures, scene cook and export
+
+Read in full at the frozen commit `e5c55a8d`: `src/cook/mod.rs` (1,324
+lines), `src/cook/mesh.rs` (1,349), `src/cook/texture.rs` (753) and
+`src/cook/export.rs` (1,403), each with its `#[cfg(test)]` module, and
+`tests/cook.rs` (918) as the cook's seam tests; 5,747 lines. The writer
+half of `src/assets/cooked.rs` was read for what the cooker writes: the
+constants and Asset ID derivation (`:1-154`), `CookedMaterial::to_blob`
+(`:171-201`), `CookedTexture::to_blob` and `resident_tail_level`
+(`:249-372`), `CookedVertex`, `CookedPrimitive`, `CookedMeshlet::split`,
+`CookedMesh`, `CookedLod` and `CookedMesh::to_blob` (`:485-702`); its
+reader's verdicts are reader C's. The scope's diff
+(`git diff 8bc34eb1..e5c55a8d`) changed 937 lines of `mod.rs`, 740 of
+`mesh.rs`, 294 of `texture.rs`, 351 of `export.rs` and 183 of
+`tests/cook.rs`; rows on unchanged code give the frozen commit's lines.
+ADRs read whole, status lines and amendments included: 0002, 0008, 0011,
+0014, 0017, 0018, 0019, 0023, 0025, 0026 and 0027. Spec stories read:
+every story and decision of `spec-611.md` (M4) and `spec-804.md` (M5);
+those these files implement are under *Spec stories*. Opened outside the
+files, to judge a clause and not audited: `src/cook/launch.rs:160-241`
+(the dev launch's use of `kept_chunks` and of a Far proxy's references),
+`src/cook/far_proxy.rs:22-38` and `src/cook/far_proxy/bake.rs:11-26`
+(what the Far proxy's Cook key hashes), `src/assets/pools.rs:510-513`
+and `src/render/prepare.rs:530-535`, `:774-781` (when prepare skips a
+Renderable without a Material Handle), `src/streaming/mod.rs:313-321`
+(`distance_metres`), `src/scenes/mod.rs:85-98`, `:553-575`,
+`:1432-1514` (`ReferenceScene::ALL`, the Load radius and View distance,
+`uv_sphere`, `ground_plane`), `src/bin/praxis.rs:488-500` (which scenes
+plain `praxis cook` cooks), `.cargo/config.toml`, `.github/workflows/ci.yml`
+(which jobs run `cargo test`), `Cargo.lock`, and the messages of commits
+`c47a441d` (cap normals) and `e5c55a8d` (the `meshopt` 0.7 bump) for the
+decisions they record. Crate sources opened, each named where used:
+`meshopt-0.7.0` (`src/simplify.rs`, `src/encoding.rs`, and its vendored
+meshoptimizer 1.3: `vendor/src/meshoptimizer.h`, `simplifier.cpp`,
+`clusterizer.cpp`, `vertexcodec.cpp`), `bevy_mikktspace-1.0.0`
+(`src/lib.rs`, `src/mikktspace.rs`) and `glam-0.34.3`
+(`src/f32/neon/quat.rs`). `docs/audit/deviations.md`,
+`scripts/cycles-reference/DIFFERENCES.md`, `docs/references.toml` and
+`CONTEXT.md` were read for what is not a Finding; M3.5's cook section
+(`docs/audit/m3.5/correctness.md:494-1504`) and the M5.5 report so far
+were read for what was filed. No open issue was named for these files.
+No `cargo` command was run: every oracle row gives the test's constant
+and the floor derived by hand, not a measured run.
+
+#### Clause verdicts
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0011 | "glTF (from Blender) is the authoring source; the runtime loads Blobs with mip chains, GPU block compression (BC) and byte ranges sized for streaming" | holds: the cooker alone parses glTF (`gltf` behind the `cook` feature), and writes a full mip chain of BC blocks per Texture with a KTX2 level index giving each mip its byte range | `src/cook/mod.rs:956-1052`; `src/cook/texture.rs:162-218`; `src/assets/cooked.rs:329-345`; `Cargo.toml:41` |
+| 0011 | "a development launch reaches glTF only through the cooker, which cooks what changed before the runtime loads Blobs" | falls in reader B (`launch.rs`); `praxis cook <scene>`'s whole-scene cook, the other path, is `cook_scene` | `src/cook/mod.rs:603-613` |
+| 0011 | "Textures cook into KTX2, a standard container" | holds: `ktx2` 0.5.0's header, level index and DFD serialisers, one key-value entry | `src/assets/cooked.rs:312-372` |
+| 0018 | "An Asset ID is the first 128 bits of SHA-256 over (GUID, Asset kind, glTF name, Channel for a Texture)" | holds, in that order, each part tagged and each string length-prefixed; a Texture is named by its image's name or index, as M3.5 recorded | `src/assets/cooked.rs:103-143`; `src/cook/mod.rs:965-969`, `:1033`; `src/cook/mesh.rs:709-712`, `:736` |
+| 0018 | "The glTF index replaces the name when the name is missing or not unique" | holds: `asset_names` gives `Index` to a missing name or one another item shares, for images, Materials and Meshes alike | `src/cook/mod.rs:1071-1082`, `:965`, `:970`; `src/cook/mesh.rs:681-682` |
+| 0018 | "A cooked Asset is a Blob named by the SHA-256 of its bytes, found through a cook index ... rebuilt when its Cook key changes" | holds: every write goes through `CookedCache::write` under the Asset's Cook key, and `is_fresh` compares the key with the Blob present | `src/cook/mod.rs:645-694`, `:902-907`; `src/assets/cooked.rs:1174-1185` |
+| 0018 | "A glTF mesh renamed in Blender gets a new Asset ID" | holds by construction: the Mesh's name is hashed; the seam renames NormalTangentTest's Mesh and reads the old ID's Blob still there | `src/cook/mesh.rs:736`; `tests/cook.rs:743-799` |
+| 0018 | "The cooker warns when an ID that something references no longer exists" | holds, with a ceiling the code states: M3.5's L1-C01 is fixed, as Material to Texture, Mesh to Material, Chunk to Mesh and Material and Reference scene to every Asset its spawn loads are checked against what this cook wrote or found fresh, not against the never-pruned cache; while any source of the referring scene is absent, every ID the cache holds passes, a stale one included (the `ponytail:` comment), and a Far proxy's references are checked only by a dev launch | `src/cook/mod.rs:615-636`, `:731-751`, `:909-934`, `:919-921`, `:514-525`; `src/cook/launch.rs:193-195`; tests `src/cook/mod.rs:1105-1186`, `tests/cook.rs:743-799` |
+| 0018 | "Cook key: SHA-256 over what the Asset cooks from (a Texture's source image, a Mesh's decoded Primitives and their Material IDs, a Material's own Blob; by content ...)" | holds: a Texture over its source bytes, or a generated image's pixels and size; a Mesh over every `Geometry` field, destructured so a new field fails to compile, and its Material ID, each part length-prefixed; a Material over its Blob | `src/cook/texture.rs:135-158`; `src/cook/mesh.rs:57-90`; `src/cook/mod.rs:882-888` |
+| 0018 | "the Cook keys of its dependencies, every cook setting, the format version and the encoder versions" | holds: the normal Texture's key, tagged `N`; `texture_zstd_level`; the three format versions; `intel_tex_2 0.5.0 basic`, `bevy_mikktspace 1.0.0`, `meshoptimizer 1.3, vertex codec 1` and zstd's runtime version, which match `Cargo.lock` (`intel_tex_2` 0.5.0, `bevy_mikktspace` 1.0.0, `meshopt` 0.7.0), `meshoptimizer.h:15` (`MESHOPTIMIZER_VERSION 1030`) and `vertexcodec.cpp:125` (`gEncodeVertexVersion = 1`) | `src/cook/texture.rs:21`, `:144-147`, `:277-286`; `src/cook/mesh.rs:45-51`, `:59-60`; `src/cook/mod.rs:884-885` |
+| 0018 | "The metallic-roughness Texture depends on the normal Texture (Toksvig)" | holds for glTF and generated sources, the first Material's normal Texture where several share the image | `src/cook/mod.rs:1019-1030`, `:830-853`; `src/cook/texture.rs:98-104`, `:144-147` |
+| 0018 | "Each dev launch recomputes the keys of its scene's Materials and Meshes as it starts, of each Chunk and Texture as it loads it ..." | falls in reader B (`launch.rs`) | |
+| 0018 | "The Cooked cache lives in git-ignored `cooked/` and is never evicted. Deleting it is always safe." | holds, cook side: no cooker code removes an index file or a Blob; the seam deletes the cache and cooks again | `src/cook/mod.rs:638-759`; `tests/cook.rs:254-274` |
+| 0018 | "Each Blob starts with a magic and a format version (a Texture Blob is KTX2, with its format version in a key-value entry)" | holds for what the cooker writes: `PXMA` 2, `PXME` 8, and `PXTXVERSION` = 2 as a little-endian u32 | `src/assets/cooked.rs:21-40`, `:179-180`, `:322-327`, `:698-699` |
+| 0018 | "Engine data that no cook format holds exactly is compiled into the binary instead ... The runtime still opens no source path" | holds, cook side: `read_sources` reads only `.gltf` and `.glb` entries, so the dither mask is never cooked | `src/cook/mod.rs:784-787` |
+| 0018 | "Textures are KTX2 with every level zstd-supercompressed, stored smallest mip first, so the Resident tail ... is one contiguous byte range ... Rows are stored unpadded" | holds: levels written in `rev()` order, each compressed on its own, scheme Zstandard, each level the encoder's tightly packed blocks | `src/assets/cooked.rs:336-345`, `:355`; `src/cook/texture.rs:592-597`, `:628` |
+| 0018 | "Formats per Channel, without RDO: albedo and emissive BC7 sRGB, normal BC5 (z rebuilt in the shader), metallic-roughness BC5 linear, occlusion BC4 ... `intel_tex_2` at its basic profile ... A Far proxy's baked albedo alone encodes at its `ultra_fast` profile" | holds: the format per Channel; the basic BC7 profiles, alpha or opaque by the level's texels; `with_fastest_bc7` selects `ultra_fast` and enters the Cook key (it is also set on the baked metallic-roughness Texture, where BC5 ignores it) | `src/cook/texture.rs:179-187`, `:622-627`, `:139-141`; `src/cook/mod.rs:450` |
+| 0018 | "Mips: a 2×2 box filter in linear light, with normals renormalised per mip. Toksvig widens each mip's roughness ... The cooker refuses a Texture whose size is not a multiple of 4 or exceeds 8192" | holds: sRGB decoded by table, the box mean, `renormalise` per normal mip, `widened_roughness` from the normal Texture's carried variance, both refusals tested | `src/cook/texture.rs:222-253`, `:351-398`, `:421-448`, `:504-512`, `:565-590`, `:169-178`; `tests/cook.rs:378-390` |
+| 0018 | "Meshes: a 28-byte vertex (position `Float32x3`, UV `Float32x2`, ... QTangent in `Snorm16x4`, its w kept non-zero ...), and u32 indices" | holds | `src/assets/cooked.rs:485-497`; `src/cook/mesh.rs:642-669` |
+| 0018 | "`meshopt` reorders for vertex cache, overdraw and fetch, then encodes, then zstd compresses" | holds | `src/cook/mesh.rs:485-492`, `:213`; `src/assets/cooked.rs:650-700` |
+| 0018 | "Each Primitive's triangles are cut, in that order, into Meshlets of at most 64 vertices ... and at most 124 triangles ... as meshoptimizer's scan builder cuts them" | holds, and the cut on a degenerate triangle matches the Deviation `src/cook/mesh.rs:meshlet_triangle_counts` (`clusterizer.cpp:245-261` in 1.3 still aliases `av`, `bv`, `cv` into `used[]`) | `src/cook/mesh.rs:503-535`; `src/assets/cooked.rs:534-588` |
+| 0018 | "A Meshlet is stored as one byte, its triangle count; the reader rebuilds its vertex remap and local triangles" | holds, writer side | `src/assets/cooked.rs:688-694` |
+| 0018 | "The Blob also holds the Mesh's bounding box for culling" | holds: the box of LOD 0's vertices and any box a Primitive adds | `src/cook/mesh.rs:220-232`; `src/assets/cooked.rs:665-667` |
+| 0018 | "Each Primitive stores its UV texel density ...: the square root of its summed UV area over its summed mesh-space area, in UV units per metre, ... taken per Primitive, as a ratio of summed areas and as a length" | holds: summed in f64 over the source triangles, `sqrt(uv_area / mesh_area)`, 0 where the mesh area is 0; a degenerate triangle adds 0 to both sums, a Primitive without UVs reads 0 (its UVs default to zeros) | `src/cook/mesh.rs:435-453`, `:701-704`; `src/assets/cooked.rs:505-510`, `:670` |
+| 0018 | "The Blob holds the Mesh's LOD chain: the vertices once, which every LOD indexes, then per LOD its error in metres, each Primitive's run of its indices and its Meshlets, with every LOD's indices in one encoded stream" | holds; the error stored is the simplifier's, of position, normal and UV together, times the Mesh's extent (see *Notes*) | `src/assets/cooked.rs:637-702`, `:605-616` |
+| 0018 | "Each LOD is simplified from the one before to half its triangles by meshoptimizer's attribute-aware simplifier, the whole Mesh in one call, normals and UVs weighted, ... a chain holds at most 8 LODs and ends before a LOD that would keep more than 85% of the indices before it" | holds: `simplify_with_attributes_and_locks` on the finer LOD with a target of `finer.len() / 6 * 3`, no error limit, weights 0.5 and 1.0, the loop bounded by `MESH_MAX_LODS` = 8, a LOD over 0.85 of the finer dropped; each LOD ordered and cut per Primitive | `src/cook/mesh.rs:302-420` |
+| 0018 | "A Thin Primitive's vertices are locked in the simplifier [ref:meshoptimizer-1.3-vertex-lock], so every LOD keeps its LOD 0 triangles and a Mesh of Thin Primitives alone has no coarser LOD" | holds: a `true` lock per vertex of a thin Primitive, which `meshopt` 0.7 passes as the Lock bit (`simplify.rs:60`) and which meshoptimizer extends to every wedge at the same position (`simplifier.cpp:510-517`); with no vertex free, a Mesh of thin Primitives alone keeps every index and its chain ends at the 85% rule | `src/cook/mesh.rs:344-351`; test `:780-812` |
+| 0018 | "Each Primitive stores a Thin Primitive's radius, zero for any other" | holds | `src/cook/mesh.rs:205`; `src/assets/cooked.rs:671` |
+| 0018 | "The cook refuses one unless each triangle is the side of a tube whose radius is within a quarter of the one declared, or a cap closing such a tube, so a side vertex's position less its normal times the radius lies within a quarter of the radius of the centre line and no vertex stores it" | holds: an edge whose normals differ lies on one ring when its centres, position less normal times the declared radius, are within 0.25 of the radius times the normals' difference, which on one ring holds a true radius R to within r/4 of the declared r; a triangle passes as a side with such an edge, or as a cap whose edges are all within 2.5 radii, its vertices at ring positions; tested by Mesh and Primitive | `src/cook/mesh.rs:98`, `:103-150`; test `src/cook/mod.rs:1088-1099` |
+| 0018 | "a cap's vertices keep their own normals (amended 2026-11-14)" | holds in intent, wording broken: since 2026-11-16 each cap vertex takes its ring's normal so that a cap widens with its side, which the ADR does not say: L1-C01 | `src/cook/mesh.rs:100-102`, `:151-158`; `src/assets/cooked.rs:511-514` |
+| 0018 | "A Material is its own Asset: PBR factors plus one Texture Asset ID per Channel. Primitives reference it by ID" | holds | `src/assets/cooked.rs:156-201`; `src/cook/mod.rs:1054-1067`; `src/cook/mesh.rs:709-712` |
+| 0018 | "A Chunk's edge is 256 m ... A Placement holds a Mesh Asset ID ..." | falls in reader B (`chunk.rs`) | |
+| 0018 | "The cooker lives in `src/cook/` behind the `praxis cook` command ... a default-on `cook` feature ... Procedural Reference scenes cook too, under Asset IDs derived from the scene name" | holds | `src/cook/mod.rs:813-867`; `src/assets/cooked.rs:114-117`; `Cargo.toml:41` |
+| 0018 | status line: "Plain `praxis cook` leaves out the `world` scene, whose library of more than 8 GB cooks only as `praxis cook world` or on a miss" | holds in the command; `cook`'s doc comment still says plain `praxis cook` cooks every scene: L1-C03 | `src/bin/praxis.rs:493-498`; `src/cook/mod.rs:584-586` |
+| 0018 | status line: "`praxis cook <scene>` cooks a scene whole"; "A dev launch cooks only what it loads" | the first holds (`cook_scene` reads the scene's sources and cooks every Asset, Chunk and Far proxy of them); the second falls in reader B | `src/cook/mod.rs:603-613`, `:638-759` |
+| 0002 | "Meshes are (vertex offset, index offset, index count) sub-allocations of one shared vertex buffer and one shared index buffer" (as the Mesh Blob serves it) | holds, writer side: a Mesh's vertices are one run every LOD indexes from 0, and every LOD's indices are u32 into it, so a loader adds one vertex offset; the Arenas are reader C's | `src/assets/cooked.rs:591-616`, `:649-656` |
+| 0017 | "The cooked format (ADR 0011) stores each mip as a separately loadable byte range of the Texture's Blob, with the Resident tail as one range, and the Mesh Blob each Primitive's UV texel density" | holds, writer side: one level index entry and one zstd frame per mip, smallest first; the density per Primitive | `src/assets/cooked.rs:333-345`, `:668-672` |
+| 0017 | "Each texture's Resident tail (mips of 64 KiB and smaller) never leaves ... 87,408 bytes for a 2,048² BC7 or BC5 Texture" (as cooked) | holds as the cook lays it out: the 2,048² chain's mips of 64 KiB or less, 256² down to 1², take 65,536 + 16,384 + 4,096 + 1,024 + 256 + 64 + 3 × 16 = 87,408 bytes; `resident_tail_level` and the pool are reader C's | `src/assets/cooked.rs:253-269`, `:288-299` |
+| 0017 | "Priority ... from distance and the Primitive's UV texel density (stored at cook time, per Primitive ...)" | holds, cook side (above); the priority falls in streaming | `src/cook/mesh.rs:204`, `:435-453` |
+| 0008 | "Nothing the image depends on reads screen-space history"; ADR 0018's "Toksvig ... a cook-time, non-temporal answer to specular aliasing (ADR 0008)" | holds: the widening reads the normal Texture's texels alone, at cook time | `src/cook/texture.rs:243-250`, `:565-590` |
+| 0014 | "cooked meshes stay within 128 m of their pivot, which the cooker enforces by refusing a mesh with any vertex farther out" | holds: every source vertex's length against `MAX_PIVOT_DISTANCE_METRES`, the Mesh named by `mesh_blob`'s context; the seam cooks 128.0 m and refuses 128.1 m | `src/cook/mesh.rs:94`, `:166-174`; `src/cook/mod.rs:892-900`; `tests/cook.rs:427-442` |
+| 0014 | "A Far proxy's Mesh is exempt ... which the cooker enforces instead" | falls in reader B (`far_proxy.rs` calls `lod_0`, not `cook`) | |
+| 0014 | World positions are f64 (as `export-scene` writes them) | holds: Renderables' and Placements' translations are taken from the f64 `DAffine3` of their drawn World transform and written as `[f64; 3]`; lights' and the camera's positions as f64; vertex positions stay mesh-local f32 | `src/cook/export.rs:155-156`, `:172`, `:183`, `:204-208`, `:110`, `:287-288`, `:356-357` |
+| 0019 | "the cooker builds Meshlets of at most 64 vertices into each Mesh Blob" | holds: `MESHLET_MAX_VERTICES` = 64, which the cut and `split` enforce | `src/assets/cooked.rs:45`; `src/cook/mesh.rs:519` |
+| 0019 | "A Mesh is a Meshlet range per LOD of its LOD chain ...: each LOD's Meshlets are cut from its own indices over the Mesh's one vertex range, ... for at most 8 LODs" | holds, cook side | `src/cook/mesh.rs:402-413`; `src/assets/cooked.rs:42` |
+| 0023 | light units (as `export-scene` writes them): lux, candela, cd/m², an ambient term in lux, an EV100 | holds: `illuminance` and `intensity` copied from components documented in lux and candela, `range` in metres, the Environment's lux and cd/m², the camera's EV100 | `src/cook/export.rs:127-131`, `:161-166`, `:218-221`, `:293`, `:296-322` |
+| 0023 | "Brighter emissives need KHR_materials_emissive_strength, which the cooker does not read yet" | holds: the cooker reads no extension and now warns, naming the file and each extension used | `src/cook/mod.rs:958-961`; test `:1290-1323` |
+| 0025 | "a larger source is fetched from its publisher into a git-ignored cache" (as `praxis cook <scene>` reaches it) | holds: `cook_scene` fetches a scene's absent fetched sources first; `fetch.rs` is unchanged since M3.5 | `src/cook/mod.rs:609` |
+| 0025 | "a file under a noncommercial or restrictive term is dev-only: never committed, and no committed Golden is rendered from it" | not applicable to these files: the cooker writes only into the git-ignored Cooked cache, and `export-scene` names a manifest source by its absolute path without copying it | `src/cook/export.rs:511`, `:638`, `:692-693` |
+| 0026 | "Its Blobs. A Mesh Blob per Chunk and, where its first Primitive has a triangle, a Material Blob and two Texture Blobs, each under an Asset ID made of the scene and the Chunk's coordinates, cooked together by `praxis cook <scene>` ..." | holds: `cook_far_proxy` writes the two baked Textures, the baked Material and the Mesh, the Mesh last, all under the proxy's one Cook key; Asset IDs from `far_proxy_id` and `far_proxy_baked_ids` | `src/cook/mod.rs:425-468`, `:676-694` |
+| 0026 | "They share one Cook key, which covers the Chunk's and its neighbours' Cook keys, the Cook keys of the Meshes they place, of the Materials those draw with and of those Materials' albedo and metallic-roughness Textures, and the format and settings of each Blob" | holds: the key hashes the Mesh and Material magics and versions, `encoder_settings`, the proxy's settings (with the bake's and `ultra_fast`), the Texture settings and version, the ground's ID, each of the nine Chunks' keys or a 0 for an absent one, then the placed Meshes', drawn Materials' and their two baked Channels' Textures' keys; a test changes a drawn and an undrawn Material's key | `src/cook/mod.rs:289-369`; `src/cook/far_proxy.rs:32-38`; test `src/cook/mod.rs:1188-1219` |
+| 0026 | "A proxy is fresh when its Mesh is in the Cooked cache under that key and, unless that Mesh names no Material, the three baked Blobs are too. A proxy whose sources name a Material or a Texture the cook did not read is kept as it is, as a Chunk is." | holds | `src/cook/mod.rs:182-193`, `:320`, `:344-346`, `:355-357`, `:681-683` |
+| 0026 | "The albedo atlas encodes at the BC7 encoder's `ultra_fast` profile where the Texture cook's is `basic`"; "at the finest mip whose texels are no smaller than the sample, as the Texture cook filters it, so a roughness its normal Texture widens is read widened" | holds: `with_fastest_bc7`; `Mips` built through the same `filtered_levels` the cook encodes, the level `ceil(log2(texels per sample))` | `src/cook/mod.rs:450`; `src/cook/texture.rs:222-273`, `:297-313` |
+| 0026 | the rest (the merge, the drop rule, the pivot, the chart, the bake, the swap) | falls in reader B (`far_proxy.rs`, `far_proxy/bake.rs`) and streaming | |
+| 0027 | "A tapered tube keeps its taper as it widens, so the coverage at its ends is off by up to the quarter the cook tolerates" (the cook's quarter) | holds: `THIN_RADIUS_TOLERANCE` = 0.25 bounds a ring's radius to within a quarter of the declared one | `src/cook/mesh.rs:96-98`, `:111-117` |
+| 0027 | "A Far proxy holds no Thin Primitive" | falls in reader B | |
+| `CLAUDE.md` | "The runtime loads cooked Blobs only and references Assets by Asset ID, never by source path (ADR 0018)" | holds for these files: the cooker writes Blobs by Asset ID; `export-scene` is a `cook`-feature tool that writes source paths into `scene.json` for a reference renderer, which no runtime path reads | `src/cook/mod.rs:645-730`; `src/cook/export.rs:268-284` |
+| `CLAUDE.md` | "A cooked Mesh Blob is the same bytes on every machine: the two hash tests ... pass on each" | holds where the test runs; see oracle A1 for what it can and cannot detect | `src/cook/mesh.rs:992-1008`; `.cargo/config.toml:4-6` |
+| `CLAUDE.md` | no GPU buffer grows and a refused request is logged; uploads through the load staging; GPU memory through the ledger; no GPU resources on ECS components; the slot order of prepare's writes | not applicable: these files create no GPU resource and write no Instance; `export-scene` reads components only | |
+
+#### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| M4 story 9, the cooker refuses a Mesh more than 128 m from its pivot, naming the Mesh and the distance | holds: the error names the distance to 0.1 m and the context names the Mesh; the seam's boundary cooks at exactly 128.0 m (128 × 128 = 16,384, whose square root is exact) | `src/cook/mesh.rs:166-174`; `src/cook/mod.rs:892-900`; `tests/cook.rs:427-442` |
+| M4 story 12, the cook warns when a Placement names an Asset ID no longer defined | holds: a Chunk's Placement references join the check against what the cook made, each warning naming the Chunk and the ID | `src/cook/mod.rs:661-664`, `:739-751`, `:930-932`; tests `src/cook/mod.rs:1136-1186`, `tests/cook.rs:743-799` |
+| M4 story 13, the Mesh Blob stores each Primitive's UV texel density | holds | `src/cook/mesh.rs:204`, `:435-453`; `src/assets/cooked.rs:670` |
+| M4 story 56, a generated world of 40 × 40 Chunks cooked by `praxis cook` | holds as ADR 0018 amended it, by `praxis cook world`: `read_sources` lists 1,600 Chunks for `world` | `src/cook/mod.rs:871-876`; test `:1235-1269` |
+| M4 story 58, `world`'s unique Textures total more than 8 GB | holds: the test asserts distinct IDs, four sampled Textures distinct, and one Texture's chain bytes times the count over 8,000,000,000 | `src/cook/mod.rs:1235-1269` |
+| M4 decision, the cooker: "Texture Blobs record their shape (size, mip count, format), which names their class" | holds: the KTX2 header's pixel width and height, level count and format | `src/assets/cooked.rs:346-355` |
+| M4 stories 6-8, 10, 11, 63, 64 | fall in reader B (Chunks, the dev launch) and reader D (ground tiles) | |
+| M5 story 4, each Mesh cooked with a LOD chain sharing its source's vertices, each LOD about half the one before, at most 8 | holds | `src/cook/mesh.rs:302-420` |
+| M5 story 5, LOD 0 cooked bit-identical to the Mesh before chains | holds in form: `lod_0` is the pre-chain cook, and nothing in `coarser_lods` writes back into LOD 0's vertices, indices or Meshlets; the bit-identity was the chain ticket's Golden check | `src/cook/mesh.rs:175-176`, `:180-234` |
+| M5 story 6, each LOD's error stored in metres | holds: the simplifier's relative error times `simplify_scale`, summed down the chain, as an f32 per LOD; it includes the weighted normal and UV error (see *Notes*) | `src/cook/mesh.rs:354`, `:375`; `src/assets/cooked.rs:680` |
+| M5 story 7, a cook test that a chain's LODs have no cracks along Primitive borders | holds: every edge of every LOD of a two-Primitive sphere is matched by its reverse, each Primitive keeps to its half and the equator loses vertices | `src/cook/mesh.rs:1247-1329` |
+| M5 story 15, the simplifier's weights and the threshold tuned on the gallery once thin features are widened | not settled from code: the weights are the values the chain's first commit set (`cbbad8c6`, normals 0.5, UVs 1.0) and no later commit in scope changes them | `src/cook/mesh.rs:33-39` |
+| M5 story 16, each Chunk cooked a Far proxy as one Blob under its own Asset ID | holds for the Blobs and their Cook key (above); the merge, drop and simplification fall in reader B | `src/cook/mod.rs:289-369`, `:425-468` |
+| M5 story 17, a Far proxy's Material baked from its sources' Materials | falls in reader B; its encode at `ultra_fast` and its sources' mips are these files' and hold (above) | `src/cook/mod.rs:384-420`, `:441-453` |
+| M5 story 33, a Primitive declared thin with a radius, in a generator or by glTF `extras` | holds: `extras.thin_radius_metres` read as a number, refused as anything else | `src/cook/mesh.rs:713-724`; test `:814-851` |
+| M5 story 34, the cooker refuses a Thin Primitive without radial normals | holds | `src/cook/mesh.rs:103-150`; test `src/cook/mod.rs:1088-1099` |
+| M5 decision, LOD chain: "`simplify_with_attributes_and_locks` on the whole Mesh, each LOD from the one before, stopping when a LOD keeps more than 85% ... One Mesh Blob at format version 4" | holds, the format version since bumped to 8: 5 by the Thin Primitive's radius (`dcb1d06d`), 6 by the cook made machine-independent (`8ac44220`), 7 by the cap rule (`c47a441d`), 8 by the locked tube (`55d110eb`) | `src/cook/mesh.rs:357-374`; `src/assets/cooked.rs:40` |
+| M5 decision, thin features: "The radius is stored per Primitive; the centre line is the position less the normal times the radius" | holds, a cap's normal its ring's | `src/assets/cooked.rs:511-514`; `src/cook/mesh.rs:151-158` |
+| M5 stories 8-14, 18-32, 35-42 | fall in render, shaders, streaming, reader B or tooling | |
+
+#### Registry keys
+
+Every key cited in these files was read against its registry entry; the
+vendored meshoptimizer of `meshopt` 0.7.0 was opened where a quote is
+about it, and its version, 1.3 (`meshoptimizer.h:15`,
+`MESHOPTIMIZER_VERSION 1030`), is the one every `meshoptimizer-1.3-*` key
+names and `Cargo.lock` pins (`meshopt` 0.7.0). The keys on code unchanged
+since M3.5 (`gltf-2.0-*`, `khronos-dfs-srgb`, `toksvig-2004-variance`,
+`kaplanyan-2016-ndf-filtering`, `tokuyoshi-2019-roughness-matrix`, the
+four `ktx2-*`) keep M3.5's verdicts, at the lines below.
+
+| File | Keys | Verdict |
+|---|---|---|
+| `src/cook/mesh.rs:34` | `meshoptimizer-1.3-attribute-weights` | matches: the quote's `const float nrm_weight = 0.5f;` is `LOD_NORMAL_WEIGHT` = 0.5 (`:35`); the UVs, scaled to metres of Texture over the Mesh's extent (`:325-333`), take 1.0, which the quote's "a change of `1/weight` in attribute value over a distance `d` is approximately equivalent to a change of `d` in position" reads as one metre of Texture for one metre of position |
+| `src/cook/mesh.rs:43` | `meshoptimizer-1.3-vertex-codec` | matches: `vertexcodec.cpp:125` `static int gEncodeVertexVersion = 1;` and `:1750` passes it from `meshopt_encodeVertexBuffer`, which `meshopt::encode_vertex_buffer` calls (`meshopt-0.7.0/src/encoding.rs:120-125`) from `CookedMesh::to_blob` (`src/assets/cooked.rs:650`); `encoder_settings` names "vertex codec 1" |
+| `src/cook/mesh.rs:295` | `meshoptimizer-1.3-vertex-lock` | matches: "`meshopt_SimplifyVertex_Lock = 1 << 0`", which a Rust `true` is when `meshopt` 0.7 casts the `&[bool]` to the C byte array (`meshopt-0.7.0/src/simplify.rs:60`, `:260`) |
+| `src/cook/mesh.rs:299` | `meshoptimizer-1.3-lod-chain` | matches: each LOD is simplified from the one before ("use the previous LOD as the starting point") and the errors are summed (`:375`, "resulting error values from previous levels should be accumulated for LOD selection"); every LOD indexes the source's vertices ("reuse the original vertex buffer") |
+| `src/cook/mesh.rs:301` | `meshoptimizer-1.3-simplify-scale` | matches: "Relative error returned by meshopt_simplify via result_error must be *multiplied* by the scaling factor to get absolute error" is `relative_error * extent_metres` (`:375`), the factor from `simplify_scale` over every vertex (`:309`) |
+| `src/cook/mesh.rs:365` | `meshoptimizer-1.3-simplify-error` | matches: "To disable the error limit, `target_error` can be set to `FLT_MAX`" is `f32::MAX` (`:366`) |
+| `src/cook/mesh.rs:383` | `meshoptimizer-1.3-simplify-materials` | matches: "If the source mesh is already split into subsets with non-overlapping vertex indices, and permissive simplification is not used, ... simplify the entire mesh at once; the result can be split back into subsets": no two Primitives share a vertex (`:310`, `:199-210`), `SimplifyOptions::None` (`:367`), and each triangle is assigned by its first vertex's Primitive with the other two checked (`:384-397`) |
+| `src/cook/mesh.rs:500` | `meshoptimizer-1.3-scan-meshlets` | matches the Deviation `src/cook/mesh.rs:meshlet_triangle_counts`: `clusterizer.cpp:245-247` binds `av`, `bv`, `cv` as references into `used[]` and `:259-261` is the quoted `used_extra` and split; the code counts a repeated corner once (`:510-515`) |
+| `src/cook/mesh.rs:597-598` | `gltf-2.0-texture-origin`, `gltf-2.0-normal-texture-convention` | matches, as M3.5 found; code unchanged |
+| `src/cook/mesh.rs:617` | `gltf-2.0-mikktspace-tangents` | matches, as M3.5 found, with its Note (tangents always generated, from `TEXCOORD_0`); code unchanged |
+| `src/cook/mesh.rs:638`, `src/cook/export.rs:735` | `gltf-2.0-tangent-bitangent` | matches, as M3.5 found; code unchanged |
+| `src/cook/texture.rs:551` | `khronos-dfs-srgb` | matches: encode knee 0.0031308 (`:553`), decode knee 0.04045 (`:355`) |
+| `src/cook/texture.rs:561`, `:570`, `:579`, `:581` | `gltf-2.0-roughness-mapping`, `toksvig-2004-variance`, `kaplanyan-2016-ndf-filtering`, `tokuyoshi-2019-roughness-matrix` | match, as M3.5 found; `widened_roughness` (`:565-590`) unchanged in scope |
+| `src/cook/export.rs:309`, `:317`, `:320` | `khr-lights-punctual-units`, `khr-lights-punctual-range` | match: illuminance in lux on the directional entry, intensity in candela and `range` in metres on the point entry, copied from the components |
+| `src/assets/cooked.rs:29`, `:306-310` (writer) | `ktx2-key-value-alignment`, `ktx2-level-order`, `ktx2-supercompression-per-level`, `ktx2-level-alignment` | match, as M3.5 found; the writer is unchanged in substance |
+| `src/assets/cooked.rs:507` | `unity-6000-uv-distribution-metric` | matches in what the doc comment claims: the quote's "Average of triangle area / uv area" inverted (UV over mesh area) and taken as a length (`sqrt`), which ADR 0018 also words as "taken per Primitive, as a ratio of summed areas"; whether Unity's "average" is of summed areas or of per-triangle ratios the quote does not say (see *Notes*) |
+| `src/assets/cooked.rs:620` (writer's layout, reader C's guard) | `meshoptimizer-1.3-vertex-block` | matches: 8,192 / 28 = 292, rounded down to a multiple of 16 is 288, capped at 256 |
+
+#### Oracles
+
+Every oracle below runs on the CPU, in f32 or f64; no WGSL floor applies.
+Behaviour tests judged and set aside: the Cook key coverage tests
+(`src/cook/mesh.rs:750-778`, `src/cook/texture.rs:678-726`), the glTF
+`extras` test (`src/cook/mesh.rs:814-851`), the crack test
+(`:1284-1329`, topological), the Meshlet read-back
+(`:1139-1158`), the Far proxy Cook key test (`src/cook/mod.rs:1188-1219`),
+the dangling-reference tests (`:1105-1186`, `tests/cook.rs:743-799`), the
+scene-reference test (`src/cook/mod.rs:1223-1229`), the extension warning
+(`:1290-1323`), the 128 m refusal (`tests/cook.rs:427-442`, whose 128.0 m
+boundary is exact: 128² = 16,384 and its square root is exact in f32), the
+scene cook test (`tests/cook.rs:667-736`) and the export tests other than
+`world`'s (`src/cook/export.rs:1163-1231`); the Toksvig, checker, QTangent,
+PSNR and `shadows` export oracles are unchanged since M3.5 and keep its
+rows.
+
+| Function | Test | Expected value and its source | Constant | Floor | Stated floor | Verdict |
+|---|---|---|---|---|---|---|
+| `cook` and `CookedMesh::to_blob`, every Reference scene Mesh and NormalTangentTest's (`src/cook/mesh.rs:165-178`; `src/assets/cooked.rs:649-702`) | `the_reference_scenes_meshes_cook_to_the_same_blobs_on_every_machine`, `src/cook/mesh.rs:992-1008` | SHA-256 `e0b71ece…c486` of the concatenated Blobs, pinned across the machines that ran it (`8ac44220`, then `e5c55a8d`) | exact | 0 on the IEEE-only steps; unbounded for the platform `sin`, `cos` and `acos` calls in the chain (Block A1) | no: the message says what a disagreement means, not which steps can cause one | exact; detects a disagreement only between machines that run `cargo test` (Block A1) |
+| `coarser_lods` (`src/cook/mesh.rs:302-420`) | `a_lod_chain_halves_until_its_stop_rule_within_eight_lods_and_its_errors_never_decrease`, `:1195-1245` | triangle counts by hand from `uv_sphere`: 65,024 = 2·256·128 − 2·256; 11,040 = 2,208 + 4 × 2,208; 22,080 = 2,208 + 4 × 4,968; the bounds 8,832 to 9,383 and the drop of a 90% LOD from the 85% rule; errors bounded 0.01 to 1.0 m and a ratio of 5 to 20 at ten times the size | counts exact; errors `(0.01..1.0)`, ratio `(5.0..20.0)` | counts 0; the error is meshoptimizer's quadric error, whose order of equal-cost collapses the comment names as the reason for a factor of two | yes for the ratio (`:1222-1223`: "within a factor of two"); no for 0.01 to 1.0 | counts exact; the error bounds are behaviour bounds, a factor of 2 either way of the 10x scaling (Block A2) |
+| `texel_density` (`src/cook/mesh.rs:435-453`) | `a_square_metre_quad_has_the_uv_units_per_metre_its_uvs_span`, `:934-940` | 1 and 2 UV units per metre for a 1 m² quad whose UVs span 1 and 2 | exact (`assert_eq!`) | 0: every product, sum and square root in the chain is exact (Block A3) | no | exact |
+| `Mips::level_of`, `Mips::level` (`src/cook/texture.rs:297-313`) | `a_sample_reads_the_finest_mip_whose_texels_are_no_smaller_than_it`, `:728-752` | levels `[0, 0, 0, 1, 2, 2, 4, 4]` for 0, 0.5, 1, 1.5, 3, 4, 100 and ∞ texels a sample on a 16 × 4 image, `ceil(log2(texels))` clamped; ADR 0026's "the finest mip whose texels are no smaller than the sample" | exact | 0, provided the platform's `log2f` returns 0 and 2 exactly at 1 and 4, two inputs that sit on a level boundary (Block A4) | no | exact, two boundary inputs resting on the platform's `log2f` |
+| thin Primitives through `cook` (`src/cook/mesh.rs:189-207`, `:274-279`, `:403-408`) | `towns_wires_rails_aerials_lamps_and_poles_cook_as_thin_primitives`, `:780-812` | each Primitive's radius as `town`'s generator declares it (0.015 to 0.115 m) at every LOD, and each thin Primitive's index count equal to LOD 0's | exact | 0: the f32 radius is copied, never computed | no | exact |
+| SciFiHelmet's Mesh Blob size (`src/assets/cooked.rs:649-702`) | `every_reference_scene_mesh_cooks_and_reads_back`, `tests/cook.rs:801-857` | ADR 0018: "with meshoptimizer 1.3's vertex codec 1 it is 353,120 bytes", 353,120 / 23,358 = 15.1177 bytes per triangle | `HELMET_MESH_BYTES_PER_TRIANGLE` = 15.29, a ceiling | 0: the Blob's size is a deterministic integer for one machine | no | loose: the ceiling admits 15.29 × 23,358 − 353,120 = 4,023 bytes (1.14%) of growth, the margin the codec 1 change took off and the comment says re-records the constant: L1-C02 |
+| `export_scene` for `world` (`src/cook/export.rs:49-266`) | `world_exports_the_buildings_within_the_view_distance_whole`, `:1040-1158` | 225 Chunks within 2 km, 900 ground tiles (4 × 225), 23,542 buildings and roofs each, 10,000 birds, one far ground, every window matched to its walls | counts exact; camera within 1e-9 m | 0 for the counts; the camera is the same f64 `camera_at` on both sides, so its floor is 0 and 1e-9 is never reached | no | exact (Block A5) |
+
+##### Block A1: the Mesh Blob hash
+
+What the hash covers: the Blob of every Mesh `ReferenceScene::ALL` (12
+scenes, `src/scenes/mod.rs:85-98`) generates, each Primitive given the
+Material `AssetId(1)` (`src/cook/mesh.rs:980-990`), and of each Mesh of
+the committed `NormalTangentTest.glb` (`:996-998`), through `cook` (LOD 0
+and the whole LOD chain) and `to_blob` (meshoptimizer's vertex and index
+codecs, then zstd at level 19, `src/assets/cooked.rs:626`, `:700`). It
+does not cover SciFiHelmet (fetched), Far proxies (reader B's hash test),
+Material or Texture Blobs, or the Cook key, which is not in the Blob.
+
+The chain, step by step:
+
+1. Scene generators (reader D's): `uv_sphere` takes `f64::sin_cos` and
+   rounds to f32 (`src/scenes/mod.rs:1441-1447`); `town.rs` still takes f32
+   `sin` and `cos` (`src/scenes/town.rs:1320`, `:1384`). Neither is
+   correctly rounded by any standard; the f64 form disagrees after
+   narrowing only where the f64 results differ and straddle an f32
+   rounding boundary, roughly 2⁻²⁹ of a one-ulp f64 disagreement, as f64
+   carries 29 more significand bits than f32.
+2. `weld` (`src/cook/mesh.rs:539-561`): bitwise keys through
+   `generate_vertex_remap`; exact.
+3. `corner_tangents` (`:618-635`): `bevy_mikktspace` 1.0.0 in f32, whose
+   default `StdOps::acos` is `(x as f64).acos() as f32`
+   (`bevy_mikktspace-1.0.0/src/lib.rs:229-234`), called once per corner to
+   weight a face's tangent by its angle (`src/mikktspace.rs:736-737`): a
+   platform f64 `acos`, with the same 2⁻²⁹ narrowing argument as step 1.
+   The `CLAUDE.md` checklist names glam's SIMD, a platform's f32 sine or
+   cosine and a fused C++ build; this f64 `acos` is a fourth platform path
+   it does not name (see *Notes*).
+4. `qtangent` (`:642-669`): glam 0.34's `Vec3` is scalar; `Quat::from_mat3`
+   reaches `from_rotation_axes`, scalar subtractions, one `sqrt` and
+   products on NEON as on SSE2 (`glam-0.34.3/src/f32/neon/quat.rs:217-262`);
+   the normalisation is written by hand in scalar f32 (`:652-653`); `round`
+   is exact. IEEE f32 throughout, each step correctly rounded: floor 0
+   between machines.
+5. `texel_density` (`:435-453`): f64 cross products, `perp_dot`, `abs`,
+   sums, one division and one `sqrt`, then `as f32`; IEEE: floor 0.
+6. `qtangent_normal` (`:422-431`): scalar f32 for the simplifier's normal
+   attribute, written so because glam's SIMD normalise rounds by
+   architecture (`8ac44220`); floor 0.
+7. meshoptimizer 1.3's C++ (vertex cache, overdraw with float area sums,
+   vertex fetch, `simplifyScale`, the quadric simplifier, both codecs):
+   built with `-ffp-contract=off` for `aarch64-apple-darwin` and
+   `x86_64-unknown-linux-gnu` (`.cargo/config.toml:4-6`), so no multiply
+   and add fuse there; floor 0 on those two targets. No flag is set for
+   any other target, and `8ac44220` records the RTX 2070 SUPER's MSVC
+   build as not covered.
+8. zstd 1.5.7 at level 19 (`Cargo.lock`, `zstd-sys 2.1.3+zstd.1.5.7`):
+   deterministic for one version and level.
+
+Floor: 0 wherever the chain is IEEE arithmetic; unbounded for steps 1 and
+3. Where it can detect: the test fails on a machine whose bytes differ
+from the pin, so it compares the machines that run `cargo test`: CI's
+`check` job on `ubuntu-latest` (`.github/workflows/ci.yml:101-127`), its
+software-Goldens job on `ubuntu-24.04` (`:157-187`) and the M4 Pro. The
+Windows job runs `cargo check` and `clippy` only (`:130-156`), so the RTX
+2070 SUPER's build, the one machine of ADR 0013's two that runs Windows,
+is compared only when its owner runs `cargo test` there by hand.
+
+##### Block A2: the LOD chain's counts
+
+`uv_sphere(radius, 256, 128)` emits two triangles per quad but one at each
+pole row (`src/scenes/mod.rs:1455-1471`): 2 × 256 × 128 − 2 × 256 =
+65,536 − 512 = 65,024 triangles, the test's LOD 0. `uv_sphere(1.0, 48, 24)`
+gives 2 × 48 × 24 − 96 = 2,208. With 2,208 faceted tetrahedra of 4
+triangles each, LOD 0 holds 2,208 + 8,832 = 11,040; the tetrahedra cannot
+collapse (each corner is three vertices of three normals), so LOD 1, asked
+for 5,520, keeps at least 8,832 and, to pass the 85% rule, at most
+0.85 × 11,040 = 9,384, the test's `8_832..8_832 + 552`, 552 being a
+quarter of the sphere's 2,208. LOD 2 would keep the 8,832 again, over 85%
+of LOD 1, so the chain ends at 2 LODs. With 4,968 tetrahedra LOD 0 holds
+2,208 + 19,872 = 22,080 and LOD 1 at least 19,872 / 22,080 = 0.90 of it,
+past 0.85, so it is dropped and the chain is `[22_080]`. The first loop's
+lower bound `finer / 2 − 1` follows from `finer.len() / 6 * 3`
+(`src/cook/mesh.rs:364`) and a collapse removing two triangles. All
+integer: floor 0. The comparison `simplified.len() as f32 > finer.len()
+as f32 * 0.85` (`:371`) rounds: 0.85 in f32 is 0.85000002384, so a LOD of
+exactly 85% is kept; no case of the test sits on that boundary (9,384 is
+the bound's excluded end).
+
+##### Block A3: texel density of the quad
+
+`ground_plane(0.5, r)` (`src/scenes/mod.rs:1495-1514`) has corners at
+±0.5, UVs at 0 and r, indices `0, 1, 2, 0, 2, 3`. Each triangle's cross
+product has length 1 (two edges of 1 m at a right angle) and its UV
+`perp_dot` magnitude r², all exact in f64 for r = 1, 2. The sums are 2 and
+2r², the ratio r², whose `sqrt` is exactly r (`f64::sqrt` is correctly
+rounded), and `as f32` keeps 1.0 and 2.0. Floor 0.
+
+##### Block A4: the mip a sample reads
+
+`level_of(16, t / 16)` computes `(t / 16) * 16`, exact for each t of the
+test (all are dyadic or ∞), then `log2`, `ceil`, `max(0)`. t = 0 gives
+`log2(0) = −∞`, `max` 0; t = 0.5 gives −1, then 0; t = 1.5 gives 0.585,
+then 1; t = 3 gives 1.585, then 2; t = 100 gives 6.64, then 7, clamped to
+4 (the 16-texel side has mips 0 to 4); t = ∞ saturates and clamps to 4.
+t = 1 and t = 4 sit on a boundary: they need `log2f(1.0) = 0` and
+`log2f(4.0) = 2` exactly, else `ceil` lands one level coarser. No standard
+requires `log2f` to be exact at powers of two, though the common libms
+are; the test does not say it rests on that. `from_the_third` at
+t = 3 / 16 gives `first_level` 2 and clamps every finer level to it.
+
+##### Block A5: the 225 Chunks
+
+The Chunks whose nearest point lies within 2,000 m of the camera fill the
+Minkowski sum of a 2,000 m disc and a 256 m square: 256² + 4 × 256 ×
+2,000 + π × 2,000² = 65,536 + 2,048,000 + 12,566,371 = 14,679,907 m², or
+224.0 Chunks of 65,536 m². The test's 225 agrees within the one Chunk the
+grid's alignment to the camera moves. The other counts are integers the
+generator fixes: floor 0.
+
+### the world's cook: Chunks, the dev launch's cook and Far proxies
+
+Scope: `src/cook/chunk.rs` (405 lines), `src/cook/launch.rs` (557),
+`src/cook/far_proxy.rs` (833) and `src/cook/far_proxy/bake.rs` (638),
+2,433 lines, every line read in full at the frozen commit `e5c55a8d`, their
+`#[cfg(test)]` modules included; all four files are new since M3.5's
+frozen commit `8bc34eb1`. Opened where these files call into them or read
+their constants: `src/cook/mod.rs:130-534` (`Sources`, `GeneratedFarProxy`,
+`Sources::chunk`, `far_proxy`, `source_material`, `cook_far_proxy`,
+`far_proxy_mesh`, `may_be_kept`) and `:615-934` (`cook_sources`,
+`read_sources`, `is_fresh`, `dangling_references`), which are reader A's
+file, cited here only where a clause of these four files runs through them;
+`src/cook/mesh.rs:25-60`, `:160-290`, `:435-453` (`LOD_KEPT_INDICES_CEILING`,
+`encoder_settings`, `cook`, `lod_0`, `push_lod`, `texel_density`);
+`src/cook/texture.rs:15-30`, `:95-337`, `:545-560` (`ENCODER`,
+`FASTEST_BC7_PROFILE`, `cook_key`, `mips`, `hash_cook_settings`, `Mips`,
+`linear_to_srgb`); `src/assets/cooked.rs:36-70` and `:883-960` (the Chunk
+constants, `chunk_origin`, `chunk_holding`, the Chunk Blob's payload);
+`src/scenes/mod.rs:142-157`, `:346-376`, `:405-440`, `:556-580`, `:726-744`
+(source files, the Chunk and Far proxy Asset IDs, static content, Load
+radius and View distance); `src/scenes/world.rs:645-700` (the quarter-turn
+rotations the hash test's Chunk holds) and `:860-960` (the far field's fit
+test, reader D's); `src/camera/` for `FIELD_OF_VIEW`;
+`src/streaming/io.rs:814-847`, `:1425-1470`, `:1515-1530` and
+`src/streaming/chunks.rs:155-196` (where a streamed load reads Blobs without
+the launch's cook); `src/state.rs:83-143`, `:190-230`. ADRs read whole,
+status lines included: 0026, 0018, 0011, 0014, 0027; 0017, 0013, 0016,
+0019, 0020, 0002 and 0025 for the clauses that name Chunks, Far proxies, the
+dev launch, the cook or the far field. Spec stories read: M4 (`spec-611.md`)
+6 to 18, 56 to 66; M5 (`spec-804.md`) 16 to 32 and the Implementation and
+Testing Decisions. Crate sources opened: `meshopt-0.7.0/src/simplify.rs:77-102`
+and its vendored `vendor/src/simplifier.cpp:2489-2490`, `:2621-2622` (what
+`result_error` means under `ErrorAbsolute`), `vendor/src/meshoptimizer.h:15`
+(`MESHOPTIMIZER_VERSION 1030`); `glam-0.34.3/src/f32/neon/quat.rs:884-899`,
+`sse2/quat.rs:881-897`, `neon/vec3a.rs:255-258`, `neon.rs:50-56` (whether
+`Quat * Vec3` rounds alike on the M4 Pro and on CI's x86-64). `Cargo.lock`
+pins `meshopt` 0.7.0, `glam` 0.34.3 and `intel_tex_2` 0.5.0. Where a number
+needed arithmetic past a hand calculation, a Python script recomputed it in
+IEEE double and single precision (no project code was run); each such number
+says so. `deviations.md` has no row at a site in these files.
+`DIFFERENCES.md`'s "Far proxies against the Chunks' own Meshes" (a roof a
+pixel off past the Load radius) is a known difference, not a Finding. No
+`cargo` command was run.
+
+#### Clause verdicts
+
+Paths are from the repo root; `far_proxy.rs` is `src/cook/far_proxy.rs`,
+`bake.rs` `src/cook/far_proxy/bake.rs`, `launch.rs` `src/cook/launch.rs`,
+`chunk.rs` `src/cook/chunk.rs`, `mod.rs` `src/cook/mod.rs`.
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0026 | Decision, "One Far proxy per Chunk ... draws its Far proxy, one Instance, in place of its Placements. Under it the Instance slots, the static TLAS and the flat cull keep M4's capacities" | falls in streaming and render: the cook makes one Mesh per Chunk coordinate (`far_proxy_id`), which streaming places | `mod.rs:676-694`; `src/scenes/mod.rs:353-357` |
+| 0026 | "A first Primitive of merged, simplified geometry under one Material baked for it, windows included, and a second Primitive of the Chunk's ground tiles, unsimplified, under the ground's own Material" | holds: `cook` splits the Chunk's Placements by `placement.mesh == ground`, merges and simplifies the rest into the shell under the baked Material, and appends each ground tile's vertices unsimplified under its Mesh's own Material, refusing a tile whose Placement overrides it | `far_proxy.rs:225-226`, `:274`, `:281-302`, `:316-319` |
+| 0026 | "Only a scene with a Far field cooks proxies; it names its ground's Mesh" | holds: a launch maps Far proxy IDs only for a scene whose `far_field_ground` is `Some`, `cook_sources` skips the rest, and `far_proxy_mesh` refuses a scene without one; the naming falls in reader D | `launch.rs:78-84`; `mod.rs:677-679`, `:477-479`; `src/scenes/mod.rs:373-376` |
+| 0026 | "drops a Placement when every vertex of it lies within one pixel of one other Placement's surface, that Placement the Chunk's own or one of its eight neighbours'" | holds: `within_another` tests each of the Chunk's own Placements (the first `parts.len()` surfaces) against each single other surface, every corner within `reach_metres` of some triangle of it; the neighbours' Placements that can reach the Chunk join as surfaces, never as candidates | `far_proxy.rs:123-159`, `:240-262` |
+| 0026 | "One pixel is its size at the Load radius at 1440p and a 45° field of view, 14.7 cm at 256 m" | holds: 256 × 2 × tan(22.5°) / 1440 = 0.147276 m, `FIELD_OF_VIEW` = π/4, `world`'s Load radius 256 m; Block B2 | `far_proxy.rs:24`, `:28-30`; `src/camera/mod.rs:90`; `src/scenes/mod.rs:569` |
+| 0026 | "It welds what is left on position and simplifies it by edge collapse to one pixel of error, with no triangle count asked; the error is the simplifier's own measure" | holds: `generate_vertex_remap` on positions alone, then `meshopt::simplify` with target count 0, the pixel as target error and `ErrorAbsolute`, whose reported error is in metres (`simplifier.cpp:2489`, `:2621-2622`) | `far_proxy.rs:161-178`, `:267-274` |
+| 0026 | "It refuses a proxy of more than 5,832 triangles outside its ground" | holds: `TRIANGLE_CAP` = 5832 = 324 × 18, checked on the simplified shell before the ground joins, the message naming the count | `far_proxy.rs:21`, `:275-279` |
+| 0026 | "Two Channels, albedo and metallic-roughness, a texel two pixels at the Load radius, 29.5 cm, in one atlas: one rectangle a planar face ... with 2 texels of gutter a side on a grid of 4, dilated, so no chart bleeds into another down to mip 2" (as amended 2026-11-18) | holds: `TEXEL_PIXELS` 2 (0.29455 m), `GUTTER_TEXELS` 4 / 2 = 2, `GRID_TEXELS` 8 / 2 = 4; each chart's padded block starts on the grid, so a mip-2 texel never spans two blocks and a UV held inside its chart samples mip 2 no farther out than its block's outer texel centres (Notes) | `bake.rs:15-20`, `:93-95`, `:197-223`, `:304-307` |
+| 0026 | "The Chunk's Placements and its neighbours', those dropped from the geometry included, are rasterised into each chart along its normal with a depth test, the outermost surface winning, at 4 × 4 samples a texel, on the CPU" | holds: `Transfer::surfaces` is every surface, dropped ones included; `tile` keeps the greatest height along the chart's normal per sample, `SAMPLES_PER_SIDE` 4 | `far_proxy.rs:346-353`; `bake.rs:16`, `:384-452` |
+| 0026 | "A Mesh Blob per Chunk and, where its first Primitive has a triangle, a Material Blob and two Texture Blobs, each under an Asset ID made of the scene and the Chunk's coordinates, cooked together by `praxis cook <scene>` and by a dev launch that loads any of them while one is missing or stale" | holds: `cook_far_proxy` writes the two atlases and the Material only when the shell charted (`transfer` is `Some`), then the Mesh; a launch maps all four IDs to one `FarProxy` entry, so loading any of them cooks the set; the IDs fall in reader D | `mod.rs:425-468`, `:676-694`; `launch.rs:78-84`, `:184-201`; `src/scenes/mod.rs:353-370` |
+| 0026 | "They share one Cook key, which covers the Chunk's and its neighbours' Cook keys, the Cook keys of the Meshes they place, of the Materials those draw with and of those Materials' albedo and metallic-roughness Textures, and the format and settings of each Blob" | holds: the key hashes the Mesh, Material and Texture formats and settings (the encoder strings and `far_proxy::settings`, which carries every bake constant and the albedo's BC7 profile), the ground's ID, then each of the nine Chunks' keys or a 0 byte, each placed Mesh's key, each Material's key (overrides and every Primitive's) and each of `BAKED_CHANNELS`' Texture keys; the metallic-roughness Texture's key covers its normal Texture's | `mod.rs:289-369`; `far_proxy.rs:32-38`; `bake.rs:23-27`; `texture.rs:135-147` |
+| 0026 | "A proxy is fresh when its Mesh is in the Cooked cache under that key and, unless that Mesh names no Material, the three baked Blobs are too" | holds | `mod.rs:185-192` |
+| 0026 | "A proxy whose sources name a Material or a Texture the cook did not read is kept as it is, as a Chunk is" | holds: `kept` is set by an unread Material, an unread Texture or a kept Chunk among the nine, and both cooks then write nothing | `mod.rs:320`, `:344-346`, `:355-358`; `launch.rs:188-190`; `mod.rs:681-683` |
+| 0026 | The swap, Which are Resident, Past the View distance | falls in streaming and render | |
+| 0026 | Settled by the cook, "The LOD chain ... cut on the welded positions, each coarser LOD simplified from LOD 0 to twice the error limit of the one before, and ends at eight LODs or at one that keeps more than 85% of the one before" | holds: each LOD is `simplified(&positions, &finest, pixel × 2^d)` for d = 1 to 7, and the chain stops at an empty LOD or one whose index count passes `LOD_KEPT_INDICES_CEILING` (0.85) of the last kept LOD's | `far_proxy.rs:329-344`; `mesh.rs:31`; `src/assets/cooked.rs:42` |
+| 0026 | "each LOD's faces get flat normals and their own vertices, shared with a finer LOD where they are equal" | holds: `faceted` gives each LOD a vertex per position and quantised face normal; `push_lod` reuses a finer LOD's vertex of identical bytes in the same Primitive (reader A's) | `far_proxy.rs:180-206`, `:338-342`; `mesh.rs:238-289` |
+| 0026 | "A LOD error is what the simplifier reports" (with Consequence line 64) | holds: the reported error of each LOD's simplification from LOD 0 is stored as its error, in metres | `far_proxy.rs:331-332`, `:342` |
+| 0026 | "The pivot. A proxy's pivot is its Chunk's centre on the ground, and the cooker refuses a proxy with a vertex more than a Chunk's edge from it" | holds: the pivot is (128, 0, 128) m from the Chunk's origin; the bound is checked on LOD 0's vertices, and every coarser LOD indexes a subset of the same welded positions | `far_proxy.rs:220`, `:320-328` |
+| 0026 | "The ground is no surface to drop against" | holds: ground tiles are partitioned out before the surfaces are built, and neighbours' ground tiles are filtered out | `far_proxy.rs:225-232`, `:242` |
+| 0026 | "Dropped against the dropped. A Placement is dropped against any other Placement, one that is itself dropped included" | holds: `within_another` never removes a dropped surface from the candidates' targets | `far_proxy.rs:151-158` |
+| 0026 | "Open land. A Chunk with nothing but ground cooks a proxy whose first Primitive is empty" | holds: no parts give no corners, an empty simplification, no atlas and no Material; the test loads `world`'s Chunk (0, 0) and asserts an empty first Primitive without a Material | `far_proxy.rs:238-240`, `:313-319`; `bake.rs:238-240`; `launch.rs:458-459` |
+| 0026 | Settled by the bake, "A planar face is the triangles of the first Primitive that share vertices, which carry a position and a face normal" | holds: `faces` joins triangles by shared vertex indices, and `faceted` keys each vertex on its position's bits and its normal in steps of 1/512 | `bake.rs:168-195`; `far_proxy.rs:189-196` |
+| 0026 | "Its chart is the least-area rectangle about it along one of its edges, a texel two pixels at the Load radius, its rows no longer than its columns" | holds: `Chart::fit` takes the least-area rectangle over every edge of the face's triangles, swapping axes so that rows ≤ columns | `bake.rs:108-142` |
+| 0026 | "Charts are packed on shelves, tallest first, each with 2 texels of gutter a side on a grid of 4, into the smallest square atlas of a power-of-two side that holds them; a proxy whose charts pass 8,192 texels a side fails its cook" | holds: a stable sort by rows, shelves, sides doubling from 4 to `MAX_TEXTURE_SIDE` (8192), then an error; "the smallest that holds them" is the smallest this shelf packer fills | `bake.rs:197-223`; `src/assets/cooked.rs:36` |
+| 0026 | "Coarser LODs. Each face of a coarser LOD takes the chart nearest it among those facing within 45° of it, or among all of them where none does, its UVs held inside that chart" | holds: `LIKE_NORMAL_COSINE` = 1/√2, inclusive; nearest by the summed distance of the face's vertices to the chart's rectangle; UVs clamped into it | `bake.rs:21`, `:157-165`, `:278-302` |
+| 0026 | "What a chart reads. A source is a triangle of a Placement of the Chunk or of a neighbour that reaches it, one dropped from the geometry included, facing along the chart's normal within two pixels of its plane ... The outermost wins" | holds: a positive projected area is a triangle facing along the normal; `REACH_PIXELS` 2; the per-sample height must lie within the reach and above the sample's last | `bake.rs:17`, `:404-417`, `:437-448` |
+| 0026 | "A Placement the runtime does not draw, one without a Material whose Mesh has a Primitive with triangles that names none, is no source" | holds for the bake: `placed` gives such a Placement's triangles no Material and `tile` skips them; its geometry still joins the shell (Notes) | `far_proxy.rs:65-69`; `bake.rs:401-403` |
+| 0026 | "A sample reads its source's Material as its factors times its albedo and metallic-roughness Textures, at the finest mip whose texels are no smaller than the sample, as the Texture cook filters it, so a roughness its normal Texture widens is read widened" | holds: `SourceMaterial::shade` multiplies the linear factors by the bilinear sample; `Mips::level_of` is ceil(log2(UV per sample × side)); `TextureSource::mips` runs the Texture cook's own `filtered_levels`, Toksvig included | `bake.rs:69-90`, `:418-419`; `texture.rs:222-272`, `:298-313`; `mod.rs:384-420` |
+| 0026 | "A texel is the mean of its covered samples in linear light; one no source covers, a gutter's included, is dilated from its neighbours. A chart no source covers at all, and the texels outside every chart, hold the mean of the baked texels as stored, which mips past mip 2 blend in" | holds: `mean` over covered samples in linear light; a breadth-first dilation over eight neighbours inside the padded block; the fill is the integer mean of every tile's stored sRGB bytes (truncated, Notes) | `bake.rs:52-59`, `:454-498`, `:355-364` |
+| 0026 | "A source Texture's repeat is baked. Where a face ends within half a texel ... of the repeat's edge, its last texels blend in the far edge, as the source's own sampler does" | holds: `Mips::sample` filters bilinearly with `rem_euclid` wrapping (reader A's function, called by the bake) | `texture.rs:315-336`; `bake.rs:76-79` |
+| 0026 | "The baked Material. Its factors are 1 for base colour, roughness and metallic, and it names no normal, occlusion or emissive Texture. Its Textures cook through the Texture cook, BC7 and BC5 with every mip ... The albedo atlas encodes at the BC7 encoder's `ultra_fast` profile" | holds: `CookedMaterial` of unit factors naming only the two atlases; each atlas a generated `TextureSource` cooked through `TextureSource::cook` with `with_fastest_bc7`, which changes only the BC7 (albedo) encode; the launch test asserts BC7 sRGB and BC5 with every mip | `mod.rs:440-462`; `texture.rs:106-113`, `:162-218`; `launch.rs:438-446` |
+| 0026 | "No area, no face. A triangle without area has no normal to chart by and is left out of the proxy" | holds | `far_proxy.rs:185-188`; `bake.rs:631-636` |
+| 0026 | Settled by the draw, "Which draws", "Its shadows", "Its mips", "The ground past the View distance" | falls in streaming and render | |
+| 0026 | Settled by the draw, "Open land. A Primitive without triangles needs no Material" | holds, cook side: the empty shell names `None`; the draw falls in render | `far_proxy.rs:315` |
+| 0026 | Consequence, "ADR 0014's 128 m pivot bound exempts a Far proxy's Mesh" | holds: `far_proxy::cook` builds through `mesh::lod_0` and `push_lod`, never `mesh::cook`, whose 128 m check (`mesh.rs:165-174`) it bypasses, and checks a Chunk's edge instead | `far_proxy.rs:316`, `:320-328` |
+| 0026 | Consequence, "A streamed scene whose Chunk keeps more triangles than the cap at one pixel fails its cook, naming the count" | holds: `praxis cook` returns the error; a launch logs it per request (`io.rs:1524-1529`) | `far_proxy.rs:275-279`; `mod.rs:691` |
+| 0026 | Consequence, "A dev launch that loads a Far proxy hashes the albedo and metallic-roughness Textures its sources draw with, loaded or not, to find its Cook key, and bakes the proxy where a Blob of it is missing or stale" | holds | `launch.rs:184-200`; `mod.rs:341-361`, `:373-380` |
+| 0026 | Consequences, the Material table's count apart and loads capped by count; ADR 0013's and ADR 0020's names | falls in reader C, streaming and render | |
+| 0018 | status, "A dev launch cooks only what it loads: each Asset as its load finds the Blob missing or stale, with the Assets it names" | broken in part: a Chunk the launch keeps (a Placement names a Mesh it did not read) returns before cooking any Asset it names, and a streamed load reads those Blobs from the cache unchecked: L1-C05 | `launch.rs:172-178`; `src/streaming/io.rs:1437-1466` |
+| 0018 | status, "`praxis cook` and every dev launch also cook each Reference scene's static content into Chunks" | holds: `cook_sources` cooks every Chunk of the scenes read; a launch cooks each Chunk it loads | `mod.rs:661-675`; `launch.rs:172-183` |
+| 0018 | Cook key, "SHA-256 over what the Asset cooks from ..., the Cook keys of its dependencies, every cook setting, the format version and the encoder versions", for a Chunk | holds: the Chunk's key hashes `CHUNK_MAGIC`, `CHUNK_FORMAT_VERSION`, zstd's version number and level, and the payload, which is all the Chunk cooks from (Placements, lights, and the bounds its Meshes' boxes give); a Mesh edit that leaves its box unchanged changes no Chunk byte, so no Mesh key is needed | `chunk.rs:98-109`; `src/assets/cooked.rs:890-953` |
+| 0018 | Cook key, "Each dev launch recomputes the keys of its scene's Materials and Meshes as it starts, of each Chunk and Texture as it loads it, and, as it loads a Far proxy, of the Textures that proxy bakes from" | holds: `CookingLoader::new` reads the sources, whose Material and Mesh keys `read_sources` computes; a Chunk's key on `Sources::chunk`; a Texture's on first need, cached | `launch.rs:49-59`, `:172-183`, `:202-206`; `mod.rs:813-866`, `:373-380` |
+| 0018 | Consequence, "The cooker warns when an ID that something references no longer exists", for the launch | holds for the launch: an ID absent from `entry_by_id` warns even when the cache holds a Blob for it, unless `may_be_kept` (a source absent) excuses it, which `dangling_references`' own comment records as its ceiling; this narrows M3.5's L1-C01 for the launch | `launch.rs:146-148`, `:236-241`; `mod.rs:913-934`; test `launch.rs:524-556` |
+| 0018 | "The runtime loads Blobs only (ADR 0011). Each Blob starts with a magic and a format version", for Chunk and Far proxy Blobs | holds: a Chunk Blob is `CHUNK_MAGIC`, `CHUNK_FORMAT_VERSION` and one zstd frame; a Far proxy is an ordinary Mesh Blob and its atlases ordinary KTX2 Texture Blobs | `src/assets/cooked.rs:54-56`, `:955-960`; `mod.rs:451`, `:465` |
+| 0018 | "A Far proxy's baked albedo alone encodes at its `ultra_fast` profile" | holds: both atlases are flagged, and the flag reaches only the BC7 encode; the metallic-roughness atlas is BC5 | `mod.rs:450`; `texture.rs:179-206` |
+| 0018 | "A Chunk's edge is 256 m (4 by 4 cells of ADR 0014's 64 m grid; 40 by 40 Chunks cover 10 km)" | holds for the edge (`CHUNK_EDGE_METRES`); the 40 by 40 falls in reader D | `src/assets/cooked.rs:57-58` |
+| 0018 | "A v1 Chunk is its own Asset, named from its scene and its integer coordinates, holding its Placements, its point lights and its bounds" | holds: `CHUNK_FORMAT_VERSION` 1; the name falls in reader D | `src/assets/cooked.rs:56`; `chunk.rs:67-78`; `src/scenes/mod.rs:346-350` |
+| 0018 | "A Placement holds a Mesh Asset ID, an optional Material Asset ID ..., an f64 translation from the Chunk origin, and f32 rotation and scale"; "A light holds an f64 translation, a colour, an intensity in candela (ADR 0023) and a range in metres" | holds: `split` moves each translation from the World's origin to its Chunk's in f64 and keeps every other field as given | `chunk.rs:48-64`; `src/assets/cooked.rs:912-951` |
+| 0018 | "Each Placement and light belongs to the Chunk that holds its pivot, and the bounds grow to hold every Placement's Mesh, which may reach past the Chunk's edge" | holds: `chunk_holding` floors x / 256 and z / 256 (a power of two, so exact; a pivot on an edge belongs to the Chunk at its +x, +z side); `chunks` grows the bounds by the eight placed corners of each Placement's source box, rotated in f64 | `src/assets/cooked.rs:66-70`; `chunk.rs:19-42`, `:66-78` |
+| 0018 | "The Blob stores each field for all Placements, then for all lights, before zstd" | holds; level 9 | `src/assets/cooked.rs:890-953` |
+| 0011 | "a development launch reaches glTF only through the cooker, which cooks what changed before the runtime loads Blobs" | holds per Blob: each Blob a launch loads through `CookingLoader`, or requests through the IO pool, is cooked first where stale (L1-C05 aside); drift on the wording, which reads as a cook ahead of every load: L1-C06 | `docs/adr/0011-gltf-authoring-cooked-runtime-formats.md:3`; `launch.rs:1-2`, `:244-283`; `src/streaming/io.rs:814-819`, `:1524-1529` |
+| 0011 | "the runtime loads Blobs with mip chains, GPU block compression (BC) and byte ranges sized for streaming", for a Far proxy's atlas | holds: BC7 and BC5 with every mip through the Texture cook | `mod.rs:449-451`; `launch.rs:443-446` |
+| 0014 | "cooked meshes stay within 128 m of their pivot ... A Far proxy's Mesh is exempt: it holds a whole Chunk about its centre, within a Chunk's edge of it, which the cooker enforces instead; it is cooked to be placed unrotated" | holds: see ADR 0026's pivot row; the unrotated placement falls in streaming | `far_proxy.rs:220`, `:320-328` |
+| 0014 | World positions in f64, narrowed to f32 only in a local frame | holds: `from_pivot` rotates a source vertex in f32 (within its Mesh's 128 m) and composes the Chunk offset, the translation and the rotated offset in f64 before narrowing; Chunk bounds are composed in f64 | `far_proxy.rs:51-54`, `:251`; `chunk.rs:30-37` |
+| 0026 | Settled by the cook, "f32 resolves 0.015 mm between 128 and 256 m" | holds: 2^7 × 2^-23 = 2^-16 m = 0.0153 mm; a quarter pixel at 256 m is 0.147276 / 4 = 36.8 mm | `far_proxy.rs:28-30` |
+| 0027 | "A Far proxy holds no Thin Primitive, so the rule ends at the Load radius" | holds: a Thin Primitive's triangles merge into the shell as ordinary triangles, and `faceted` builds `Geometry::default()`, whose `thin_radius_metres` is `None` | `far_proxy.rs:68-94`, `:180-181`; `mesh.rs:190-205` |
+| 0017 | Arena shares "as `helmet`'s, `town`'s and the world scene's Meshes fill them ... with the Far proxies of its densest far field: the 282 within the View distance and a Chunk's edge of a camera on a 64 m grid" | falls in reader D: the fit test is `src/scenes/world.rs:860-960`, fed by `far_field_contents` (`mod.rs:541-582`, reader A's) | |
+| 0017 | "a second count of 285 entries, which only a Far proxy's Material takes ... and the baked Textures' bytes stay in the texture pool's Budget" | falls in reader C; the cook's share is that each atlas is a square power-of-two side, BC7 or BC5 with every mip, a shape the Texture classes take as any Texture's | `bake.rs:197-223`; `mod.rs:449-451` |
+| 0017 | "the Primitive's UV texel density (stored at cook time, per Primitive ...)", for a Far proxy | holds: `lod_0` computes the shell's density from its atlas UVs in f64, and each coarser LOD carries LOD 0's (reader A's code); the launch test reads it back as a texel of two pixels | `mesh.rs:204`, `:278`, `:435-453`; `launch.rs:447-448` |
+| 0013 | "2 km LOD'd View distance"; world size and Chunk grid | falls in reader D and streaming; the cook reads only the Load radius, for the pixel | `far_proxy.rs:28-30`; `mod.rs:296` |
+| 0016 | the IO pool reads, the main thread loads | not applicable to the cook's own code; the launch's cook runs on the main thread before each request reaches the IO pool (streaming's code) | `src/streaming/io.rs:814-819`, `:1524-1529` |
+| 0020 | "a per-Chunk sky-visibility field" | not applicable: planned, nothing in these files cooks it | |
+| 0002, 0025 | one vertex and one index buffer; MIT, nothing unpublishable | not applicable: these files allocate no GPU buffer and adapt no outside code; none cites a source and licence | |
+| checklist | "The runtime loads cooked Blobs only and references Assets by Asset ID, never by source path" | holds: Placements, Far proxies and baked Blobs are named by Asset ID; `CookingLoader` reads `assets/` only under the `cook` feature, as ADR 0011 allows a dev launch | `chunk.rs:48-64`; `launch.rs:49-59`; `src/state.rs:207-216` |
+| checklist | "A cooked Mesh Blob is the same bytes on every machine: the two hash tests ... pass on each" | holds as far as this reader can see: the Far proxy's hash test pins one Chunk's Mesh Blob; whether it passes on each machine is the verifier's (Block B1 for what it can and cannot see) | `far_proxy.rs:815-825` |
+| checklist | GPU buffers that never grow, the load staging, the GPU memory ledger, no GPU resources on ECS components, the slot order of prepare | not applicable: none of these files creates, uploads to or writes a GPU resource; the cook's own refusals (the triangle cap, the 8,192-texel atlas) are cook-time | `far_proxy.rs:275-279`; `bake.rs:222` |
+
+#### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| M4 story 6, each Chunk cooked as one Blob holding its Placements and point lights | holds | `chunk.rs:19-64`; `src/assets/cooked.rs:900-960` |
+| M4 story 7, a Placement names its Mesh by Asset ID, f64 translation from the Chunk's origin, f32 rotation and scale | holds: `split` rebases the translation in f64 and keeps the rest | `chunk.rs:53-57` |
+| M4 story 8, a point light with an f64 translation and photometric values | holds: rebased in f64, colour, candela and range kept as the generator gives them | `chunk.rs:58-62` |
+| M4 story 11, a Placement belongs to the Chunk that holds its pivot, the bounds grown to hold its Meshes | holds; test `chunk.rs:168-328` checks every cooked Mesh box of `town` inside its Chunk's bounds | `chunk.rs:19-42`, `:66-78` |
+| M4 story 12, the cook warns when a Placement names an Asset ID no longer defined | holds for the launch, against what this cook makes, not the cache; a scene with an absent source passes every cached ID (`mod.rs:919-921`, reader A's ceiling) | `launch.rs:146-148`, `:236-241`; test `launch.rs:524-556` |
+| M4 stories 15 and 16, `town` and every Reference scene load their static content through Chunks | holds, cook side: the tests load every scene's Chunks and find each Placement and light once, no static entity spawned; the Goldens fall in tooling | tests `chunk.rs:168-328`, `:363-404` |
+| M4 story 56, a generated 40 × 40 world cooked by `praxis cook` | falls in reader D and reader A (`cook world` in `mod.rs`); `chunk.rs:333-357` checks each of `world`'s 1,600 Chunks generated alone has its cut's Cook key | test `chunk.rs:333-357` |
+| M4 story 63, CI cooks only what its frames load | holds, mechanism side: the launch cooks each Blob on its first load and nothing before; the CI workflow falls in tooling | `launch.rs:117-131`; test `launch.rs:346-404` |
+| M4 story 64, a dev launch cooks a Chunk and the Assets it names when its load misses or finds them stale | broken in part: a kept Chunk's named Assets are not cooked: L1-C05 | `launch.rs:172-183` |
+| M5 story 16, each Chunk cooked a Far proxy: Placements merged, small parts dropped, simplified to a pixel at the Load radius under a triangle cap, one Blob under its own Asset ID | holds | `far_proxy.rs:212-355`; `mod.rs:425-468` |
+| M5 story 17, a Far proxy's Material baked from its sources', albedo and metallic-roughness, "one texel a pixel at the Load radius" | superseded by ADR 0026 as amended 2026-11-18: a texel two pixels, `TEXEL_PIXELS` 2; the two Channels hold | `bake.rs:15`, `:329-380` |
+| M5 story 26, the fit test extended to the Far proxies of the densest 2 km view | falls in reader D (`src/scenes/world.rs:860-960`); these files supply each proxy's Arena elements and atlas side through `far_field_contents` | `mod.rs:541-582` |
+| M5 stories 18 to 25, 27 to 32 (the draw, the swap, residency, shadows, the fill) | fall in streaming and render; nothing in these files implements them | |
+| M5 Implementation Decision, Far proxy: "`meshopt` 0.6.2's `simplify` runs to one pixel under a cap of 5,832 triangles ... with gutters clean to mip 3" | superseded: `meshopt` 0.7.0 since the frozen commit itself, and ADR 0026's amendment of 2026-11-18 (texel two pixels, gutters clean to mip 2); the cap and the pixel hold | `Cargo.lock` (`meshopt` 0.7.0); `far_proxy.rs:21`, `:161-178`; `bake.rs:15-19` |
+| M5 Testing Decision, "Captures and Goldens render Settled frames; Settled waits for the Far proxies within the View distance" | falls in streaming and tooling | |
+
+#### Registry keys
+
+No `[ref:<key>]` is cited in these four files. The rows below are the keys
+the code relies on uncited, through ADR 0026, ADR 0018 or the function it
+calls.
+
+| File | Keys | Verdict |
+|---|---|---|
+| `far_proxy.rs:161-178` | `meshoptimizer-1.3-simplify-error` (ADR 0026:9) | matches: the quote's "setting `target_index_count` to 0 will simplify the input mesh as much as possible within the specified error limit" is `simplify(indices, &adapter, 0, error_metres, ...)`, and "an approximate measure of the deviation" is ADR 0026's own caveat; the quote's "normalized to `[0..1]` range" is the default mode, which `SimplifyOptions::ErrorAbsolute` replaces with metres, as `simplifier.cpp:2489` (`error_scale = ... ? vertex_scale : 1.f`) and `:2622` (`*out_result_error = sqrtf(result_error) * error_scale`) show; the registry has that flag only as `meshopt-0.6.2-simplify-options`, a version `Cargo.lock` no longer pins (Notes). Version: key names meshoptimizer 1.3 vendored by `meshopt` 0.7.0; `Cargo.lock` pins `meshopt` 0.7.0 and `meshoptimizer.h:15` reads `MESHOPTIMIZER_VERSION 1030 /* 1.3 */` |
+| `far_proxy.rs:180-206`, `:338` | `meshoptimizer-1.3-simplify-original-vertices` (ADR 0026:20) | matches: "The resulting index buffer references vertices from the original vertex buffer" is why each LOD indexes the welded `positions` and is re-faceted |
+| `far_proxy.rs:271-273` | `meshoptimizer-1.3-vertex-kinds` (ADR 0026:20) | matches: "more than one vertex maps to this one ... result[i] = Kind_Locked" is the locking a face-by-face box meets in a Mesh's own chain; welding on position alone leaves every position one vertex, so no corner locks |
+| `bake.rs:43-47` | `unity-6000-uv-distribution-metric` (ADR 0018, texel density) | matches the form ADR 0018 records: the square root of UV area over triangle area, the inverse of Unity's "triangle area / uv area" taken as a length; per triangle here, where the stored density is per Primitive, which the function's doc names as its unit, not its extent |
+| `bake.rs:499-503` via `texture.rs:552-558` | `khronos-dfs-srgb` | matches: "R′ = R × 12.92, R ≤ 0.0031308; 1.055 × R^(1/2.4) − 0.055, R > 0.0031308" is `linear_to_srgb`, applied once to the linear mean before the byte |
+| `bake.rs:75-90`, `:364` | `gltf-2.0-metallic-roughness` | matches: "The factor value is a linear multiplier for the corresponding texture components" is `red * base_red` and `roughness * self.roughness` on linear samples; "Its green channel contains roughness values and its blue channel contains metalness values" is the atlas pixel `[0, roughness, metallic, 255]` |
+| `bake.rs:304-307`, `:369-372` | `gltf-2.0-texture-origin` | matches: "(0, 0) corresponds to the upper left corner" is a UV of the chart's texel over the side with row 0 written first (`LoadedImage`, "top row first") |
+
+#### Oracles
+
+Every test in these four files is new since `8bc34eb1`. All run on the CPU,
+so no WGSL floor applies; the floors are f32 (u = 2^-24) and f64 (u = 2^-53)
+chains, platform `tan`, `sin`, `cos` and `powf`, glam's SIMD paths and
+meshoptimizer's C++.
+
+| Function | Test | Expected value and its source | Constant | Floor | Stated floor | Verdict |
+|---|---|---|---|---|---|---|
+| `far_proxy::cook` through `far_proxy_mesh` and `CookedMesh::to_blob`, the densest Chunk (-19, -3) | `the_densest_chunks_proxy_cooks_to_the_same_blob_on_every_machine`, `far_proxy.rs:815-825` | SHA-256 `5341731a...c3e4` of the Mesh Blob, pinned across machines (CI's x86-64 and the M4 Pro) | exact | 0 where every operation is deterministic across the two; Block B1 lists what can move it and what it cannot see | no: the message says only that a machine that alone disagrees cooks other bytes | exact |
+| `pixel_metres` | `the_densest_chunks_proxy_keeps_the_cap_...`, `far_proxy.rs:734` | 0.1473 m, ADR 0026:9's "14.7 cm at 256 m" to four digits; derived 0.147275938 m | `1e-4` | f32 rounding of the f64 chain, 1.7e-9 m; libm `tan` cannot move the f32 result (Block B2) | no | explained: measured error 2.41e-5 is the four-digit rounding of the expected value; the constant is 2× the largest such rounding (5e-5) |
+| `Atlas::chart_shell` and `lod_0`'s `texel_density`, the densest Chunk | same test, `far_proxy.rs:736-737` | a 2048² atlas at a texel of `texel_metres(0.1473)` = 0.2946 m: ADR 0026:30, "charts into 2048²" | `1e-3` on texels per metre × texel size − 1 | 1.63e-4 from the test's four-digit pixel (0.2946 / 0.29455188 − 1), plus at most ~1e-5 from f32 UVs summed in f64 (Block B3) | no | explained, 6× margin |
+| LOD 1 of the densest Chunk | same test, `far_proxy.rs:738-741`, `:754` | ADR 0026:20: LOD 1 within twice the pixel, ≤ 85% of LOD 0's indices, 324 buildings' flattened roof tops of 6 index vertices each, the ground's 8 triangles | `2.0 * PIXEL_METRES` = 0.2946; integer counts exact | 0.29455188 is the simplifier's own limit, which `result_error` meets to sqrt-rounding (~3e-8); the counts are integers | no | explained (slack 4.8e-5 over the limit, ADR's reported 0.27 is 0.025 under); counts exact |
+| `far_proxy::cook`, LOD 0 against its sources | same test, `far_proxy.rs:797-806` | every seventh source corner within one pixel of the shell: ADR 0026:9 | `PIXEL_METRES` = 0.1473 | the simplifier's limit is 0.14727594, 2.4e-5 under the constant; a distance computed in f32 at 128 to 190 m from the pivot rounds by several ulps of 1.53e-5 (Block B4); and the simplifier's error is approximate, a tenth under the true distance on `world`'s roofs (ADR 0026:64) | no | tight: a corner the simplifier moved by its full limit could read past the constant; it passes because LOD 0 of this Chunk moves no corner that far |
+| `distance_to_triangle` | `a_point_is_as_far_from_a_triangle_as_from_its_nearest_face_edge_or_corner`, `far_proxy.rs:419-427` | hand derivation: 0.25 over the face, 3.0 to an edge, 5.0 to a corner, √2 to the hypotenuse | exact for three; `1e-6` for √2 | 0: every intermediate is exact in f32 and both sides round `sqrt(2.0)` alike (Block B5) | no | exact for three; loose for the fourth (constant 1e-6 over a floor of 0), harmless |
+| `within_another` and the shell's merge | `a_placement_within_a_pixel_of_anothers_surface_is_left_out_and_no_other_is`, `far_proxy.rs:429-501` | hand derivation of the kept corners in millimetres: ADR 0026:9, :22, :23 (Block B6) | exact (millimetres) | 0: no kept or dropped case lies within f32 rounding of the pixel; the nearest margin is 0.06 m against 0.1473 | no | exact |
+| `Transfer::bake` and `Atlas` UVs | `a_baked_proxy_reads_the_outermost_source_along_its_faces_normal_a_neighbours_too`, `far_proxy.rs:609-673` | sRGB EOTF of bytes 200, 40, 30 (`khronos-dfs-srgb-eotf`): 0.5776, 0.0212, 0.0130, times the factors; roughness 0.8 × 128/255, metallic 0.5 × 64/255 | `0.01` per component | 8-bit sRGB storage of the baked texel, 0.0014 at most on these points; and at (2.3, 2.6) the source's own bilinear transition at the brick's red-blue edge, which spills into the atlas texel the point reads: 0.0089 in blue (Block B7) | no | tight at (2.3, 2.6): 0.0089 of 0.01; the other points within 0.0045 |
+| `Transfer::bake`, gutters and fill | `no_chart_bleeds_into_another_down_to_mip_2`, `far_proxy.rs:675-716` | each plate's flat colour and roughness at its corners and centre at mips 0, 1, 2: ADR 0026:10 | `0.01` | 8-bit storage: albedo 0.8 → byte 231 → 0.7991 (8.8e-4); metallic 0.5 → byte 128 → 0.5020 (1.96e-3); roughness 0.2 to 0.8 exact; mips of identical texels in one block are exact | no | explained, 5× margin; a bleed would read tenths off |
+| `Chart::fit` and `pack` | `each_face_has_a_chart_of_its_own_on_the_grid_with_its_gutter`, `bake.rs:555-594` | hand derivation: a 256-texel atlas; each chart ceil(side / 0.1473) by its longer side first; the UV diagonal the quad's metres (Block B8) | exact for the side, the sizes and the grid; `1e-3` m on the diagonal | 0 for the integers (no side within rounding of a whole texel: nearest 0.3 / 0.1473 = 2.037); ~3e-6 m on the diagonal (f32 UV at 1/256 of a 256-texel side, a 0.3 rad turn in f32) | no | exact; loose on the diagonal (~300×) |
+| baked texel density of `world`'s farm Chunk (-20, -11) | `loading_a_far_proxy_cooks_it_...`, `launch.rs:447-448` | a texel of two pixels: texels per metre × 0.1473 = 0.5 (ADR 0026:10) | `1e-3` | 8.2e-5 from the four-digit pixel (0.1473 / 0.29455188 − 0.5), the density's f64 sum negligible | no | explained, 12× margin |
+
+Set aside as behaviour tests, judged and not oracles: in `chunk.rs`, the
+three tests that compare the Chunk cut with the generator, the cut with each
+Chunk generated alone, and every scene's spawn with its Chunks (their
+bounds tolerance of 1e-9 m compares the code's formula with itself); in
+`launch.rs`, the four tests of what a launch cooks and warns of; in
+`bake.rs`, `a_coarser_lods_face_reads_the_nearest_chart_facing_its_way_held_inside_it`
+(chart indices) and
+`a_face_longer_than_the_largest_atlas_fails_and_a_triangle_without_area_has_no_face`;
+in `far_proxy.rs`, `the_same_chunk_cooks_the_same_blob_twice`.
+
+##### Block B1: the Far proxy's hash test
+
+What the bytes cover: the Mesh Blob of one Chunk's proxy (`far_proxy.rs:718-725`):
+the shell's welded and simplified positions, its flat normals (as
+QTangents), its atlas UVs, so the charting, the packer's order and each
+chart's position; the ground's tiles; the LOD chain's indices, errors and
+Meshlets; the bounds; the zstd frame. It does not cover the bake: no atlas
+texel, no Texture Blob, no Material Blob; and it covers one Chunk of 1,600.
+
+The chain and what can move it across machines:
+
+1. The Placements: `world::static_content` turns buildings by
+   `Quat::from_rotation_y(quarter_turns × π/2)` (`src/scenes/world.rs:659`)
+   and windows by `rotation_arc` products (`:682`, `:688`). `from_rotation_y`
+   takes a platform f32 `sin_cos`, not correctly rounded across libms; a
+   one-ulp difference in sin(π/4) moves a rotated vertex. The test can see
+   this, since the densest Chunk holds rotated buildings.
+2. `from_pivot` (`far_proxy.rs:52`): `Quat * Vec3` is `mul_vec3a` in glam
+   0.34.3. On aarch64 (`neon/quat.rs:884-899`) and on x86-64
+   (`sse2/quat.rs:881-897`) both evaluate `rhs·(w² − |b|²) + b·(2 rhs·b) +
+   (b × rhs)·2w` with the same operation order: `length_squared` and `dot`
+   are scalar `(x·x + y·y) + z·z` on NEON (`neon/vec3a.rs:255-258`) and
+   `dot3_into_m128`'s pairwise sum on SSE2, each `(x + y) + z`; rustc does
+   not contract. So the two targets round alike here, and the test could
+   not tell them apart if they did not: it is the scalar path, which no
+   target here builds, that rounds differently. The f64 sum and the
+   narrowing are IEEE-exact operations.
+3. `generate_vertex_remap`, `simplify` (`far_proxy.rs:271-274`, `:331-332`):
+   meshoptimizer's C++, built with `-ffp-contract=off` for
+   `aarch64-apple-darwin` and `x86_64-unknown-linux-gnu`
+   (`.cargo/config.toml:5-6`). The test sees a contraction on any target
+   without that flag.
+4. `faceted`, `Chart::fit`, `nearest_texel` (`far_proxy.rs:184-196`;
+   `bake.rs:108-165`): scalar `Vec3` cross, dot, `normalize` (IEEE `sqrt`)
+   and `ceil`; deterministic.
+5. `pixel_metres` (`far_proxy.rs:29`): f64 `tan`, which cannot move the f32
+   result (Block B2).
+6. `HashMap` use: `faceted`'s `vertex_of`, `within_another`'s grid and
+   `reach_of_mesh` are lookups only; output order follows the triangle and
+   Placement order. No thread order enters the Mesh.
+7. `mesh::lod_0` and `push_lod`: reader A's chain, under `mesh.rs`'s own
+   hash test.
+
+Floor: 0 across the two machines for steps 2, 4, 5 and 6; the test detects
+steps 1 and 3 and reader A's chain on this one Chunk. The bake's
+cross-machine determinism (its `powf` in `linear_to_srgb`, `texture.rs:556`,
+and the BC7 encoder) is outside it, as nothing claims the Texture Blobs are
+the same bytes on every machine.
+
+##### Block B2: the pixel
+
+`pixel_metres(256.0)`, `far_proxy.rs:29`:
+`FIELD_OF_VIEW` = f32(π/4) = 0.785398185253143 (`src/camera/mod.rs:90`),
+widened to f64 and halved: 0.392699092626572. `tan` of it: 0.414213575175865
+(libm on this host, 1.9e-4 ulp from the 60-digit value 0.41421357517586482...,
+recomputed). 256 × 2 = 512 (exact), × tan = 212.077350, / 1440 =
+0.147275937840307 (f64), narrowed to f32: 0.14727593958377838 (`0x3e16cf81`).
+The f64 value lies 1.74e-9 below the f32 value, 0.117 of an f32 ulp
+(2^-26 = 1.49e-8), so 0.38 ulp from a rounding midpoint, against an f64
+error of about 1e-17: the same f32 for `tan` one ulp either way (recomputed
+for both neighbours). Against the test's 0.1473: 2.41e-5.
+
+##### Block B3: the atlas's texel density
+
+`texel_density` (`mesh.rs:435-453`) sums mesh and UV areas in f64 from f32
+positions and UVs. A UV is `(position_texels + held) / 2048` (`bake.rs:306`),
+an f32 below 1 with ulp ≤ 6e-8, so ≤ 1.2e-4 texel; over a chart of tens of
+texels the relative error of a triangle's UV area is ≤ ~1e-5, and the sum
+averages it. The UV map is isometric within each chart (orthonormal
+`across` and `down`, `bake.rs:115-122`), so the density is
+1 / (0.29455188 × 2048). The test multiplies by 2048 × 0.2946:
+0.2946 / 0.29455188 = 1.000163.
+
+##### Block B4: LOD 0 within a pixel
+
+`distance_to_triangle` (`far_proxy.rs:106-121`) on corners up to 190 m from
+the pivot (ADR 0026:21): differences of coordinates near 128 m carry an
+ulp of 1.53e-5 m, then a cross product, a dot and a division by a length,
+so a distance at the limit rounds by a few times 1.5e-5. The test's
+`PIXEL_METRES` (0.1473) sits 2.4e-5 above the simplifier's limit
+(0.14727594), about 1.6 ulps; and ADR 0026:64 says the simplifier's
+reported error runs a tenth under the distance moved. A corner moved to the
+limit can therefore read past the constant. The test passes because the
+densest Chunk's 5,832 triangles are the cap itself (324 buildings of 18
+triangles: four wall quads and a five-quad roof slab,
+`src/scenes/world.rs:407-445`), so the merge keeps every triangle and moves
+no corner.
+
+##### Block B5: `distance_to_triangle`'s four points
+
+Triangle (0,0,0), (4,0,0), (0,0,4); its normal (4,0,0) × (0,0,4) = (0, −16, 0).
+(1, 0.25, 1): over the face; |(1, 0.25, 1)·(0, −16, 0)| / 16 = 4 / 16 = 0.25,
+exact. (2, 0, −3): nearest edge z = 0, along = 8 / 16 = 0.5, point (2,0,0),
+distance 3, exact. (7, 4, 0): edge (4,0,0) to (0,0,4), along = −12/32,
+clamped to 0, so the corner (4,0,0); distance √(9 + 16) = 5, exact.
+(3, 0, 3): outside, hypotenuse along = 16/32 = 0.5, point (2,0,2), distance
+√2, computed as `sqrt(1 + 0 + 1)`, the same f32 operation as `2f32.sqrt()`:
+difference 0.
+
+##### Block B6: the drop rule's kept set
+
+Pixel 0.1473 m; the pane is `upright_quad(1, 1, 0.06)`, so a pane placed at
+z stands at z + 0.06. Wall: x 98 to 102, z = 100. Pane at (100, 1, 100):
+z = 100.06, 0.06 from the wall, every corner over it: dropped. Pane at
+(100, 1, 100.2): 0.26 off: kept, `quad([99.5,1],[100.5,2],100.26)`. Pane at
+(110, 1, 100): 7.5 m past the wall's edge: kept. Pane at (101.8, 1, 100):
+corners at x = 102.3 lie √(0.3² + 0.06²) = 0.306 from the wall's edge: kept.
+Pane at (0.5, 1, 50): x 0 to 1, z = 50.06; the west neighbour's wall at
+x = 255 − 256 = −1 spans x −3 to 1 at z = 50: 0.06 off, dropped against a
+neighbour. Wall turned π/4 at (60, 0, 60): its normal (sin π/4, 0, cos π/4);
+the pane at (60.5, 1, 59.94) stands at z = 60, x 60 to 61; its corner
+(61, 1, 60) lies (1, 0)·(0.707, 0.707) = 0.707 off: kept, and the turned
+wall's corners (60 ± 2·0.7071, y, 60 ∓ 2·0.7071) are its expected
+`turned_wall`. Plate 0.05 above the ground: kept, the ground no surface.
+In millimetres from the pivot (x − 128, z − 128), each expected corner is an
+f32 within 1e-5 of a whole millimetre; no rounding flips one.
+
+##### Block B7: the bake's outermost read
+
+Computed by this reader in a 1-D model (rows are identical across the
+brick), in IEEE double with the f32 sRGB table, recomputed in Python. The
+wall spans x 0 to 4 m with UVs 0 to 1, the brick 16 texels wide, red texels
+0 to 7, blue 8 to 15. The chart's texel is 2 × 0.1473 = 0.2946 m from x = 0
+(the first edge, +x, is the rectangle's `across`, `bake.rs:114-125`), four
+samples a side. The source sampler (`texture.rs:317-336`) blends red into
+blue between texel centres 7.5/16 and 8.5/16, x 1.875 to 2.125 m. Atlas
+texel 7 spans x 2.0622 to 2.3568; its first sample column, at x = 2.0990,
+reads 0.104 red; the texel's mean blue is 0.5629 linear, stored as byte
+198, read back 0.5647. The point x = 2.3 sits at texel coordinate 7.807, so
+bilinear weights 0.693 on texel 7 and 0.307 on texel 8 (0.5776): blue
+0.5687, 0.0089 under 0.5776. The other points: (1.0, 0.5), (1.2, 1.5),
+(0.7, 2.6) red 0.0014 under (byte storage); (3.7, 0.5) blue 0.0045 under
+(texel 13 holds the wall's last 0.17 m, the repeat's wrap to red within
+it); (3.0, 0.5) within 1e-4. So the constant 0.01 holds at every point, at
+(2.3, 2.6) by 0.0011.
+
+##### Block B8: the chart test's atlas
+
+At 0.1473 m a texel: chart sizes ceil(4/0.1473) × ceil(3/0.1473) = 28 × 21;
+(9 m, 2 m) turned to rows ≤ columns, 62 × 14; 204 × 3; 7 × 7; 48 × 17; 34 × 14.
+Padded (+ 2 × 2 gutter, up to a multiple of 4): 32 × 28, 68 × 20, 208 × 8,
+12 × 12, 52 × 24, 40 × 20. Tallest first, ties in index order: 28, 24, 20
+(quad 1), 20 (quad 5), 12, 8. At side 128 the 208-texel chart does not fit;
+at 256 the first shelf takes 32 + 52 + 68 + 40 + 12 = 204 columns, the
+208-wide chart opens a second shelf at row 28, ending at row 36 ≤ 256. Side
+256, as asserted.
+
+### assets: the Cooked cache reader, the loader, the pools and their Arenas
+
+Scope: `src/assets/pools.rs` (2,277 lines), `material.rs` (2,054),
+`cooked.rs` (1,556; the reader's half: `AssetId::new`, every `from_blob`
+and its helpers, `resident_tail_level`, `level_bytes`, the Texture
+decoders, `CookedCache`; the `to_blob` writers are reader A's and were read
+only as the format the reader parses), `loader.rs` (655), `mesh.rs` (64)
+and `mod.rs` (12); 6,618 lines, every file read in full at `e5c55a8d`,
+`#[cfg(test)]` modules included. ADRs read whole, status lines and
+amendments included: 0002, 0011, 0017, 0018, 0026; read for the clauses
+these files implement: 0001, 0003, 0013, 0020, 0021, 0025. Specs read whole,
+stories, implementation and testing decisions: the M4 spec and the M5
+spec; rows are given for the 26 M4 and 9 M5 stories these files implement
+or partly implement. Opened outside the
+files, only as far as a clause needs them: `bench/budgets.json` (the
+Budgets the capacities derive from), `src/stats/gpu_memory.rs:107`
+(`RESIDENT_TAIL_LEVEL_BYTES`), `src/streaming/io.rs:915-925` (which pool
+counters reach Frame stats), `src/render/acceleration_structures.rs:454`,
+`:861` (the callers of `handle_at`), `src/render/staging.rs` (the load
+staging's `write`, `write_texture`, `copy_texture`, `build_blas`). Crate
+sources read in the cargo registry: `meshopt` 0.7.0 (`src/encoding.rs:171-186`,
+`vendor/src/vertexcodec.cpp:125-146`, `:505-535`, `vendor/src/meshoptimizer.h:15`,
+version 1030, "1.3"), and `offset-allocator` 0.2.0 where an Arena claim
+rests on it. `docs/audit/deviations.md` holds no row in these files;
+`DIFFERENCES.md` lists no image these files produce. The one known open
+issue in these files, the texture pool's Channels capped in Texture
+classes rather than bytes, is under *Open issues read*. No `cargo` command
+was run. Every `where` is `path:line` at `e5c55a8d`, under `src/assets/`
+unless given in full.
+
+#### Clause verdicts
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0002 | "Meshes are (vertex offset, index offset, index count) sub-allocations of one shared vertex buffer and one shared index buffer in the Mesh pool" | holds: one vertex Arena and one index Arena, each one `wgpu::Buffer`; a Mesh keeps its vertex range and its index range, and its BLAS build names both offsets and LOD 0's index count | `pools.rs:242-255`, `:514`, `:607-613`, `:664-669`, `:691-705` |
+| 0002 | "ADR 0017 replaces growth with fixed arenas sized from the Budget, sub-allocated by an offset allocator, each at most 2^31 − 1 bytes" | holds: each Arena's buffer is created once, an `offset_allocator::Allocator` of its elements sub-allocates it, and creation asserts fewer than 2^31 bytes | `pools.rs:1327-1356`, `:1337-1340` |
+| 0002 | "each Arena is now sized at device creation from the geometry Arenas' GPU memory Budget, in the share ADR 0017 gives it" | holds: `from_budgets` takes each Arena's per-mille of `geometry_arenas`, rounded down to `COPY_BUFFER_ALIGNMENT`; 658, 130, 11, 133 and 68 per mille are ADR 0017's 65.8%, 13.0%, 1.1%, 13.3% and 6.8% | `pools.rs:19`, `:75-93`; `bench/budgets.json:11` |
+| 0002 | "Refined by ADR 0019: the Mesh table names each Mesh's Meshlet ranges in three further Arenas ...; the vertex Arena still holds the vertices, and the index Arena feeds only the BLAS builds and refits" | holds: three Meshlet Arenas, a `MeshData` per Mesh with each LOD's Meshlet and triangle ranges; the index Arena is `BLAS_INPUT` only and no pass binds it | `pools.rs:248-273`, `:529-573`, `:596-600`; `mesh.rs:36-49` |
+| 0017 | status: "each Channel is a partially bound binding array of texture arrays, one per Texture class of Textures sized to their source" | holds: a `TextureViewArray` of one `D2Array` view per class per Channel; a class's array is created at the Texture's own width, height, mip count and format | `material.rs:418-475`, `:1296-1303` |
+| 0017 | status: "loaded from cooked Blobs through a `StagingBelt` and sampled trilinear, the colour Channels at 16x anisotropy and the data Channels at 4x" | holds: every level through `LoadStaging::write_texture`; two samplers, `Linear` on all three filters, `anisotropy_clamp` 16 and 4 | `material.rs:39-40`, `:362-365`, `:374-376`, `:598-599`, `:1272-1283` |
+| 0017 | status: "a Texture a Chunk loads arriving as its Resident tail, its finer mips streaming in ..., while one a spawn loads keeps its full mip chain" | holds, reader side: `resident_tail_from_blob` decodes the tail alone, `from_blob` every mip, and `push` places whatever the reader gave; which reader a load uses falls in streaming | `cooked.rs:376-384`; `material.rs:348-391` |
+| 0017 | status: "a Far proxy's atlas arriving with its mips down to the one its distance from the camera needed ..., drawn from its tail only where its Channel has no room for that chain" | holds: `down_to_from_blob` decodes from the finer of the picked mip and the tail's first; `push` places the tail, then the chain, and keeps the tail alone when the chain finds no room | `cooked.rs:389-397`; `material.rs:361`, `:370-372` |
+| 0017 | status: "with the eviction below making room for a move into a full Channel" | holds: `stream_mips` calls `evict_for` when the target class has no room | `material.rs:1048-1059` |
+| 0017 | status: "geometry loads through the same belt into one vertex and one index arena ..., which refuse a Mesh that does not fit ..., and into three Meshlet arenas" | holds: every Arena write is `LoadStaging::write`; a short Arena returns `MeshRefusal::ArenaShort` with every Arena as it was | `pools.rs:495-509`, `:574-600`, `:1297-1315`, `:1374-1377` |
+| 0017 | status: "at device creation the pools derive their capacities from them, each Arena and table at its share ..., and each Channel a Texture class per 64 KiB of the texture pool's fifth, up to what the Capability floor binds" | holds: `texture_pool / (5 × RESIDENT_TAIL_LEVEL_BYTES)` = 13,107, then `.min(CLASSES_PER_CHANNEL)` = 65,536 / 5 = 13,107 (Block C1) | `pools.rs:97-100`; `material.rs:19-20`; `src/stats/gpu_memory.rs:107`; `src/gpu/mod.rs:301` |
+| 0017 | "an array per Texture class: the Textures of one shape, size, mip count and format alike, none padded or resampled to share one" | holds: `TextureShape` is width, height, mip count and format; `place` matches on the whole shape | `material.rs:94-110`, `:173-215` |
+| 0017 | "A Layer names a class and a slice of its array, Layer 0 stays the neutral default" | holds: `class * SLICES_PER_CLASS + slice`; each Channel's neutral 1×1 Texture is placed first, class 0 slice 0, never released; the normal Channel's neutral is now `Rgba16Float` (0.5, 0.5, 1, 1), exact, which closes M3.5's L1-C03 | `material.rs:136-141`, `:526-559`, `:592-596` |
+| 0017 | "A class's slice count is fixed when it opens, at most the Capability floor's 256 array layers, and a full class's shape opens another" | holds: the first class of a shape has one slice, each later one twice the newest's, capped at `SLICES_PER_CLASS` = `FLOOR_TEXTURE_ARRAY_LAYERS`; the array is created at that count once (Block C7) | `material.rs:24`, `:199-214`, `:430-449`; `src/gpu/mod.rs:305` |
+| 0017 | "an empty slice still holds memory, which `gpu_memory_bytes` counts" | holds: the array is charged at creation for all its slices through `create_material_texture` | `material.rs:430-448`; `src/stats/gpu_memory.rs:169-186` |
+| 0017 | "A Texture whose resident mips change moves to the class of its new shape by copy" | broken in part: `stream_mips` writes the new mips into the target slice and copies the Resident ones after them, and `evict_finest_mip` copies the chain from its next mip into the coarser class, but a new shape whose mip 0 is not whole blocks opens a class wgpu refuses, a panic: L1-C08 | `material.rs:1064-1081`, `:1192-1201` |
+| 0017 | "Metal's `useResource` ... and wgpu-core's tracking then follow the classes, not the Textures" | holds, pool side: one view per class is bound, however many slices it holds | `material.rs:451-473`, `:1296-1303` |
+| 0017 | "Residency changes are batched so that bind group is rebuilt at most once per frame" | holds: placements set `views_changed`; `refresh_bind_group` rebuilds once if any did, called once at the start of `render` | `material.rs:472`, `:1241-1266`; `src/render/renderer.rs:813` |
+| 0017 | the gate: "the rebuild ... measured at 10k textures" | holds, pool side: the rebuild is timed and logged with the bound class count | `material.rs:1246`, `:1255-1264` |
+| 0017 | "Priority is computed on the CPU ... from distance and the Primitive's UV texel density (stored at cook time, per Primitive ...)" | holds, pool side: the reader reads each Primitive's density, and the Mesh pool keeps it per Primitive for mip priority; the priority falls in streaming | `cooked.rs:722`, `:759-766`; `pools.rs:516-520`; `mesh.rs:15-16` |
+| 0017 | "The Materials rays reach off screen ... take the Resident tail as their floor, which the next consequence keeps loaded" | holds, pool side: a Texture's tail slice is released only when the Texture itself is freed | `material.rs:407-413`, `:787-801`, `:1082-1084`, `:1202` |
+| 0017 | "Each texture's Resident tail (mips of 64 KiB and smaller) never leaves" | holds for the tail `resident_tail_level` picks; drift on the definition: a Texture whose first mip of 64 KiB or less is not whole blocks takes its whole chain as its tail: L1-C09 | `cooked.rs:253-269`; `material.rs:356-366` |
+| 0017 | "When finer mips arrive, the Texture moves to the class of its mips from its finest Resident one and its tail's slice stays taken, charged twice in `resident_tails` (87,408 bytes for a 2,048² BC7 or BC5 Texture, 1.6% of its chain)" | holds: the chain's class repeats the tail's mips; the ledger charges every level of 64 KiB or less a slice to `ResidentTails`; 87,408 and 1.56% recomputed (Block C2) | `material.rs:370-390`; `src/stats/gpu_memory.rs:175-181` |
+| 0017 | "When a request would exceed the texture pool's capacity, which is set from its Budget" | broken, known (see *Open issues read*) | `material.rs:199-201`, `:231-245`; `pools.rs:97-100` |
+| 0017 | "the finest mip of the lowest-priority texture goes first, least recently used breaking ties" | holds: the victim minimises (`Reverse(finest_mip_needed)`, `last_used_plan`, Asset ID); `u32::MAX`, needed by nothing, goes first | `material.rs:1102-1118`, `:274-282` |
+| 0017 | "a mip loads at priority p and is evicted only below p − 1" | falls in streaming: `rank` returns no rank unless the need is two mips past the finest Resident one (`mips.rs:291-293`), and `evictable` takes no Texture without a rank | `material.rs:1132` |
+| 0017 | "the candidates are the Textures whose chain lies in the very class the request needs, whose slice it takes" | holds: `evict_for` keeps Textures of the Channel whose `mips_from(resident_level)` is the target shape; the released slice is the one `place` gives the move | `material.rs:1105-1107`, `:173-187`, `:1061` |
+| 0017 | "the one evicted moves to the class of its mips from the next, or falls back to its tail only when it needs no finer mip than the tail's, so it never re-requests what it lost" | holds: `evictable` admits a Texture only when its need is at or past its tail's first mip or the next class has room; `evict_finest_mip` moves it a mip coarser when that class has room, else to its tail (Block C11) | `material.rs:1125-1139`, `:1183-1208` |
+| 0017 | "a request is made only when its move finds room, free or by an eviction" | falls in streaming (the M5.5 report's L1-F01); the pool answers `full_class_for_mips` and `coarsest_evictable_needs` | `material.rs:1143-1168` |
+| 0017 | "One vertex arena and one index arena, and the Meshlet arenas, each at most 2^31 − 1 bytes" | holds: asserted at creation; the checked-in largest is 55,197,040 bytes | `pools.rs:1337-1340`, test `:1411-1427` |
+| 0017 | "sub-allocated with the `offset-allocator` crate" | holds: an `Allocator` per Arena, in elements; `allocation_size` is the requested count (`offset-allocator-0.2.0/src/lib.rs:246`), so `bytes_in_use` is exact; a request is refused when no free range's bin reaches its rounded-up size (see *Notes*) | `pools.rs:1352`, `:1360-1371` |
+| 0017 | "the Capability floor's 128 MiB `max_storage_buffer_binding_size` caps that arena" | holds: 55,197,040 bytes against 134,217,728, pinned by a test | `pools.rs:1416`; `src/gpu/mod.rs:824` |
+| 0017 | "No growth at runtime: a load that does not fit is refused and logged" | broken in part: the Arenas, the Mesh table and the Material table never grow and refuse with a log (`error!`, `warn!`); a Texture whose Channel has no room for its tail is logged and given Layer 0, not refused, and not counted: L1-C07 | `pools.rs:490-509`, `:1114-1143`; `material.rs:653-655`, `:679-690`, `:418-426`, `:985-989` |
+| 0017 | "The CPU shadow of vertex and index data goes" | holds: a loaded `Mesh` keeps its vertex range, bounds, texel densities and Material Handles | `mesh.rs:6-20`; `pools.rs:510-522` |
+| 0017 | "the vertex, index, Meshlet, Meshlet vertex and Meshlet triangle Arenas take 65.8%, 13.0%, 1.1%, 13.3% and 6.8% of the geometry Budget" | holds (Block C1) | `pools.rs:19`, `:82-85` |
+| 0017 | "the Mesh table an entry per 5,124 bytes of it, `town`'s mean Mesh" | holds: 83,886,080 / 5,124 = 16,371 | `pools.rs:33`, `:94` |
+| 0017 | "the Material table an entry per 19,267,584 bytes of the texture pool's, the largest Material of the Reference scenes, `helmet`'s, past its Resident tails" | holds: 3 × 5,505,024 + 2,752,512 = 19,267,584 for three 2,048² BC7 or BC5 chains and one BC4 chain past their tails; 222 entries (Block C2) | `pools.rs:38`, `:95` |
+| 0017 | "a second count of 285 entries, which only a Far proxy's Material takes ...: neither count takes an entry of the other's, a load past either is refused, logged and counted" | holds: `count_capacities` and `entries_taken` per `MaterialUse`; `refused_as_full` warns and counts; a full count frees only its own unused Materials; one SSBO of 222 + 285 entries | `pools.rs:43`, `:96`; `material.rs:570-580`, `:616-617`, `:674-690`, `:752-757`, `:891-896` |
+| 0017 | "the baked Textures' bytes stay in the texture pool's Budget" | holds: a Far proxy's Textures load into the Channels as any Texture | `material.rs:900-916`; `loader.rs:230-235` |
+| 0017 | "The Renderer and its Pools create the buffers, textures and TLASes they count through one ledger, and charge it their BLASes' bytes" | holds: Arenas under `GeometryArenas`, the Mesh table and the SSBO under `SceneAndPassBuffers`, class arrays through `create_material_texture`, BLASes through one `Charge` under `AccelerationStructures` | `pools.rs:239`, `:274-283`, `:1342-1351`, `:999-1005`; `material.rs:570-580`, `:430` |
+| 0017 | "What ADR 0013 leaves out, the GPU stats readback and the load staging, bypasses it" | holds, pool side: the pools write through `LoadStaging`, uncounted (the M5.5 report's L1-R04 is the drift on this clause) | `pools.rs:1374-1377`; `material.rs:659` |
+| 0017 | "Acceleration structures join the ledger ..., each BLAS ... at the size its driver gives through wgpu-hal's build-sizes query" | holds, pool side: `blas_bytes` at load with the BLAS's own flags and geometry; the query is the render section's | `pools.rs:621-625`, `:683-684` |
+| 0017 | "A compacted BLAS's size stays an estimate ...: the fraction of its built size compaction kept where measured" | holds: compacted bytes move from the uncompacted total as each BLAS is compacted and are charged at `compacted_blas_fraction`, rounded (Block C6) | `pools.rs:828-834`, `:999-1005` |
+| 0017 | "Streaming uploads go through a `StagingBelt`, never `Queue::write_texture`" | holds: every pool write is `LoadStaging::write`, `write_texture`, `copy_texture` or `build_blas`; no `queue.write_*` in `src/assets/` | `pools.rs:574-600`, `:670`; `material.rs:364`, `:375`, `:378-385`, `:659`, `:1066`, `:1074-1081`, `:1193-1200`, `:1234` |
+| 0017 | "A Mesh a streamed load brings that the pools lack does not hold its frame: the GPU builds and compacts its BLAS over the frames after, which the main thread finds by polling ...; a Settled frame and a spawn's loads still wait for theirs" | holds, pool side: `defer_blases`, `poll_blases`, `blas_ready`, `asset_blas_ready`, and `wait_for_blases` for a wait; when to place falls in streaming | `pools.rs:727-763`, `:775-798` |
+| 0017 | "The cooked format ... stores each mip as a separately loadable byte range ..., and the Mesh Blob each Primitive's UV texel density" | holds, reader side: each level through its KTX2 level index entry, decompressed on its own; the density read per Primitive; the Blob is read whole (the M5.5 streaming section's note) | `cooked.rs:459-474`, `:722`; `:1146` |
+| 0018 | status: "the runtime loads Materials and Textures ... and Meshes ... from them by Asset ID; the reader rebuilds their Meshlets ..., which the Mesh pool keeps in three Arenas the main pass draws from" | holds: `AssetLoader` and `AssetReader` take `AssetId` only; `CookedMeshlet::split` rebuilds each Meshlet; the status sentence now names the Meshlet Arenas, which closes M3.5's L1-C06 | `loader.rs:11-69`; `cooked.rs:534-588`, `:815-832`; `pools.rs:256-273` |
+| 0018 | "An Asset ID is the first 128 bits of SHA-256 over (GUID, Asset kind, glTF name, Channel for a Texture)" | holds: unchanged since M3.5 but for the Chunk kind (3); the `shasum` oracle is not changed in scope, so it gets no row | `cooked.rs:107-142`, test `:1221-1229` |
+| 0018 | "A cooked Asset is a Blob named by the SHA-256 of its bytes, found through a cook index that maps Asset ID to Blob" | holds, reader side: `index/<id>` holds the hash and Cook key, `blobs/<hash>` the bytes; the reader does not rehash what it reads (see *Notes*) | `cooked.rs:1119-1152` |
+| 0018 | "The Cooked cache lives in git-ignored `cooked/` and is never evicted" | holds: no code in the module removes a Blob or an index file | `cooked.rs:1078`, `:1082-1185` |
+| 0018 | "The runtime loads Blobs only (ADR 0011). Each Blob starts with a magic and a format version (a Texture Blob is KTX2, with its format version in a key-value entry). A mismatch is refused with a re-cook message; there is no migration code." | holds: `payload` for `PXMA` 2, `PXME` 8, `PXCH` 1; the KTX2 entry `PXTXVERSION` 2; each refusal says "re-cook with `praxis cook`"; no branch reads an older version | `cooked.rs:21-56`, `:1064-1075`, `:416-427`, `:204`, `:705`, `:965` |
+| 0018 | "The runtime still opens no source path" | holds: `CookedCache` opens `cooked/index/<id>` and `cooked/blobs/<hash>` only | `cooked.rs:1119-1125`, `:1129`, `:1146` |
+| 0018 | "Textures are KTX2 with every level zstd-supercompressed, stored smallest mip first" | holds, reader side: the reader requires `Zstandard` and takes each level by its index entry, so the byte order does not matter to it | `cooked.rs:429-432`, `:459-466` |
+| 0018 | "Rows are stored unpadded, and the loader re-pitches them to 256 bytes as it writes into the `StagingBelt`" | holds: `levels` hold unpadded rows; `write_texture` re-pitches to `COPY_BYTES_PER_ROW_ALIGNMENT` | `cooked.rs:244-246`; `src/render/staging.rs:222-246` |
+| 0018 | "Formats per Channel ...: albedo and emissive BC7 sRGB, normal BC5, metallic-roughness BC5 linear, occlusion BC4" | holds, reader side: a Texture Blob holds one of the three formats; which Channel takes which is the cooker's | `cooked.rs:272-285`, `:433-441` |
+| 0018 | "The cooker refuses a Texture whose size is not a multiple of 4 or exceeds 8192" | falls in reader A; the reader mirrors it and requires the full mip chain | `cooked.rs:444-457` |
+| 0018 | "a 28-byte vertex ... and u32 indices" | holds: asserted at compile time; indices decoded as `u32` | `cooked.rs:486-497`, `:802` |
+| 0018 | "Meshlets of at most 64 vertices ... and at most 124 triangles" | holds: `split` refuses a run past either | `cooked.rs:548-551`, `:562-565` |
+| 0018 | "A Meshlet is stored as one byte, its triangle count; the reader rebuilds its vertex remap and local triangles from its run of the index stream, which BLAS builds read" | holds | `cooked.rs:778-781`, `:815-832`, `:534-588`; `pools.rs:579-580` |
+| 0018 | "The Blob also holds the Mesh's bounding box for culling" | holds: six f32 after the counts, into `MeshData` | `cooked.rs:715-718`; `pools.rs:529-533` |
+| 0018 | "Each Primitive stores its UV texel density ... the inverse of Unity's per-Mesh average of triangle area over UV area [ref], taken per Primitive, as a ratio of summed areas and as a length" | holds, reader side: one f32 per Primitive; the registry difference this sentence records is L1-C10 | `cooked.rs:505-510`, `:722` |
+| 0018 | "The Blob holds the Mesh's LOD chain: the vertices once, which every LOD indexes, then per LOD its error in metres, each Primitive's run of its indices and its Meshlets, with every LOD's indices in one encoded stream" | holds: one vertex stream, per LOD an error, index count and per-Primitive runs, one index stream split coarsest first; a LOD error must be finite and no less than the finer one's | `cooked.rs:734-776`, `:802-814` |
+| 0018 | "a chain holds at most 8 LODs" | holds: a count outside 1 to 8 is refused | `cooked.rs:711-714`; `pools.rs:483-486` |
+| 0018 | "Each Primitive stores a Thin Primitive's radius, zero for any other" | holds: zero reads as `None`; a radius not finite or below zero is refused | `cooked.rs:723-731` |
+| 0018 | "A Material is its own Asset: PBR factors plus one Texture Asset ID per Channel. Primitives reference it by ID." | holds | `cooked.rs:160-169`, `:203-231`, `:504` |
+| 0018 | "A Placement holds a Mesh Asset ID, an optional Material Asset ID ..., an f64 translation from the Chunk origin, and f32 rotation and scale ... A light holds an f64 translation, a colour, an intensity in candela ... and a range in metres ... The Blob stores each field for all Placements, then for all lights, before zstd" | holds, reader side: the column layout, its byte count checked against the counts before any column is cut | `cooked.rs:850-881`, `:964-1029` |
+| 0018 | "A Chunk's edge is 256 m" | holds | `cooked.rs:58` |
+| 0018 | Cook key, dev-launch cooking, the cooker's warning | falls in reader A and reader B | |
+| 0011 | "the runtime loads Blobs with mip chains, GPU block compression (BC) and byte ranges sized for streaming" | holds, reader side: a Texture Blob must hold its full chain, in a BC format, with a level index entry per mip | `cooked.rs:433-457`, `:459-474` |
+| 0011 | "a development launch reaches glTF only through the cooker, which cooks what changed before the runtime loads Blobs" | holds, reader side: nothing in `src/assets/` reads glTF; the cooking falls in reader B | `loader.rs:71-87` |
+| 0011 | "Textures cook into KTX2, a standard container" | holds, reader side: parsed by `ktx2::Reader` | `cooked.rs:416-418` |
+| 0026 | Consequence: "The Material table counts Far proxies' Materials apart" | holds: the first Primitive's Material of a Far proxy's Mesh takes an entry of the Far proxies' count, the ground's an ordinary one; a full Far proxies' count frees only unused Far proxies' Meshes | `loader.rs:151-153`, `:164-172`, `:230-234`; `material.rs:891-893` |
+| 0026 | "A Far proxy's Mesh builds a BLAS from its LOD 0 at load, and the proxy is placed once that BLAS is ready, as a Chunk is" | holds, pool side: `MeshUse::FarProxy` is traced, its BLAS built from LOD 0's indices, compacted, and `asset_blas_ready` answers for it; the placing falls in streaming | `pools.rs:124-126`, `:137-139`, `:607-613`, `:759-763` |
+| 0026 | "While drawn it holds one static TLAS entry under the mask bit an ordinary Instance has" | falls in render; the pool's part is `thin_radius_metres`, `None` for a Mesh with any Primitive that is not thin | `pools.rs:636-641`, `:864-869` |
+| 0026 | "A Far proxy is read with its atlas's mips down to the one it needs from where the camera was when it was requested" | holds, reader and pool side (the ADR 0017 status row above) | `cooked.rs:389-397`; `material.rs:370-372` |
+| 0026 | Open land: "A Primitive without triangles needs no Material, so the proxy of a Chunk with nothing but ground draws its ground" | holds: `needs_material_handle` counts only Primitives with triangles; tested | `pools.rs:511-513`; test `loader.rs:359-364` |
+| 0026 | What it holds, its Mesh, its Material, its Blobs, the swap, which are Resident | falls in reader B (cook) and streaming | |
+| 0020 | "each Mesh rays trace gets a BLAS at load, compacted unless it is loaded to be refitted or rebuilt each frame" | holds: `ALLOW_COMPACTION` unless `MeshUse::Refitted`, whose BLAS is `REFITTED_BLAS_FLAGS`, never queued for compaction, and is what the rebuild form rebuilds | `pools.rs:152-154`, `:614-620`, `:673-682`, `:710-717` |
+| 0020 | "The `crowd` ... figures ... have no BLAS" | holds: `MeshUse::Drawn` is not traced: no index range, no BLAS | `pools.rs:115-117`, `:137-139`, `:651-653`, `:1271-1275` |
+| 0020 | "Every BLAS is built from its Mesh's LOD 0, a refitted Mesh's included ...; the index Arena ... holds LOD 0's indices alone" | holds: `CookedMesh::indices` is LOD 0's; the BLAS's index count and the index Arena range are its length; every LOD's Meshlets load beside it; tested | `cooked.rs:591-597`; `pools.rs:607-613`, `:1270-1275`, `:534`; test `:1767-1770` |
+| 0020 | "wgpu-core 30.0.2 records no barrier after `compact_blas`'s copy" (the compaction ordering) | holds: `compact_blases` waits through both stages, and a deferred BLAS is ready only once its compacted copy's submission is done | `pools.rs:765-798`, `:840-852` |
+| 0001 | "Materials are entries in one structured GPU buffer, indexed by the Material ID that each Meshlet record carries ...; one bind group serves every material" | holds: one `materials_buffer` of `MaterialData`; `MeshletData::material_id` is the Handle's index or `NO_MATERIAL`; one `MATERIALS` bind group | `material.rs:478-484`, `:570-580`; `pools.rs:552`; `mesh.rs:58-64` |
+| 0003 | "Whatever changes what an Instance holds makes prepare write its slot" | falls in render: the pools count their frees (`LoadedMeshes::frees`, `Generations::frees`), which prepare reads | `pools.rs:1034-1038`, `:1256-1259`; `src/render/prepare.rs:670` |
+| 0013 | "each capacity is its share of its kind's Budget at its real bytes per entry, as ADR 0017 gives them"; the seven Budgets | holds: `from_budgets` reads `bench/budgets.json`'s figures, which are ADR 0013's | `pools.rs:75-107`; `bench/budgets.json:10-18` |
+| 0021 | "`max_texture_array_layers` 256" (the floor a class's slices may reach) | holds: `SLICES_PER_CLASS = FLOOR_TEXTURE_ARRAY_LAYERS` | `material.rs:24`; `src/gpu/mod.rs:305`, `:315` |
+| 0021 | "`max_binding_array_elements_per_shader_stage` at least 65,536" | holds: five Channels of 13,107 classes, 65,535 elements | `material.rs:19-20`; `src/gpu/mod.rs:301` |
+| 0021 | "`max_buffer_size` at least 2^31 − 1 (ADR 0017 arenas)" | holds | `pools.rs:1337-1340`; `src/gpu/mod.rs:313` |
+| 0025 | the repo is public under MIT; adapted code cites its source and licence | not applicable: no code in these files is adapted from elsewhere | |
+| checklist | "The runtime loads cooked Blobs only and references Assets by Asset ID, never by source path" | holds | `loader.rs:11-69`; `cooked.rs:1138-1168` |
+| checklist | "A cooked Mesh Blob is the same bytes on every machine" | falls in reader A (the writer and its hash tests) | |
+| checklist | "no GPU buffer grows at runtime, and a request past a buffer's capacity is refused and logged" | broken in part: holds for the Arenas, the Mesh table and the SSBO; for a Channel's classes a Texture is substituted by Layer 0, logged, not refused or counted: L1-C07 | `pools.rs:490-509`; `material.rs:653-655`, `:985-989` |
+| checklist | "Streaming uploads go through the load staging (`LoadStaging`...), never `Queue::write_texture`" | holds (the ADR 0017 row above) | |
+| checklist | "GPU buffers, textures and acceleration structures are created through the GPU memory ledger (`GpuMemory`) under their kind" | holds (the ADR 0017 ledger row above); samplers and views hold no memory of their own | |
+| checklist | "No GPU resources stored on ECS components" | holds: `MeshHandle` and `MaterialHandle` are an index and a generation | `mesh.rs:24-28`; `material.rs:45-49` |
+| checklist | "Pool lookups return `Option<&T>`" | holds | `pools.rs:1012-1014`, `:1028-1032`; `material.rs:704-708` |
+
+#### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| M4 story 6, each Chunk cooked as one Blob holding its Placements and point lights | holds, reader side: `CookedChunk::from_blob` reads both, refusing a count its bytes do not hold; the cook falls in reader B | `cooked.rs:964-1029`; test `:1446-1489` |
+| M4 story 7, a Placement names its Mesh by Asset ID, f64 translation, f32 rotation and scale | holds, reader side | `cooked.rs:853-860`, `:986-1006` |
+| M4 story 8, a point light in a Chunk carries an f64 translation and photometric values | holds, reader side: f64 translation, colour, candela intensity, range | `cooked.rs:865-870`, `:1007-1020` |
+| M4 story 12, the cook warns when a Placement names an Asset ID no longer defined | falls in reader A and reader B | |
+| M4 story 13, the Mesh Blob stores each Primitive's UV texel density | holds, reader side: read per Primitive and kept on the loaded `Mesh` | `cooked.rs:722`; `pools.rs:516-520` |
+| M4 story 27, the Mesh, Material and Texture pools keyed by Asset ID, one entry per Asset however many Chunks load it | holds: `asset_handles` keyed by (Asset ID, `MeshUse`), `loaded_materials` and `loaded_textures` by Asset ID; a Mesh loaded for two uses takes an entry per use, and a bent Mesh one per Renderable, by design (tested) | `pools.rs:174`, `:141-148`, `:381-383`, `:402-411`; `material.rs:500-502`, `:884-890`, `:975-978`; test `pools.rs:1484-1524` |
+| M4 story 28, generational Handles, so a stale Handle is refused | holds: `Generations` moves an index's generation on at each free; `get` and `free` check it; tested for Meshes and Materials (Block C10) | `pools.rs:1198-1260`, `:1028-1032`; `material.rs:694-708`; tests `pools.rs:1619-1688`, `material.rs:1542-1595` |
+| M4 story 29, each pool entry counted by the loaded Chunks and entities that use it, freed only when nothing uses it | holds: users per Mesh and per Material; a loaded Mesh counts a user of each Material its Primitives name, and a Material of each Texture it samples; only an unused entry is freed | `pools.rs:305-353`, `:402-411`; `material.rs:823-834`, `:787-801`; test `loader.rs:487-564` |
+| M4 story 30, a freed Mesh's Arena ranges returned to the offset allocator | holds | `pools.rs:922-945`, `:1367-1371`; test `:1808-1809` |
+| M4 story 31, the moment an unused entry is freed set by survey 2's decision | holds: unused entries stay loaded, least recently used first, until a refused load needs room, at most `ENTRIES_FREED_PER_FRAME` = 64 a frame beside a full Material count's one-for-one frees | `pools.rs:45-51`, `:389-401`, `:419-442`; `material.rs:739-772`, `:891-893` |
+| M4 story 32, each Channel a binding array of texture arrays, one array per shape | holds (the ADR 0017 rows) | `material.rs:94-110`, `:418-475` |
+| M4 story 33, the floor kept at 256 layers per texture array | holds | `material.rs:24`, `:202-204` |
+| M4 story 34, each Texture's Resident tail kept for as long as the Texture is loaded | holds; the tail's definition is L1-C09 | `material.rs:407-413`, `:1082-1084`, `:1202-1208` |
+| M4 story 35, mips streamed by priority | falls in streaming | |
+| M4 story 36, the Materials rays reach off screen given a floor priority | holds, pool side (the tail never leaves); the floor's measure falls in streaming | |
+| M4 story 37, a Texture whose Resident mips change moved to its new class by copy through the staging belt | broken in part (L1-C08, a new shape not whole blocks); otherwise holds: new mips through the belt, Resident mips by `copy_texture` on the load staging's encoder, the Material Layers rewritten through the belt | `material.rs:1064-1086`, `:1216-1236` |
+| M4 story 38, eviction drops the finest mip of the lowest-priority Texture first, least recently used breaking ties, a mip evicted only below its load priority minus one | holds: the order is the pool's; the hysteresis is streaming's rank (`mips.rs:291-293`) | `material.rs:1094-1139` |
+| M4 story 41, the 8 GB split into Budgets per kind | holds, pool side: the pools read the geometry and texture pool Budgets | `pools.rs:75-102` |
+| M4 story 43, every fixed capacity sized from its Budget at device creation | holds for the Arenas, the Mesh table, the Material table and the Texture classes; the Far proxies' count is ADR 0017's fixed 285, which no Budget sizes | `pools.rs:75-102`, `:43` |
+| M4 story 44, GPU memory counted by kind where it is created | holds | `pools.rs:239`, `:274-283`, `:1342-1351`; `material.rs:430`, `:570-580` |
+| M4 story 45, acceleration-structure bytes counted exactly | holds, pool side: built sizes by query, compacted ones by ADR 0017's measured fraction | `pools.rs:621-625`, `:999-1005` |
+| M4 story 46, the vertex Arena's binding split only above 128 MiB | holds: 55,197,040 bytes, whole binding | `pools.rs:1416` |
+| M4 story 47, a request past any capacity refused, logged and counted in Frame stats | broken in part: holds for Meshes and Materials (`take_refusals`, into `meshes_refused` and `materials_refused`); broken for a Texture whose Channel has no room for its tail: given Layer 0, logged, not counted: L1-C07. A mip move's refusal is the M5.5 report's L1-F02 | `pools.rs:393-397`, `:457`; `material.rs:679-690`, `:985-989`; `src/streaming/io.rs:924-925` |
+| M4 story 53, the waits on BLAS compaction measured on streaming frames | falls in streaming and tooling; the pool's deferral is above | `pools.rs:727-798` |
+| M4 story 69, Frame stats count pool entries freed | holds, pool side: `take_frame_frees` of both pools, the Material pool's including the Textures freed with a Material | `pools.rs:452-454`; `material.rs:768`, `:805-808`; `src/streaming/io.rs:920-923` |
+| M4 story 71, GPU memory kept as a running total updated at load and eviction | holds, pool side: charges at creation and drop; an eviction moves slices within arrays already charged | `pools.rs:999-1005`; `material.rs:430` |
+| M5 story 4, a LOD chain sharing its source's vertices, at most 8 LODs | holds, reader side: one vertex stream every LOD indexes, a count past 8 refused; the cook falls in reader A | `cooked.rs:711-714`, `:794-814` |
+| M5 story 6, each LOD's error stored in metres | holds, reader side: read, checked finite and non-decreasing, written to `MeshData::lod_errors_metres` | `cooked.rs:738-743`; `pools.rs:572` |
+| M5 story 12, every BLAS built from its Mesh's LOD 0, and the index Arena to hold LOD 0 only | holds; tested | `pools.rs:607-613`, `:1270-1275`; test `:1767-1770` |
+| M5 story 16, a Far proxy cooked as one Blob under its own Asset ID | falls in reader B; the pool loads it as `MeshUse::FarProxy` | `loader.rs:151-153` |
+| M5 story 22, at most 285 Far proxies Resident | falls in streaming; the Material table's Far proxies' count is 285 | `pools.rs:43` |
+| M5 story 25, Far proxies' Materials counted apart from the Material table's other entries | holds; tested | `material.rs:296-302`, `:674-690`; `loader.rs:230-234`; tests `material.rs:1959-2053`, `loader.rs:287-381` |
+| M5 story 27, Far proxies cast and receive the sun's shadows | holds, pool side: a Far proxy's Mesh gets a compacted BLAS from LOD 0 | `pools.rs:137-139`, `:607-620` |
+| M5 story 33, a Primitive declared thin with a radius, without a byte per vertex | holds, reader side: one f32 per Primitive, refused when not finite or negative | `cooked.rs:723-731` |
+| M5 story 35, a Thin Primitive drawn a pixel wide | holds, pool side: each LOD's Thin Primitives' Meshlets follow its others', with their radius in `MeshletData` and their count in `thin_triangle_counts`; tested | `pools.rs:537-571`; test `:1531-1614` |
+
+#### Registry keys
+
+| File | Keys | Verdict |
+|---|---|---|
+| `material.rs:29` | `wgpu-core-30-bound-view-needs-initialised` | matches: the quote pushes `NeedsInitializedMemory` over the view's `mip_range` and `layer_range`; `WHOLE_VIEW_ARRAY_BYTES`' comment says a bound view has the slices it spans initialised, which is why a class past 32 MiB is viewed only over the slices placed (`:451-458`) |
+| `material.rs:30` | `wgpu-core-30-submit-initialises-textures` | matches: "the mips and layers a command buffer needs initialised and nothing wrote are cleared in that submit" is the comment's "the first submit that draws with a view bound has wgpu zero-fill the slices it spans that nothing wrote" |
+| `cooked.rs:29`, `:310`, `:1302` | `ktx2-key-value-alignment` | matches: `PXTXVERSION` and its NUL are 12 bytes, a multiple of the u32 value's 4; the test checks the key length and the value's offset (`:1303-1310`); `:310` is the writer's comment, reader A's |
+| `cooked.rs:306` | `ktx2-level-order` | falls in reader A (the writer's comment); the reader takes each level by its index entry (`:459-462`), so it relies on no order |
+| `cooked.rs:307` | `ktx2-supercompression-per-level` | matches, reader side: "applied independently to each mip level"; one `zstd::bulk::decompress` per level, its capacity the level's expected size (`:465`) |
+| `cooked.rs:308` | `ktx2-level-alignment` | falls in reader A (the writer packs levels unpadded); the reader requires `Zstandard` (`:429-432`), the scheme under which the quote's alignment is 1 |
+| `cooked.rs:507` | `unity-6000-uv-distribution-metric` | differs: the quote is Unity's per-Mesh "Average of triangle area / uv area"; the code's density is per Primitive, the square root of summed UV area over summed mesh-space area; ADR 0018:24 records the difference and `deviations.md` has no row: L1-C10 |
+| `cooked.rs:620`, `:786` | `meshoptimizer-1.3-vertex-block` | matches: `(8192 / 28) & ~15` = 288, capped at 256, is `VERTEX_CODEC_BLOCK_VERTICES`; `control_size = vertex_size / 4` = 7 bytes a block for codec 1, so `vertex_count.div_ceil(256) * 7` bounds the encoded bytes from below and admits every valid stream (codec 0 spends a header byte per byte of vertex, more). Version: `Cargo.lock:1369-1370` pins `meshopt` 0.7.0, whose `vendor/src/meshoptimizer.h:15` is version 1030, "1.3", and whose `vertexcodec.cpp:140-146`, `:719-721` hold the quoted lines |
+| `pools.rs:2261` | `tracing-issue-3611` | matches: the quote's `has_just_one` short path takes the first registering thread's default; `logged` registers a standing `NoSubscriber` dispatch first so the capture is never the only one, and the test at `:2234-2246` warns from a thread without a subscriber first |
+| uncited, `pools.rs:1317-1383` (cites ADR 0017) | `offset-allocator-tlsf`, `offset-allocator-0.2.0-port` (ADR 0017's) | matches: a TLSF-like allocator under MIT, `Cargo.lock:1816-1817` 0.2.0; the Arena's claims rest on `allocate`, `free`, `allocation_size` and `storage_report` (`offset-allocator-0.2.0/src/lib.rs:199-291`, `:495-517`) |
+| uncited, `material.rs:24` (through `FLOOR_TEXTURE_ARRAY_LAYERS`) | `wgpu-types-30-max-texture-array-layers-default` (ADR 0017's) | matches: 256 |
+
+#### Oracles
+
+| Function | Test | Expected value and its source | Constant | Floor | Stated floor | Verdict |
+|---|---|---|---|---|---|---|
+| `PoolCapacities::from_budgets` (`pools.rs:75-102`) | `the_checked_in_budgets_give_these_pool_capacities` (`pools.rs:1411-1427`) | 55,197,040 / 10,905,188 / 922,744 / 11,156,848 / 5,704,252 bytes, 16,371 Meshes, 222 Materials, 285, 13,107 classes: hand derivation from `bench/budgets.json:11-12` and ADR 0017's shares, recomputed (Block C1) | exact | 0 (u64 divisions) | no | exact |
+| `PoolCapacities::from_budgets`, `Arena::new` | `a_mesh_past_the_mesh_table_its_budget_sizes_is_refused` (`pools.rs:1432-1461`) | 10,240 Arena bytes and a 2-entry Mesh table from a 10,248-byte Budget (Block C3) | exact | 0 | no | exact; 10,248 / 5,124 = 2 sits on the division's boundary, exact in integers |
+| `MeshPool::written_bytes` (`pools.rs:321-338`) | `a_mesh_loads_every_lods_meshlets_and_frees_them_with_it` (`pools.rs:1742-1750`) | 464 bytes, counted element by element by hand (Block C4) | exact | 0 | no | exact |
+| `MeshPool::load_for`, index Arena | same test (`pools.rs:1767-1777`) | 24 index bytes (LOD 0's six indices), `meshlet_counts` [2, 1, 0, ...], `triangle_counts` [2, 1, 0, ...], `lod_errors_metres` [0.0, 0.5]: ADR 0020's "LOD 0's indices alone" and the test Mesh's own counts | exact | 0 (0.5 is exact in f32) | no | exact |
+| `Arena::allocate`, `allocate_all` | `a_mesh_past_capacity_is_refused_and_logged_and_changes_nothing` (`pools.rs:2201-2232`) | refusal at one vertex past 4 and one index past 28, the vertex given back: `CAPACITY` = 112 bytes, offset-allocator's bins (Block C5) | exact | 0 | no | exact; the index Arena's 25 free elements sit in the bin of 24, so the refusal holds for any request of 25 or more, one lower than "one index past" says (see *Notes*) |
+| `MeshPool::charge_blases` (`pools.rs:999-1005`) | `a_meshs_blas_holds_its_triangle_from_its_arena_ranges_and_is_compacted` (`pools.rs:1881-1923`) | `(2 × triangle_bytes × 0.25).round()`: the ledger's fraction applied to two built sizes from the driver's query (Block C6) | exact | 0 (a dyadic fraction of an integer under 2^53) | no | exact; the expected expression repeats the code's, so it pins the bookkeeping, not the fraction |
+| `ClassTable::place` (`material.rs:173-215`) | `a_shapes_classes_double_to_the_floors_slices_and_a_full_channel_refuses` (`material.rs:1330-1381`) | slices 1, 2, 4, ..., 256, 256; placements (0,0) to (4,0); refusal once 13,107 classes are open and the shape's newest is full: ADR 0017's doubling to the floor's 256 (Block C7) | exact | 0 | no | exact; the capacity is reached exactly by the loop's condition |
+| `ChannelTextures::place`, the view span | `a_large_classes_view_spans_only_the_slices_placed` (`material.rs:1422-1455`) | arrays of 1, 2, 4 slices; views of 1, 2, 1 then 2 slices; `views_changed` [true, true, false, true]: 16 MiB a 4,096² BC7 slice against `WHOLE_VIEW_ARRAY_BYTES` (Block C8) | exact | 0 | no | exact; the two-slice class is 33,554,432 bytes, exactly the constant, and is viewed whole by `<=` |
+| `MaterialPool::load_texture`, the ledger | `a_texture_two_materials_share_loads_once` (`material.rs:1459-1537`) | 24 bytes for one 4×4 BC4 Texture of three one-block mips; Layers 256, 256, 0 (Block C9) | exact | 0 | no | exact |
+| `MaterialPool::new`, `PoolCapacities::from_budgets` | `a_material_past_capacity_is_refused_and_logged` (`material.rs:1921-1954`) | SSBO of (4 + 285) × 80 = 23,120 bytes; the fifth Material refused (Block C9) | exact | 0 | no | exact; 4 × 19,267,584 / 19,267,584 = 4 sits on the division's boundary |
+| `MaterialPool::new`, the two counts | `far_proxies_materials_and_the_others_fill_their_own_counts` (`material.rs:1959-2012`) | SSBO of (222 + 285) × 80 = 40,560 bytes; the 286th and 223rd refused and counted (Block C9) | exact | 0 | no | exact |
+| `Generations::take`, `free`, `live` (`pools.rs:1218-1254`) | `a_freed_meshs_index_takes_the_next_mesh_and_refuses_the_old_handle` (`pools.rs:1619-1688`), `a_freed_materials_index_takes_the_next_material_and_refuses_the_old_handle` (`material.rs:1542-1595`) | the freed index reused at generation 1, the generation-0 Handle finding nothing (Block C10) | exact | 0 | no | exact |
+| `Unused`, `free_least_recently_used` (`pools.rs:1148-1181`, `:419-442`) | `a_load_into_full_arenas_frees_the_least_recently_used_unused_mesh` (`pools.rs:1827-1874`) | the Mesh whose last user left first (Mesh 2) freed, its vertex range taken by Mesh 3, Material 102 released (Block C10) | exact | 0 | no | exact |
+| `evict_for`, `evictable`, `evict_finest_mip` (`material.rs:1094-1212`) | `a_full_channel_evicts_the_lowest_priority_finest_mip_and_keeps_tails` (`material.rs:1707-1795`), `a_texture_gives_way_only_without_losing_a_mip_it_needs` (`material.rs:1802-1855`) | the victim and where it goes, hand-derived from seven classes and the ranks (Block C11) | exact | 0 | no | exact; need 2 against tail 3, and need 3 against tail 3, sit either side of `>=` |
+| `resident_tail_level` (`cooked.rs:253-269`) | `texture_blob_round_trips_smallest_mip_first_and_refuses_another_version` (`cooked.rs:1257-1359`); the tail asserts at `material.rs:1724`, `:1820` | tail at mip 1 for 512² BC4, at mip 2 for 1,024² BC7, at mip 3 for 2,048² BC7 (Block C2) | exact | 0 | no | exact; the BC7 cases' tail mips are 65,536 bytes, exactly `RESIDENT_TAIL_LEVEL_BYTES`, taken by `<=` |
+| `CookedMesh::from_blob`, the vertex bound (`cooked.rs:789-793`) | `mesh_blob_with_more_vertices_than_its_bytes_hold_is_refused` (`cooked.rs:1513-1530`) | refused at 2^32 − 1 vertices: meshoptimizer 1.3's 7 control bytes a 256-vertex block (`meshoptimizer-1.3-vertex-block`) (Block C12) | exact | 0 | no | exact |
+
+The other tests in these files compare the code with itself or check that a
+thing loads, refuses or logs, not a computed value against an independent
+source, and get no row: the Blob round trips (Material, Mesh with its LOD
+chain and thin radius, Chunk), the partial triangle and wrong count
+refusals, the content hash's order, the GPU tables read back
+(`pools.rs:1531-1614`), the shared-entry tests (`pools.rs:1484-1524`,
+`loader.rs:383-481`), the two TLAS-after-compaction tests on eight devices,
+the released slice zero, the shared Texture's slices, the 65 one-for-one
+frees, a full count's own frees, the Far proxy load, the Material freed after
+its Mesh, the Texture that frees a Mesh, and `logged`'s own test.
+
+##### Block C1: the checked-in capacities
+
+Inputs (`bench/budgets.json:11-12`): `geometry_arenas` G = 83,886,080,
+`texture_pool` T = 4,294,967,296. Each Arena (`pools.rs:82-85`) is
+⌊⌊G × per-mille / 1000⌋ / 4⌋ × 4:
+
+- vertex: 83,886,080 × 658 = 55,197,040,640; / 1000 → 55,197,040; / 4 = 13,799,260 exactly → 55,197,040.
+- index: × 130 = 10,905,190,400; / 1000 → 10,905,190; / 4 → 2,726,297 → 10,905,188.
+- Meshlet: × 11 = 922,746,880; / 1000 → 922,746; / 4 → 230,686 → 922,744.
+- Meshlet vertex: × 133 = 11,156,848,640; / 1000 → 11,156,848; / 4 = 2,789,212 → 11,156,848.
+- Meshlet triangle: × 68 = 5,704,253,440; / 1000 → 5,704,253; / 4 → 1,426,063 → 5,704,252.
+- Meshes (`:94`): 83,886,080 / 5,124 → 16,371 (5,124 × 16,371 = 83,885,004; × 16,372 = 83,890,128).
+- Materials (`:95`): T / 19,267,584 → 222 (× 222 = 4,277,403,648; × 223 = 4,296,671,232).
+- Classes (`:97-100`): T / (5 × 65,536) = T / 327,680 → 13,107 (13,107.2); `CLASSES_PER_CHANNEL` = 65,536 / 5 → 13,107 (`material.rs:19-20`); the minimum is 13,107.
+
+Every step is a u64 or u32 integer division; no input sits on a rounding
+boundary (fractions .64, .4, .88, .64, .44 before the first rounding). The
+shares sum to 1,000 per mille. The Arenas in elements: 55,197,040 / 28 →
+1,971,322 vertices (24 bytes unused), 922,744 / 20 → 46,137 Meshlets
+(4 bytes unused; `MeshletData` is five 4-byte fields, `mesh.rs:58-64`).
+
+##### Block C2: the Material's bytes and the Resident tail
+
+`level_bytes` (`cooked.rs:288-299`) is ⌈max(w >> l, 1) / 4⌉ × ⌈max(h >> l, 1) / 4⌉
+× block bytes (16 for BC7 and BC5, 8 for BC4). For 2,048² BC7: mip 0
+512² blocks × 16 = 4,194,304; mip 1 1,048,576; mip 2 262,144; mip 3
+65,536 ≤ 65,536 = `RESIDENT_TAIL_LEVEL_BYTES` (`src/stats/gpu_memory.rs:107`),
+so the tail starts at mip 3 by `<=` (`cooked.rs:262`), 256 a multiple of 4
+(`:265`). Tail: 65,536 + 16,384 + 4,096 + 1,024 + 256 + 64 + 16 + 16 + 16 =
+87,408 (mips 9 to 11 are one block each), ADR 0017's figure; the chain is
+4,194,304 + 1,048,576 + 262,144 + 87,408 = 5,592,432, and 87,408 / 5,592,432
+= 1.563%, ADR 0017's "1.6%". Past the tail, a BC7 or BC5 chain is
+4,194,304 + 1,048,576 + 262,144 = 5,505,024. For 2,048² BC4: mip 0
+2,097,152, mip 1 524,288, mip 2 131,072, mip 3 32,768 ≤ 65,536, so past the
+tail 2,752,512. Three of the first and one of the second: 16,515,072 +
+2,752,512 = 19,267,584 = `TEXTURE_POOL_BYTES_PER_MATERIAL` (`pools.rs:38`).
+The tests' tails: 512² BC4, mip 0 131,072 > 65,536, mip 1 32,768 → 1
+(`cooked.rs:1284`); 1,024² BC7, mip 1 262,144, mip 2 65,536 → 2
+(`material.rs:1724`); 2,048² BC7 → 3 (`material.rs:1820`). The two BC7
+cases sit on the `<=` boundary, exact in integers.
+
+##### Block C3: a two-Mesh Budget
+
+G = 2 × 5,124 = 10,248. Arenas: 10,248 × 658 / 1000 → 6,743 → 6,740;
+× 130 → 1,332 → 1,332; × 11 → 112 → 112; × 133 → 1,362 → 1,360; × 68 → 696
+→ 696. Sum 6,740 + 1,332 + 112 + 1,360 + 696 = 10,240 (`pools.rs:1445`).
+Meshes: 10,248 / 5,124 = 2 exactly; the Mesh table is 2 × 220 bytes
+(`MeshData`: 4 + 6 × 8 × 4 + 2 × 12 = 220, `mesh.rs:36-49`). The third
+triangle is refused by `full` (`pools.rs:490`): two indices taken of two.
+
+##### Block C4: a two-LOD Mesh's written bytes
+
+The test Mesh (`pools.rs:1724-1741`): 4 vertices × 28 = 112; LOD 0's 6
+indices × 4 = 24 (traced); Meshlets: LOD 0 two of one triangle and 3
+vertices each, LOD 1 one of one triangle and 3 vertices, so 3 × 20 = 60
+bytes of `MeshletData`, 9 Meshlet vertices × 4 = 36 and 3 triangles × 4 =
+12; `MeshData` 220. Sum 112 + 24 + 60 + 36 + 12 + 220 = 464, which
+`written_bytes` (`:334-337`) gives as 112 + (6 + 9 + 3) × 4 + 60 + 220.
+
+##### Block C5: one past each Arena
+
+`CAPACITY` = 112 bytes: 4 vertices, 28 indices, 5 Meshlets, 28 Meshlet
+vertices, 28 triangles. offset-allocator 0.2.0 bins a free node by
+`uint_to_float_round_down` and searches from `uint_to_float_round_up` of
+the request (`offset-allocator-0.2.0/src/lib.rs:207`, `:385`;
+`small_float.rs`, three mantissa bits). After the first triangle: vertices
+1 free (exact, under 8); indices 25 free, binned at 24 (25 = 11001b:
+mantissa (25 >> 1) & 7 = 4, value (8 + 4) << 1 = 24). `mesh(2, ...)` asks 2
+vertices of 1: refused. `mesh(1, [0; 26])` takes its vertex, asks 26
+indices: `round_up(26)` = 26 (13 & 7 = 5, no low bit), bin 21 above the free
+node's bin 20: refused, and `allocate_all` frees the vertex
+(`pools.rs:1308-1312`). `mesh(1, [0, 0, 0])` asks 3 indices (bin 3): fits.
+Integer throughout. A request of 25 would round up to 26 and be refused
+too, though 25 elements are free.
+
+##### Block C6: the compacted BLAS charge
+
+Two BLASes of one triangle each (`pools.rs:1891-1895`, the first
+degenerate, same size descriptor): uncompacted 2T; after `compact_blases`
+both move to `compacted_blas_bytes` (`:833-834`) and the charge is
+`(2T as f64 × 0.25).round()` (`:1001`). 0.25 is 2^-2, 2T is an integer far
+under 2^53, so the product is exact and `round` changes nothing unless 2T
+is not a multiple of 4, where it rounds half away from zero, as the
+expected value's own `round()` does. Floor 0.
+
+##### Block C7: a shape's classes
+
+`place` (`material.rs:173-215`): wall shape × 7: class 0 of 1 slice (0,0);
+class 1 of 2 (1,0), (1,1); class 2 of 4 (2,0) to (2,3); the other shape
+opens class 3 of 1 (3,0); the next wall opens class 4 at twice class 2's,
+8 (4,0); `slices(4)` = 8. 2,000 more walls: classes of 8 (one slice taken),
+16, 32, 64, 128, 256, then 256 each: the first ten wall classes are 1, 2,
+4, 8, 16, 32, 64, 128, 256, 256 (`:1369`). Opening shapes of widths 16, 20,
+... until `classes.len()` = 13,107 leaves the next new shape and the full
+`other` class refused (`:199-201`), a wall placed in its newest class's
+free slices, and width 16, whose one class is full, refused.
+
+##### Block C8: the view span
+
+4,096² BC7, one mip: 1,024² blocks × 16 = 16,777,216 bytes a slice. Class
+0: 1 slice, 16 MiB ≤ 32 MiB, viewed whole (1). Class 1: 2 slices,
+33,554,432 = `WHOLE_VIEW_ARRAY_BYTES` (`material.rs:31`, 32 << 20), viewed
+whole by `<=` (`:454`): 2. Class 2: 4 slices, 64 MiB, viewed over the
+slices placed: 1, then 2 after the next placement. `views_changed`: class
+0 opens (true), class 1 opens (true), class 1 slice 1 within its whole view
+(false), class 2 opens (true); class 1 slice 0 released and placed again
+(false); class 2 slice 1 widens (true). The ledger's `level_bytes`
+(`src/stats/gpu_memory.rs:297-302`) multiplies by the array layers through
+`theoretical_memory_footprint`.
+
+##### Block C9: the ledger's Texture and SSBO bytes
+
+4×4 BC4 with 3 mips (⌊log2 4⌋ + 1): each mip one 8-byte block; its tail is
+mip 0 (8 ≤ 65,536), so one tail class of one slice: 3 × 8 = 24 bytes
+(`material.rs:1522`). Its Layer: class 1 (class 0 the neutral), slice 0,
+1 × 256 + 0 = 256 = `SLICES_PER_CLASS` (`:1526-1527`); the third Material
+has no occlusion Texture: Layer 0. `MaterialData` is five `[_; 4]` of
+4-byte words, 80 bytes (`material.rs:83-91`). Budget of 4 × 19,267,584 →
+4 Materials, plus the fixed 285: 289 × 80 = 23,120 (`:1936`); checked-in:
+507 × 80 = 40,560 (`:1971`).
+
+##### Block C10: generations and least recently used
+
+`Generations` (`pools.rs:1198-1260`): an index taken fresh is generation 0;
+`free` sets it not live and moves it to 1; `take` pops it from `free`; a
+generation-0 Handle fails `live`. The Mesh test reuses the index at
+generation 1 (`:1673-1677`). LRU (`pools.rs:1827-1874`): `remove_user` of
+Mesh 2, then Mesh 1, pushes ticks 0 and 1; `pop_least_recent_where` takes
+tick 0, Mesh 2; its ranges, freed first, are the ones Mesh 3 takes (the
+vertex Arena's 4 elements hold two Meshes of 2). Integer and order only.
+
+##### Block C11: eviction order
+
+`a_full_channel_evicts_...`: 1,024² BC7 read from mip 2 (tail level 2,
+Block C2). Seven classes: neutral; three tail classes of 1, 2 and 4 slices
+for six Textures; one mip-1 class (Texture 10); mip-0 classes of 1 and 2
+slices (10, then 11 and 12, Texture 10's mip-1 slice released). Texture 13
+to mip 0: no released slice and its newest mip-0 class full, so `has_room`
+counts one new class, 8 > 7: eviction. Candidates 10 (need 5, plan 7), 11
+(5, 3), 12 (4, 1); all evictable (needs ≥ tail 2). The minimum of
+(`Reverse(need)`, plan, ID) is 11; its next class, mip 1, has the released
+slice, so it moves to mip 1 (resident 1) and 13 takes its slice. Then 14
+against 12 alone: 12's mip-1 class has no slice left and no new class fits,
+so it falls back to its tail (resident 2). 15 finds no candidate:
+`Refused`. `a_texture_gives_way_...`: 2,048² BC7 at mip 0 in three classes
+(neutral, tail, chain), tail level 3; `evictable` with need 2: 2 ≥ 3 false
+and no room for a mip-1 class, so `None`; with need 3: 3 ≥ 3 true. Integer
+comparisons; the two needs sit either side of `>=`.
+
+##### Block C12: the vertex count bound
+
+`cooked.rs:789-793`: refused unless ⌈n / 256⌉ × 7 ≤ encoded bytes. At n =
+2^32 − 1 = 4,294,967,295: ⌈n / 256⌉ = 16,777,216, × 7 = 117,440,512 bytes,
+far past the test's few encoded bytes. The comment's figures: 256 × 28 / 7
+= 1,024 decoded bytes per encoded byte, and (2^32 − 1) × 28 =
+120,259,084,260 bytes = 112.0 GiB (/ 2^30). A valid 3-vertex stream holds
+at least one block's 7 control bytes, so the round trips pass. usize
+arithmetic, no overflow on 64-bit.
+
+#### Open issues read
+
+| Issue | What the code shows | Needs hardware |
+|---|---|---|
+| The texture pool's Channels are capped in Texture classes, not bytes (ADR 0017's capacity clause, broken, known) | As the issue says, from the pool's side. A Channel's capacity is `texture_classes_per_channel`, 13,107, which `from_budgets` derives from bytes on the premise of one class per 64 KiB (`pools.rs:97-100`), but `ClassTable::has_room` and `place` count classes only (`material.rs:199-201`, `:231-245`), and a class opens at 1, 2, 4, ... 256 slices of its shape whatever a slice's bytes (`:202-204`), its whole array charged at creation (`:430-448`). One 2,048² BC7 chain is 5,592,432 bytes a slice (Block C2), so its class of 256 slices is 1,431,662,592 bytes, a third of the 4 GiB texture pool Budget, and a shape's first nine classes hold 511 slices. No byte figure enters a placement, and nothing caps the `resident_tails` Budget either: no pool capacity reads it (`pools.rs:75-102`). The streaming section's row reads the same from the plan's side. Nothing filed. | No |
+
+### the Reference scenes
+
+Scope: read in full at the frozen commit `e5c55a8d`, test modules included: `src/scenes/world.rs` (998 lines, all new since `8bc34eb1`), `src/scenes/town.rs` (1,472 lines, 414 changed in scope) and `src/scenes/mod.rs` (1,726 lines, 647 changed in scope); 4,196 lines. `git diff 8bc34eb1..e5c55a8d -- src/scenes/` and `git log -S` were read to place each changed line and each doc comment in scope. ADRs read whole, status lines and amendments included: 0018, 0026, 0013, 0027, 0006, 0011, 0025; read for the clauses these files implement: 0002, 0003, 0014, 0017, 0019, 0022, 0023. Spec stories read: every story of the M4 spec (`spec-611.md`) and the M5 spec (`spec-804.md`), with their Implementation and Testing decisions. Opened outside these files only as far as a clause or a constant needs them: `src/assets/cooked.rs:50-80` (`CHUNK_EDGE_METRES`, `chunk_origin`, `chunk_holding`); `src/streaming/mod.rs:311-321` (`distance_metres`, the nearest point of a Chunk); `src/state.rs:55-135`, `:215-232`, `:388-420` (the spawn dispatch, the root shift, the fixed chain); `src/cook/mesh.rs:98-150`, `:422-430`, `:975-1008` (the thin tube rule and its tolerance, the QTangent normal decode, the Reference scenes' Mesh hash test); `src/cook/far_proxy.rs:814-824` (the densest Chunk's proxy hash test); `src/cook/export.rs:60-80`; `src/assets/material.rs:171-205` (`ClassTable::place`, which the fit test copies); `src/assets/loader.rs:34-46`; `src/bench/mod.rs:52-117` (warm-up frames); `tests/goldens.rs:1-20`, `:305-330` (`world`'s Golden frames). No crate source was opened. `CONTEXT.md` was read for Thin Primitive, Placement, Chunk, Moving Instance, Fast travel, Load radius and View distance. Several figures below depend on the world generator's hash; this reader recomputed `random` (`town.rs:293-304`, SplitMix64's output function folded over four parts) in a standalone script outside the worktree, and every such figure names the draws it used. `docs/audit/deviations.md` has no row on these files; `scripts/cycles-reference/DIFFERENCES.md` lists image differences of `town` and `world` that no line here decides. The streaming section's frame reader filed L1-F41 at `src/scenes/mod.rs:921-934` (`wrap_around_camera` reading the per-frame camera in the fixed schedule); it is cited, not filed again. No `cargo` command was run.
+
+#### Clause verdicts
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0018 | "Procedural Reference scenes cook too, under Asset IDs derived from the scene name, so Goldens test the cooked path" | holds: every procedural Mesh, Material, Texture, Chunk and Far proxy ID is built from `AssetSource::Scene(self.name())`; `world`'s and `town`'s spawns load the bird and the ground by those IDs | `src/scenes/mod.rs:122-138`, `:345-369`; `src/scenes/world.rs:245`, `:265`; `src/scenes/town.rs:825` |
+| 0018, checklist | "The runtime still opens no source path"; "references Assets by Asset ID, never by source path" | holds: the two glTF scenes name their source by manifest GUID (`SCI_FI_HELMET`, `NORMAL_TANGENT_TEST`) and their Meshes by glTF name under it; `source_files` exists only under the `cook` feature | `src/scenes/mod.rs:140-157`, `:707-718`, `:806-814` |
+| 0018, 0011 | "The runtime loads Blobs only"; "glTF ... is the authoring source; the runtime loads Blobs" | holds on the scene side: every generator (Meshes, Materials, Textures, static content) is compiled only with the `cook` feature, and the runtime spawns load by ID through the `AssetLoader` | `src/scenes/world.rs:281-287`; `src/scenes/town.rs:916-924`; `src/scenes/mod.rs:159-161`, `:251-254`, `:299-301`, `:412-415` |
+| 0018 | "A Chunk's edge is 256 m (4 by 4 cells of ADR 0014's 64 m grid; 40 by 40 Chunks cover 10 km)" | holds: `CHUNKS_PER_SIDE` 40 over `CHUNK_EDGE_METRES` 256, 10,240 m a side; `chunk_square(-20..20)` lists 1,600 Chunks | `src/scenes/world.rs:26-27`; `src/scenes/mod.rs:397`; `src/assets/cooked.rs:57-58` |
+| 0018 | "A v1 Chunk is its own Asset, named from its scene and its integer coordinates" | holds | `src/scenes/mod.rs:345-350` |
+| 0018 | "A Placement holds a Mesh Asset ID, an optional Material Asset ID that overrides its Mesh's Materials ..., an f64 translation ..., and f32 rotation and scale" | holds on the scene side: both generators build `CookedPlacement` with a `DVec3` translation from the World's origin, a `Quat` and a `Vec3` scale, the walls' facade Material as the override; the cut to the Chunk's origin falls in reader B | `src/scenes/world.rs:661-672`, `:695-708`; `src/scenes/town.rs:409-419` |
+| 0018 | "A light holds an f64 translation, a colour, an intensity in candela (ADR 0023) and a range in metres" | holds on the scene side: `town`'s lamp lights are `CookedLight` from `LAMP_LIGHT`, 2,000,000 cd and 18 m, at f64 positions; `world` cooks no point light | `src/scenes/town.rs:241-245`, `:397`, `:421-429`; `src/scenes/world.rs:498`, `:508`, `:520` |
+| 0018, 0026 | "Each Placement and light belongs to the Chunk that holds its pivot"; "a Placement belongs to the Chunk that holds its pivot" | holds: `chunk_content` keeps exactly the Placements and lights whose pivot `chunk_holding` puts in the Chunk; the generator's `reaching` over-selects by each square's reach (a lot's 6 m covers its windows' pivots, at most 5 m off on either axis; a farm tile's 64 m covers its farm, at most 48 + 5 m off) and never under-selects | `src/scenes/mod.rs:449-460`; `src/scenes/world.rs:525-536`, `:555`, `:561`, `:594`, `:631` |
+| 0018 | "Plain `praxis cook` leaves out the `world` scene ... cooks only as `praxis cook world` or on a miss" | falls in reader A | |
+| 0018 | "The cooker warns when an ID that something references no longer exists" | falls in reader A (M3.5's L1-C01, which reader A finds fixed but for a scene with an absent source); the scenes add references by name (facade Textures by facade name) that only the cook sees | `src/scenes/world.rs:329-333` |
+| 0018 | Meshes: "Each Primitive stores a Thin Primitive's radius ... The cook refuses one unless each triangle is the side of a tube whose radius is within a quarter of the one declared, or a cap closing such a tube" | holds, and `town`'s declarations meet it: every declared radius is within a quarter of its tube's (the mast 0.03 to 0.02 m declared 0.025, ratios 1.2 and 0.8; the lamp pole 0.09 to 0.06 declared 0.075, 1.2 and 0.8; the utility pole 0.13 to 0.10 declared 0.115, 1.13 and 0.87; the rest exact); the rule itself falls in reader A | `src/scenes/town.rs:1076-1081`, `:1102-1186`; `src/cook/mesh.rs:98`, `:111-117` |
+| 0018 | Meshes: "a cap's vertices keep their own normals" (amended 2026-11-14) | falls in reader A for the rule; the clause is false since the cook gives each cap vertex its ring's normal, which a test in `town.rs` pins: L1-C01 | `src/scenes/town.rs:1452-1470`; `src/cook/mesh.rs:100-102`, `:126-131` |
+| 0026 | "Only a scene with a Far field cooks proxies; it names its ground's Mesh" | holds: `far_field_ground` names `world`'s `ground` and no other scene's; only `world`'s View distance exceeds its Load radius | `src/scenes/mod.rs:371-376`, `:573-580` |
+| 0026 | Its Blobs: "each under an Asset ID made of the scene and the Chunk's coordinates" | holds: the proxy's Mesh and its baked Material and two Textures are named `far proxy {x} {z}` under the scene | `src/scenes/mod.rs:352-369` |
+| 0026 | "It refuses a proxy of more than 5,832 triangles outside its ground: the walls and roofs of `world`'s densest Chunk, 324 buildings of 18" | holds on the scene side: walls are 4 quads (8 triangles) and a roof is a bottomless slab of 5 quads (10); the densest Chunk holds 324 lots by this reader's recomputation of every settlement's lots (`settlement_centre` from the hash, 52 × 52 lots a settlement); 324 × 18 = 5,832; the refusal falls in reader B | `src/scenes/world.rs:408-432`, `:435-446`, `:459-474`, `:583-593` |
+| 0026 | "A first Primitive ... windows included, and a second Primitive of the Chunk's ground tiles" | holds on the scene side: `chunk_standing_content` hands the bake each building whole with its windows and the Chunk's 128 m ground tiles; the merge falls in reader B | `src/scenes/mod.rs:462-476`; `src/scenes/world.rs:511-521` |
+| 0026 | "Past the View distance. Nothing is drawn but flat ground reaching the horizon, one Resident quad"; Settled by the draw: "One of the ground's tiles, scaled to reach 1,024 km from the world's middle and laid 0.5 m under the tiles, placed by the scene as a Chunk of one Placement that is never held, and traced by no ray" | holds: `spawn_world` loads the ground tile through `untraced_mesh` (no BLAS), scales it by 2 × 1,024,000 / 128 = 16,000 so its 64 m half-side reaches 1,024,000 m, at 0.5 m under the origin, as a `FarGround` Chunk of one Placement with `held: false` | `src/scenes/world.rs:43-51`, `:244-264`; `src/assets/loader.rs:34-36` |
+| 0026 | "f32 places a corner to 62.5 mm"; "From the camera's 60 m it ends a tenth of a pixel under the horizon at 1440p" | holds: 2^19 ≤ 1,024,000 < 2^20, so an f32 spacing of 2^-4 m = 62.5 mm; atan(60 / 1,024,000) = 5.86e-5 rad against 2 tan(22.5°) / 1440 = 5.75e-4 rad a pixel, 0.102 pixel (0.1024 from the traversal's corner, 1,019,008 m from the edge) | `src/scenes/world.rs:43-46`, `:58` |
+| 0026, 0013 | the View distance, "2 km at target scale (ADR 0013), never less than the Load radius" (`CONTEXT.md`); the Load radius 256 m | holds: `world` 2,000 m and 256 m; every other scene's View distance is its Load radius | `src/scenes/mod.rs:553-580` |
+| 0026 | "Which are Resident ... released past the View distance plus one Chunk's edge" (M5 story 22's "at most 285") | falls in streaming; on the scene's constants the most Chunks within 2,256 m of a camera on a 64 m grid is 285, as the story says (this reader's count over 161 × 161 cameras with `distance_metres`) | `src/scenes/mod.rs:573-580`; `src/scenes/world.rs:901-905` |
+| 0027 | "A Far proxy holds no Thin Primitive, so the rule ends at the Load radius" | holds on the scene side: no `world` Mesh is declared thin | `src/scenes/world.rs:389-404` |
+| 0027 | "Its vertices move out from its tube's centre line ... the tube's true width over the width it draws"; Consequences: "`town`'s wire", "`town`'s six-faced post" | holds on the scene side: the wire is a 3-faced tube of 15 mm, the post a 6-faced tube of 25 mm, both declared at their radius; the post's figures check (0.75 × 0.05 / 5.753e-4 = 65 m, 0.866 × 0.05 / 5.753e-4 = 75 m, 8 × 0.75 × 0.05 / 5.753e-4 = 521 m, 8 × 0.866 × 0.05 / 5.753e-4 = 602 m); the widening falls in shaders | `src/scenes/town.rs:1102-1116`, `:1177-1186` |
+| 0019 | the main pass's twins for Thin Primitives | falls in render and shaders; no clause of 0019 names a scene's declaration | |
+| 0013 | "a 10 by 10 km streamed Game world, a 2 km LOD'd view distance (drawn past the Load radius as a Far proxy per Chunk, ADR 0026)" | holds: 10.24 km a side, 2 km View distance | `src/scenes/world.rs:1-2`, `:26-27`; `src/scenes/mod.rs:573-580` |
+| 0013 | "M4 set the seven above `town`'s and the world scene's peaks on the M4 Pro" | falls in tooling (bench); the scenes exist at the scale the peaks were read from | |
+| 0014 | "World positions are f64"; checklist "No World position reaches the GPU in f32" | holds on the scene side: settlement centres, lots, farms, cameras, flock centres, birds' offsets, Placements and lights are `DVec3`; a window's offset from its building (at most 30 m) is rotated in f32 and added in f64 | `src/scenes/world.rs:171-183`, `:191-239`, `:586-593`, `:688`; `src/scenes/town.rs:397`, `:770-806` |
+| 0014 | the 128 m pivot bound (ADR 0026's Consequence exempts a Far proxy) | holds: `world`'s farthest vertex from a pivot is a tower roof's top corner, √(4.3² + 29.1² + 4.3²) = 29.7 m (9 storeys of 3.2 m, a 0.3 m slab, 4 m plus 0.3 m of overhang); ground tiles reach 64√2 = 90.5 m in both scenes; `far_coplanar`'s 125 m tiles 88.4 m; the far ground passes the bound and ADR 0026 records why | `src/scenes/world.rs:28`, `:118`, `:435-446`; `src/scenes/town.rs:178-182`; `src/scenes/mod.rs:824-831` |
+| 0022 | "Everything that changes game state runs in the fixed schedule"; determinism "whatever the frame timing" | broken, known: L1-F41 (streaming section) files `wrap_around_camera`; `spin` and `sway` read the Tick count alone | `src/scenes/mod.rs:902-910`, `:919-934`, `:1328-1345` |
+| 0022, checklist | "every entity whose World transform it changes, children included, carries `PreviousWorldTransform`" | holds: flock centres and birds (`town` and `world` share `spawn_flocks`), orrery bodies, crowd bones and refit figures | `src/scenes/town.rs:834-857`; `src/scenes/mod.rs:873-878`, `:1286-1301` |
+| 0022, checklist | "a jump inserts `Teleported` before `reset_teleported` runs" | holds: `wrap_around_camera` inserts it on each flock centre it moves, ahead of `reset_teleported` in the chain; tested to drop the bird's previous transform on the jump; a Fast travel moves only the camera, which is not blended, and the wrap then marks each flock it moves | `src/scenes/mod.rs:929-932`, `:1624-1690`; `src/state.rs:410`, `:414`; `src/scenes/world.rs:207-210` |
+| 0022 | "randomness comes from a seeded resource ...; no result depends on hash-map iteration order" | holds: no fixed-schedule system in these files draws randomness; every generator choice is `random` of where the thing stands, iterated in fixed loops; `town` sorts its lamp corners with the stable `sort_by` | `src/scenes/town.rs:301-304`, `:391`; `src/scenes/world.rs:552-564` |
+| 0023 | "a `DirectionalLight` gives illuminance in lux and a `PointLight` luminous intensity in candela"; "every Reference scene's lights ... under a sun of 100,000 lx" | holds: `SUN_ILLUMINANCE` 100,000 lx for every scene's sun; `town`'s lamps 20 × 100,000 = 2,000,000 cd, the coloured lights 900,000 cd, minification's 3 × 10^7 cd | `src/scenes/mod.rs:582-610`, `:636-670`, `:950-965`; `src/scenes/town.rs:239-245` |
+| 0023 | ambient in lux, background in cd/m², an EV100 per scene set by hand | holds: 10,000 lx ambient, (10,000, 20,000, 30,000) cd/m² background, EV100 log₂(100,000 / 1.2) = 16.35 for all twelve scenes; the traversal sets `world`'s EV100 itself, as `ReferenceScene::camera_at` does | `src/scenes/mod.rs:513-531`, `:612-633`; `src/scenes/world.rs:236` |
+| 0006, checklist | "Components hold data only ... A method that is a pure function of the component's own data and its arguments ... is allowed"; "No GPU resources stored on ECS components" | holds: `Spin`, `WrapsAroundCamera` and `Bone` are data; `Sway::curvature` reads only `self.phase` and its argument, the amendment's kind; `MeshRef` holds a Handle | `src/scenes/mod.rs:895-917`, `:1307-1326`; `src/scenes/town.rs:846-853` |
+| 0003 | "prepare writes only the slots ... whose World transform, Mesh or Material changed ..., so camera motion writes no Instance" | holds on the scene side: `wrap_around_camera` dereferences `Transform` mutably only when a flock jumps, so a flock the camera does not push past half a span is not marked changed | `src/scenes/mod.rs:926-932` |
+| 0003 (refined), M4 story 2 | static Placements as Instances in a slot range their Chunk owns, no entity per Placement | holds on the scene side: no spawn in these files spawns static content; `spawn_world` and `spawn_town` spawn flocks and the far ground's Chunk only; the slot ranges fall in render | `src/scenes/world.rs:244-279`; `src/scenes/town.rs:824-828` |
+| 0017 | the geometry Arenas' shares "as `helmet`'s, `town`'s and the world scene's Meshes fill them ..., the world scene's with the Far proxies of its densest far field: the 282 within the View distance and a Chunk's edge of a camera on a 64 m grid" | holds in form: the fit test walks a camera over the same 64 m grid with the same 2,256 m and sums each Arena's most; the 282 is the densest far field by bytes, which needs a run (see *Notes*) | `src/scenes/world.rs:844-997` |
+| 0017, 0002 | the Mesh table, the Material table's two counts, the texture pool's bytes and classes sized from the Budgets | holds in form: the fit test asserts each count's most against `PoolCapacities::checked_in()`, Far proxies' baked Materials counted apart (ADR 0026's Consequence); ADR 0002's buffers fall in reader C | `src/scenes/world.rs:977-996` |
+| 0011, 0025 | a generated library's sources; "everything in it is published under the MIT licence" | holds: `world`'s and `town`'s content is generated from code; the one adapted source, SplitMix64's output function, cites its paper and Vigna's public-domain `splitmix64.c` | `src/scenes/town.rs:289-298`; `src/scenes/world.rs:356-387` |
+| checklist | "A cooked Mesh Blob is the same bytes on every machine: the two hash tests pass on each" | holds as tested: every Reference scene Mesh feeds the hash at `src/cook/mesh.rs:993-1008`; `town`'s `cylinder` and `wire` take platform f32 `cos` and `sin`, which the checklist names as a cause, and agree on the machines CI and the M4 Pro run (see *Notes*) | `src/scenes/town.rs:1318-1321`, `:1383-1384`; `src/scenes/mod.rs:1440-1442` |
+| checklist | the slot order of prepare's writes; uploads through the load staging; GPU memory through the ledger; no buffer grows | not applicable: no code in these files creates, writes or uploads a GPU resource | |
+
+#### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| M4 story 8, a point light in a Chunk carries an f64 translation and photometric values | holds on the scene side: `town`'s 1,024 lamp lights cook as `CookedLight` in candela at f64 positions | `src/scenes/town.rs:393-398`, `:421-429` |
+| M4 story 10, ground cooked as 128 m tiles, four per Chunk | holds: both streamed scenes lay 128 m tiles whose edges fall on multiples of 128 m (`world`: 80 a side from −5,120 m; `town`: 8 a side from −512 m), so each 256 m Chunk holds four whole tiles | `src/scenes/world.rs:28-29`, `:548-551`; `src/scenes/town.rs:178-182`, `:379-381`; `src/scenes/mod.rs:1476-1490` |
+| M4 story 11, a Placement belongs to the Chunk that holds its pivot | holds on the scene side (`chunk_content`); the bounds fall in reader B | `src/scenes/mod.rs:449-460` |
+| M4 story 14, `town`'s ground re-tiled into 128 m tiles | holds: 8 × 8 tiles, 1,024 m, the 4 × 4 Chunks the blocks stand on, trimmed from 1.1 km as the spec's decision allowed | `src/scenes/town.rs:178-182` |
+| M4 story 15, `town` cooked into the Chunks it covers and loaded through the Chunk path | holds on the scene side: `chunk_square(-2..2)` and `static_content` place every block, lamp, pole and wire pivot within ±500 m; Goldens fall in tooling | `src/scenes/mod.rs:396`, `:438`; `src/scenes/town.rs:403-431`, `:709-716` |
+| M4 story 16, every Reference scene's static content loads through Chunks | holds on the scene side: `static_content` gives every scene's Placements and lights, and no spawn in these files spawns static content | `src/scenes/mod.rs:412-441`, `:1072-1084` |
+| M4 story 17, Moving Instances spawned by scene systems | holds: the flocks, the orrery and the crowd | `src/scenes/town.rs:834-857`; `src/scenes/world.rs:265-277`; `src/scenes/mod.rs:871-893`, `:1248-1305` |
+| M4 story 54, lights stream with their Chunks | holds on the scene side: `town`'s and the small scenes' point lights are cooked into Chunks, none spawned | `src/scenes/mod.rs:412-441`; `src/scenes/town.rs:421-429` |
+| M4 story 56, a generated world of 40 × 40 Chunks cooked by `praxis cook` | holds: 1,600 Chunks, each generated alone by `static_content_reaching`; the command falls in reader A | `src/scenes/world.rs:26`, `:504-509`; `src/scenes/mod.rs:397`, `:449-460` |
+| M4 story 57, settlements as dense as the Budgets allow, sparse land between | holds in form: 64 settlements of 52 × 52 lots, farms on a quarter of the open 128 m tiles, and the fit test asserts the densest view against the Budgets' capacities; whether denser would still fit is the ticket's measurement | `src/scenes/world.rs:31-41`, `:99-100`, `:857-997` |
+| M4 story 58, unique Meshes and Textures over 8 GB | holds: 64 settlements × 24 facade Textures of 2048² BC7 with every mip, 4,194,304 × 4/3 bytes each, are 8 GiB (8.59 GB) before the Far proxies' atlases; whether eviction then runs is under *Notes* | `src/scenes/world.rs:84-86`, `:337-352` |
+| M4 story 59, flat ground tiles until terrain | holds | `src/scenes/world.rs:389-394` |
+| M4 story 60, 10,000 Moving Instances around the camera | holds in placement: 100 flocks of 100 birds, `FLOCKS_PER_SIDE² × BIRDS_PER_FLOCK` asserted equal to `DYNAMIC_TLAS_CAPACITY`, wrapped to within 160 m of the camera per axis; the wrap's determinism is L1-F41 | `src/scenes/town.rs:251-253`; `src/scenes/world.rs:77-82`, `:265-277` |
+| M4 story 61, a bench path of about 60 s: into a settlement at 50 m/s, across sparse land, one Fast travel | holds: 3,600 frames at 50/60 m a frame, over settlement [4, 4] at frame 599, over open land at frame 1,799, a 4,948 m jump at frame 1,800 into settlement [1, 6], tested; its comment's start "from farmland" is L1-C14 | `src/scenes/world.rs:53-68`, `:189-211`, `:756-769` |
+| M4 story 62, a full traversal along a side, the diagonal and one Fast travel | holds: 11,980 frames west to east along the south side half a Chunk in, a jump to the north-east corner, 16,942 frames down the diagonal, tested | `src/scenes/world.rs:69-75`, `:213-239`, `:771-796` |
+| M4 story 63, CI cooks only what its frames load, Settled Goldens at a few frames | falls in tooling; the scene gives four Golden frames (59, 300, 599, 1,500) whose descriptions in `tests/goldens.rs` this reader checked against the path: 250.8 m and 50 m short of settlement [4, 4], 199 m inside it, and 196 m past it with settlement [4, 3]'s Chunks 444 to 1,325 m away, all in the Far field | `src/scenes/world.rs:189-211` |
+| M4 story 65, the same Chunk content at the origin and the far corner, identical images | falls in the frame (State tests) | |
+| M4 story 66, nothing drawn past the Load radius until M5 | superseded by ADR 0026 | |
+| M5 story 16, each Chunk cooked a Far proxy | falls in reader B; the scene supplies `chunk_standing_content` and the ground's Mesh | `src/scenes/mod.rs:371-376`, `:462-476` |
+| M5 story 21, flat ground drawn to the horizon | holds on the scene side: the far ground's Chunk; the draw falls in render | `src/scenes/world.rs:244-264` |
+| M5 story 22, at most 285 Far proxies Resident | falls in streaming; 285 checks on the scene's constants (see the clause row) | `src/scenes/mod.rs:573-580` |
+| M5 story 26, the fit test extended to the densest 2 km view's Far proxies | holds: Far proxies within 2,256 m join the static TLAS, Instance, Arena, Mesh table, baked Material and texture pool counts | `src/scenes/world.rs:844-997` |
+| M5 story 30, a Fast travel's hold waits for the Load radius alone | falls in streaming; the scene marks the jump frame `teleported` | `src/scenes/world.rs:207-210`, `:234-235` |
+| M5 story 32, the traversal reports Late Far proxies | falls in tooling; the scene gives the path | `src/scenes/world.rs:213-239` |
+| M5 story 33, a Primitive declared thin with a radius in a generator or by glTF `extras` | holds for the generator (`Geometry::thin`); `extras` falls in reader A | `src/scenes/mod.rs:1406-1418`; `src/scenes/town.rs:976-978` |
+| M5 story 34, the cooker refuses a Thin Primitive without radial normals | falls in reader A; `town.rs`'s test drives the refusal at its seam (a cuboid bar, a bar merged with a post, radius 0 and NaN) | `src/scenes/town.rs:1416-1433` |
+| M5 story 38, `town`'s top rails made tubes, tubes of few faces settled | holds: the top rail is a 6-faced tube of the posts' 25 mm radius resting on the 1 m posts (centre 1.025 m), its own Mesh, declared thin | `src/scenes/town.rs:561-566`, `:1117-1135` |
+| M5 story 39, `town`'s pigeons scaled to a pixel and dropped at zero coverage | falls in render and shaders; the bird is an ordinary Mesh of two cuboids | `src/scenes/town.rs:1243-1249` |
+| M5 stories 1 to 15, 17 to 20, 23 to 25, 27 to 29, 31, 35 to 37, 40 to 42 | fall in cook, render, shaders, streaming or tooling; nothing in these files implements them | |
+| M4 stories 1 to 7, 9, 12, 13, 18 to 53, 55, 64, 67 to 71 | fall in cook, assets, streaming, render or tooling | |
+
+#### Registry keys
+
+Two keys are cited in these files, both on lines unchanged since `8bc34eb1`; both match their quotes. No key is cited in `world.rs` or `town.rs`.
+
+| File | Keys | Verdict |
+|---|---|---|
+| `src/scenes/mod.rs:637` | `bevy-lux-constants` | matches: the quote gives `pub const DIRECT_SUNLIGHT: f32 = 100_000.;`, and `SUN_ILLUMINANCE = 100_000.0` lx at `:639` |
+| `src/scenes/mod.rs:755` | `hoffman-2013-f0` | matches: the quote gives gold's linear F0 as `1.00,0.71,0.29`, and `SWEEP_BASE_COLOR = [1.0, 0.71, 0.29, 1.0]` at `:758` |
+| `src/scenes/town.rs:289-292` (uncited) | none: SplitMix64's output function, cited to Steele, Lea and Flood (OOPSLA 2014) and Vigna's `splitmix64.c` in prose | no key; the lines are unchanged in scope (see *Notes*) |
+
+#### Oracles
+
+| Function | Test | Expected value and its source | Constant | Floor | Stated floor | Verdict |
+|---|---|---|---|---|---|---|
+| `camera_at` (`src/scenes/world.rs:191-211`) | `the_bench_path_flies_into_a_settlement_over_farmland_then_fast_travels_into_another` through `jumps` (`:728-744`, `:756-769`) | each non-jump frame moves 50/60 m, M4 story 61's 50 m/s at 60 Hz; one jump, past 1,024 m (twice the 512 m hold radius); recomputed: the jump is 4,948.25 m | `1e-6` m on the step (`:738`) | 1.0e-12 m (Block D1) | no | loose, by about 10^6 |
+| `traversal_camera_at` (`src/scenes/world.rs:214-239`) | `the_traversal_flies_a_side_then_the_diagonal_through_one_fast_travel` (`:771-796`) | 50/60 m a frame; the side leg's z unchanged; the diagonal's \|x\| equal to its \|z\|; both legs 9,900 to 10,240 m long; every frame within 5,120 m; recomputed: 9,982.5 m and 9,983.0 m | `1e-6` m on the step and on \|Δx ± Δz\|, `1e-9` m on the side's z (`:779`, `:784`) | 4e-12 m on the step; 0 on the diagonal's Δx + Δz and on the side's z (Block D2) | no | loose on the step, by about 2.5 × 10^5; the diagonal and the side's z exact, under tolerances of 1e-6 m and 1e-9 m |
+| `wrap_around_camera` (`src/scenes/mod.rs:921-934`) | `a_wrapping_entity_jumps_whole_spans_to_within_half_a_span_of_the_camera` (`:1624-1690`) | hand derivation: round((340 − 100) / 500, −249 / 500) = (0, −0), no jump; round(260 / 500, −1,240 / 500) = (1, −2), a jump of (500, 0, −1,000) to (600, 40, −1,000), the bird to (610, 40, −1,000), its previous transform dropped; round(−0.48, −0.48) = (−0, −0), no jump | exact (`assert_eq!`) | 0 (Block D3) | no | exact |
+| the cook's thin tube rule, through `cylinder`, `wire` and `cuboid` (`src/scenes/town.rs:1314-1406`; rule `src/cook/mesh.rs:103-150`) | `the_cook_takes_a_thin_primitive_only_as_a_tube_near_its_declared_radius` (`:1416-1433`) | ADR 0018: a tube's radius "within a quarter of the one declared": accepted at \|R − r\| / r of 0.1667 (0.05 at 0.06) and 0.200 (the tapered pole at 0.075), refused at 0.2857 (0.05 at 0.07), 0.672 and 9.04, and for a cuboid, a mixed Primitive, 0 and NaN | exact (booleans) against `THIN_RADIUS_TOLERANCE` 0.25 | 0 (Block D4) | no | exact |
+| the cook's ring normals for a thin Primitive's caps (`src/cook/mesh.rs:100-131`), through `cylinder` | `a_thin_primitives_cap_vertices_cook_with_their_rings_normals` (`:1452-1470`) | hand derivation: every cooked vertex less its normal times the declared radius lies on the axis (post) or within the taper of it (tapered pole: 0.0150012 m at its base, 0.0149988 m at its top) | `0.01 × radius_metres` past the taper: 2.5e-4 m (post), 7.5e-4 m (pole) (`:1464`) | 5.3e-6 m (post), 1.6e-5 m (pole), worst case of the Snorm16 QTangent's normal (Block D5) | no | loose, by about 47 on the worst-case floor |
+
+Set aside as behaviour tests, not oracles: `the_densest_view_fits_the_capacities_the_budgets_give` (counts against capacities, `src/scenes/world.rs:857-997`), `a_thin_primitive_keeps_every_triangle_at_each_lod_of_a_mesh_that_simplifies` (equal index counts, `src/scenes/town.rs:1435-1450`) and `a_crowd_figure_bends_within_its_bounds` (containment). The crowd's two proxy oracles changed in scope only in how the test builds a `MeshHandle` (`src/scenes/mod.rs:1553-1563`); M3.5's rows stand for them.
+
+##### Block D1: the bench path's step
+
+- `:204`: z = fl(start_z − fl(k · f)), k = fl(50 / 60) = 0.83333333333333337, |k − 5/6| = 3.7e-17. Before the jump |z| ≤ 1,438.41 m and |k f| ≤ 1,500 m, so each rounding is at most half an ulp of 2^-42 m: 1.14e-13 m. After the jump |z| ≤ 3,201.82 m: 2.27e-13 m.
+- `:194`: start_z = fl(fl(centre.z + 377) + 300): a constant of the run, common to both frames, so it cancels in the step.
+- `:733`: `distance` of two positions whose x and y are equal bit for bit, so it is |Δz| exactly (√ of an exact square of a difference that Sterbenz's lemma makes exact).
+- Step error: two roundings of k f and two of the subtraction, 4 × 2.27e-13 = 9.1e-13 m, plus k's 3.7e-17: under 1.0e-12 m. The test compares with fl(50.0 / 60.0) = k, so k's own error does not enter.
+
+##### Block D2: the traversal's step, side and diagonal
+
+- `:230`: heading = (end − start).normalize(), glam's `self * (1 / length)`. Side leg: (9,984, 0, 0) × fl(1 / 9,984): x within 1 ulp of 1, z = 0 × r = 0 exactly. Diagonal: (−9,984, 0, 9,984) × fl(1 / 14,119.4): x and z the same magnitude a, bit for bit, opposite signs, a within 2u of 1/√2.
+- `:231-232`: position = start + heading · fl(k f) + 60 Y. |k f| ≤ 14,118 m, so the product's rounding is at most 9.1e-13 m a coordinate and the sum's (|coordinate| ≤ 4,992 m) 4.5e-13 m.
+- Step: per coordinate two frames × (9.1e-13 + 4.5e-13) = 2.7e-12 m, as a norm over two coordinates under 4e-12 m; |heading| − 1 adds 2.8e-16 m over a step's 0.833 m.
+- Side's z: start.z + 0 + 0 = corner, exact: floor 0, against the test's 1e-9 m.
+- Diagonal: start = (c, 60, −c) and heading = (−a, 0, a) with one magnitude a, so x = fl(c − fl(a D)) and z = fl(−c + fl(a D)) = −x exactly, D = fl(k f), since rounding to nearest is symmetric in sign. x + z is 0 at every frame and Δx + Δz is 0: floor 0, against the test's 1e-6 m.
+- The leg lengths, 11,979 × k = 9,982.5 m and 16,941 × k = 14,117.5 m along the diagonal (9,982.5 m on each axis), sit 82 m and 257 m inside the range's ends.
+
+##### Block D3: the wrap
+
+- `:927`: spans = ((camera − translation) / 500).round(). The quotients 0.48, −0.498, 0.52, −2.48 and −0.48 lie at least 0.002 from a half, past any f64 rounding of an integer-valued difference divided by 500 (relative 2^-53).
+- `:928-929`: jump = (spans.x, 0, spans.z) × 500, and `jump != DVec3::ZERO`. The first and third calls give a z span of −0.0; IEEE equality has −0.0 == 0.0, so no jump, as the test expects: the one boundary in the chain, and it falls the right way.
+- `:930`: 100 + 500, 0 − 1,000 and 600 + 10 are integers, exact in f64.
+
+##### Block D4: the tube rule's boundary cases
+
+- `src/cook/mesh.rs:111-117`: on a ring edge of a straight tube of radius R with radial vertex normals, centres_apart = (R − r)(n₁ − n₂), so the test is |R − r| ≤ 0.25 r. On a tapered tube the normal is c·radial + s·Y with c = h / √(h² + (b − t)²): the test becomes |R − r c| ≤ 0.25 r c; c = 0.9999834 for (0.09, 0.06, 5.2), so 0.0150012 / 0.0749988 = 0.20002 at the base and 0.19998 at the top.
+- Margins to 0.25: 0.083, 0.050, 0.036, 0.42 and 8.8, each over 10^4 times the f32 chain's relative error (a few 2^-24).
+- The cuboid has per-face vertices whose normals are equal along every edge, so no edge is on a ring and every triangle is refused; radius 0 and NaN fail the `ensure!` at `:104-107`.
+
+##### Block D5: the cap vertices' centre line
+
+- Expected: side and cap vertices share positions bit for bit (`around(side)` in both loops, `src/scenes/town.rs:1318-1321`, `:1350-1353`), so a cap vertex takes its ring's normal by position. The post's normal is radial, so position − normal × 0.025 is on the axis. The pole's base vertex is at 0.09 m with c = 0.9999834, so 0.09 − 0.075 c = 0.0150012 m off the axis, against a bound of 0.015 + 0.00075 m; its top, 0.0149988 m.
+- Floor: the QTangent stores each quaternion component as Snorm16, a step of 1/32,767, rounded by at most 1.53e-5; `qtangent_normal` (`src/cook/mesh.rs:422-430`) is quadratic in the components, each partial derivative at most 2 in magnitude, so a component of the normal moves by at most 4 × 2 × 1.53e-5 = 1.2e-4 and the normal by at most 2.1e-4; times the radius, 5.3e-6 m (post) and 1.6e-5 m (pole). f32 positions add under 1e-8 m.
+- Margin: 2.5e-4 m over 5.3e-6 m and 7.5e-4 − 1.2e-6 m over 1.6e-5 m, both about 47.
+
+### Findings
+
+| id | claim | severity | where | evidence | expected | verifier | placement |
+|---|---|---|---|---|---|---|---|
+| L1-C01 | ADR 0018 says a Thin Primitive's cap vertices "keep their own normals", but since 2026-11-16 the cook gives each cap vertex its ring's normal, so that the vertex stage widens a cap with its tube's side; the commit that made the change amended ADR 0027 and not ADR 0018. | `drift`; not load-bearing: `CookedPrimitive`'s doc comment and the function's doc state the cap rule; a reader of ADR 0018 alone is misled about what a thin Primitive's normals hold; filed by readers A and D | `docs/adr/0018-cooked-assets-are-named-by-stable-ids-and-stored-by-content-hash.md:24` | block below | ADR 0018's Meshes bullet says a cap's vertices take their ring's normal, as `src/assets/cooked.rs:513` does | | |
+| L1-C02 | The SciFiHelmet Mesh Blob ceiling stays at 15.29 bytes per triangle though its comment says "A lower figure re-records it" and the `meshopt` 0.7 bump measured the Blob at 353,120 bytes, 15.12 bytes per triangle, which ADR 0018 records; the ceiling admits 4,023 bytes (1.14%) of growth. | `drift`; not load-bearing: the ceiling still catches a regression past 1.14%; a reader of the comment is told the ceiling is the measurement | `tests/cook.rs:804` | block below | `HELMET_MESH_BYTES_PER_TRIANGLE` re-recorded at 15.12 (353,120 / 23,358 = 15.1177, rounded up), or the comment's rule dropped | | |
+| L1-C03 | `cook`'s doc comment says plain `praxis cook` cooks every Reference scene's procedural Assets, but since `world` was generated (`2dbd1ec1`) plain `praxis cook` passes every scene but `world`, as ADR 0018's status line says. | `drift`; not load-bearing: the binary and ADR 0018 say it; a reader of the function's doc is misled about `world` | `src/cook/mod.rs:585` | block below | the doc names the exception: every Reference scene's but `world`'s, which `praxis cook world` cooks | | |
+| L1-C04 | `export-scene` skips a Renderable without a Material Handle whenever a Primitive of its Mesh names no Material, where prepare skips it only when such a Primitive has triangles, so an export can leave out a Renderable praxis draws, against the module's "a Reference scene as prepare reads it" and the line's own comment "As prepare". | `correctness`; one condition of one skip; no Mesh `export-scene` writes at this commit has an empty Primitive that names no Material, so no export differs today | `src/cook/export.rs:195` | block below | the export skips such a Renderable only when a Primitive with triangles names no Material, as `src/assets/pools.rs:511-513` decides for prepare | | |
+| L1-C05 | A dev launch that keeps a Chunk, because one of its Placements names a Mesh the launch did not read, returns before cooking any Mesh, Material or Texture the Chunk names, and the IO pool then reads those Blobs from the Cooked cache unchecked, so a stale one loads without a cook or a warning. | `correctness`; one clause of ADR 0018 broken in part (the dev launch's "with the Assets it names") and M4 story 64 with it; reachable only while one of a scene's sources is absent: `helmet` with SciFiHelmet unfetched, whose Chunk names 10 procedural sweep Materials (`src/scenes/mod.rs:726-744`); no visible defect unless such an Asset changed since its Blob was cooked | `src/cook/launch.rs:175` | block below | before a kept Chunk's Blob is read, the launch cooks each Asset the Chunk names that it did read, as `praxis cook <scene>` does (`src/cook/mod.rs:645-660`), and keeps only the Chunk's own Blob | | |
+| L1-C06 | ADR 0011's sentence that a development launch's cooker "cooks what changed before the runtime loads Blobs" still describes a cook ahead of the loads, while a launch cooks each Asset only as its own load reaches it, and never one it does not load, as ADR 0018's amendment of 2026-11-08 and the launch's code say. | `drift`; not load-bearing: ADR 0018's status line states the current behaviour; a reader of ADR 0011 alone expects a launch to cook every changed Asset up front | `docs/adr/0011-gltf-authoring-cooked-runtime-formats.md:3` | block below | ADR 0011's sentence says the launch cooks each Blob it loads, as it loads it, missing or stale, dated with the change that made it so, or points at ADR 0018's amendment | | |
+| L1-C07 | A Texture whose Channel has no room for its Resident tail is neither refused nor counted: `load_texture` returns Layer 0 and the Material loads sampling the neutral default, the refusal logged by `ChannelTextures::place` but missing from Frame stats, whose pool refusals are `meshes_refused` and `materials_refused` alone. | `correctness`; M4 spec story 47 broken for one capacity, a Channel's Texture classes (13,107 each); no Reference scene shown to reach it | `src/assets/material.rs:985` | block below | M4 spec, story 47: "a request past any capacity refused, logged and counted in Frame stats, so that an overflow is visible, never silent"; `CLAUDE.md` checklist: "a request past a buffer's capacity is refused and logged" | | |
+| L1-C08 | A mip move or an eviction can open a Texture class whose mip 0 is not whole blocks, which wgpu refuses with a validation error that its default handler turns into a panic: `stream_mips` and `evict_finest_mip` take the class shape `mips_from(level)` for any level the plan asks, while only the Resident tail's first mip is checked for whole blocks, so a Texture whose sides are multiples of 4 but not of 4 × 2^level, such as 2,052², tailed at mip 3, panics on its first move to mip 1 or 2. | `correctness`; a panic on the first such move; every Texture the cooker accepts whose side at a mip between 1 and its tail's first is not a multiple of 4 (2,052², 1,028²); no Reference scene shown to hold one | `src/assets/material.rs:1047` | block below | ADR 0017: "A Texture whose resident mips change moves to the class of its new shape by copy"; ADR 0018: "The cooker refuses a Texture whose size is not a multiple of 4 or exceeds 8192, rather than resizing it", so every such size is one the runtime must stream; the code's own rule at `cooked.rs:249-252`: a mip "not whole blocks, which a Texture of its own cannot start with" | | |
+| L1-C09 | ADR 0017 and ADR 0018 say a Texture's Resident tail is its mips of 64 KiB and smaller, but `resident_tail_level` makes the whole chain the tail when the first such mip is not whole blocks, so such a Texture never streams and keeps its mips past 64 KiB Resident for its life: a 1,000² BC7 Texture holds 1,335,360 bytes as its tail where the ADRs' tail is 85,360. | `drift`; load-bearing for a reader sizing Resident bytes or predicting which Textures stream; every Texture whose side at its first mip of 64 KiB or less is not a multiple of 4; no Reference scene shown to hold one | `src/assets/cooked.rs:264` | block below | ADR 0017 and ADR 0018 state the exception (a Texture whose tail mip is not whole blocks keeps its whole chain), or the cooker refuses such a size | | |
+| L1-C10 | `CookedPrimitive::texel_density` cites Unity's UV distribution metric as what it inverts, but Unity's metric is a per-Mesh average of triangle area over UV area, and the density is taken per Primitive as the square root of summed UV area over summed mesh-space area; ADR 0018 records the difference and `deviations.md` has no row for it. | `drift`; not load-bearing: mip priority reads the density the cooker writes, whatever the citation; one registry citation | `src/assets/cooked.rs:507` | block below | a `deviations.md` row at `src/assets/cooked.rs:CookedPrimitive::texel_density` (and the cook's `texel_density`), source `unity-6000-uv-distribution-metric`, giving the per-Primitive ratio of summed areas and why; `deviations.md`: "A Deviation lives here and nowhere else" | | |
+| L1-C11 | The error `ChannelTextures::place` logs for every refused placement says "the Texture keeps its Resident tail, or Layer 0 without one", but a refused mip move in `stream_mips` leaves the Texture at its earlier chain, its finer mips kept, not at its tail. | `drift`; not load-bearing: one log line misleads a reader of a refused move's log; it also shows the refusal the M5.5 report's L1-F02 calls unlogged is logged by the pool | `src/assets/material.rs:423` | block below | the line names what the caller keeps, or `stream_mips` logs its own refusal | | |
+| L1-C12 | `ReferenceScene::World`'s doc says the world is "seen within its 256 m Load radius", while since the far field landed every Chunk out to the 2 km View distance draws as its Far proxy and flat ground reaches the horizon. | `drift`; not load-bearing: `view_distance_metres` and ADR 0026 state the true reach; misleads a reader of the scene registry about how far `world` draws, by a factor of 7.8 | `src/scenes/mod.rs:80` | block below | the doc says the world is seen out to its 2 km View distance, its Chunks past the 256 m Load radius as Far proxies, with flat ground beyond | | |
+| L1-C13 | `chunk_coordinates`'s doc calls its list "the Chunks its spawn loads", while since the Chunk streamer landed the State spawns a scene with no Chunk loaded and streams those within the Load radius; the list is the streamer's index of the Chunks that exist. | `drift`; not load-bearing: no caller depends on the sentence; misleads a reader into taking `world`'s spawn to load all 1,600 Chunks, which only `Simulation::new` (cook tests, and `export` of a scene without a Far field) does | `src/scenes/mod.rs:379` | block below | "the Chunks that exist, which the Chunk streamer streams within the Load radius" | | |
+| L1-C14 | The bench path's doc says the camera starts "from farmland `APPROACH_METRES` south of its settlement's edge", but its frame 0 lies 39.6 m inside settlement [4, 5]'s square, over that settlement's northern row of blocks, until frame 47: the open land between settlements [4, 4] and [4, 5] is 260.4 m deep, under `APPROACH_METRES`' 300 m. | `drift`; not load-bearing: the bench's 248 warm-up frames and the first Golden (frame 59) both fall past frame 47; frames 0 to 47 of 3,600 | `src/scenes/world.rs:56` | block below | the doc says the path starts 300 m short of the settlement, wherever that falls, or `APPROACH_METRES` is no deeper than the open land in front of `CAMERA_SETTLEMENT` (at most 260 m), with a test that frame 0 is over no settlement | | |
+| L1-C15 | `TownMesh::ALL` and `BoxMaterial::ALL` say their order "indexes its Handle when loaded", but nothing has indexed a Handle by them since `town` stopped spawning its static content: each array is read only by its own compile-time assertion. | `health`; two arrays and two `const` assertion blocks, 51 lines, 0 call sites; their doc comments describe a load that no longer exists | `src/scenes/town.rs:57-59` | block below | both arrays and their assertions deleted, or a caller that needs them | | |
+
+#### L1-C01
+
+Code, `src/cook/mesh.rs:100-102` and `:151-158`:
+
+```rust
+/// A Primitive declared thin, each cap vertex's normal its ring's, so a cap
+/// widens with its tube's side; or a refusal, where a triangle is neither the
+/// side of a tube of `radius_metres` nor a cap that closes one.
+[...]
+let mut tube = geometry.clone();
+for (vertex, normal) in (0..).zip(&mut tube.normals) {
+    if !ring_vertices.contains(&vertex)
+        && let Some(ring_normal) = ring_normals.get(&position_bits(vertex))
+    {
+        *normal = *ring_normal;
+    }
+}
+Ok(tube)
+```
+
+`lod_0` cooks the returned geometry (`:190-196`), so a cap vertex's
+QTangent carries its ring's normal. `src/assets/cooked.rs:511-514`:
+"a vertex's position less its normal times this is on its centre line,
+or off it by what its ring's radius differs by on a tapered tube; a cap's
+normal is its ring's." ADR 0018, Consequences, Meshes bullet: "The cook
+refuses one unless each triangle is the side of a tube [...] or a cap
+closing such a tube, so a side vertex's position less its normal times
+the radius lies within a quarter of the radius of the centre line and no
+vertex stores it; a cap's vertices keep their own normals (amended
+2026-11-14 [...])." The rule changed in commit `c47a441d` (2026-11-16),
+whose message records it ("Caps: The cook gives each cap vertex its
+ring's normal [...] A cap now shades with its ring's normals") and whose
+file list amends ADR 0027 alone; `git log 8bc34eb1..e5c55a8d --
+docs/adr/0018*` shows no later change to the clause. `MESH_FORMAT_VERSION`
+went from 6 to 7 for it. The clause's first half, the refusal, holds; its
+last clause is now false.
+
+Reader D filed the same sentence from the scenes' side, and the two are
+one Finding here. The test `a_thin_primitives_cap_vertices_cook_with_their_rings_normals`
+(`src/scenes/town.rs:1452-1470`) asserts that every cooked vertex, the
+caps' included, has a normal that puts its centre on the tube's axis
+(`from_axis_metres < taper_metres + 0.01 * radius_metres`), which a cap
+vertex's own ±Y normal would not: a cap vertex at radius 0.025 m with
+normal +Y gives a centre 0.025 m off the axis, a hundred times the test's
+2.5e-4 m. `git log -S` puts both the doc comment and the test in the commit
+that made `town`'s rails, aerial bars and pole arms Thin Primitives
+(2026-11-16), after the amendment the ADR names. The `CLAUDE.md` checklist:
+"each clause the change makes false (a doc comment, [...] a Consequence
+[...]) is rewritten or dated in the same PR".
+
+#### L1-C02
+
+Code, `tests/cook.rs:801-805` and `:852-856`:
+
+```rust
+/// SciFiHelmet's cooked Mesh Blob bytes per triangle of LOD 0, Meshlets and
+/// its LOD chain included, at most: the ceiling the LOD chain cook's
+/// measurement sets. A lower figure re-records it.
+const HELMET_MESH_BYTES_PER_TRIANGLE: f64 = 15.29;
+const HELMET_TRIANGLES: usize = 23_358;
+[...]
+let bytes_per_triangle = cache.read(helmet).unwrap().len() as f64 / HELMET_TRIANGLES as f64;
+assert!(bytes_per_triangle <= HELMET_MESH_BYTES_PER_TRIANGLE, [...]);
+```
+
+ADR 0018, Meshes bullet: "SciFiHelmet's Blob, of six LODs, was 356,874
+bytes [...]; with meshoptimizer 1.3's vertex codec 1 it is 353,120
+bytes, against 356,958 with codec 0 before it". 356,958 / 23,358 =
+15.2821, which the ceiling of 15.29 was set over (commit `8ac44220` raised
+it from 15.28 for a Blob of 356,958 bytes); 353,120 / 23,358 = 15.1177.
+The frozen commit `e5c55a8d` measured the lower figure and amended the
+ADR with it, and did not touch `tests/cook.rs`. The ceiling now passes
+any Blob up to 15.29 × 23,358 = 357,143 bytes, 4,023 bytes (1.14%) over
+the measured one, a margin 19 times the 0.06% M3.5's ceiling kept over
+its measurement (13.83 against 13.8218). The test is skipped where
+SciFiHelmet is not fetched, as on CI, so only the M4 Pro runs it.
+
+Measured by the session, not the reader: with SciFiHelmet fetched into the
+frozen worktree and a temporary print beside the assertion (reverted after
+the run), `cargo test --test cook every_reference_scene_mesh_cooks_and_reads_back -- --nocapture`
+at `e5c55a8d` on the Apple M4 Pro printed "353120 bytes, 15.117733 bytes
+per triangle", the figure ADR 0018 records, and passed against the ceiling
+of 15.29.
+
+#### L1-C03
+
+Code, `src/cook/mod.rs:584-596`:
+
+```rust
+/// Cooks the sources `assets/manifest.json` lists that are present, and the
+/// procedural Assets of `scenes`, into `cache`; `praxis cook` cooks every
+/// Reference scene's.
+pub fn cook(
+```
+
+`src/bin/praxis.rs:493-497`:
+
+```rust
+None => {
+    let scenes: Vec<_> = (ReferenceScene::ALL.into_iter())
+        .filter(|&scene| scene != ReferenceScene::World)
+        .collect();
+    praxis::cook::cook(assets, &scenes, &cache, &settings)?
+```
+
+ADR 0018, status line: "Plain `praxis cook` leaves out the `world` scene,
+whose library of more than 8 GB cooks only as `praxis cook world` or on a
+miss (amended 2026-11-08 [...])". `git blame` gives the doc comment
+`81f25800c` (2026-10-19) and the filter `2dbd1ec19` (2026-11-08), inside
+the scope, which made the comment false without editing it. The
+`CLAUDE.md` checklist: "each clause the change makes false (a doc
+comment, [...]) is rewritten or dated in the same PR".
+
+#### L1-C04
+
+Code, `src/cook/export.rs:187-203`:
+
+```rust
+for (transform, mesh_handle, material_handle) in entity_renderables.chain(placements) {
+    let mesh = exported.mesh(recorder.meshes[mesh_handle.index as usize])?;
+    let material = match material_handle {
+        [...]
+        // As prepare skips one whose Primitives all have triangles.
+        None if exported.meshes[&mesh].materials.contains(&None) => {
+            tracing::warn!(mesh, "Renderable has no Material Handle and a Primitive of its Mesh names no Material, skipping it");
+            continue;
+        }
+        None => None,
+    };
+```
+
+Prepare's rule, `src/render/prepare.rs:775` with
+`mesh.needs_material_handle`, which the Mesh pool sets at
+`src/assets/pools.rs:511-513`:
+
+```rust
+needs_material_handle: mesh_use.drawn()
+    && (mesh.primitives.iter().zip(materials))
+        .any(|(primitive, material)| material.is_none() && primitive.index_count > 0),
+```
+
+and prepare's doc, `src/render/prepare.rs:533-535`: "or that has no
+Material Handle where a Primitive with triangles names no Material, is
+skipped with a warning". ADR 0026, *Settled by the draw*: "A Primitive
+without triangles needs no Material". The export's test reads only
+whether a Primitive's Material is `None` (`MeshEntry::materials`,
+`:640-648`), not whether that Primitive has triangles, and its comment
+claims prepare's rule. The module's doc (`:1-3`): "a Reference scene as
+prepare reads it from its World". A Renderable without a Material Handle
+whose Mesh has an empty Primitive naming no Material, as a Far proxy of
+open land is (ADR 0026, *Open land*), is drawn by praxis and left out of
+`scene.json`. `export-scene` writes no Far proxy, and no generated Mesh at
+this commit was found with such a Primitive, so no export differs today;
+the class is `correctness` for the disagreement with the rule the line
+cites. The verifier can confirm by listing, per scene, the Meshes with a
+Primitive of `index_count` 0 and `material` `None`.
+
+#### L1-C05
+
+`src/cook/launch.rs:172-178`:
+
+```rust
+            SourceEntry::Chunk(index) => {
+                let (scene, coordinates) = sources.chunks[index];
+                let generated = self.sources.chunk(scene, coordinates)?;
+                if generated.kept {
+                    self.sources.kept_chunks.push(id);
+                    return Ok(());
+                }
+```
+
+The named Assets are cooked only on the next line's path, which a kept
+Chunk never reaches (`:179-182`: `let named = generated.references().collect();
+self.cook_after_named(cache, id, &generated.cook_key, named, ...)`).
+
+A streamed load does not pass through the launch's cook for anything but
+the Chunk's own ID: `FrameIo::request` runs `cook_chunk(id)` with the Chunk's
+ID alone (`src/streaming/io.rs:1518-1529`), and the IO pool then reads each
+Mesh, Material and Texture the Chunk names straight from the cache
+(`:1437-1466`: `let mesh = reader.mesh(id)?;` ... `let material =
+reader.material(id)?;` ... `let texture = reader.texture(id)?;`). No Chunk
+loads at spawn (`src/state.rs:81-82`, "and no Chunk loaded"), so every
+Chunk takes this path. `Sources::chunk` warns only of the unread Mesh
+(`src/cook/mod.rs:254-258`: "a Placement's Mesh is not among the sources
+this cook reads; the Chunk's Blob, if any, stays as it is"), not of the
+Assets left uncooked.
+
+Reachable: a scene's Chunk is kept when a Placement names a Mesh of a source
+the launch could not read (`mod.rs:794-798` marks an absent file kept and
+reads none of its Meshes). `helmet`'s only source is SciFiHelmet
+(`src/scenes/mod.rs:144`), and its Chunk places SciFiHelmet's Mesh 11 times,
+10 of them under procedural sweep Materials, 2 metallic by 5 roughness
+values (`src/scenes/mod.rs:726-744`, `:763-765`).
+With SciFiHelmet absent but its Blobs cached, a launch of `helmet` keeps the
+Chunk, and a sweep Material whose factors changed in code loads its old
+Blob. `praxis cook helmet` in the same state cooks every Material it reads
+whatever the Chunks (`mod.rs:645-660`), so the two cooks disagree.
+
+The clause, ADR 0018 status line: "A dev launch cooks only what it loads:
+each Asset as its load finds the Blob missing or stale, with the Assets it
+names, while `praxis cook <scene>` cooks a scene whole (amended 2026-11-08,
+[...])". M4 story 64: "I want a dev launch to cook a Chunk and the
+Assets it names when its load misses or finds them stale".
+
+The Far proxy branch has the same shape (`launch.rs:188-190`, a kept proxy
+returns before its ground's Materials are cooked); no scene can reach it,
+as `world`, the one scene with a Far field, reads no source file
+(`src/scenes/mod.rs:155`), so it is not filed apart.
+
+For the verifier: a test beside `a_chunk_placing_a_removed_mesh_warns_and_loads_its_stale_blob`
+(`launch.rs:524-556`) whose `Sources` hold a Chunk placing one read Mesh
+under a read Material and one unread Mesh, with the Material's Blob cooked
+under an old key, then `cook_for_scene` called with the Chunk's ID alone,
+as streaming calls it, finds the Material's old key still in the index.
+
+#### L1-C06
+
+`docs/adr/0011-gltf-authoring-cooked-runtime-formats.md:3`: "Loading glTF
+at runtime was a development convenience until [...]; since then a
+development launch reaches glTF only through the cooker, which cooks what
+changed before the runtime loads Blobs (amended 2026-10-19, [...])."
+
+The code since the dev launch's cook on a miss:
+`src/cook/launch.rs:1-2`: "What a dev launch cooks (ADR 0018): each Asset it
+loads whose Blob is missing or stale, as it loads it, with every Asset that
+one names." `src/state.rs:204-206`: "A dev launch cooks each Asset it loads
+that is missing or stale, as it loads it (ADR 0018)". `CookingLoader::new`
+"reads the scene's sources and cooks nothing yet" (`launch.rs:46-48`), and
+the test `loading_one_chunk_cooks_that_chunk_and_the_assets_it_names`
+asserts an empty index before the first load (`launch.rs:363`). Streaming
+cooks a Chunk "on the main thread, before the IO pool reads it"
+(`src/streaming/io.rs:814-815`).
+
+ADR 0018 was amended for the change (status line: "A dev launch cooks only
+what it loads ... (amended 2026-11-08, [...])"); ADR 0011's sentence
+was not. Read per Blob ("cooks what changed before the runtime loads [it]")
+it holds but for L1-C05; read as written, a cook of what changed ahead of the
+runtime's loads, it describes the launch before the amendment. The rule it
+falls under, `CLAUDE.md`'s review checklist: "each clause the change makes
+false ... is rewritten or dated in the same PR".
+
+#### L1-C07
+
+`src/assets/material.rs:984-989`:
+
+```rust
+        let channel_textures = &mut self.channels[channel as usize];
+        let Some((placement, resident_level)) =
+            channel_textures.push(device, staging, &texture, holds_back_finer_mips)
+        else {
+            return Ok(Self::DEFAULT_LAYER);
+        };
+```
+
+`push` returns `None` only when `place` finds no room for the tail
+(`:361`), after `place` logs `tracing::error!(... "channel has no room for
+another Texture class; the Texture keeps its Resident tail, or Layer 0
+without one")` (`:419-425`). `load_making_room` writes that Layer 0 into
+the Material (`:902-905`, `:927-928`) and the Material loads. The pool's
+refusal counter counts Materials only: `refused_as_full` is its one
+increment (`:679-689`), and `take_refusals` hands it to
+`src/streaming/io.rs:925` as `materials_refused`, beside `meshes_refused`
+(`:924`); no counter takes a Texture's. The Texture is also not entered in
+`loaded_textures`, so each later Material naming it reads and decodes its
+Blob again and logs again (M3.5's note, still true). The chain-refused case
+at `:370-372` (tail kept) is likewise uncounted, but ADR 0017's 2026-11-20
+amendment admits "drawn from its tail only where its Channel has no room
+for that chain", so it is named here and not filed. The M3.5 report filed
+the same shape for Materials (M3.5's L1-C04, a Material past capacity drawn
+as Material 0), which `insert_as` now refuses (`:653-655`). Run: a
+`MaterialPool` with `texture_classes_per_channel: 2` (the neutral class and
+one), two Textures of different shapes, and `take_refusals` read after the
+second.
+
+#### L1-C08
+
+`src/assets/material.rs:1047`, `:1060-1063`:
+
+```rust
+        let (texture_channel, target_shape) = (loaded.channel, loaded.shape.mips_from(first_level));
+        [...]
+        let channel = &mut self.channels[texture_channel as usize];
+        let Some(target) = channel.place(device, target_shape) else {
+```
+
+`mips_from` (`:118-125`) is `width >> level`, `height >> level`. A class
+that opens is created at that size (`:430-448`). wgpu-core refuses a
+compressed texture whose width or height is not a multiple of its block
+(`vendor/wgpu-core/src/device/resource.rs:1438-1449`,
+`TextureDimensionError::NotMultipleOfBlockWidth`), and the `wgpu` crate's
+default handler panics on it (`wgpu-30.0.2/src/backend/wgpu_core.rs:692-694`:
+`panic!("wgpu error: {err}\n")`); nothing in `src/` installs another
+handler. The only whole-block check is the tail's
+(`src/assets/cooked.rs:264-267`), whose comment states the rule: a mip "not
+whole blocks, which a Texture of its own cannot start with"
+(`cooked.rs:249-252`). The reader accepts any side that is a multiple of 4
+up to 8192 (`cooked.rs:445-451`), as the cooker does
+(`src/cook/texture.rs:170`), and the cook's mip filter expects
+non-power-of-two Textures (`src/cook/texture.rs:452-453`). Worked case,
+2,052² BC7 (`level_bytes`, `cooked.rs:288-299`): mip 0 513² blocks ×
+16 = 4,210,704; mip 1, 1,026 texels, 257² × 16 = 1,056,784; mip 2, 513
+texels, 129² × 16 = 266,256; mip 3, 256 texels, 64² × 16 = 65,536 ≤ 65,536,
+and 256 is a multiple of 4: tail at mip 3. A Chunk loads it as its tail;
+the plan asks any mip finer (`src/streaming/mips.rs:213-220`,
+`levels: need.ahead..resident`); a move to mip 1 opens a 1,026 × 1,026 class
+and a move to mip 2 a 513 × 513 one, neither a multiple of 4. The same holds
+for `evict_finest_mip`'s coarser class (`:1185`, `:1187-1188`) and for
+`push`'s chain from a `down_to_from_blob` read (`:370`), whose picked mip is
+not checked either (`cooked.rs:393-396`). A spawn's full chain is safe: its
+mip 0 is checked. Run: load a 2,052² BC7 Texture through `TailReader` and
+call `stream_mips` to mip 1, as `a_full_channel_evicts_...` does for
+1,024².
+
+#### L1-C09
+
+`src/assets/cooked.rs:260-268`:
+
+```rust
+    (0..mip_level_count)
+        .find(|&level| {
+            level_bytes(format, width, height, level as usize) as u64 <= RESIDENT_TAIL_LEVEL_BYTES
+        })
+        .filter(|&level| {
+            (width >> level).is_multiple_of(block_width)
+                && (height >> level).is_multiple_of(block_height)
+        })
+        .unwrap_or(0)
+```
+
+ADR 0017 (line 16): "Each texture's Resident tail (mips of 64 KiB and
+smaller) never leaves"; ADR 0018 (line 21): "the Resident tail (mips of 64
+KiB and smaller, ADR 0017)". With level 0 the tail, `push` writes every mip
+into the tail's class and places no chain (`material.rs:356-368`), and
+`evictable` never takes it (`:1131`). Worked case, 1,000² BC7 (10 mips):
+mips 0 to 9 are 1,000,000, 250,000, 63,504, 16,384, 4,096, 1,024, 256, 64,
+16, 16 bytes; mip 2 (250 texels) is the first of 64 KiB or less and 250 is
+not a multiple of 4, so the tail is level 0: 1,335,360 bytes, where the
+ADRs' tail, mips 2 to 9, is 85,360. `CONTEXT.md`'s Resident tail ("the
+smallest mips of a texture") states no size and is not contradicted. The
+mechanism differs from L1-C08, where the tail's mip is whole blocks and a finer
+one is not.
+
+#### L1-C10
+
+`src/assets/cooked.rs:505-510`:
+
+```rust
+    /// UV units per mesh-space metre: the square root of its triangles'
+    /// summed UV area over their summed mesh-space area, zero when either sum
+    /// is, as without UVs; the inverse of [ref:unity-6000-uv-distribution-metric]
+    /// as a length. [...]
+    pub texel_density: f32,
+```
+
+`docs/references.toml`, `unity-6000-uv-distribution-metric`: "The UV
+distribution metric can be used to calculate the desired mipmap level based
+on the position of the camera. [...] Average of triangle area / uv area.
+[...] // uvDistributionMetric is the average of triangle area / uv area".
+Unity's is one figure per Mesh, an average; the code's is one per
+Primitive, a ratio of sums (`src/cook/mesh.rs:435-452`). ADR 0018 line 24
+says so ("taken per Primitive, as a ratio of summed areas and as a
+length"), which is a record in an ADR, not a row: `deviations.md` lines
+10-11, "A Deviation lives here and nowhere else", and its table has no row
+for this key. The M5 source check (`docs/audit/m5/sources.md:237`) confirmed
+the quote, not the difference. The cook's function is reader A's; this
+Finding is the citation in this file.
+
+#### L1-C11
+
+`src/assets/material.rs:419-425`:
+
+```rust
+        let Some(placement) = self.table.place(shape) else {
+            tracing::error!(
+                channel = self.label,
+                capacity = self.table.capacity,
+                "channel has no room for another Texture class; the Texture keeps its Resident tail, or Layer 0 without one"
+            );
+            return None;
+        };
+```
+
+`stream_mips` calls this `place` for the move's class (`:1061`) and returns
+`StreamedMips::Refused` on `None` (`:1062`), with the Texture's placement
+and `resident_level` untouched (`:1082-1085` are not reached), so it keeps
+its earlier chain, which may hold mips finer than its tail. The message is
+true for `push`'s tail and chain (`:361`, `:370-372`). The M5.5 report's
+L1-F02 says the refused move is "neither logged nor counted" and its note
+says `material.rs:1061-1063` "returns `Refused` without a log"; the refusal
+is logged here at `error`, though not counted (see *Notes*).
+
+#### L1-C12
+
+Code, `src/scenes/mod.rs:78-81`:
+
+```rust
+    /// A generated Game world of 40 × 40 Chunks, settlements with sparse
+    /// farms between them, whose library of Textures outgrows the texture
+    /// pool, seen within its 256 m Load radius (`world.rs`).
+    World,
+```
+
+and `:573-578`:
+
+```rust
+    /// The scene's View distance, in metres: the world's 2 km, or the Load
+    /// radius of the others, which have no Far field.
+    pub(crate) fn view_distance_metres(self) -> f64 {
+        match self {
+            Self::World => 2000.0,
+```
+
+ADR 0026, Decision: "Every Chunk outside the Load radius and within the View distance draws its Far proxy, one Instance, in place of its Placements." and "Past the View distance. Nothing is drawn but flat ground reaching the horizon, one Resident quad." `spawn_world` places that ground (`src/scenes/world.rs:244-264`). `git log -S` puts the doc line in the commit that generated the world (2026-11-08, M4, when nothing drew past the Load radius, as M4 story 66 asked) and the far field's draw in a later one (2026-11-18). 2,000 / 256 = 7.8.
+
+#### L1-C13
+
+Code, `src/scenes/mod.rs:378-380`:
+
+```rust
+    /// The coordinates of the Chunks the scene's static content lies in, x
+    /// then z, in coordinate order: the Chunks its spawn loads.
+    pub(crate) fn chunk_coordinates(self) -> Vec<[i32; 2]> {
+```
+
+The State builds its World with `Simulation::spawned` (`src/state.rs:223`), whose doc ends "and no Chunk loaded" (`src/state.rs:79-82`), and hands `chunk_coordinates()` to the Chunk streamer as the index of existing Chunks (`src/streaming/io.rs:787`, `:794`), which loads only those within the Load radius. `Simulation::new`, which calls `load_chunks` over the whole list (`src/state.rs:60-77`), is called only from `src/cook/chunk.rs:185`, `:377` (tests) and `src/cook/export.rs:72-76` for a scene without a Far field. The line was written in the commit that loaded every scene's static content from its Chunks (2026-11-07); the State already used `Simulation::spawned` at the commit that streamed every scene's Chunks through the IO pool (2026-11-08), which made it false. M4 spec, Implementation decision: "The spawn dispatch no longer builds static content: the Chunk streamer loads it."
+
+#### L1-C14
+
+Code, `src/scenes/world.rs:53-60` and `:191-195`:
+
+```rust
+/// The settlement whose region the camera flies into, column then row.
+const CAMERA_SETTLEMENT: [u32; 2] = [4, 4];
+/// The camera flies north along a street, over the roofs and the birds, at
+/// 50 m/s, from farmland `APPROACH_METRES` south of its settlement's edge,
+/// looking at the ground `GAZE_METRES` ahead.
+const CAMERA_HEIGHT_METRES: f64 = 60.0;
+const CAMERA_METRES_PER_FRAME: f64 = 50.0 / 60.0;
+const APPROACH_METRES: f64 = 300.0;
+...
+    let (street_x, start_z, frames_flown) = if frame < FAST_TRAVEL_FRAME {
+        let centre = settlement_centre(CAMERA_SETTLEMENT);
+        let start_z = centre.z + SETTLEMENT_HALF_SIZE_METRES + APPROACH_METRES;
+        (centre.x - BLOCK_PITCH_METRES / 2.0, start_z, frame)
+```
+
+Arithmetic, from `settlement_centre` (`:171-183`) with `REGION_METRES` 1,280, `SETTLEMENT_STRAY_METRES` 640 − 377 − 32 = 231 and `SETTLEMENT_HALF_SIZE_METRES` 13 × 58 / 2 = 377, and `random` (`src/scenes/town.rs:293-304`) recomputed by this reader:
+
+- Settlement [4, 4]: `random([4, 4, 0, 0])` = 0.237102, `random([4, 4, 1, 0])` = 0.762786; centre x = 640 + 231 × (2 × 0.237102 − 1) = 518.54, z = 640 + 231 × 0.525571 = 761.41; south edge z = 761.41 + 377 = 1,138.41.
+- Frame 0: x = 518.54 − 29 = 489.54, z = 1,138.41 + 300 = 1,438.41.
+- Settlement [4, 5]: `random([4, 5, 0, 0])` = 0.036441, `random([4, 5, 1, 0])` = 0.187893; centre x = 640 − 231 × 0.927117 = 425.84, z = 1,920 − 231 × 0.624213 = 1,775.81; its square spans x 48.84 to 802.84 and z 1,398.81 to 2,152.81.
+- Frame 0 lies in that square, 1,438.41 − 1,398.81 = 39.6 m south of its north edge; at 50/60 m a frame the camera leaves it at frame 48 (z = 1,398.41). The open land between the two settlements is 1,398.81 − 1,138.41 = 260.4 m deep.
+
+The test module's own helper settles it on a run: `over_a_settlement(camera_at(0).position)` (`:746-754`) returns true; the bench path's test checks frames 599, 1,799 and 1,800 only (`:765-768`). `SETTLEMENT_STRAY_METRES`' own doc guarantees only 64 m of open land between neighbours (`:39-41`), so a 300 m approach can start over the neighbour for some seeds; for this one it does. The bench measures from frame 248 (`src/bench/mod.rs:64`, `:76`, `:117`), and the first Golden is frame 59, 250.8 m short of settlement [4, 4] over open land, as `tests/goldens.rs:315-318` says.
+
+#### L1-C15
+
+Code, `src/scenes/town.rs:56-59` and `:111-117`:
+
+```rust
+impl TownMesh {
+    /// Every Mesh, in the order of its discriminant, which indexes its
+    /// Handle when loaded.
+    const ALL: [TownMesh; 21] = [
+...
+const _: () = {
+    let mut index = 0;
+    while index < TownMesh::ALL.len() {
+        assert!(TownMesh::ALL[index] as usize == index);
+        index += 1;
+    }
+};
+```
+
+and the same for `BoxMaterial::ALL` (`:133-145`, "Every Material, in the order of its discriminant, which indexes its Handle when loaded.", asserted at `:162-168`). `grep -rn "TownMesh::ALL\|BoxMaterial::ALL" src` at the frozen commit finds only those four assertion lines. At `8bc34eb1`, `spawn_town` loaded every Mesh and Material through these arrays and indexed the Handles by discriminant (`let meshes: Vec<MeshHandle> = TownMesh::ALL ...`, then `MeshRef(meshes[renderable.mesh as usize])`); `git log -S` puts the removal of that load in the commit where `town` spawned its static content from its cooked Chunks (2026-11-07). The cook now names Meshes and Materials by `name()` alone (`:409-415`, `:1230-1233`). Lines: `:57-81` (25 with the doc), `:111-117` (7), `:134-145` (12 with the doc), `:162-168` (7): 51; the enums' `name()` methods stay in use.
+
+### Notes for the verifier
+
+Four of the drift Findings are in documents lane 7 also reads: L1-C01
+(ADR 0018's cap normals), L1-C06 (ADR 0011's dev launch), L1-C09 (ADR
+0017's and ADR 0018's Resident tail) and L1-C10 (a `deviations.md` row
+missing for the texel density); where lane 7 files the same sentence, the
+triage keeps one. The tooling section's notes point at `src/cook/mod.rs:585`,
+which is L1-C03 here. Reader C reads the streaming section's L1-F02 from
+the pool's side: the refused mip move it calls "neither logged nor
+counted" is logged at `error` by `ChannelTextures::place`
+(`src/assets/material.rs:419-425`) and is only uncounted, so the verifier
+may narrow L1-F02; the log line itself misdescribes the move, which is
+L1-C11. M3.5's L1-C01, the dangling-reference warning, is fixed in scope
+but for a scene with an absent source, which reader A records with its
+ceiling and reader B for the launch. Reader A also settles a question the
+shaders section's L1-S10 leaves: meshoptimizer 1.3's reported error
+includes the weighted attribute error, unclamped, so the "metres" that
+ADR 0018 and `CONTEXT.md` give it is not a geometric distance alone.
+
+#### the cooker's Meshes, Textures, scene cook and export
+
+Not filed, since each is a reading without a quoted clause it breaks, a
+question only a run can settle, or another reader's; recorded so the next
+audit does not re-find them.
+
+- **The LOD error includes the attribute error.** This settles the
+  question the shaders section's notes leave open (whether
+  `simplify_with_attributes_and_locks`'s `result_error` includes the
+  weighted attribute error): it does. In meshoptimizer 1.3,
+  `rankEdgeCollapses` adds each collapse's attribute quadric error to its
+  position error when attributes are given (`simplifier.cpp:1430-1433`,
+  with seam and complex wedges at `:1435-1469`, the collapse's error set
+  at `:1477`), `performEdgeCollapses` keeps the largest collapse error
+  (`:1643`), and the result is returned
+  as `sqrtf(result_error) * error_scale` (`:2620-2622`). The cook asks for
+  normals at weight 0.5 and UVs at weight 1.0 and no
+  `meshopt_SimplifyErrorClamped`, whose documentation is "Clamp attribute
+  error to match position error scale and avoid extreme error values in
+  areas with high attribute variance" (`meshoptimizer.h:484-485`); the
+  `meshopt` 0.7 commit's review deferred that option as a technique
+  decision. `CookedLod::error_metres`'s doc says so ("of position, normal
+  and UV together", `src/assets/cooked.rs:608-610`); `CONTEXT.md`'s
+  **LOD error** ("how far a LOD strays from LOD 0, in metres") and ADR
+  0018's "per LOD its error in metres" read as a geometric distance. The
+  README quote under `meshoptimizer-1.3-attribute-weights` makes an
+  attribute change "approximately equivalent" to a distance, so "metres"
+  is defensible; the consequence is that selection draws a finer LOD and
+  the shadow mask's `LOD_ERROR_MARGIN` passes higher back faces where
+  normals or UVs vary, more of the shaders section's L1-S10 band. To size
+  it, run the chain of `town`'s Meshes once more with
+  `simplify_with_locks` (positions only) on the same LODs and compare the
+  errors. Not filed: no clause quotes a positions-only error.
+- **A fourth platform path in the Mesh cook.** `bevy_mikktspace` 1.0.0
+  weights each corner's tangent by an angle from `(x as f64).acos() as
+  f32` (`bevy_mikktspace-1.0.0/src/lib.rs:229-234`,
+  `src/mikktspace.rs:737`), the platform's f64 `acos`. The `CLAUDE.md`
+  checklist line on the Mesh Blob names glam's SIMD, a platform's f32 sine
+  or cosine and a fused C++ build; this path is of the same kind, made
+  rare by the narrowing (Block A1, step 3), and the hash agrees on the
+  machines that run it today. `uv_sphere`'s comment
+  (`src/scenes/mod.rs:1440`, reader D's) also presents f64 `sin_cos` as
+  machine-independent, which the same narrowing argument makes rare, not
+  impossible. A line in the checklist naming any platform `libm` call
+  would cover both.
+- **What the hash test cannot see.** The RTX 2070 SUPER's Windows build
+  runs neither hash test in CI, and `.cargo/config.toml` sets
+  `-ffp-contract=off` for no Windows target; commit `8ac44220` records
+  both as not covered. SciFiHelmet's Mesh is outside the test.
+- **The dangling-reference warning's ceiling.** While any source of the
+  referring scene is absent, every ID the Cooked cache holds passes for
+  that scene's Scene and Chunk references, a stale one included, even an
+  ID of another, present source of the scene (`src/cook/mod.rs:514-525`,
+  `:919-921`); the `ponytail:` comment states it. A Far proxy's
+  references, the ground's Materials, are checked by a dev launch
+  (`src/cook/launch.rs:193-195`) and not by `praxis cook`, where the
+  ground Mesh's own Mesh-to-Material reference covers them whenever the
+  ground is read. In `cook_sources` no reference names a Chunk, so
+  `may_be_kept`'s `kept_chunks.contains(id)` (`:515`) never matches
+  there; it matters for the dev launch, which looks Chunks up by ID
+  (`src/cook/launch.rs:176`, `:239-240`).
+- **Unity's "average".** `unity-6000-uv-distribution-metric`'s quote,
+  "Average of triangle area / uv area", does not say whether Unity
+  averages per-triangle ratios or divides summed areas. ADR 0018 states
+  the code's form ("as a ratio of summed areas"), so a reader is not
+  misled; a `deviations.md` row is due only if Unity's metric is the mean
+  of ratios, which the registry's quote cannot settle.
+- **The image decoder is outside the Texture Cook key.** A Texture's key
+  hashes its encoded source bytes and the encoder (`intel_tex_2 0.5.0
+  basic`), not the `image` crate that decodes PNG and JPEG
+  (`src/cook/texture.rs:116-130`, `:135-158`). A decoder release that
+  decoded a JPEG differently would leave Blobs fresh that a fresh cook
+  would write otherwise. ADR 0018 lists "the encoder versions", so no
+  clause is broken.
+- **`with_fastest_bc7` on a baked metallic-roughness Texture.**
+  `cook_far_proxy` sets it on both baked Textures (`src/cook/mod.rs:450`);
+  BC5 never reads the BC7 settings (`src/cook/texture.rs:648-656`), so the
+  flag changes nothing there. Harmless.
+- **The world test's "each of one size".** The doc at
+  `src/cook/mod.rs:1231-1234` says each of `world`'s Textures is of one
+  size; the test asserts it of four sampled Textures and multiplies one
+  chain by the count.
+- **DIFFERENCES.md and ADR 0026 on a Far proxy past the View distance.**
+  The *Far proxies against the Chunks' own Meshes* entry says praxis
+  "keeps a Far proxy Resident, and draws it, out to a Chunk's edge past
+  the View distance"; ADR 0026's *Settled by the draw* holds a Far proxy,
+  its slot an Instance with no Mesh, while it is past the View distance.
+  `export-scene` writes the Chunks within the View distance
+  (`src/cook/export.rs:254-257`, by `distance_metres`), as the entry
+  says. Which of the two describes what praxis draws is streaming's to
+  judge.
+- **Small Instances in a Cycles rebuild.** `export-scene` writes each
+  Renderable at its true transform, as prepare reads it; ADR 0027 then
+  scales a small Instance to a pixel in the culling and vertex stages.
+  `DIFFERENCES.md` has an entry for Thin Primitives and one for coverage
+  quantised by 4x MSAA, and none naming small Instances; whether the MSAA
+  entry covers `town`'s far pigeons is the tooling reader's to decide.
+- **M5 story 15** (weights tuned on the gallery) cannot be settled from
+  code; the weights are the first chain commit's.
+- **Sound but subtle, checked:** the cut computed before
+  `optimize_vertex_fetch` holds after it, since renumbering is a
+  bijection (`src/cook/mesh.rs:212-219`); meshoptimizer extends a lock on
+  any wedge to every vertex at its position (`simplifier.cpp:510-517`), so
+  a thin tube's triangles survive even where another Primitive touches
+  it; the 85% comparison keeps a LOD of exactly 85%, since 0.85 in f32 is
+  0.85000002384 (`:371`); `export-scene` composes every translation in
+  f64 and narrows only rotation and scale; the Far proxy's Cook key
+  hashes each drawn Material once in sorted order, the placed Meshes in
+  the order the sources list them and a Texture once per Material that
+  samples it (`src/cook/mod.rs:324-361`), deterministic for one source
+  list and each part a fixed-length hex key, so no two inputs share an
+  encoding.
+
+#### the world's cook: Chunks, the dev launch's cook and Far proxies
+
+- **The atlas's gutters.** A chart's padded block starts at a column and row
+  that are multiples of 4 (`bake.rs:206-212`: `column` advances by padded
+  widths, `row` by shelf heights, both multiples of `GRID_TEXELS`), the chart
+  2 texels in. At mip 2 the chart's first edge is at (col + 2) / 4 = a texel
+  centre of the block's first mip-2 texel, and its far edge at
+  (col + 2 + size) / 4 ≤ (col + padded) / 4 − 0.5, the block's last centre,
+  since padded ≥ size + 4. A UV held inside the chart, bilinear at mip 2,
+  therefore weights no texel outside its block. At mip 3 a block of 4 may
+  share a mip-3 texel with its neighbour, which ADR 0026:32 admits.
+- **BC blocks across charts.** The analysis above is of filtering. At mip 1
+  and coarser, a BC7 or BC5 block of 4 × 4 texels spans 8 × 8 or more mip-0
+  texels, so up to four charts' blocks; the encoder's endpoints then mix
+  their colours. `no_chart_bleeds_into_another_down_to_mip_2` samples the
+  bake's uncompressed `Mips`, not the encoded Blob. ADR 0026:34's reopen
+  trigger ("a proxy whose capture shows the encoder's blocks") covers what
+  a capture would show; a crop of `world`'s densest Chunk's proxy at the
+  Load radius, at mip 1 and 2, would settle whether it shows.
+- **A Placement the runtime does not draw still joins the shell.** `placed`
+  keeps such a Placement's triangles with no Material (`far_proxy.rs:65-94`);
+  they are a drop surface and are merged and charted, and their chart reads
+  no source, so the proxy draws them in the atlas's mean colour, which
+  `no_chart_bleeds_into_another_down_to_mip_2` asserts on purpose
+  (`far_proxy.rs:692-703`). ADR 0026 says only that such a Placement is no
+  source of the bake. Whether a Far proxy should draw what its Chunk does
+  not is the owner's question; no Reference scene places such a Placement
+  that this reader found.
+- **The fill is a truncated mean.** `bake.rs:360-361` divides integer byte
+  sums, `(component / count.max(1)) as u8`, so the fill is the mean rounded
+  down, up to one code under it. ADR 0026:32 says "the mean of the baked
+  texels as stored". Below the lane's resolution; not filed.
+- **A pivot a hair under a Chunk edge.** `chunk_holding` floors exactly, but
+  `split`'s `placement.translation -= origin` rounds to 256.0 for a pivot
+  within 2.8e-14 m under a Chunk's lower edge (half an f64 ulp at 256), so
+  such a Placement sits at 256.0 from its Chunk's origin, not in [0, 256).
+  The World position stays exact to that rounding; the town test's
+  `(0.0..256.0).contains` (`chunk.rs:248-251`) would catch one on `town`.
+  No generator places one.
+- **Thread and hash map order.** Chunk order is a `BTreeMap`'s; Placements
+  keep the generator's order; every `HashMap` in these files is a lookup.
+  The bake's workers take charts from an atomic counter (`bake.rs:332-353`),
+  but each tile is written to its own rectangle and the fill sums integers,
+  so the atlas does not depend on thread order.
+- **What a stale Far proxy key misses.** Checked and found complete: the
+  key covers every constant of the drop, the merge, the LOD chain, the
+  chart, the pack and the bake (`far_proxy.rs:32-38`, `bake.rs:23-27`),
+  the pixel through its f32 `Display`, which round-trips; the Mesh encoder
+  string, which names meshoptimizer 1.3 and vertex codec 1 (`mesh.rs:45-47`,
+  matching `Cargo.lock` and `meshoptimizer.h:15`); the Texture encoder and
+  format (`texture.rs:277-286`). Only the spatial grid's 16 m cell
+  (`GRID_CELL_METRES`) and the atlas ceiling are left out, neither of which
+  changes a cooked byte.
+- **`ErrorAbsolute`'s key.** The registry carries the flag only as
+  `meshopt-0.6.2-simplify-options`, whose quote names `const ErrorAbsolute = 4`
+  in 0.6.2; `Cargo.lock` pins 0.7.0. Nothing in these files cites the key,
+  and the vendored `simplifier.cpp:2489`, `:2621-2622` show the absolute
+  error under 0.7.0, so no Finding; the registry's maintainer may want a
+  0.7.0 entry.
+- **The launch's warnings for an absent source.** `may_be_kept` excuses every
+  cached ID a scene with an absent source names (`mod.rs:514-525`, `:919-921`,
+  a `ponytail:` ceiling); for the launch this is the remaining part of
+  M3.5's L1-C01, reader A's to weigh.
+- **The densest Chunk's LOD 0.** Block B4's tightness rests on the shell
+  keeping all 5,832 triangles. If the verifier wants it confirmed, the test's
+  `shell.index_count / 3` printed for Chunk (-19, -3) settles it.
+- **A cook on a miss inside a frame.** `FrameIo::request` cooks on the main
+  thread before a read (`src/streaming/io.rs:1524-1529`); `cook_ahead`
+  (`:825-847`) moves the cooks ahead for the cameras it is given. A Far
+  proxy's bake measured 7.5 core-hours for `world` at a texel a pixel
+  (ADR 0026:34), so a launch whose camera meets an unbaked proxy outside
+  `cook_ahead` stalls that frame. Streaming's and tooling's lane, if any.
+- **Repeated warnings.** `far_proxy_mesh` calls `Sources::chunk` for the
+  Chunk and each neighbour again after `far_proxy` did (`mod.rs:480-486`), so
+  a kept Chunk warns up to once per proxy that reads it. Noise, not a defect.
+- **Not re-found.** `DIFFERENCES.md`'s Far proxy roofs a pixel off, and the
+  shaders section's notes on Far proxies under point lights and
+  `COMPOSITION_ERROR` past 128 m, are the same mechanisms seen from the
+  draw; nothing in these files changes them.
+
+#### assets: the Cooked cache reader, the loader, the pools and their Arenas
+
+- M3.5's assets Findings are closed at this commit: L1-C02, the vertex
+  count now bounded by the encoded bytes before `decode_vertex_buffer`
+  allocates (`cooked.rs:784-793`, test `:1513-1530`; `meshopt-0.7.0/src/encoding.rs:175`
+  still allocates first); L1-C03, the normal Channel's Layer 0 now
+  `Rgba16Float` 0.5, 0.5, 1, exact (`material.rs:528-547`); L1-C04, a
+  Material past its count now gets no Handle (`material.rs:653-655`, test
+  `:1921-1954`); L1-C06, ADR 0018's status sentence now names the Meshlet
+  Arenas.
+- The M5.5 report's L1-F02 says a refused mip move is "neither logged nor
+  counted", and its streaming note says `material.rs:1061-1063` returns
+  `Refused` "without a log". `ChannelTextures::place` logs every refused
+  placement at `error` before returning `None` (`material.rs:419-425`), the
+  move's included. The verifier may want L1-F02's claim narrowed to
+  "counted"; L1-C11 is the misleading wording of that log line.
+- offset-allocator 0.2.0 bins a free node by rounding its size down and
+  searches from the request rounded up, with three mantissa bits
+  (`offset-allocator-0.2.0/src/lib.rs:207`, `:385`; `small_float.rs`). So a
+  request is refused whenever no bin value lies between it and the largest
+  free node, which happens with the node up to about 12.5% larger than the
+  request: the refusal test's index Arena holds 25 free elements in the bin
+  of 24 and would refuse 25 (Block C5). `Arena::longest_free_range` reports
+  that bin value (`lib.rs:495-517`), which is what `allocate` guarantees,
+  so the doc comment at `pools.rs:1379` and the refusal log are right; but
+  a refused load then frees unused Meshes (`pools.rs:389-401`) for room
+  that was there. Not filed: ADR 0017 chooses the crate, and the clause
+  says "does not fit" without a granularity. A test that fills an Arena to
+  leave a free node of 2^k + 2^(k-3) + 1 elements and loads one of that
+  many would show it.
+- A zero-element request still needs a free node: `allocate(0)` takes the
+  lowest non-empty bin (`lib.rs:207-238`) and returns `None` when none is
+  free. A `MeshUse::Traced` load takes no Meshlet element and a
+  `MeshUse::Drawn` load no index (`pools.rs:1264-1283`), yet either is
+  refused as "an Arena's longest free range is too short" when the Arena it
+  takes nothing from is filled exactly or out of nodes (131,072 per Arena,
+  above the Mesh table's 16,371). Not reached by any test; noted, not
+  filed.
+- `CookedCache::read` returns the Blob the index names without hashing it
+  (`cooked.rs:1138-1152`), and `content_hash` hashes the index's names, not
+  the bytes read (`:1106-1117`). A Blob changed in place under its name
+  loads, if it parses, and moves no content hash. ADR 0018 names Blobs by
+  their hash and requires no check on read, so nothing is filed; the
+  verifier may judge whether the Bench history's content hash should rest
+  on the bytes.
+- `zstd::decode_all` decodes a Mesh or Chunk Blob's payload with no bound
+  (`cooked.rs:705`, `:965`); a Texture's levels are bounded by their
+  expected size (`:465`). A corrupt frame can inflate before any count is
+  checked. A local, disposable cache; not filed.
+- Still as M3.5 noted: the Texture reader requires `height > 0` but not
+  `width > 0` (`cooked.rs:445-447`), so a hand-edited Blob of width 0
+  reaches `create_texture` and wgpu's panic; the reader does not check a
+  Texture Blob's format against its Channel (`:433-441`).
+- `texel_density` and the bounds are read without a finiteness check
+  (`cooked.rs:715-718`, `:722`), where the thin radius and the LOD error are
+  checked (`:724-727`, `:739-742`). The cooker writes finite values.
+- `mips_from_blob` truncates to `end - first_level` in u32 (`cooked.rs:404-406`):
+  a range ending below the level it starts from would underflow; its one
+  caller passes `need.ahead..resident` with `need.ahead < resident`
+  (`src/streaming/mips.rs:213-219`).
+- L1-C08 and L1-C09 share a root, the whole-block check made at the tail's mip
+  alone, but are two defects: L1-C09 Textures never stream, L1-C08 Textures stream
+  into an invalid class. A Texture whose side is a power of two times a
+  multiple of 4 at every mip down to its tail meets neither: `world`'s
+  facades are 2,048 (`src/scenes/world.rs:86`). The helmet sources are not
+  in the worktree; listing every cooked Texture's sides (`praxis cook` then
+  the KTX2 headers) would say whether any Reference scene has one.
+- Sound and subtle, checked: the two Material counts share one
+  `Generations`, and since each count's live entries stay within its
+  capacity, every index stays under 222 + 285 and inside the SSBO
+  (`material.rs:570-580`, `:653-667`); `written_bytes` counts exactly what
+  `load_for` writes (Block C4); the copies' mip arithmetic in `push`,
+  `stream_mips` and `evict_finest_mip` fills the target from its first mip
+  to its last; the neutral class 0 slice 0 is never released, as the
+  neutral Textures are not in `loaded_textures`; a tail mip of a BC Texture
+  is never 0 texels tall, as the mip before it held more than 64 KiB in at
+  most 2,048 blocks a row; `evictable` with streaming's `rank` (need at
+  least two past the finest Resident mip, `mips.rs:291-293`) never evicts a
+  mip a Texture needs.
+- `compact_blases` drains whatever is left after its two waits with the
+  warning "BLAS not compacted: not ready after its build"
+  (`pools.rs:791-796`), also for an entry already compacted and only
+  waiting for its copy's submission; after two blocking polls none should
+  be left. Wording only.
+- Textures a spawn loads by `AssetLoader::texture` (texture-wall's 10,000,
+  `src/scenes/mod.rs:1071-1083`) count a user no Material holds and that no
+  code removes, so they are never freed; by design for a spawn.
+- The ledger charges a class's levels by size a slice (`src/stats/gpu_memory.rs:175-181`),
+  not by role: a L1-C09 Texture's mips past 64 KiB, Resident for life, go to
+  `TexturePool`, its smaller ones to `ResidentTails`.
+- `GEOMETRY_BYTES_PER_MESH`'s "the mean of `town`'s Meshes when it had 19"
+  (`pools.rs:31-33`) and `ARENA_PER_MILLE`'s measured shares need a cook
+  and a fill to recheck; the arithmetic from them is Block C1's.
+
+#### the Reference scenes
+
+Not filed, since each is already filed elsewhere, predates the scope, needs a run, or breaks no clause; recorded so the next audit does not re-find them.
+
+- L1-F41 (streaming section) is the one defect this reader found in the fixed-schedule systems of these files (`wrap_around_camera`, `src/scenes/mod.rs:921-934`); its clause rows above cite it.
+- Mesh Blobs across machines. `uv_sphere` computes its trigonometry in f64 because "a platform's f32 sine and cosine round by machine, and a Blob's bytes must not" (`src/scenes/mod.rs:1440`), but `town`'s `cylinder` (`src/scenes/town.rs:1318-1321`) and `wire` (`:1383-1384`) call f32 `cos` and `sin`, and `moved` (`:1266-1275`) rotates by glam's SIMD `Quat`, both of which the `CLAUDE.md` checklist names as causes of a hash that moves on one machine alone. Fifteen of `town`'s 21 Meshes are built from them. The Reference scenes' Mesh hash (`src/cook/mesh.rs:993-1008`) pins the bytes on the machines that run it, so no clause is broken on the evidence here. `world`'s walls take their rotation from f32 `sin_cos` (`Quat::from_rotation_y`, `src/scenes/world.rs:659`) and its windows from `from_rotation_arc` and SIMD products (`:682`, `:688-689`); those reach the densest Chunk's Far proxy hash (`src/cook/far_proxy.rs:814-824`) through the walls and roofs it merges. To settle it on a machine no CI job is: run both hash tests on the RTX 2070 SUPER's Windows build, ADR 0013's hardware floor, with its own C runtime's `cosf` and `sinf`.
+- Eviction on `world`. `world.rs:5` says "the scene's library outgrows the texture pool and freeing and eviction run", as M4 story 58 asks ("so that eviction must run"). The library is 8 GiB against a 4 GiB pool, but the fit test asserts that every camera's view, with every mip of every facade and atlas Resident, fits the pool (`src/scenes/world.rs:995`); freeing runs (the M4 Pro Baseline counts 1,126 `pool_entries_freed`, `bench/baselines/apple-m4-pro/world.json:334`), and Frame stats hold no eviction counter (`grep -i evict src/stats/mod.rs` finds none). Whether a Texture is ever evicted over the bench path or the traversal needs a run with a counter or a probe on `evict_finest_mip`.
+- ADR 0017's "the 282 within the View distance and a Chunk's edge of a camera on a 64 m grid": the most Chunks within 2,256 m of such a camera is 285 (M5 story 22's figure, this reader's count), so the 282 must be the camera of most Arena bytes, which the fit test does not print (it prints each count's most over all cameras, `src/scenes/world.rs:964-971`). Settled by a run that prints the proxies at the camera of most vertex Arena bytes.
+- ADR 0026's Considered options say "at most 219 proxies are drawn"; on the fit test's 64 m grid this reader counts at most 218 Chunks with a nearest distance in (256, 2,000] m, and 220 in [256, 2,000]. Not a decision clause and not in these files; for reader B if it weighs the sentence.
+- `town`'s `placements` doc, "Every Instance the town places, block by block, then its lamps, poles and wires" (`src/scenes/town.rs:375-376`), omits the ground, which opens the list: 64 tiles now, one Placement at `8bc34eb1` under the same doc. The omission predates the scope, so it is not filed.
+- Window and farm reach (checked, sound): a window's pivot lies at most 5 m from its building's on either axis (half a 10 m wall, or 4 m along it for six columns at 1.6 m), inside a lot's 6 m reach; a farm's building lies at most 48 + 5.3 m from its tile's centre, inside the tile's 64 m; a farm keeps clear of its own settlement (excluded under 377 + 64 = 441 m on both axes, its building at most 53.3 m from the tile's centre, so at least 10.7 m clear) and of the neighbour's (a settlement's edge is at least 32 m inside its region, and ground tiles align with regions, 10 to a region).
+- Determinism of the generator (checked, sound within one machine): every choice is `random` of where the thing stands, in f64; farms seed by the tile centre's f64 bits; loops run in fixed order. One coincidence: a lot's pick `[settlement, 9, lot_row, 2..4]` equals a brick shade's `[facade, 9, course, brick]` when the global facade index equals the settlement index; it correlates two decorative values and breaks no clause.
+- The far ground's depth (checked): `FAR_GROUND_DEPTH_METRES`' comment ties the depth to f32's 62.5 mm at 1,024 km, a horizontal spacing; `docs/performance.md:35` shows the depth it needs falls tenfold with a tenfold shorter reach (through at 0.005 m at 1,024 km and at 0.0005 m at 102.4 km), consistent with the comment, and 0.5 m is 25 times the shallowest depth that hid it (0.02 m), as ADR 0026 says.
+- The far ground's `LoadedChunk` takes the ground Mesh's Asset ID as its Chunk ID (`src/scenes/world.rs:253`); no cooked Chunk shares it, so per-Chunk caches keyed by Chunk ID see a distinct key. Checked, sound.
+- `town`'s lamp after its head became its own Mesh (checked): the light at 4.7 m lies under the head (4.85 to 5.05 m) and the arm (4.96 to 5.04 m), outside both Meshes, as the comment says (`src/scenes/town.rs:235-238`); the Lamp's Mesh is now Thin Primitives alone, so it takes its widest tube's width class, which the shaders section's L1-S12 reads; the head, an ordinary cuboid of steel with no emission, casts at every distance.
+- Load radii (checked): `town`'s 1,024 m holds every Chunk from every frame of its path (the farthest Chunk's nearest point is about 842 m from the orbit at 45°); `far_coplanar`'s 4,352 m holds its farthest Chunk's nearest point at 4,237.6 m.
+- The bench path test's "Past twice the 512 m hold radius, so no Chunk stays loaded" (`src/scenes/world.rs:763`) is right: two cameras over 1,024 m apart share no Chunk within 512 m of both.
+
+### Counts
+
+| Severity class | Findings |
+|---|---|
+| `image` | 0 |
+| `budget` | 0 |
+| `correctness` | 4 (L1-C04, L1-C05, L1-C07, L1-C08) |
+| `drift` | 10 (L1-C01, L1-C02, L1-C03, L1-C06, L1-C09, L1-C10, L1-C11, L1-C12, L1-C13, L1-C14) |
+| `health` | 1 (L1-C15) |
+
+Clause verdicts: 261 rows (A 59, B 66, C 95, D 41); `holds` 220, four of
+them with a `drift` Finding on the clause's wording or its doc (L1-C01,
+L1-C03, L1-C06, L1-C09); `broken` in part 4 (L1-C05 on ADR 0018's dev
+launch; L1-C07 on ADR 0017's no-growth clause and its checklist line;
+L1-C08 on ADR 0017's move by copy); `broken, known` 2 (ADR 0017's
+texture pool capacity in Texture classes, ADR 0022's determinism as the
+streaming section's L1-F41); `superseded` 0; falls in another reader or
+module 27; not applicable 8. Spec stories: 99 rows (A 19, B 15, C 35, D
+30), a story read by more than one reader counted once by each; 70 hold;
+broken in part 3 (M4 story 64 with L1-C05, M4 story 47 with L1-C07, M4
+story 37 with L1-C08); superseded 3 (M5 story 17 and the M5 spec's Far
+proxy Implementation Decision by ADR 0026's 2026-11-18 amendment, M4
+story 66 by ADR 0026); falls in another reader or module 22; not settled
+from code 1 (M5 story 15, the simplifier's weights tuned on the gallery).
+Registry keys: 38 rows (A 17, B 7, C 11, D 3); 34 match, one of them as
+the Deviation `src/cook/mesh.rs:meshlet_triangle_counts`; 1 differs
+(`unity-6000-uv-distribution-metric`, L1-C10); 2 fall in reader A; 1 an
+uncited source unchanged in scope (SplitMix64). Oracles: 39 rows (A 7, B
+11, C 16, D 5); `exact` 26; `exact` with a `loose` part 2; `explained` 5;
+`tight` 2 (the Far proxy's LOD 0 within a pixel, the bake's outermost read
+at (2.3, 2.6)); `loose` 4 (SciFiHelmet's Blob ceiling, L1-C02, by 1.14%
+over its measurement; the two camera paths' steps, by about 10^6 and
+2.5 × 10^5; the cap vertices' centre line, by about 47); `unexplained` 0;
+one states its floor beside its constant. The module's 95 unit tests and
+the 16 of `tests/cook.rs` pass on the M4 Pro.
