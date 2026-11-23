@@ -1408,3 +1408,1325 @@ Before the verifier. Clause verdicts: 128 rows, of which 6 are
 Finding; 5 fall in shaders or another module and 1 is not judged from
 code; none is `superseded`. Spec stories: 40 rows. Registry keys: 84 keys
 in 29 rows, all matching their quotes.
+
+## shaders
+
+Scope: `src/render/shaders/`, the WGSL parts and `mod.rs`, with the oracles
+in `src/render/shader_function_tests.rs`, `src/render/shader_tests.rs` and
+`src/render/coverage_tests.rs`, as far as they changed after `8bc34eb1`:
+932 changed lines of the parts and `mod.rs` (`culling.wgsl` 388,
+`main.wgsl` 196, `common.wgsl` 148, `mod.rs` 116, `shadow_mask.wgsl` 75,
+`shading.wgsl` 7, `dynamic_tlas_marker.wgsl` 2), 548 of the oracle file
+and 317 of `shader_tests.rs`; `coverage_tests.rs` did not change and was
+read for what it pins. Three readers at high effort shared the module by
+file, each with the lane brief verbatim: A, surface shading, coverage,
+Thin Primitives, small Instances and Texture classes (`main.wgsl`,
+`shading.wgsl`, the coverage and Layer functions of `common.wgsl`,
+`coverage_tests.rs`); B, culling, LOD selection and module assembly
+(`culling.wgsl`, `mod.rs`, `shader_tests.rs`, the composition and LOD
+functions of `common.wgsl`); C, the shadow mask and its rays
+(`shadow_mask.wgsl`, `shadow_ray_mask`, `segment_meets_box`, `position_at`
+and the octahedral codec). Every reader read `common.wgsl` whole. Each
+reader's scope, clause verdicts, stories, registry keys and oracles are a
+subsection below, its floors in blocks numbered by its letter (A1, B1,
+C1, ...); a block named "M3.5's" is one of that report's. Their Findings
+are one table, numbered from `L1-S01` in the readers' order; "M3.5's
+L1-S0n" names that report's Finding. ADRs read whole and judged for their
+WGSL clauses: 0008, 0014, 0015, 0017, 0019, 0020, 0021, 0026 and 0027,
+with 0003 for one figure and the `CLAUDE.md` review checklist's shader
+clauses as their operational form. `deviations.md` holds two rows in
+these files, `shading.wgsl:point_light_luminance` and
+`common.wgsl:selected_lod`, which the code matches. ADRs 0008 and 0023
+are unchanged since `8bc34eb1`, as are `hdr.wgsl`, `gt7.wgsl`,
+`display.wgsl`, `tonemapping.wgsl`, `froxel.wgsl`, `froxel_grid.wgsl`,
+`light_count.wgsl`, `depth_pyramid.wgsl`, `bend.wgsl` and
+`blas_refit_marker.wgsl`: M3.5's verdicts on the clauses that fall in
+those parts stand, and the rows below give them again only where code in
+scope calls them. Every `where` is `path:line` at the frozen commit, under
+`src/render/shaders/` unless given in full.
+
+Oracles: 36 tests at the frozen commit against 28 at `M3.5`'s. The eight
+added since each have a row below, as do five older tests whose bodies or
+comments changed in scope; of the eight, three state their WGSL floor
+beside their tolerance and five do not (L1-S03, L1-S08, L1-S13). The
+session ran the 36 once on the frozen tree before assembling the section,
+`cargo test --lib shader_function_tests` at `e5c55a8d` on the Apple M4
+Pro's Metal adapter, battery charged at 100%, load average 4.17 at the
+start, no peer session benching or holding a quiet turn: 36 passed in
+0.27 s, none skipped for want of an adapter. The readers ran nothing.
+
+### surface shading, coverage, Thin Primitives, small Instances and Texture classes
+
+Read in full at the frozen commit `e5c55a8d`: `src/render/shaders/main.wgsl`
+(465 lines; in scope `surface_normals` `:50-72`, `vs_thin` `:93-173`,
+`thin_fragment_samples` `:181-184`, `fs_thin_depth` `:186-189`,
+`fs_thin_surface_normals` `:191-202`, `fs_thin_main` `:204-215`, `fs_main`
+`:298-301`, `lit` `:307-465` and the `froxel_mask_bit` midpoint `:287`),
+`src/render/shaders/shading.wgsl` (269 lines; in scope only three comments,
+`:110`, `:182-183`, `:262`), `src/render/shaders/common.wgsl` (408 lines;
+mine: `CameraUniform` `:17-28`, `MeshData` `:191-201`,
+`THIN_NARROWEST_VIEW`, `thin_drawn_radius`, `thin_kept_samples`
+`:223-234`, `SMALL_INSTANCE_WIDEST_PIXELS`, `small_instance_coverage`,
+`small_instance_scale` `:236-280`, `MeshletData.thin_radius_metres`
+`:295-301`, `layer_class_and_slice` `:403-407`), and
+`src/render/coverage_tests.rs` (828 lines, unchanged since M3.5, read for
+what it pins of ADR 0019's merging clause). Diffed against M3.5's frozen
+commit `8bc34eb1` for each file. ADRs read whole, status lines and
+amendments included, and given a row per clause that falls in these
+files: 0027, 0019, 0008, 0023, 0014, 0015, 0017 and 0026; the `CLAUDE.md`
+review checklist's shader clauses as their operational form. Spec stories
+read: every story of the M4 spec (`spec-611.md`) and the M5 spec
+(`spec-804.md`); rows below for those these files implement. Opened
+outside these files, to judge a clause and not audited:
+`src/render/shaders/mod.rs:290-330` (the constants these parts read),
+`src/render/shaders/culling.wgsl:110-175`, `:300-345`, `:390-430` (how
+the culling pass decides which Instances reach `vs_thin`, reader B's),
+`src/render/main_pass.rs:90-225` (which entry point each pipeline runs and
+its multisample state), `src/render/renderer.rs:185-200`
+(`pixel_size_per_metre`), `src/assets/material.rs:1-30`, `:120-240`,
+`:520-560` (the Layer encoding and the neutral texels), `src/gpu/mod.rs:298-306`
+(the floor's array layers), `src/scenes/town.rs:976-1180` (which Thin
+Primitives exist). Sources judged by their entries in
+`docs/references.toml`; `docs/audit/deviations.md` and
+`scripts/cycles-reference/DIFFERENCES.md` read for what is not a
+Finding. Oracles read in `src/render/shader_function_tests.rs`: the five
+named in the brief, the three tolerance constants' comments the M3.5 exit
+rewrote (`:15-23`, `:1227-1247`) and the `decode_surface` comment
+(`:1530-1533`), all against M3.5's derived floors. Nothing was run. Every
+`where` is `path:line` at the frozen commit, under `src/render/shaders/`
+unless given in full.
+
+#### Clause verdicts
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0027 | "Partial coverage is a `sample_mask` output of the fragment stage" | holds: the two depth twins return `@builtin(sample_mask)`, `fs_thin_depth` as its only output and `fs_thin_surface_normals` beside the normals | `main.wgsl:186-189`, `:191-202` |
+| 0027 | "No pipeline of the main pass enables alpha-to-coverage" | holds: every main-pass pipeline is built with the one `MultisampleState`, `alpha_to_coverage_enabled: false`; no WGSL reads alpha as coverage, `surface.opacity` is written as the colour's alpha and nothing reads it as coverage | `src/render/main_pass.rs:110-114`; `main.wgsl:464` |
+| 0027 | "The depth passes write the mask, so only the kept samples take the fragment's depth" | holds: the pre-pass twin runs `fs_thin_surface_normals` with shadow rays on, `fs_thin_depth` with them off, and the lit pass's own depth draw runs `fs_thin_depth`; each writes `thin_fragment_samples`, which the raster ANDs with coverage | `main.wgsl:181-202`; `src/render/main_pass.rs:156-186` |
+| 0027 | "The lit pass draws the same geometry at depth equal and writes none: it meets the depths the depth passes kept" | holds: `fs_thin_main` has no `sample_mask` output; every twin runs `vs_thin`, whose `clip_position` is `@invariant`, so the lit twin computes the depth pass's positions | `main.wgsl:94`, `:206-215`; `src/render/main_pass.rs:218-221` |
+| 0027 | "A fragment of its twin that keeps no sample is discarded there, since another fragment's depth can equal its own" (amended 2026-11-16) | holds: `kept_samples = covered_samples & thin_fragment_samples(in)`, `discard` at 0 | `main.wgsl:204-213` |
+| 0027 | "A fragment keeps a count of the four samples equal to its coverage times four, rounded to the nearest, and none below an eighth" | holds: `u32(saturate(coverage) * 4.0 + 0.5)`, round half up, truncation toward zero; 0 exactly below 0.125, and each threshold 0.125, 0.375, 0.625, 0.875 is exact in f32 (Oracles, Block A2) | `common.wgsl:231-233` |
+| 0027 | "The samples kept follow from the count alone, sample 0, then 3, 1 and 2, so every fragment of a pixel keeps the same ones and a tube's faces share them" | holds for the order: `0xfb910 >> 4·count & 15` gives 0b0000, 0b0001, 0b1001, 0b1011, 0b1111, nested; the same samples in every fragment of a pixel hold where the fragments' counts agree, which per-fragment inputs can split at a rounding threshold (Notes) | `common.wgsl:230-234` |
+| 0027 | "No dither, no pattern across pixels, no state across frames" | holds: the mask reads the count alone; `vs_thin` and `thin_fragment_samples` read this frame's camera, Instance, Mesh and vertex only | `common.wgsl:231-234`; `main.wgsl:113-184` |
+| 0027 | "Each pipeline of the main pass has a twin whose fragment stage writes the mask, or for the lit pass meets it" | holds, shader side: four twins, each running `vs_thin`: `fs_thin_surface_normals` twins the pre-pass's `vs_depth_normals` and `fs_surface_normals` (shadow rays on); `fs_thin_depth` twins the pre-pass's `vs_depth_prepass` alone (rays off) and the lit pass's depth draw, `vs_depth_prepass` and `fs_depth`; `fs_thin_main` twins `vs_main` and `fs_main`. The lists and draws fall in shaders B and render | `main.wgsl:113`, `:187`, `:197`, `:207`; `src/render/main_pass.rs:146-221` |
+| 0027 | "The twins draw every frame, since any Instance can be small" | falls in render | |
+| 0027 | "Its vertices move out from its tube's centre line until the tube draws a pixel wide" | holds: the centre is the vertex less the radial vector, `instance.rotation_scale * (normal * radius)`; the vertex moves to `centre + radial · drawn / radius` with `drawn = max(radius, 0.5 · pixel / 0.75)`, so the tube's narrowest view, 0.75 of its drawn diameter, spans a pixel | `main.wgsl:122-134`; `common.wgsl:223-228` |
+| 0027 | "its coverage is the tube's true width over the width it draws" | holds: `radius / thin_drawn_radius(radius, pixel)`, the radius flat and the pixel's span interpolated at the centroid; both widths scale with the same view factor | `main.wgsl:182` |
+| 0027 | "It reads the camera and the Instance alone" (Thin Primitive) | holds: the camera uniform, the Instance's rotation-scale, its Meshlet's radius and the vertex's normal | `main.wgsl:115-128` |
+| 0027 | "With culling on, the culling pass drops an Instance of a Mesh that is all Thin Primitives once its widest tube keeps no sample at the bounds' nearest depth" | falls in shaders B (`culling.wgsl:328-344`, `:425-427`) | |
+| 0027 | "A Far proxy holds no Thin Primitive, so the rule ends at the Load radius" | falls in cook | |
+| 0027 | "An Instance whose Mesh bounds cover under a pixel's area is scaled about their centre, across the view, until they cover a pixel's, each vertex keeping its depth" | broken off the view axis, `correctness`, L1-S02: each vertex's offset from the bounds' centre keeps its component along the view axis, the clip-w row's `xyz`, and the rest is scaled by `inverseSqrt(coverage)`, so each vertex keeps its w and its reverse-Z depth near/w (ADR 0015) as the clause asks; but the footprint the bounds' depth extent draws through perspective is not scaled by s², so the scaled bounds cover a pixel on the view axis only (0.84 px at coverage 0.5 at the view's corner) | `main.wgsl:136-160`; `common.wgsl:277-280` |
+| 0027 | "its coverage is the area they truly cover over a pixel's" | holds where the bounds' area share is at least (sphere diameter / 4 px)²; elsewhere the coverage is that sphere term, larger than the area share: `drift`, L1-S01 | `common.wgsl:253-274` |
+| 0027 | "With culling on, the culling pass drops it once that rounds to no sample, under an eighth" | falls in shaders B for the drop (`culling.wgsl:424`); the shader half holds: coverage under 0.125 keeps mask 0, and the scale stops at 0.125 | `common.wgsl:231-233`, `:277-280` |
+| 0027 | "An Instance that draws four pixels wide across the sphere about its bounds is scaled no further" | holds: `sphere_share = diameter² / (4² · pixel²)` is 1 at four pixels across, so `max(area_share, sphere_share) ≥ 1` and the select returns 1, scale 1; below four pixels the sphere term holds the scale under 1/√(area share) (L1-S01) | `common.wgsl:267-274` |
+| 0027 | "A Mesh with a Thin Primitive keeps that rule alone" | holds in `vs_thin`: a Meshlet with a radius takes the tube's rule whatever its Instance; that such a Mesh's other Meshlets never reach `vs_thin` is the culling pass's (`culling.wgsl:400-411`: coverage stays 1, so the Instance is not small), shaders B | `main.wgsl:122`, `:135` |
+| 0027 | "It reads the camera and the Instance alone" (small Instance) | holds: the Instance's anchor, offset and rotation-scale, its Mesh's bounds and the camera | `main.wgsl:136-160` |
+| 0027, Consequences | "A tube of few faces draws wider than a pixel so that its narrowest view spans one, a third wider for three faces, so `town`'s wire ends where it is a sixth of a pixel wide" | holds, arithmetic: drawn = pixel / (2 · 0.75), so a three-faced tube draws 1/0.75 = 4/3 of a pixel across a face; coverage = r / drawn = 0.75 · d / pixel, under 1/8 where d < pixel / 6 | `common.wgsl:224-228`, `:231-233` |
+| 0027, Consequences | "Every tube takes three faces' share, 0.75 of its diameter, whatever its faces" | holds: one constant, `THIN_NARROWEST_VIEW = 0.75`, no face count read; an equilateral triangle of circumradius R is 1.5 R = 0.75 · 2R wide at its narrowest, and the stored radius is the circumradius (the vertex's distance from the centre line) | `common.wgsl:223-228`; `main.wgsl:125-127` |
+| 0027, Consequences | "A tapered tube keeps its taper as it widens, so the coverage at its ends is off by up to the quarter the cook tolerates" | holds in form: one stored radius per Primitive, each vertex moved by the same factor from a centre that is off the true axis by the taper; `town`'s `cylinder(0.03, 0.02, ...)` at radius 0.025 is such a tube; the tolerance is the cook's | `main.wgsl:125-132`; `src/scenes/town.rs:1078` |
+| 0027, Consequences | "A fragment stage that writes the mask reads a flat input, so the M4 Pro merges none of its fragments" | holds: `thin_fragment_samples` reads `radius_metres` and `instance_coverage`, both `@interpolate(flat)`, into its result, so no compiler can drop them | `main.wgsl:100`, `:103`, `:181-184` |
+| 0027, Consequences | "A small Instance keeps its mean coverage whatever its Mesh, since the samples it keeps fall by the area it gains" | broken off the view axis, L1-S02: on the axis the scale 1/√c multiplies the drawn area by 1/c and the mask keeps c of the samples, so the product is the Mesh's own area share whichever term set c; off it the drawn area grows by f/c + (1 − f)/√c, so the mean coverage falls by up to 35% at the view's corner | `common.wgsl:273`, `:279`; `main.wgsl:157-159` |
+| 0027, Consequences | "The culling pass tests a small Instance's bounds as it draws them, scaled"; "the twins' packed indices share the frame's draw's buffer" | falls in shaders B | |
+| 0027, Consequences | "A pixel whose samples a mask splits between two surfaces is listed for the shadow mask pass's second surface" | falls in shaders C; the lit twin's half holds: `lit` takes `covered & kept` as its coverage, so a thin fragment counts as the nearest surface only where none of its kept samples shows the second surface | `main.wgsl:210`, `:214`, `:390-395` |
+| 0019 | "a lit pass at depth equal" (the twins) | holds: as for the ordinary pipelines, one vertex function per twin set, `vs_thin`, with an `@invariant` position, so the lit twin's depths meet the depth twins' bit for bit | `main.wgsl:94`, `:113` |
+| 0019 | "one more per phase and pipeline for Thin Primitives and small Instances (ADR 0027)" | holds, shader side: an entry point per twin (rows above); the draws are render's | `main.wgsl:113-215` |
+| 0019 | "with alpha-to-coverage for masked materials (amended 2026-11-15, ADR 0027: alpha-to-coverage stays off, and partial coverage ... is a written `sample_mask`)" | holds: the ADR 0027 rows above; masked Materials are M7's | `src/render/main_pass.rs:113` |
+| 0019 | "A fragment stage that reads any flat input is never merged"; "Two passes that must agree on a sample's triangle, as the depth passes' normals and the lit pass must, both read a flat input" | holds for the twins: `fs_thin_surface_normals` reads `material_id` through `surface_normals`' select and the radius and coverage through `thin_fragment_samples`; `fs_thin_main` reads all three; `fs_thin_depth` reads the radius and coverage. The ordinary entry points are unchanged (M3.5's row); `coverage_tests.rs` still pins the merging the clause describes (`:648-669`) and nothing in scope changed it | `main.wgsl:71`, `:181-184`, `:197-202`, `:207-214`; `src/render/coverage_tests.rs:648-669` |
+| 0019 | "the depth passes also write each sample's triangle normal and the normal interpolated over it, 4 bytes per sample" | holds for the twin: `surface_normals` is the former body of `fs_surface_normals` moved into a function, its arguments the varyings it read, called by both depth stages that write normals; a widened tube's normals are those of the triangles drawn | `main.wgsl:50-77`, `:196-202` |
+| 0019 | "each fragment reads the bits traced from the surface it shades: the nearest sample's, or, where the fragment covers a sample off that sample's plane, the farthest such sample's ... a nearest-surface fragment that runs under a nearer surface at another sample reads that surface's" | holds, unchanged in `lit`, and for the twin with its kept samples as the coverage | `main.wgsl:387-397`, `:210`, `:214` |
+| 0019 | "the vertex shader reads the record for its Instance, Material and vertex base, then pulls its vertex from the vertex Arena" | holds: `vertex_output`, and `vs_thin` reads the same record, Meshlet and Instance again for the radius, the bounds and the normal | `main.wgsl:217-247`, `:114-124` |
+| 0019 | "Each Primitive draws with its own Material unless its Instance overrides it" | holds for the read: `record.material_id`, resolved by the culling pass | `main.wgsl:245` |
+| 0019 | "One compute culling pass composes each Instance's bounds centre camera-relative (ADR 0014; amended 2026-11-04: the vertex shader still composes each vertex)" | holds: `vertex_output` composes each vertex; `vs_thin` composes the bounds' centre once more for the small-Instance rule, by the same function and the same arguments as `culling.wgsl:133-141`, so both see one centre | `main.wgsl:227-233`, `:140-146`; `culling.wgsl:133-141` |
+| 0019 | "lit by every directional light and by the point lights of each pixel's Froxel ... each hidden where the shadow mask says so ... up to 59 lights per pixel" | holds, unchanged since M3.5's rows: the body of `fs_main` moved into `lit` without change past the Texture reads; the twin shades through the same `lit` | `main.wgsl:365-457`, `:298-301`, `:214` |
+| 0019 | "they are listed from the light buffer, which holds its lights directional first ... since the lit pass sums lights and the shadow mask gives them its bits in buffer order" (amended 2026-11-04, 2026-11-06) | holds: directional lights 0 to `directional_light_count`, then the Froxel's entries in light order; the struct comment no longer names the shadow-casting split the amendment removed | `main.wgsl:398-457`; `common.wgsl:161-171` |
+| 0019 | `froxel_mask_bit`'s binary search, which finds a light's bit in another slice's list | holds: the midpoint changed from `(low + high) / 2` to `low + (high - low) / 2`, the same value for any count at most `FROXEL_LIGHT_CAPACITY` (127), so the change cannot move a bit | `main.wgsl:282-296`; `src/render/froxel_pass.rs:28` |
+| 0008 | "Anti-aliasing is spatial (MSAA, SMAA)" | holds: coverage below a pixel is four samples' worth, rounded; no jitter, no accumulation | `common.wgsl:231-234` |
+| 0008 | "Nothing the image depends on reads screen-space history ...: ... the main pass reads none (ADR 0019)" | holds: `vs_thin`, `thin_fragment_samples` and `lit` read this frame's uniforms, buffers, Textures and shadow mask only | `main.wgsl:113-215`, `:307-465` |
+| 0023 | "a `DirectionalLight` gives illuminance in lux and a `PointLight` luminous intensity in candela ... emissive ... luminance in cd/m² ... ambient ... in lux" | holds, unchanged since M3.5's rows; the twin shades through the same `lit` | `main.wgsl:398-460`; `shading.wgsl` unchanged in code |
+| 0023 | "Shading runs in f32 and pre-exposes colour before fp16 stores it, and every path clamps it to 65504" | holds for both lit entry points: one `min(luminance * camera.exposure, LARGEST_HALF)` in `lit` | `main.wgsl:463-464` |
+| 0014 | "The GPU never holds a World position in f32 ... shaders compose positions relative to the camera" | holds in the scope's code: `vs_thin` composes the bounds' centre by `camera_relative_position` from anchors and offsets, and the widening and the scaling work on camera-relative positions and offsets from them | `main.wgsl:127-133`, `:140-160`; `common.wgsl:37-46` |
+| 0014 | "point lights reach the GPU as an anchor plus an offset, which ... the lit pass compose camera-relative" | holds: `point_light_position` in `lit` | `main.wgsl:443`; `common.wgsl:127-139` |
+| 0014 | the precision bar, "a point 0.3 m from the camera lands within 0.25 px ... (0.043 mm)" | holds for the twins: an unwidened tube's vertex is recomposed as `(p − radial) + radial · (r / r)`, which returns p within two roundings of \|p\| (2 × 2⁻²⁴ × \|p\|: 0.12 µm at 1 m, 12 µm at 100 m, where a quarter pixel at 1440p and 45° is 100 × 2 tan 22.5° / 1440 / 4 = 14 mm), and the depth and lit twins compute it alike | `main.wgsl:127-133` |
+| 0015 | "with no far plane"; clip w is the depth along the view axis | holds where the twins rely on it: a pixel's span at the centre line is `pixel_size_per_metre · w`, and a vertex at or behind the camera's plane (w ≤ 0) stays and keeps all its samples; the small-Instance scaling keeps w, hence depth near/w | `main.wgsl:128-130`, `:154-160`, `:182` |
+| 0015 | "Depth is cleared to 0 and compared with `Greater`"; "Hi-Z passes follow the same direction" | not applicable to these parts, which compare no depth; the twins' depth state is render's | |
+| 0017 | "A Layer names a class and a slice of its array, Layer 0 stays the neutral default" | holds: `layer / SLICES_PER_CLASS`, `layer % SLICES_PER_CLASS`, the inverse of Rust's `class * SLICES_PER_CLASS + slice` with the same constant, 256, declared from Rust; Layer 0 decodes to class 0's slice 0, where each Channel's table places its neutral texture first (oracle below) | `common.wgsl:403-407`; `mod.rs:315`; `src/assets/material.rs:22-24`, `:136-140`, `:520-526` |
+| 0017 | "Each Channel is one partially bound binding array ... of texture arrays ..., an array per Texture class" | holds for the reads: each of the five Channel reads indexes its binding array by the class and samples the slice as the array layer | `main.wgsl:309-335` |
+| 0017 | "sampled trilinear, the colour Channels at 16x anisotropy and the data Channels at 4x" | holds for which sampler each Channel takes: `colour_sampler` for albedo and emissive, `data_sampler` for normal, metallic-roughness and occlusion; the samplers' descriptors are render's | `main.wgsl:314-335` |
+| 0017 | "a class's slice count is fixed when it opens, at most the Capability floor's 256 array layers" | holds as WGSL reads it: `SLICES_PER_CLASS` is `FLOOR_TEXTURE_ARRAY_LAYERS`, wgpu's default `max_texture_array_layers`, 256 | `mod.rs:315`; `src/gpu/mod.rs:305-306` |
+| 0026 | "The baked Material. Its factors are 1 for base colour, roughness and metallic, and it names no normal, occlusion or emissive Texture" | holds in the lit pass: a Channel without a Texture reads Layer 0, its neutral texel: the flat normal, decoded exactly (oracle below), white occlusion, and white emissive times the Material's emissive factor | `main.wgsl:309-335`; `src/assets/material.rs:520-560` |
+| checklist | "No main-pass pipeline enables alpha-to-coverage. Partial coverage is a `sample_mask` the depth passes write, through pipelines of their own, the same samples in every fragment of a pixel, from a stage that reads a flat input (ADR 0027)" | holds (the ADR 0027 rows above; same samples per pixel where the counts agree, Notes) | `main.wgsl:181-202`; `common.wgsl:230-234` |
+| checklist | "calls no `textureSample` under non-uniform control flow" | holds by WGSL's rules: `lit` samples its five Textures first; in `fs_thin_main` a non-uniform `discard` precedes the call to `lit`, which WGSL defines as demoting the invocation to a helper, so the samples and derivatives after it stay in uniform control flow; whether Metal's lowering keeps the discarded quad members alive is a Note | `main.wgsl:207-214`, `:303-335` |
+| checklist | "no divide-by-zero or NaN at grazing angles or zero roughness" | holds in the scope's code: `drawn / radius` only under `radius_metres > 0`; `thin_fragment_samples` floors the pixel at 1e-9, so its divisor is at least 6.7e-10; `along_view` divides by at least 1e-30; `small_instance_coverage` divides by `view_depth · pixel_area`, 0 at w = 0, where the select returns 1, and a NaN fails `coverage < 1.0` and returns 1 too; `small_instance_scale` clamps at 0.125 before `inverseSqrt` | `main.wgsl:130-132`, `:157`, `:182`; `common.wgsl:256`, `:274`, `:279` |
+| checklist | "WGSL keeps sRGB and linear apart" | holds: unchanged reads; the neutral colour texels are `Rgba8UnormSrgb` and the neutral normal `Rgba16Float`, linear, as their Channels' Textures are | `main.wgsl:314-335`; `src/assets/material.rs:536-553` |
+| checklist | "No World position reaches the GPU in f32" | holds (the ADR 0014 rows) | |
+| checklist | "Matrices reach WGSL column-major" | holds for the uses: `view_proj[0].w`, `[1].w`, `[2].w` are the clip-w row's x, y and z, the view axis; `rotation_scale[i] * half_extent` scales column i, the Mesh's axis i | `main.wgsl:155`; `common.wgsl:246-250` |
+| checklist | "A new or changed shading function in WGSL has an oracle test"; "a function under an oracle lives in a shared part" | holds: `thin_drawn_radius`, `thin_kept_samples`, `small_instance_coverage`, `small_instance_scale` and `layer_class_and_slice` sit in `common.wgsl`, each under an oracle; `thin_fragment_samples`, a select between two of them, and `surface_normals`, the former entry point's body, have none | `shader_function_tests.rs:2305-2465`, `:2572-2609` |
+| checklist | "A binding is written once ...; no WGSL part declares one" | holds: no `@group` or `@binding` in the three parts | |
+| checklist | comments cite "only an upstream bug, adapted code's source and licence, a pinned third-party source or an ADR" | holds: no ticket number in the three parts; the two timing figures the scope removed from comments now point to `docs/performance.md`'s Measurements behind the code, whose rows 27 and 28 hold them | `main.wgsl:365-369`; `shading.wgsl:182-183`; `docs/performance.md:27-28` |
+| checklist | "Identifiers are full words, WGSL included" | holds: no abbreviation in the scope's code | |
+
+#### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| M4 story 32 ("each Channel bound as a binding array of texture arrays, one array per shape") | holds, shader side: each Channel's read indexes its binding array by the Layer's class and samples its slice as the array layer; the class table that opens one array per shape is the assets module's | `main.wgsl:309-335`; `common.wgsl:403-407` |
+| M4 story 33 ("the Capability floor kept at 256 layers per texture array") | holds as WGSL reads it: `SLICES_PER_CLASS` is declared from `FLOOR_TEXTURE_ARRAY_LAYERS`, wgpu's default limit, 256, so no Layer names a slice past it | `mod.rs:315`; `src/gpu/mod.rs:305-306`; `common.wgsl:405-407` |
+| M5 story 17 ("a Far proxy's Material baked ..., albedo and metallic-roughness") | holds in the lit pass: the proxy's other three Channels read Layer 0, whose normal decodes to the flat normal exactly (oracle below) and whose occlusion and emissive texels are white, the emissive multiplied by its factor | `main.wgsl:309-335`; `shader_function_tests.rs:1398-1421` |
+| M5 story 35 ("a Thin Primitive narrower than a pixel drawn a pixel wide with its coverage rounded to the nearest of five levels") | holds: widened in `vs_thin` to a pixel at its narrowest view, its true width's share kept as a count of four samples rounded to the nearest, none under an eighth | `main.wgsl:122-134`, `:181-184`; `common.wgsl:223-234` |
+| M5 story 36 ("masked geometry drawn through pipelines of its own") | holds, shader side: the mask is written only by the twins' fragment stages, `fs_thin_depth` and `fs_thin_surface_normals`; no ordinary entry point writes or reads it beyond its coverage input; which indices reach the twins is shaders B's | `main.wgsl:186-202`, `:74-82`, `:298-301` |
+| M5 story 37 ("a Thin Primitive to cast a shadow only onto receivers whose pixel is no wider than it") | falls in shaders C (`shadow_ray_mask`) | |
+| M5 story 39 ("an Instance smaller than a pixel scaled to a pixel with its coverage by area, and dropped at zero coverage") | holds on the view axis: scaled across the view by 1/√coverage, its samples kept by coverage, mask 0 under an eighth (the drop itself is shaders B's); off the axis the scaled Instance covers less than a pixel and fades by up to 35% more than its area (L1-S02); "coverage by area" holds where the area share exceeds the four-pixel sphere term, which sets it for slivers (L1-S01) | `main.wgsl:136-160`; `common.wgsl:239-280` |
+| M5 story 9 ("selection to read no earlier frame"), as it bears on the twins | holds for the widening, the scaling and the mask: they read this frame's camera and Instance only (ADR 0008 row) | `main.wgsl:113-184` |
+
+#### Registry keys
+
+| File | Keys | Verdict |
+|---|---|---|
+| `main.wgsl:339` | `gltf-2.0-bitangent` | matches, unchanged since M3.5 (moved into `lit`): `cross(geometric_normal, tangent) * in.tangent_world.w` (`:345`) is the quote's "cross product of the XYZ components of the normal and tangent vectors and multiplying that cross product against the W component of the tangent" |
+| `main.wgsl:381` | `salvi-2012-sbaa-surfaces` | matches, unchanged: one word of the shadow mask per surface a fragment shades, the quote's "computing only one color sample per surface"; the twin passes its kept samples as the coverage that picks the surface (`:210`, `:390-395`) |
+| `shading.wgsl:7`, `:15`, `:21`, `:25`, `:26`, `:36`, `:37`, `:64`, `:93`, `:103`, `:108`, `:152`, `:165`, `:226`, `:231`, `:266` | the sixteen keys M3.5's report matched | match: no cited line's code changed in scope (the file's diff is three comments), and none of these entries changed in `docs/references.toml` since `8bc34eb1` (`git diff 8bc34eb1..e5c55a8d -- docs/references.toml` names none of them); the `khr-lights-punctual-range` floor is `deviations.md`'s first row |
+| `common.wgsl` (scope's functions) | none cited | the coverage functions cite no source, and none needs one: the five levels, the sample order and the widening are ADR 0027's own decisions, and the projected-area form `a \|n · centre\| / depth³` is derived in the oracle's doc comment (`shader_function_tests.rs:2369-2374`) |
+| `shader_function_tests.rs:1417-1420`, `:1530-1533` | `vulkan-glsl-std-450-precision` | matches: the quote's "sqrt(): Inherited from 1.0 / inversesqrt(). inversesqrt(): 2 ULP." carries the comments' claim that sqrt of a perfect square need not come back exact; `msl-4.1-fast-math`'s "sqrt(x): Implemented as x * rsqrt(x)" with "rsqrt: <= 2 ulp" allows the same on Metal, which neither comment names (Notes) |
+| `shader_function_tests.rs:15-23` | `wgsl-2026-float-accuracy`, `msl-4.1-rounding` | match: the quote's "x / y: 2.5 ULP" gives the GGX peak's 1.3e-6 (2.5 × 2⁻²¹ = 1.19e-6 plus f32(π)'s 1.4e-7 relative to 5.09); "round toward zero ... may be supported" is the u = 2⁻²³ of the parenthesised figures; each figure equals M3.5's derived floor |
+| `shader_function_tests.rs:1238-1246` | `higham-3.1` | matches: γ₃ = 3u/(1 − 3u) at u = 2⁻²³ is 3.58e-7, the comment's 3.6e-7; × 0.71 over the masking term's 1.13e-3 is 2.24e-4, its "up to 2.2e-4"; M3.5's L1-S01 is answered by this comment |
+
+#### Oracles
+
+u = 2⁻²⁴ for round to nearest and 2⁻²³ where Metal may round toward zero
+(`msl-4.1-rounding`); division 2.5 ULP (`wgsl-2026-float-accuracy`,
+`vulkan-spirv-precision`, `msl-4.1-fast-math`); `inverseSqrt` 2 ULP and
+`sqrt` inherited from 1/`inverseSqrt` (`vulkan-glsl-std-450-precision`,
+`wgsl-2026-float-accuracy`), on Metal x · rsqrt(x) (`msl-4.1-fast-math`);
+a dot of n terms within γₙ Σ\|xᵢyᵢ\| (`higham-3.1`).
+
+| Function | Test | Constant | WGSL floor | Stated error | Stated floor | Verdict |
+|---|---|---|---|---|---|---|
+| `tangent_space_normal` at the normal Channel's Layer 0 | `the_neutral_normal_layer_decodes_to_the_flat_normal_exactly`, `shader_function_tests.rs:1404` | exact (`assert_eq!`, `:1421`) | 0 for x, y and the scale-0 case; z at scales 0.5, 1 and 2 is `sqrt(1)`, which the allowances let land within 4.2e-7 of 1 on WGSL and Vulkan and 2.4e-7 on Metal (Block A1) | none | yes, `:1417-1420` (Vulkan's allowance; Metal's x · rsqrt(x) unnamed) | tight: passes where `sqrt(1)` returns 1, as a correctly rounded root does; the expected (0, 0, 1) is glTF's flat normal and 0x3800 is binary16 0.5 exactly |
+| `thin_drawn_radius` | `a_thin_primitive_draws_a_pixel_wide_where_it_is_narrower`, `:2305` | 1e-6 absolute, an unnamed literal (`:2327`) | ≤ 2.5e-8 absolute: the halving exact, one 2.5 ULP division at most 0.08 (ULP 2⁻²⁷), `max` exact, and the f32 inputs' and expectations' own rounding (Block A2) | none | no | loose, about 40×; every expected value recomputed (Block A2), the boundary case 0.0225 m equal to the radius by construction |
+| `thin_kept_samples` | `a_thin_primitive_keeps_the_samples_nearest_its_coverage`, `:2335` | exact (`assert_eq!` on the mask, `:2360`) | 0: `saturate` and × 4 exact, + 0.5 exact at the four thresholds 0.125, 0.375, 0.625, 0.875 (sums 1, 2, 3, 4), the off-threshold inputs 0.124, 0.374 and 0.874 sit 0.016 of a count below one, about 2¹⁷ ULP, so neither a fused multiply-add nor round toward zero can flip a count; `u32()` truncates; shift and mask are integer (Block A2) | none | no | exact; the twelve masks recomputed from `0xfb910` |
+| `small_instance_coverage` | `a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one`, `:2375` | 2e-6 absolute, unnamed literal (`:2427`) | ≤ 8.3e-7 × coverage from about 14 roundings (1.7e-6 at 2⁻²³), plus the literals' own: 0.353_553 is 3.9e-7 under 0.5 · f32(1/√2), 0.5625 is 1.3e-7 under the sheared case's value from its f32 inputs: worst ≈ 1.1e-6 (Block A3) | none | no | explained, 1.8× at round toward zero, about 3× at round to nearest; all sixteen expected coverages recomputed by hand (Block A3) |
+| `small_instance_scale` | the same test | 1e-5 absolute, unnamed literal (`:2430`) | `inverseSqrt` 2 ULP at most 2.83 (4.8e-7), plus half the coverage's relative error times the scale (≤ 1.2e-6, 2.4e-6 at 2⁻²³), plus the literals' rounding (2.777_778: 2.2e-7): ≤ 1.9e-6, 3.1e-6 at 2⁻²³ (Block A3) | none | no | explained, 3 to 5× |
+| `thin_kept_samples` of the coverage | the same test | exact (`:2431`) | 0 in effect: the nearest case to a threshold is 0.1296, 0.0184 of a count past 1, four orders past the coverage's floor | none | no | exact |
+| `layer_class_and_slice` | `every_layer_of_texture_wall_decodes_to_the_class_and_slice_it_was_placed_in`, `:2572` | exact (`assert_eq!`, `:2601`) | 0: `/` and `%` by the constant 256 are exact in u32; the Layer reaches the kernel as f32 and `u32(input.x)` is exact below 2²⁴; texture-wall's largest Layer is 47 · 256 + 16 = 12,048 (Block A4) | none | yes, `:2588` ("Layers stay below 2^24, so f32 carries them exactly") | exact; the expectation is the Rust twin's own placement, so the test pins the round trip through `ClassAndSlice::layer`, and its first assertion that the neutral texture is Layer 0 (`:2599`) |
+
+##### Block A1: the neutral normal
+
+`shading.wgsl:157-159` with `encoded = unpack2x16float(0x38003800) =
+(0.5, 0.5)`, exact: `encoded * 2.0 - 1.0` is 0 in every rounding mode
+(1.0 − 1.0); `dot` of zeros is 0; `1.0 - 0.0` is 1; `max` exact;
+`sqrt(1)`. On WGSL and Vulkan, `sqrt` is inherited from `1.0 /
+inverseSqrt(x)`: `inverseSqrt(1)` lies within 2 ULP, in [1 − 2 · 2⁻²⁴,
+1 + 2 · 2⁻²³], and the division adds 2.5 ULP: from 1 − 2⁻²³ the quotient
+is about 1 + 2⁻²³ + 2.5 · 2⁻²³ = 1 + 4.2e-7, from 1 + 2⁻²² about
+1 − 2⁻²² − 2.5 · 2⁻²⁴ = 1 − 3.9e-7. On Metal `sqrt(x)` is `x * rsqrt(x)`,
+so z is `rsqrt(1)` within 2 ULP, \|z − 1\| ≤ 2.4e-7. `x_and_y * scale` is 0
+for every finite scale, and at scale 0 the `select` returns 1.0 exactly.
+The test compares with `assert_eq!`, so it allows none of this: it passes
+where `sqrt(1)` is correctly rounded.
+
+##### Block A2: the thin pair
+
+`thin_drawn_radius`, `common.wgsl:227`: `0.5 * pixel_metres` exact (a power
+of two, no underflow at these sizes); `/ THIN_NARROWEST_VIEW` one division,
+2.5 ULP, or under fast math's "allow reciprocal" a product with f32(4/3)
+(relative 3.0e-8) and one rounding; `max` exact. The largest result is
+0.08 (pixel 0.12 m), whose ULP is 2⁻²⁷ = 7.45e-9: 2.5 ULP = 1.9e-8. The
+inputs and expectations are f32 literals, each within half an ULP of the
+decimal: 0.12 within 3.7e-9, which the division scales to 2.5e-9; 0.08
+within 3.7e-9. Sum ≤ 2.5e-8; the test's f32 subtraction of two values
+this close is exact (Sterbenz). Expected values: 0.5 · 0.012 / 0.75 = 0.008
+< 0.015 → 0.015; 0.5 · 0.0225 / 0.75 = 0.015 = the radius → 0.015 either
+way; 0.03 → 0.02; 0.06 → 0.04; 0.12 → 0.08; radius 0.025 with 0.03 →
+0.02 < 0.025 → 0.025; with 0.06 → 0.04. All seven match `:2310-2316`.
+
+`thin_kept_samples`, `common.wgsl:231-233`: `0xfb910 >> (4 · count) & 15`
+gives, for counts 0 to 4, 0x0, 0x1, 0x9 (0b1001), 0xb (0b1011), 0xf: sample
+0, then 3, then 1, then 2, ADR 0027's order. Count = ⌊saturate(c) · 4 +
+0.5⌋: 0 → 0; 0.124 → ⌊0.996⌋ = 0; 0.125 → 1; 0.25 → ⌊1.5⌋ = 1; 0.374 →
+⌊1.996⌋ = 1; 0.375 → 2; 0.5 → ⌊2.5⌋ = 2; 0.625 → 3; 0.874 → ⌊3.996⌋ = 3;
+0.875 → 4; 1.0 → ⌊4.5⌋ = 4; 3.0 → saturate 1 → 4. All twelve match
+`:2340-2351`. f32(0.124) · 4 = 0.49599999 exactly (power of two); + 0.5
+lies in [0.5, 1), ULP 2⁻²⁴, so its rounding moves it by at most 6e-8 from
+0.996: no count flips. The thresholds' sums are integers, exact in any
+rounding.
+
+##### Block A3: the small Instance
+
+Expected coverages, from `common.wgsl:246-274` with k = 0.001 and w the
+negated centre z:
+
+- AHEAD (0, 0, −1000), half 0.5: a × b = 0.25 ẑ, |c · (a × b)| = 250, the
+  other two 0; facing 4 · 250 = 1000; pixel = 0.001 · 1000 = 1 m, area 1;
+  share 1000 / (1000 · 1) = 1. Sphere 4 · 0.75 / 16 = 0.1875. max 1 →
+  select 1; scale 1; count 4 → 0b1111. Matches.
+- half 0.25: facing 4 · 62.5 = 250 → 0.25; sphere 0.047; scale 2; count
+  ⌊1.5⌋ = 1 → 0b0001. Matches.
+- half 0.18: 4 · 0.0324 · 1000 / 1000 = 0.1296; scale 1 / 0.36 = 2.777…;
+  count ⌊1.018⌋ = 1. Matches.
+- half 0.175: 0.1225; clamped to 0.125, scale 2√2; count ⌊0.99⌋ = 0.
+  Matches.
+- half 0: 0; scale 2√2; count 0. Matches.
+- ASIDE (1000, 0, −1000), half 0.25: two faces of 0.0625 · 1000 = 62.5
+  each, facing 500, share 0.5; scale √2; count ⌊2.5⌋ = 2 → 0b1001.
+  Matches. Cross-check against the exact projection: the cube's projected
+  area across the ray is 2 · 0.25 · cos 45° = 0.354 m² at 1414 m, a solid
+  angle of 1.77e-7 sr, over cos³ 45° = 0.354 on the image plane a metre
+  out, 5e-7 m², over a pixel's 1e-6 m²: 0.5. The first-order form is exact
+  for a flat face.
+- half (1, 0.01, 0.01): facing 4 · 0.01 · 1000 = 40 → area share 0.04;
+  sphere 4 · (1 + 1e-4 + 1e-4) / 16 = 0.25005; coverage 0.25005, the
+  sphere's; scale 1.9998; count 1. Matches; this case, and the sheared
+  one, pin the sphere term L1-S01 is about.
+- half (2, 0.01, 0.01): sphere 16.0008 / 16 > 1 → 1. Matches.
+- (0, 0, −10), half 0.5: pixel 0.01, area 1e-4, facing 10, share 10 /
+  (10 · 1e-4) = 1e4 → 1. Matches.
+- (0, 0, 1000): w = −1000, select 1. (1, 0, 0): w = 0, area 0, the share
+  1/0 or 0/0, select 1. Both match.
+- TURNED (columns (s, 0, −s), (0, 1, 0), (s, 0, s), s = f32(1/√2)), half
+  0.25: a × b = 0.0625 (s, 0, s), b × c = 0.0625 (s, 0, −s), c × a =
+  0.0625 (0, 2s², 0); against (0, 0, −1000): 44.19 + 44.19 + 0; facing
+  353.55, share 0.353553; scale 1.681793; count ⌊1.914⌋ = 1. Matches.
+- k doubled, half 0.5: pixel 2 m, area 4: 1000 / 4000 = 0.25. Matches.
+- SCALED (2, 1, 0.5) on half (0.125, 0.25, 0.5): the 0.25 cube. Matches.
+- SHEARED (columns (1, 0, 0), (1, 1e-3, 0), (1, 0, 1e-3)), half 0.5:
+  facing 4 · (0.25 + 0.25 + 0) = 2 → area share 0.002; skews all 0.25,
+  the farthest 0.75; diameter² 4 · (0.25 + 0.25 + 0.25 + 5e-7 + 1.5) =
+  9.000002, / 16 = 0.5625001; coverage 0.5625; scale 4/3; count ⌊2.75⌋ =
+  2 → 0b1001. Matches.
+
+Floor of the coverage chain: `half_axes` one product per component (exact
+for the identity, the power-of-two scales and 0.25 · s); a cross
+component, two products and a difference (exact where one product is 0, as
+in every case but the shear); `dot` with the centre, γ₃; three `abs`
+terms summed, 2u; × 4 exact; `pixel_metres` one product, its square one
+more and doubled, 3u; × `view_depth` u; the division 2.5 ULP, at most 5u
+relative at a binade's foot. About 14u relative: 8.3e-7 (2⁻²⁴) or 1.7e-6
+(2⁻²³) of a coverage at most 1, so at most that absolute; in the cases
+here most steps are exact and the bound is far from reached. The sphere
+term: three dots γ₃ each, the skew sums 2u, the four-term sum 3u, the same
+pixel area and division: about 14u as well. Against the literals: the
+turned case's 0.353_553 is 3.85e-7 under 0.5 · f32(1/√2) = 0.35355339,
+and its computed share carries 0.354 × 14u = 2.9e-7 (5.9e-7): ≤ 9.8e-7;
+the sheared case's 0.5625 is 1.3e-7 under 0.5625001, plus 0.5625 × 14u =
+4.7e-7 (9.4e-7): ≤ 1.1e-6. Against 2e-6: explained.
+
+Scale: `inverseSqrt` 2 ULP, ULP 2⁻²² = 2.4e-7 on [2, 4): 4.8e-7; a relative
+error ε in the coverage is ε/2 in its inverse root: ≤ 7u × 2.83 = 1.2e-6
+(2.4e-6); the literal 2.777_778 is 2.2e-7 off 1/0.36: ≤ 1.9e-6 (3.1e-6)
+against 1e-5.
+
+##### Block A4: the Layer decode
+
+`common.wgsl:405-406`: `layer / 256u` and `layer % 256u`, integer, exact.
+The kernel takes the Layer as f32 (`:2589-2592`) and converts with `u32()`,
+exact for integers below 2²⁴. texture-wall's albedo Channel: the neutral
+texture opens class 0 with 1 slice (Layer 0); the wall's shape opens
+classes of 1, 2, 4, ..., 128 slices (255 Textures in classes 1 to 8), then
+of 256 (`src/assets/material.rs:201-205`): 10,000 − 255 = 9,745 = 38 ·
+256 + 17, so classes 9 to 46 fill and class 47 takes 17, the last at Layer
+47 · 256 + 16 = 12,048, far below 2²⁴ and its class below
+`CLASSES_PER_CHANNEL`, 13,107. The class and slice return through
+`f32(...)`, exact.
+
+### culling, LOD selection and module assembly
+
+Read in full at the frozen commit `e5c55a8d`: `src/render/shaders/culling.wgsl`
+(652 lines), `src/render/shaders/common.wgsl` (407 lines), `src/render/shaders/mod.rs`
+(348 lines), `src/render/shaders/dynamic_tlas_marker.wgsl` (17 lines) and
+`src/render/shader_tests.rs` (1,020 lines); in `src/render/shader_function_tests.rs`,
+lines 1630-1700 (`pack_index`), 1862-2020 (the two precision oracles and
+`PRECISION_COORDINATES`), 2213-2302 (`Case`, `sums_in_every_order`) and 2503-2569
+(the LOD oracle), with the scope diff of the whole file to find the older tests whose
+comments changed. `git diff 8bc34eb1..e5c55a8d` read for every one of those files.
+ADRs read whole, status lines and amendments included, and judged clause by clause
+where the clause lands in these files: 0019, 0014, 0015, 0027, 0008, 0021, 0026,
+0017, and 0003's status line for one figure. Spec stories read: every story of
+`spec-611.md` (M4) and `spec-804.md` (M5) with its Implementation Decisions. Opened
+outside these files, only to judge a clause: `src/render/culling_pass.rs:40-330` (the
+constants the WGSL is assembled with, the buffer sizes, the asserts, the dispatches),
+`src/render/renderer.rs:186-290` (`RenderCapacities`, the LOD threshold) and its
+capacity test at `:1087-1098`, `src/render/bind_groups.rs:17-138`, `:566-584`,
+`src/render/instance.rs:1-22`, `src/assets/cooked.rs:35-57`, `src/assets/pools.rs:505-575`
+(how the Mesh table orders a LOD's Meshlets), `src/cook/mesh.rs:260-420` (the LOD
+chain and its locked Thin Primitives), `src/transform/mod.rs:1-40` (whether an
+Instance can shear), `src/gpu/mod.rs:310-323` (the floor's limits),
+`src/render/shaders/main.wgsl:276-296` and `:400-445` (the loops of the `MAIN` module,
+which `mod.rs` compiles without loop bounding), `bench/budgets.json:17`, and the
+registry entries of every key cited in these files and of the precision keys.
+`deviations.md`, `DIFFERENCES.md`, `CONTEXT.md` and the M3.5 report's shaders section
+(`docs/audit/m3.5/correctness.md:1505-2613`) read for what is not a Finding. Nothing run.
+
+#### Clause verdicts
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0019 | line 3: "a compute pass appends the Meshlets of the LOD selected for each Instance whose Mesh bounds reach into the view frustum to the compacted index buffer in slot order, in two phases" | holds: each slot's three counts are summed by an exclusive scan within its block of 256 slots, then across blocks by one workgroup, so every Meshlet record and packed index is written at its slot's prefix sum; atomics only take a maximum or a count | `culling.wgsl:92-109`, `:441-460`, `:473-496`, `:578-601`, `:638-650` |
+| 0019 | line 3: "Phase one appends those visible the frame before, one bit per slot" | holds: `visible_before` reads one bit of `instance_visibility` per slot; with CULLING off phase one draws every Instance in use | `culling.wgsl:363-367`, `:418-420` |
+| 0019 | line 3: "A compute pass reduces that depth into the Hi-Z pyramid, each texel the minimum of every sample below it" | holds: `depth_pyramid.wgsl` has no change in scope, so M3.5's row stands | `depth_pyramid.wgsl` (unchanged since `8bc34eb1`) |
+| 0019 | line 3: "Phase two appends the others whose bounds lie anywhere nearer than the pyramid's minimum over the texels their screen rectangle covers, and rewrites the bits" | holds: `occluded` is unchanged since M3.5 and now receives bounds grown for a Thin Primitive's widening or widened for a small Instance, which only enlarge the box, so the test stays conservative; phase two draws only a slot phase one left `NOT_DRAWN`, and writes every bit of its block from the workgroup's gathered words | `culling.wgsl:220-267`, `:398-417`, `:436-445` |
+| 0019 | line 3: "one `draw_indexed_indirect` per phase for the depth pipeline and one of both phases for the lit pipeline, and one more per phase and pipeline for Thin Primitives and small Instances (ADR 0027)" | holds for the arguments the pass writes: `draw` holds both phases' ordinary indices from index 0, `phase_two_draw` phase two's, and each phase has a thin draw, each with `instance_count` 1; which pass issues which call is render's | `culling.wgsl:43-61`, `:497-526`, `:579-590` |
+| 0019 | line 15: "One compute culling pass composes each Instance's bounds centre camera-relative (ADR 0014; amended 2026-11-04 [...]: the vertex shader still composes each vertex)" | holds: `bounds_centre` composes the Mesh bounds' centre through `camera_relative_position`, and the frustum, Hi-Z, LOD and coverage tests all take it | `culling.wgsl:133-142`, `:151`, `:292`, `:320` |
+| 0019 | line 15: "tests the frustum and a two-phase Hi-Z pyramid of minimum reverse-Z depth" | holds (rows above and the ADR 0015 rows) | `culling.wgsl:190-200`, `:220-267` |
+| 0019 | line 15: "each index packs a Meshlet record in its high bits and a vertex within that Meshlet in its low six: the cooker builds Meshlets of at most 64 vertices" | holds: `pack_index(record_index, vertex)` shifts by `MESHLET_VERTEX_BITS`, declared as log2 of `MESHLET_MAX_VERTICES` (64), which a compile-time assert keeps a power of two; the record capacity is asserted under 2^26 | `common.wgsl:320-326`; `culling.wgsl:650`; `mod.rs:43`, `:289`, `:319`; `src/render/culling_pass.rs:221` |
+| 0019 | line 15: "Each Primitive draws with its own Material unless its Instance overrides it" | holds: each Meshlet record takes the Meshlet's Material ID unless the Instance's is not `NO_MATERIAL` | `culling.wgsl:594-600` |
+| 0019 | line 15: "Culling tests Instances; tests per Meshlet wait for a profile" | holds: every test runs once per slot in `offset_slots`; no Meshlet is tested | `culling.wgsl:384-435` |
+| 0019 | line 15: "the Mesh table gives the culling pass each LOD's Meshlet range, triangle range and LOD error, for at most 8 LODs" | holds: `MeshData` holds `first_meshlets`, `meshlet_counts`, `first_triangles`, `triangle_counts`, `thin_triangle_counts` and `lod_errors_metres` as arrays of `MESH_MAX_LODS`, declared from `cooked.rs:42` as 8 | `common.wgsl:191-201`; `mod.rs:291`; `src/assets/cooked.rs:42` |
+| 0019 | line 15: "The pass draws, of each Instance, the coarsest LOD whose LOD error times the Instance's scale is under the LOD threshold, one pixel of the target's height, at the distance to the Instance's bounding sphere" | holds for an Instance whose rotation-scale columns are orthogonal: the scale is the largest column length and the sphere's radius the Mesh bounds' half-diagonal times it, which bounds a sheared Instance's box only up to √3 short, so there the distance can be overstated: L1-S04. The threshold is `LOD_THRESHOLD_PIXELS` (1) times a pixel's size a metre away, as the camera uniform carries it | `culling.wgsl:269-300`; `common.wgsl:207-221`; `src/render/renderer.rs:188-200` |
+| 0019 | line 15: "It reads the camera and the Instance alone, so both phases draw the same LOD and no earlier frame decides it" | holds: `instance_lod` reads the camera uniform, the Instance, its Mesh table entry and the `FORCED_LOD` override; phase two recomputes it with the same function on the same inputs; no visibility bit enters it | `culling.wgsl:284-300`, `:428-431` |
+| 0019 | line 15: "the switch is hard, and no Instance draws two LODs" | holds: one LOD per slot, stored in the slot word's top bits and read back by `append_records` and `append_triangles` through `slot_lod` | `culling.wgsl:447-449`, `:576`, `:630` |
+| 0014 | line 3: "The GPU never holds a World position in f32: it reads an integer anchor on a 64 m grid plus an f32 offset, and shaders compose positions relative to the camera" | holds in these files: `InstanceData` and `CameraUniform` carry a `vec3<i32>` anchor and an f32 offset; `camera_relative_position` subtracts the anchors in i32 and scales by `ANCHOR_CELL_SIZE`, declared from Rust's 64 | `common.wgsl:17-28`, `:37-46`, `:177-184`; `mod.rs:288`, `:318` |
+| 0014 | line 3: "point lights reach the GPU as an anchor plus an offset, which the Froxel pass and the lit pass compose camera-relative" | holds for the shared function: `point_light_position` composes the light's anchor and offset through `camera_relative_position` with no local position; its callers are other readers' | `common.wgsl:127-139`, `:166-171` |
+| 0014 | line 3: "a shader-function oracle holds the composition to the precision bar in every evaluation order within 100 km, and shows f32 World positions failing it" | holds: the GPU's order and every order on the CPU over 8³ camera positions to ±100 km, 26 directions and 3 local positions, with an assertion that f32 World positions miss the bar; the floor the test states leaves out the rounding of its inputs: L1-S06 | `src/render/shader_function_tests.rs:1897-1965`, `:2254-2302` |
+| 0014 | line 7: "a point 0.3 m from the camera lands within 0.25 px at 1440p and a 45° vertical field of view (0.043 mm)" | holds: 2 × 0.3 × tan 22.5° / 1440 × 0.25 = 4.31e-5 m; `PRECISION_BAR` is 4.3e-5 | `src/render/shader_function_tests.rs:1872` |
+| 0014 | line 19: "the culling pass composes each Instance's bounds centre the same way for its tests (amended 2026-11-04 [...])" | holds: `bounds_centre`; M3.5's L1-S05 no longer applies | `culling.wgsl:133-142` |
+| 0014 | line 19: "Worst cases [...] sum to 0.041 mm" | holds where the culling pass uses it: `COMPOSITION_ERROR` takes 0.041 mm for the box's centre and for the vertices, 0.082 mm rounded up to 1e-4 m, unchanged since M3.5; a Far proxy's vertices lie past 128 m (Notes) | `culling.wgsl:202-208`, `:222-227` |
+| 0015 | line 3: "Depth is cleared to 0 and compared with `Greater` [...] with no far plane" | holds in the culling pass: `in_view_frustum` tests the four side planes and the near plane, z ≤ w, and no far plane | `culling.wgsl:183-200` |
+| 0015 | line 3: "a Hi-Z pyramid keeps the minimum depth, which is the farthest" | holds: `occluded` takes the minimum of four texels as the farthest depth and calls a box occluded only where its nearest depth, the largest z/w over its corners with each corner moved towards the camera, is under it; equality is not occluded | `culling.wgsl:228-266` |
+| 0015 | line 3: "shadow comparisons follow the same direction" | falls in shaders C | |
+| 0027 | line 3: "Implemented for Thin Primitives [...] and small Instances" | holds for the culling pass's half (rows below) | `culling.wgsl:302-344`, `:398-427` |
+| 0027 | line 9: "A fragment keeps a count of the four samples equal to its coverage times four, rounded to the nearest, and none below an eighth" | holds for the call: the culling pass drops on `thin_kept_samples(coverage) == 0`, the same function the fragment stage keeps samples by; the function falls in shaders A | `culling.wgsl:424`, `:426` |
+| 0027 | line 9: "No dither, no pattern across pixels, no state across frames" | holds for the culling half: coverage and the drop read the camera, the Instance and the Mesh and Meshlet tables only | `culling.wgsl:316-344` |
+| 0027 | line 10: "the culling pass lists the geometry drawn through the twins apart, in slot order within each phase" | holds: a third scan component sums each slot's Thin Primitive indices, every index of a small Instance's; each phase's fill the packed index buffer's end back from the phases' before, and `thin_index` places a slot's at the buffer's end less the phase's end sum plus its own sum less the phase's start, so in slot order | `culling.wgsl:306-314`, `:502-517`, `:556-562`, `:640-646` |
+| 0027 | line 10: "The twins draw every frame, since any Instance can be small" | holds for the arguments: `offset_blocks` writes each phase's thin draw, `instance_count` 1 and its `first_index`, every frame, at zero indices too | `culling.wgsl:508-517` |
+| 0027 | line 11: "With culling on, the culling pass drops an Instance of a Mesh that is all Thin Primitives once its widest tube keeps no sample at the bounds' nearest depth" | holds: a Mesh whose LOD 0 is all Thin Primitive triangles is dropped where the widest Meshlet radius of LOD 0, times the Instance's largest scale, keeps no sample at the grown box's nearest view depth; conservative, as the grown box is nearer than the Mesh's and the largest scale the widest; LOD 0's widest tube is every LOD's, since the cook locks a Thin Primitive's vertices | `culling.wgsl:328-344`, `:425-427`; `src/cook/mesh.rs:293-297`, `:340-347` |
+| 0027 | line 11: "It reads the camera and the Instance alone" (a Thin Primitive's coverage) | holds for the culling pass's widening of the bounds and its drop | `culling.wgsl:162-170`, `:330-344` |
+| 0027 | line 12: "An Instance whose Mesh bounds cover under a pixel's area is scaled about their centre, across the view, until they cover a pixel's, each vertex keeping its depth" | holds for the bounds the culling pass tests: the clip-space half axes are scaled by `small_instance_scale(coverage)` in x, y and z with w kept; under the reverse-Z projection with no far plane a direction's clip z is 0, so the depth is kept; the vertex shader's scaling falls in shaders A | `culling.wgsl:401-410` |
+| 0027 | line 12: "With culling on, the culling pass drops it once that rounds to no sample, under an eighth" | holds | `culling.wgsl:424` |
+| 0027 | line 12: "A Mesh with a Thin Primitive keeps that rule alone" | holds: coverage is worked out only where LOD 0 has no Thin Primitive triangle, so `small` is false otherwise | `culling.wgsl:399-411` |
+| 0027 | line 26: "The culling pass's compute stage already binds the nine storage buffers the Capability floor allows (ADR 0021), so the twins' packed indices share the frame's draw's buffer: each phase's fill its end, back from the phases' before, in slot order" | holds: four compute storage buffers in `SCENE_GEOMETRY` (`instances`, `meshes`, `meshlets`, `meshlet_triangles`), five in `FRAME_DRAW`, and `FRAME`'s one compute binding is the camera uniform; the placement is the line 10 row's | `src/render/bind_groups.rs:20-40`, `:71-102`, `:122-138`; `culling.wgsl:556-562` |
+| 0027 | line 29: "The culling pass tests a small Instance's bounds as it draws them, scaled, against the view frustum and the depth pyramid [...]; it works out every Instance's coverage for that, culled or not" | holds: coverage is worked out for every slot with a Mesh, before the frustum test and whatever CULLING says, and both tests take the widened bounds; which phase draws it still follows the frame before's bit, as for every Instance (ADR 0019) | `culling.wgsl:398-417` |
+| 0027 | line 8: "Who writes it" | falls in shaders A | |
+| 0008 | line 3: "Nothing the image depends on reads screen-space history" | holds for the culling pass's choices that change the image: the LOD, a small Instance's coverage and the thin drop read no earlier frame; the visibility bit chooses only the phase | `culling.wgsl:284-344`, `:418-420` |
+| 0021 | line 16: "`max_storage_buffers_per_shader_stage` at least 9, since the culling pass's compute stage reads and writes nine" | holds: nine, counted in the ADR 0027 line 26 row; the floor requests 9 | `src/gpu/mod.rs:318-320` |
+| 0021 | line 14: "indirect draws, one per pipeline and Hi-Z phase, each from first instance 0" | holds: no WGSL writes `first_instance`, which the clear before phase one leaves 0 | `culling.wgsl:497-526`; `src/render/culling_pass.rs:351` |
+| 0021 | line 16: "Required limits are `wgpu::Limits::default()` [...]" as the culling module relies on them | holds: 256 invocations a workgroup, the default's most; 4,128 bytes of workgroup storage (`scan`, 256 × 16, and `visible_words`, 8 × 4) against 16,384; `append_triangles` dispatched in rows of at most 65,535 workgroups | `culling.wgsl:73-77`, `:383`, `:506-507`; `src/render/culling_pass.rs:81` |
+| 0017 | line 18: "the Instance slots 30% of the scene and pass buffers', at 136.2 bytes a slot with its offsets and visibility bit, in whole scan blocks" | broken in its figure, `drift`: a slot's offsets are now four u32, the three scan components and the LOD error word, so a slot is 144.2 bytes and the checked-in Budgets give 488,448 slots, not 517,376: L1-S05 | `culling.wgsl:446-457`; `src/render/bind_groups.rs:131`; `src/render/renderer.rs:213-217`, `:1092` |
+| 0003 | line 3: "30% of it at 136.2 bytes a slot [...]: 517,376 slots at the Budgets M4 set" | broken in its figures, `drift`: L1-S05 | as above |
+| 0017 | line 18, and the checklist: "a load past either is refused, logged and counted"; "no GPU buffer grows at runtime, and a request past a buffer's capacity is refused and logged" | holds for the culling pass's buffers: `fits` refuses an Instance whose records or indices pass a buffer's end, and every Instance after it, and `append_records` counts it in `instances_overflowed`; every capacity is `arrayLength` or `INSTANCE_CAPACITY`; the log is render's | `culling.wgsl:540-554`, `:579-593` |
+| 0026 | line 20: "A Far proxy is a Mesh and the culling pass selects its LOD as any Instance's" | holds: `culling.wgsl` has no case for a Far proxy | `culling.wgsl:284-300` |
+| 0026 | line 41: "A Far proxy is held, its slot an Instance with no Mesh" | holds: a `NO_MESH` slot is neither drawn nor tested, written `NOT_DRAWN` with a LOD error of 0 | `culling.wgsl:395`, `:446-457` |
+| 0026 | line 7: "Under it the Instance slots, the static TLAS and the flat cull keep M4's capacities" | holds for the culling pass: one `INSTANCE_CAPACITY` from `RenderCapacities`, one flat pass over the slots | `mod.rs:297`, `:323` |
+| 0026 | line 21: "f32 resolves 0.015 mm between 128 and 256 m" | holds, arithmetic: an f32's step in [128, 256) is 2^-16 m = 1.53e-5 m | |
+| checklist | "No World position reaches the GPU in f32: only an anchor plus an f32 offset, composed camera-relative (ADR 0014)" | holds (ADR 0014 rows) | `common.wgsl:37-46` |
+| checklist | "Depth has no far plane, and WGSL that compares or reduces depth (shadow, Hi-Z) keeps reversed depth's direction (ADR 0015)" | holds for the Hi-Z test (ADR 0015 rows); the shadow side falls in shaders C | `culling.wgsl:190-266` |
+| checklist | "Matrices reach WGSL column-major" | holds for the uses: `rotation_scale[i]` is the Instance's axis i, `view_proj * vec4` and `view_proj * mat3x4` are column-vector products | `culling.wgsl:140`, `:151-161`, `:271-273` |
+| checklist | "The GPU builds the frame's draw in slot order within each culling phase, never in the order atomics land" | holds: atomics are `atomicMax` on index counts, `atomicAdd` on the drawn and overflowed counts, `atomicOr` on a workgroup's visibility words; every address written comes from prefix sums | `culling.wgsl:438`, `:581-592` |
+| checklist | "A binding is written once, in its bind group's definition [...] no WGSL part declares one" | holds: `culling.wgsl` and `common.wgsl` declare no `@group` or `@binding`; `assemble` appends each bind group's declarations | `mod.rs:337-339` |
+| checklist | "Streaming uploads [...] no GPU buffer grows at runtime, and a request past a buffer's capacity is refused and logged" | holds for the culling pass (ADR 0017 row) | `culling.wgsl:540-554` |
+| checklist | "A newly used wgpu feature or limit joins the Capability floor" | holds: the nine storage buffers are in the floor; `create_shader_module_trusted` and `ShaderRuntimeChecks` are API, not a feature or limit | `src/gpu/mod.rs:318-320`; `mod.rs:226-247` |
+| checklist | "A new or changed shading function in WGSL has an oracle test" | holds for `selected_lod` and `camera_relative_position`; the culling pass's own functions (`instance_lod`, `lod_counts`, `fits`, the coverage calls) are not shading functions and sit under the Renderer's GPU tests | `src/render/shader_function_tests.rs:2511`; `src/render/renderer.rs:1344`, `:3130`, `:3470` |
+| checklist | "WGSL [...] has no divide-by-zero or NaN" | holds in the culling pass: the growth divides by `max(half_lengths, 1e-30)`; `occluded` divides by `clip.w` only after `clip.w > w_rounding > 0`; `widest_tube_coverage` divides by `thin_drawn_radius`, at least the radius, after returning where it is 0 | `culling.wgsl:172`, `:234-239`, `:340-343` |
+| checklist | "calls no `textureSample` under non-uniform control flow" | holds: the culling pass samples nothing; four `textureLoad`s | `culling.wgsl:263-264` |
+| checklist | "No `unsafe` unless absolutely necessary and clearly explained" | holds: the one `unsafe` call carries a SAFETY comment citing the registry's quote of what turning loop bounding off risks; the check it relies on has a gap: L1-S07 | `mod.rs:242-246` |
+| checklist | "Identifiers are full words, WGSL included"; comments cite no ticket | holds: no abbreviation and no ticket number in these files | |
+
+#### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| M4 story 43, every fixed capacity, Instance slots among them, sized from its Budget at device creation, not a compile-time constant | holds for the WGSL: `INSTANCE_CAPACITY` was imported from a Rust constant at M3.5 and is now `capacities.instances`, which `RenderCapacities::from_budgets` derives and `assemble` writes into the culling module at device creation; the frame's draw stays fixed by design (`DrawCapacity::FIXED`, which the story's list does not name) | `mod.rs:297`, `:323`; `src/render/renderer.rs:252-276`; `src/render/culling_pass.rs:83-100` |
+| M4 story 47, a request past any capacity refused, logged and counted in Frame stats | holds for the culling pass's buffers: an Instance past the Meshlet records' or packed indices' end is not drawn, nor any after it, and is counted in `instances_overflowed`, which the GPU stats readback reads; the log is render's | `culling.wgsl:540-554`, `:579-593` |
+| M4 story 65, the same Chunk content at the world's origin and at its far corner gives identical images | holds for the shader half: positions reach the GPU as anchor plus offset and are composed with the anchor difference in i32, so the camera-relative position depends only on the cell difference and the two offsets; the capture is tooling's | `common.wgsl:37-46` |
+| M5 story 4, a LOD chain of at most 8 | holds for the Mesh table the culling pass reads: arrays of `MESH_MAX_LODS` = 8, and `selected_lod` loops to `min(lod_count, MESH_MAX_LODS)` | `common.wgsl:191-201`, `:215`; `mod.rs:291` |
+| M5 story 6, each LOD's error stored in metres, so selection compares it with a pixel's size without source data | holds: `lod_errors_metres[lod] * scale` against `error_per_metre * distance_metres` | `common.wgsl:216` |
+| M5 story 8, every Instance drawn at the coarsest LOD whose error is under a pixel | holds, with L1-S04 for a sheared Instance | `culling.wgsl:284-300`; `common.wgsl:207-221` |
+| M5 story 9, selection reads no earlier frame | holds: the camera, the Instance and its Mesh only | `culling.wgsl:284-300` |
+| M5 story 10, a Render switch that forces every Instance to LOD 0 and one that forces a given LOD | holds: `forced_lod` becomes the `FORCED_LOD` override, `MESH_MAX_LODS` when unset, clamped to LOD 7 on the CPU and to each Mesh's coarsest in WGSL, so `Some(0)` forces LOD 0 | `culling.wgsl:22-25`, `:285-287`; `src/render/culling_pass.rs:299-310` |
+| M5 story 13, a shadow ray ignores a back face within a pixel's width of its origin | partly, the culling pass's half holds: it writes each slot's drawn LOD's error, in metres at the Instance's largest scale, into the slot's fourth word, in phase one for every slot with a Mesh whether drawn or not, and phase two keeps it; the ray test falls in shaders C | `culling.wgsl:374-377`, `:428-431`, `:450-456`; `shadow_mask.wgsl:192` |
+| M5 stories 18, 19 and 20, Chunks past the Load radius drawn as their Far proxy, swapped whole, a Late Chunk keeping it | partly, the culling pass's half holds: a Far proxy's Instance is culled and its LOD selected as any other's, and a held proxy's slot, with no Mesh, draws nothing; which slots hold what is streaming's | `culling.wgsl:395`, `:284-300` |
+| M5 story 35, a Thin Primitive narrower than a pixel drawn a pixel wide, coverage rounded to five levels | partly, the culling pass's half holds: the bounds grow by the widening so the frustum and Hi-Z tests keep the widened tube, and its Meshlets are listed for the twin draw; the widening and rounding fall in shaders A | `culling.wgsl:144-181`, `:640-646` |
+| M5 story 36, masked geometry drawn through pipelines of its own | holds for the listing: Thin Primitives' and small Instances' indices fill their own region of the packed index buffer, with each phase's draw arguments | `culling.wgsl:502-517`, `:556-562` |
+| M5 story 37, a Thin Primitive shadows only receivers whose pixel is no wider than it | partly: `mod.rs` declares `NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE` (320.0) and `SHADOW_WIDTH_CLASSES` (7) from Rust; `shadow_ray_mask` and the rays fall in shaders C | `mod.rs:316-317`; `src/render/acceleration_structures.rs:971-974` |
+| M5 story 39, an Instance smaller than a pixel scaled to a pixel with its coverage by area, dropped at zero coverage | holds for the culling pass's half: coverage worked out for every Instance without a Thin Primitive, the bounds widened by the same scale before the tests, and the drop under CULLING at zero kept samples; the scaling and coverage functions fall in shaders A | `culling.wgsl:399-411`, `:424` |
+| M5 story 40, the culling phases' per-slot stages judged against 1 ms | partly: the per-slot stages, `offset_slots`, `offset_blocks` and `append_records`, run in one timed compute pass apart from `append_triangles`; the judging is tooling's | `src/render/culling_pass.rs:42-62`, `:356-390` |
+
+#### Registry keys
+
+| File | Keys | Verdict |
+|---|---|---|
+| `culling.wgsl:91` | `hillis-steele-partial-sums` | matches: the quote's "compute all partial sums of the array" is the stride-doubling inclusive sum at `:94-102`, read one place back for the exclusive sum at `:104-108`. The addition saturates; min(a + b, 2³² − 1) over unsigned values is associative, so the scan's partial sums are the saturated true sums. The quote carries the result, not the doubling form |
+| `culling.wgsl:282` | `meshoptimizer-1.3-lod-selection` | matches the Deviation: the quote's `d = max(0, distance(camera_position, mesh_center) - mesh_radius)` is `max(length(bounds_centre(..)) - radius, 0.0)` with the camera at the origin (`:292`); `e = d * (tan(camera_fovy / 2) * 2 / screen_height)` is `error_per_metre * distance_metres`, with `lod_error_per_metre` = 1 pixel × 2 tan(fov/2)/height (`src/render/renderer.rs:188-200`), so `lod_factor` 1; `lod_ok = e * lod_factor >= lod_error` is `<` in `common.wgsl:216`, the `deviations.md` row, whose wording matches the code (from inside the sphere the distance is 0 and LOD 0 is drawn beside a LOD of error 0). The code multiplies the error by the Instance's scale where the quote's is "in mesh space", the same comparison for an unscaled Instance; the scale's reading falls under L1-S04 |
+| `mod.rs:243` | `wgpu-types-30-loop-bounding` | matches: the quote's "backend compilers MAY treat such a loop as unreachable code" is the comment's "a backend compiler may take an infinite loop for unreachable code"; the quote's "the caller MUST ensure that all passed shaders do not contain any infinite loops" is what the comment rests on `shader_tests` for, whose check has a gap (L1-S07) |
+| `src/render/culling_pass.rs:79`, relied on by `culling.wgsl:506-507` | `wgpu-types-30-default-workgroups-per-dimension` | matches: `max_compute_workgroups_per_dimension: 65535` is `MAX_WORKGROUPS_PER_DIMENSION`, declared into WGSL at `mod.rs:296`; `append_dispatch` keeps x at ⌈records/rows⌉ ≤ 65,535 |
+| `culling.wgsl:210-267`, relied on uncited (ADR 0019 line 15 cites it) | `greene-hiz` | matches in substance, unchanged since M3.5: "choosing the farthest Z" is the minimum in reverse-Z; where the quote finds "the finest-level sample of the pyramid whose corresponding image region covers the screen-space bounding box", the code reads up to 2 × 2 texels at the level where the box spans at most two, which together cover it |
+| `culling.wgsl:7-10`, `:378-380`, relied on uncited (ADR 0019 line 15 cites it) | `nanite-two-pass-occlusion` | matches: "Draw what was visible in the previous frame [...] Build HZB [...] Draw what is visible now but wasn't in the last frame" is phase one, the depth pyramid between, and phase two drawing only a slot phase one left `NOT_DRAWN` |
+| `src/render/shader_function_tests.rs:1864-1871`, the floors of the precision oracles, uncited | `higham-3.1`, `msl-4.1-rounding`, `msl-4.1-fast-math`, `wgsl-2026-float-accuracy` | match as used in Block B2: additions correctly rounded (`wgsl-2026-float-accuracy`), the u·\|x\| model of each (`higham-3.1`), round toward zero allowed on Metal (`msl-4.1-rounding`), reassociation allowed under fast math (`msl-4.1-fast-math`), which the test answers by checking every order on the CPU |
+
+#### Oracles
+
+| Function | Test | Constant | WGSL floor | Stated error | Stated floor | Verdict |
+|---|---|---|---|---|---|---|
+| `selected_lod` (`common.wgsl:207-221`) | `the_selected_lod_is_the_coarsest_whose_scaled_error_is_under_the_threshold`, `shader_function_tests.rs:2511` | exact (`assert_eq!` on the LOD, `:2560`) | 0 (Block B1): per LOD two f32 products and one comparison; the four cases on a boundary (`:2531-2534`) multiply dyadic values, so both products are exact and equal, and stay so under a fused multiply-add; every other case's margin from its boundary is at least 13% (0.01 against 0.0115), against a few u | none | no: the doc comment (`:2503-2509`) says what the cases hold, no floor: L1-S08 | exact; all 15 expected LODs recomputed by hand and right; the test fails if `<` became `<=` (cases at `:2531`, `:2533`), if the scale or `lod_count` were ignored (`:2523-2524`, `:2527`) |
+| `camera_relative_position` (`common.wgsl:37-46`) | `camera_relative_position_meets_the_precision_bar_within_100_km`, `:1897` | `PRECISION_BAR` 4.3e-5 m, Euclidean, on the GPU's result and on every CPU order (`:1872`) | Block B2: the chain alone, as the file states it, 192.6u per axis in the written order, 2.0e-5 m (4.0e-5 at u = 2⁻²³), 384.9u in the worst other order, 3.97e-5 m; the comparison against the f64 reference also measures the two f32 offsets' rounding, up to 2⁻¹⁹ m each per axis (64u), giving 2.65e-5 m and 4.63e-5 m by the file's own model; by the half-step of the magnitudes the cases reach, at most 320.25u per axis in any order with the inputs, 3.31e-5 m at √3 of it | none in the file; ADR 0014 line 19 states 0.0185 mm measured for every order | yes, `:1864-1871`, without the inputs' rounding: L1-S06 | explained in the written order (1.6× by the stated model with the inputs); in any order tight by that model (4.63e-5 over 4.3e-5) and explained by the cases' magnitudes (1.30×); under round toward zero with reordering over, as the file says |
+| `point_light_position` (`common.wgsl:127-139`) | `point_light_position_meets_the_precision_bar_within_100_km`, `:1968` | `PRECISION_BAR` 4.3e-5 m (`:1872`), with `PRECISION_COORDINATES` (`:1876-1885`) shared | Block B2: 64.3u per axis written, 64.6u in any order, as stated; with the offsets' rounding 128.3u, 1.33e-5 m (1.99e-5 with the chain at u = 2⁻²³) | none | yes, `:1869-1871`, without the inputs' rounding (L1-S06) | explained, 3.2× (2.2× under round toward zero) |
+| `pack_index`, `unpack_index` (`common.wgsl:320-326`), called by `culling.wgsl:650`; comment changed in scope | `a_packed_index_holds_its_meshlet_record_above_six_bits_of_vertex`, `:1639` | exact (`assert_eq!`, `:1681-1690`) | 0: shifts and masks on u32; each 16-bit half crosses the harness as an f32, exact below 2²⁴; the record's top case, `0x03FF_FFFF`, is the 26 bits above six of vertex | none | yes, `:1677` ("WGSL floor 0: integer shifts and masks, on halves f32 holds exactly") | exact |
+
+##### Block B1: `selected_lod`
+
+`common.wgsl:216`: `lod_errors_metres[lod] * scale` (one rounding) against
+`error_per_metre * distance_metres` (one rounding), compared exactly. With
+the 1440-row pixel 0.000575 (2 × tan 22.5° / 1440 = 0.82843 / 1440 =
+5.753e-4, which the doc's "0.575 mm" rounds) and the doubling chain 0,
+0.01, 0.02, ..., 0.64: 10 m gives 0.00575, under no error but LOD 0's, so
+0; 20 m gives 0.0115, over 0.01 and under 0.02, so 1; 100 m gives 0.0575,
+over 0.04 and under 0.08, so 3; scale 2 turns 0.04 into 0.08, so 2; scale
+0.5 turns 0.08 into 0.04, so 4; twice the pixel at 10 m is 0.0115, so 1;
+10 km gives 5.75, over 0.64, so 7, or the coarsest a chain of 3 or 1 or 0
+LODs holds, 2, 0, 0; 0 m gives 0, so 0. The whole-metre chain with a
+threshold of 0.5: 2 m gives 1.0, equal to LOD 1's 1.0 and not under it, so
+0; 2.5 m gives 1.25, so 1; scale 2 at 4 m gives 2.0 against 2.0, so 0; at
+5 m 2.5 against 2.0 and 4.0, so 1. Every expected value at `:2520-2534`
+matches. The smallest margin off a boundary is 0.0115 against 0.01, 13% of
+the larger; one rounding of each product is at most 2⁻²⁴ relative, so no
+rounding flips a case. The four boundary cases multiply 1.0 × 1.0 against
+0.5 × 2.0, 0.5 × 2.5, 2.0 × 1.0 against 0.5 × 4.0, and 2.0 × 1.0 against
+0.5 × 5.0: dyadic, exact in f32, so equality is exact, and a fused
+multiply-add of an exact product changes nothing. Not exercised: a
+`lod_count` above `MESH_MAX_LODS`, which the loop's `min` bounds.
+
+##### Block B2: the precision bar's floor
+
+`common.wgsl:44-45`: `vec3<f32>(anchor - camera_anchor) * ANCHOR_CELL_SIZE`
+is exact (an i32 difference of at most 3,125 cells for 200 km, times 64,
+under 2²⁴). The written order then rounds three times per axis:
+`offset - camera_offset`, |x| < 64; `anchor_position + (...)`, the
+pivot's position relative to the camera, |x| ≤ 0.3 + 127.9 = 128.2 for
+the local position (−127.9, 3.3, 64.7) at `:1913`; `+ local_position`,
+|x| ≤ 0.3. In the u·|x| model (`higham-3.1`'s δ ≤ u per operation, additions
+correctly rounded by `wgsl-2026-float-accuracy`): u(64 + 128.3 + 0.3) =
+192.6u per axis, √3 × 192.6 × 2⁻²⁴ = 1.99e-5 m, as `:1865-1866` states.
+The worst other order, (offset + local) − camera offset with the anchor
+term last, sums |x| ≤ 192.3, 192.3 and 0.3: 384.9u, √3 × 384.9 × 2⁻²⁴ =
+3.97e-5 m, as `:1867-1868` states.
+
+What the assertion measures is more. `Case::test_vectors` (`:2237-2251`)
+takes `anchor_and_offset` (`src/render/instance.rs:8-12`), whose offsets are
+the f64 remainder in [0, 64] rounded to f32 by `as_vec3()`; the reference is
+the f64 `camera_relative` (`:1951`). Each offset rounds by up to half its
+step, 2⁻¹⁹ m = 1.91e-6 m for a value in [32, 64), which is 32u; the
+instance's and the camera's together 64u per axis. Added: written order
+256.6u, √3 × 256.6 × 2⁻²⁴ = 2.65e-5 m; worst other order 448.9u, √3 ×
+448.9 × 2⁻²⁴ = 4.63e-5 m, over the 4.3e-5 bar. The model overstates: by
+the half-step of each partial sum's actual magnitude, on the x axis with
+the local position −127.9 m the anchor term is 64, 128 or 192, and the
+worst order, (anchor + offset) − camera offset then + local, holds two
+partial sums in [128, 256), each rounded by at most 2⁻¹⁷ (128u), before the
+final 0.3 (0.25u): 256.25u, with the inputs' 64u 320.25u per axis; the z
+axis (local 64.7 m, anchor term −128) reaches the same through (offset +
+local) − camera offset, and the y axis (local 3.3 m) 192.25u. At √3 ×
+320.25u, 3.31e-5 m, under the bar by 1.30×; with the axes' own worsts,
+√(320.25² + 192.25² + 320.25²) = 492u, 2.93e-5 m, 1.47×; consistent with
+ADR 0014's measured 0.0185 mm. At u = 2⁻²³ on the GPU and reordering, the
+file's own 7.9e-5 stands.
+
+`point_light_position` (`common.wgsl:132-138`): local position 0, so the
+chain is `offset - camera_offset` (|x| < 64) and `+ anchor_position`
+(|x| ≤ 0.3) and an exact `+ 0.0`: 64.3u, √3 × 64.3 × 2⁻²⁴ = 6.64e-6 m; with
+the inputs' 64u, 128.3u, 1.33e-5 m, 3.2× under the bar; at u = 2⁻²³ the
+chain doubles to 128.6u, with the inputs 192.6u, 1.99e-5 m, 2.2× under.
+
+### the shadow mask and its rays
+
+Read in full at the frozen commit `e5c55a8d`: `src/render/shaders/shadow_mask.wgsl` (702 lines), `src/render/shaders/common.wgsl` (408 lines; this reader owns `CameraUniform`'s TLAS fields, `camera_relative_position` as the shadow ray uses it, `position_at`, `segment_meets_box`, `shadow_ray_mask` and the octahedral functions), `src/render/shaders/dynamic_tlas_marker.wgsl` and `blas_refit_marker.wgsl`, and in `src/render/shader_function_tests.rs` the oracles `a_shadow_ray_includes_the_width_classes_whose_upper_bound_its_receivers_pixel_is_within` (`:2463-2502`), `a_segment_meets_a_box_where_some_point_of_it_lies_in_the_box` (`:2013-2212`), `position_at_rebuilds_the_point_a_depth_shows_through_a_pixel` (`:1696-1765`) and `octahedral_coordinates_decode_to_the_unit_vector_they_encode` (`:1767-1862`), the last three because their bodies changed in scope (floor comments, a glam call) and they exercise this reader's functions. The scope's diff (`git diff 8bc34eb1..e5c55a8d`) of `shadow_mask.wgsl` is 75 lines: `first_intersection`'s `mask` argument, `LOD_ERROR_MARGIN`, the back-face pass by the hit Instance's drawn LOD error, the receiver's width classes, and the point light's `unshadowed_range` test removed; `common.wgsl` gained `CameraUniform.lod_error_per_metre` and `pixel_size_per_metre`, `shadow_ray_mask`, and lost `LightData.unshadowed_range`. ADRs read whole, status lines and amendments included: 0008, 0014, 0015, 0019, 0020, 0026, 0027. Spec stories read: every story of `spec-611.md` (M4) and `spec-804.md` (M5); those this reader's files implement are under *Spec stories*. Opened outside the files, to judge a clause and not audited: `src/render/acceleration_structures.rs` (`instance_mask`, `tlas_instance`, the static TLAS's anchor and re-anchor, `NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE`, `SHADOW_WIDTH_CLASSES`), `src/render/renderer.rs:705-745` (the frame's TLAS anchor and the dynamic TLAS's fill), `src/render/uniforms.rs:31-64` (`CameraUniform`), `src/render/shaders/culling.wgsl:270-300`, `:345-462` (where each slot's fourth word, the drawn LOD error, is written), `src/cook/mesh.rs:290-380` (the LOD error's units), `src/render/shaders/mod.rs:97-104`, `:186-245`, `:290-320` (the module's enables, which modules run without loop bounding, the declared constants), `src/render/shadow_mask_pass.rs:25-70`, `docs/performance.md:34`, and the commit messages of the scope's three shadow-ray changes for the decisions they record. `docs/audit/deviations.md`, `scripts/cycles-reference/DIFFERENCES.md`, `docs/references.toml` and `CONTEXT.md` were read for what is not a Finding. M3.5's shaders section (`docs/audit/m3.5/correctness.md:1505-2613`, its reader D) was read for what was filed; rows below that only restate an M3.5 verdict on unchanged code give the frozen commit's lines.
+
+#### Clause verdicts
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0020 | "Direct light is one hard shadow ray per pixel per light" | holds: one `shadowed` call per light entry of a surface; inside it the one ray runs in at most two segments, the nearest hit, then, past a back face it passes, any hit, through `first_intersection`, the one call site that queries | `shadow_mask.wgsl:293-366`, `:364`; `:185-202`; `:99-125` |
+| 0020 | "skipped where the light adds nothing (since [...], a light the surface's interpolated normal turns from is hidden without one; amended 2026-11-04 [...]: the test reads the interpolated normal ADR 0019's surface normals carry, not the face's)" | holds: a directional light the interpolated normal turns from by more than sin 2° is hidden with no ray, a point light likewise unless another sample of the surface faces it; the amendment's wording now matches the code, so M3.5's drift on "face" no longer stands | `:306-309`, `:332-358`, `:248-252` |
+| 0020 | "from an origin offset along the surface's normal" | holds: along the stored triangle normal by the larger of 2^-16 of the largest coordinate in either frame (1 m at least) and 1/32 of a pixel's width, to the light's side where the triangle faces it, inside the surface otherwise | `:168-177`; `:36`, `:51` |
+| 0020 | "and composed in the TLAS's frame" | holds: `camera_relative_position(camera.anchor, camera.offset, camera.tlas_anchor, 0, position)` is (camera Anchor − TLAS Anchor) × 64 in integers, plus the camera's offset, plus the camera-relative point | `:161-167`; `common.wgsl:37-46` |
+| 0020 | "one toward each point light that reaches the pixel, ending at the light" | holds: every point light whose range reaches the surface gets a ray ending at `sqrt(distance_squared)`; since the scope removed `LightData.unshadowed_range`, no point light in range is passed over for casting no shadow | `:318-331`, `:364`; `common.wgsl:166-171` |
+| 0020, 0019 | "A compute pass traces them from the depth target, at each pixel's nearest sample and, where its other samples show another surface, at the farthest of those too" | holds, unchanged in scope: the greatest of the four depths, first such sample; samples off its triangle's plane by more than a pixel's width, the least depth among them listed and traced into layer 1 | `:418-426`; `:434-470`; `:501-520` |
+| 0020 | "at a pixel whose verdict for one of the first seven directional lights differs from a 4-neighbour's among the lights both traced, or whose nearest sample turns from that light while another sample of its nearest surface faces it, toward that light again from each other sample that shows its nearest surface" | holds, unchanged in scope | `:546-551`, `:557-569`, `:573-611`, `:651-702` |
+| 0020 | "where the nearest sample turns from a point light while another sample of its nearest surface faces it, the surface's one bit for that light is the verdict of a ray from the first such sample" | holds, unchanged in scope | `:332-359` |
+| 0020, 0019 | "holds 59 lights per pixel: a light past them casts no shadow there, and Frame stats count it" | holds: bit = the light's entry, bits 0-31 in `x` and 32-58 in `y`, the Froxel slice from bit 27 of `y` (59 − 32); an entry at 59 or past it, in range, is counted once per surface by one `atomicAdd`; `SHADOW_MASK_LIGHTS + log2 FROXEL_SLICES == 64` is asserted in Rust | `:298-301`, `:325-328`, `:368-373`; `src/render/shadow_mask_pass.rs:35`, `:68-70` |
+| 0020 | "Moving Instances form the dynamic TLAS [...] and a shadow ray the static TLAS lets through is traced against it" | holds: queried unless empty, unless a first hit was asked for and found, or unless the segment misses the dynamic box grown by 2^-16 of the largest coordinate; a nearest-hit query runs only to the static hit; both queries take the same flags and the same `mask` | `:102`, `:106-124` |
+| 0020 | Consequences: "A static build keeps the static TLAS's Anchor until the camera's is more than a Chunk's edge from it along an axis, [...] so the camera adds less than 4.9 mm to a shadow ray's offset once that build is bound" | holds, shader side: the offset is 2^-16 times the largest coordinate of `tlas_position` and `position`, and `tlas_position` exceeds `position` by the camera's place in the TLAS's frame, under 4 cells of 64 m plus its offset within a cell, so under 320 m per axis: 320 × 2^-16 = 4.88 mm | `:161-172`; `src/render/acceleration_structures.rs:195` (`REANCHOR_CELLS`) |
+| 0020 | Consequences: "the dynamic TLAS, rebuilt each frame in the bound static TLAS's frame, follows in the frame a new one is bound" | holds, shader side: one `camera.tlas_anchor` frames both queries' origin and the dynamic box; the Renderer reads the bound TLAS's Anchor after the frame's update and fills the dynamic TLAS and the uniform from that one value | `:111-118`, `:161-167`; `src/render/renderer.rs:724-737` |
+| 0020 | Consequences: "Every BLAS is built from its Mesh's LOD 0, [...] whichever LOD the main pass draws" | the build falls in render; the mask's half holds for a ray from a surface onto its own Instance: a back face met no higher above the surface than 3 times the drawn LOD's error is passed, so a coarser LOD that lies inside LOD 0 does not shadow itself; the rule also passes other Instances' back faces: L1-S10 | `:127-130`, `:186-201` |
+| 0020 | Consequences: "Shadow and probe rays query both" | holds for shadow rays; no probe ray exists | `:99-125` |
+| 0020 | "The `crowd` Reference scene's figures [...] cast their shadows through rigid per-bone shadow proxies, Moving Instances in that TLAS" | holds, shader side: the proxies' entries carry the ordinary bit every ray's mask holds, and the drawn LOD error their slot carries is their Mesh's LOD 0 error, 0, so their back faces always shadow | `common.wgsl:287`; `culling.wgsl:428-431`; `src/render/acceleration_structures.rs:990-1008` |
+| 0020 | "Direct light is Temporal class (a)" | holds: the pass reads this frame's depth, normals, lights, Froxel lists and the culling pass's per-slot words; the static TLAS's lag is the decided one (Notes on a stale slot word) | `:192`, `:236`, `:418-423` |
+| 0020 | "Soft sun shadows [...] a denoiser is class (c)"; "Sun penumbrae reopen when area lights arrive" | not applicable: one hard ray, no jitter | `:364` |
+| 0020 | "A constant ambient term stands in for indirect light" | falls in shaders A | |
+| 0020 | Considered option, soft shadows: "contact shadows stay sharp either way" | holds in kind, with a gap: the back-face pass can drop a contact shadow under an open Mesh drawn at a coarser LOD: L1-S10 | `:193-195` |
+| 0019 | "a compute pass traces, from each pixel's nearest sample, one shadow ray toward each light that reaches it and keeps whether it is hidden in the shadow mask, and, where the pixel's other samples show another surface, traces from the farthest of those too, into the mask's second layer" | holds | `:408-493`, `:478`; `:501-520`, `:519` |
+| 0019 | "each sample's triangle normal and the normal interpolated over it [...] which the shadow mask pass reads so that a coarse smooth-shaded mesh's terminator follows its interpolated normals rather than its triangles" | holds: the turn tests read `interpolated_normal`; `triangle_normal` decides the origin's side, the height the back-face pass measures, and the second-surface plane | `:233-243`, `:306`, `:332`, `:173-177`, `:190`, `:438` |
+| 0019 | "the second surfaces of 13.7% of its pixels are traced from a packed list, as tile-based deferred renderers schedule per-sample shading" | holds, unchanged in scope: `atomicAdd` on the count, the opening entry of each 64-entry run grows the indirect dispatch by `atomicMax` in rows of `MAX_WORKGROUPS_PER_DIMENSION`; the second entry point returns past the count read once per workgroup | `:455-468`; `:501-513` |
+| 0019 | "a pixel of three surfaces or more gives its middle ones the farthest's" | holds: one word for every off-plane sample, traced from the least depth among them | `:445-454` |
+| 0019 | "each fragment reads the bits traced from the surface it shades [...]" | falls in shaders A; the layout it reads is what this pass stores: second-surface sample bits 0-3, each edge light's four sample verdicts above them | `:478`, `:485-489`, `:697-701` |
+| 0019 | "the lit pass sums lights and the shadow mask gives them its bits in buffer order" | holds: a light's bit is its entry, the directional lights first, then the Froxel's list in light order (every point light in buffer order with Froxels off); a point light out of range keeps its entry's bit unused, as the lit pass indexes it (`main.wgsl:444-446`) | `:282-293`, `:316`, `:322-324` |
+| 0019 | the mask's word follows the Froxel of the sample it was traced from, its slice in the second half's top bits | holds, unchanged in scope | `:283-287`, `:372-373` |
+| 0019, checklist | "The GPU builds the frame's draw in slot order [...] never in the order atomics land" | holds for the mask: list entries land in atomic order, but each writes only its own pixel's words; the dispatch sizes are `atomicMax`, the overflow an `atomicAdd`, both commutative; no result depends on which lands first | `:455-468`, `:631-642`, `:369`, `:519`, `:697-701` |
+| 0019 | "the shadow mask pass rebuilds each pixel's position from it and reads each sample's normals from the surface normals the depth passes write, so shadow rays need no G-buffer" | holds | `:233-243`; `common.wgsl:55-62` |
+| 0015 | "Depth is cleared to 0" | holds: depth 0 is the background at every use | `:272`, `:390`, `:435`, `:445`, `:685` |
+| 0015 | "compared with `Greater`" | holds: the nearest sample is the greatest depth, the farthest second surface the least, the sentinel 2 lies past the near plane's 1 | `:425`, `:452-454`, `:594`, `:676` |
+| 0015 | "with no far plane" | holds: the view depth is the near distance over the depth, finite for every depth the tests above let through | `:284`; `common.wgsl:58` |
+| 0015 | "shadow comparisons follow the same direction" | holds: the ray code compares no depth; the back-face pass compares a height above the surface with an error and a distance along the ray with the light's | `:190-196` |
+| 0014 | "The GPU never holds a World position in f32: it reads an integer anchor [...] plus an f32 offset, and shaders compose positions relative to the camera" | holds: the TLAS-frame origin is composed from the Anchors' difference in `vec3<i32>`; point lights through `point_light_position` | `:161-167`, `:319`; `common.wgsl:37-46`, `:127-139` |
+| 0014 | "Subsystems that compute in f32 ([...] ray-tracing acceleration structures) convert at their boundary into a local frame they own" | holds: one composition per ray into the TLAS's frame; the dynamic box arrives in it | `:161-167`, `:111-113` |
+| 0014 | amended: "a build moves it only once the camera's Anchor strays more than a Chunk's edge (4 cells) along an axis, so, once that build is bound, the camera is again within 320 m of the frame's origin along each axis and a shadow ray composes and lifts its origin 10 km from where it started as at the origin" | holds, shader side: the lift is 2^-16 of the larger of the point's camera-relative and TLAS-frame coordinates, both of which stay near the camera wherever it is in the World; the re-anchor itself is render's | `:161-172` |
+| 0027 | Consequences: "A pixel whose samples a mask splits between two surfaces is listed for the shadow mask pass's second surface, as any edge pixel is" | holds: a sample a fragment's mask did not keep holds the depth of the surface behind it, and is listed when that lies off the nearest sample's triangle plane by more than a pixel's width, the rule of every edge; the pass reads depths only, no coverage or sample mask | `:439-447` |
+| 0027 | "The depth passes write the mask, so only the kept samples take the fragment's depth" | holds as the mask needs it: the nearest sample of a pixel a Thin Primitive or small Instance keeps one sample of is that sample, traced from the widened surface the depth shows | `:425-426`, `:471-477` |
+| 0008 | "Lighting is ray-traced probe GI with hard ray-traced shadows (amended 2026-10-13, ADR 0020)"; no temporal tricks | holds: the mask reads no earlier frame's screen data and accumulates nothing; the one word read per hit is the current frame's for every slot in use (Notes: a static TLAS entry past the slots in use) | `:192`; `culling.wgsl:428-431`, `:446-456` |
+| 0026 | Settled by the draw, "Its shadows": "While drawn it holds one static TLAS entry under the mask bit an ordinary Instance has, so it casts and takes the sun's shadows" | holds, shader side: bit 0 is in every ray's mask, the sun's and each point light's, so no width class can hide a Far proxy; the entry's bit is Rust's (`instance_mask` gives a Mesh without a thin radius bit 0) | `common.wgsl:287`; `src/render/acceleration_structures.rs:990-994` |
+| 0026 | "A Far proxy's Mesh builds a BLAS from its LOD 0 at load" | the build falls in render; a receiver on a Far proxy drawn at a coarser LOD of its own chain passes its own LOD 0's back faces by the same rule as any Instance | `:186-201` |
+| 0026 | "The ground past the View distance [...] traced by no ray" | falls in render (it takes no TLAS entry) | |
+| checklist | "No World position reaches the GPU in f32" | holds (ADR 0014 rows) | `:161-167` |
+| checklist | "WGSL that compares or reduces depth (shadow, Hi-Z) keeps reversed depth's direction" | holds (ADR 0015 rows) | |
+| checklist | "WGSL [...] has no divide-by-zero or NaN at grazing angles" | holds in the scope's code: `height` and `shadow_ray_mask` divide by nothing; `shadow_ray_mask` maps a NaN, infinite or zero pixel width to a mask that still holds bit 0 (Oracles block); a miss's `instance_custom_data` indexes a bounds-checked buffer and its result is discarded (Notes) | `:190-197`; `common.wgsl:283-288` |
+| checklist | "calls no `textureSample` under non-uniform control flow" | holds: `textureLoad` only | `:236`, `:346`, `:418-423`, `:517`, `:588-601`, `:670-675` |
+| checklist | "A newly used wgpu feature or limit joins the Capability floor" | holds in the WGSL: a run-time cull mask and a hit's custom data are parts of the ray query the floor already requires; the pass's ninth storage buffer is render's | `:102`, `:118`, `:192` |
+| checklist | "A new or changed shading function in WGSL has an oracle test" | holds: `shadow_ray_mask` has one (Oracles); `shadowed`'s back-face pass, in a part no oracle harness can load (it needs a TLAS), is tested by the Renderer's GPU test of a back face at several heights | `shader_function_tests.rs:2463-2502` |
+| checklist | "Identifiers are full words, WGSL included" | holds for the scope's names (`pixel_bits`, `narrower_classes`, `drawn_lod_error`, `any_hit`, `height`) | `common.wgsl:283-287`; `:188-195` |
+| checklist | comments cite "only an upstream bug, adapted code's source and licence, a pinned third-party source or an ADR" | holds: no ticket in the scope's comments; registry keys and ADRs only | `:127-129`, `:141-148` |
+| checklist | "Every name the change renames, removes or changes the behaviour of [...] is grepped" | holds for `unshadowed_range` (no stale mention in ADRs, `CONTEXT.md` or code) and `first_intersection`'s arguments (one caller); the doc comments of `first_intersection` and `CONTEXT.md`'s Thin Primitive lag their code: L1-S11, L1-S12 | `:83-99`; `CONTEXT.md:21-22` |
+
+ADR 0020 at the frozen commit has no clause on Thin Primitives' shadows by width class or on a back face passed within the drawn LOD's error, and no other ADR has one: those rules are recorded in the M5 spec's design notes ("Thin Primitives carry an instance-mask bit per width class, one class per doubling"; "Near back faces ignored within a pixel's width times the threshold") and in `CONTEXT.md`'s Thin Primitive entry, so they are judged under *Spec stories*. ADR 0026's "the mask bit an ordinary Instance has" is the one ADR sentence that presumes the instance mask.
+
+#### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| M4 story 49, "the static TLAS's anchor to move with the camera, so that a shadow ray's origin lifts by no more than its distance from the camera allows, at 10 km as at the origin" | holds, shader side: the origin is composed in the bound TLAS's frame from the uniform's `tlas_anchor`, and its lift is 2^-16 of the larger of its camera-relative and TLAS-frame coordinates, so it follows the camera, not the World origin; the move itself is render's | `shadow_mask.wgsl:161-172` |
+| M4 story 52, "the dynamic TLAS to follow the static TLAS's anchor in the frame the new static TLAS swaps in, so that both answer rays in one frame" | holds, shader side: both queries take the one origin composed from `camera.tlas_anchor`, and the dynamic box arrives in that frame; the Renderer fills both from the bound TLAS's Anchor after the frame's update | `:102`, `:111-118`; `src/render/renderer.rs:724-737` |
+| M4 stories 48, 50, 51, 60, 70 (static TLAS membership, the off-frame rebuild, its frames-until-traced ceiling, 10,000 Moving Instances, the build time reported) | falls in render | |
+| M4 story 36, "the Materials that rays reach off screen given a floor priority [...] so that shadows [...] never sample a missing mip" | not applicable to the shadow mask: its rays are `RAY_FLAG_FORCE_OPAQUE` and sample no Material | `:102`, `:118` |
+| M5 story 12, "every BLAS built from its Mesh's LOD 0 [...] so that a LOD switch changes no BLAS and starts no static TLAS build" | the build falls in render; the mask holds its consequence: a ray from a coarser LOD passes its own LOD 0's back faces by the drawn LOD's error, so the BLAS need not follow the LOD | `:186-201` |
+| M5 story 13, "a shadow ray to ignore a back face within a pixel's width of its origin, so that a drawn LOD sitting just inside LOD 0 does not shadow itself" | holds in intent, not in letter: the code passes a back face met no higher above the surface than `LOD_ERROR_MARGIN` (3) times the LOD error the hit Instance draws, a height bounded by the LOD threshold, rather than one within a pixel's width along the ray, which `docs/performance.md:34` measured worse (`orrery` frame 59: 4,100 pixels off LOD 0 forced with a pixel's width along the ray, 500 at 3.0); the rule also passes the back faces of other Instances, which the story's purpose does not need: L1-S10 | `:127-130`, `:186-201`; `docs/performance.md:34` |
+| M5 story 14, "the shadow mask pixels that differ from LOD 0 counted and limited" | falls in tooling (the count is `praxis shadow-mask-difference`) | |
+| M5 story 27, "Far proxies to cast and receive the sun's shadows" | holds, shader side: every ray's mask holds the ordinary bit a Far proxy's entry carries, and a pixel on a Far proxy is traced as any surface | `common.wgsl:287`; `:293-366` |
+| M5 story 29, "shadow-ray time reported with Far proxies traced and not" | falls in render and bench | |
+| M5 story 35, "a Thin Primitive narrower than a pixel drawn a pixel wide" | falls in shaders A; the mask traces the widened surface the depth target shows, as any surface | `:233-243` |
+| M5 story 37, "a Thin Primitive to cast a shadow only onto receivers whose pixel is no wider than it, so that its shadow ends where it would break into dots" | holds in the reading `CONTEXT.md` records ("whose shadow ends where it would fall between a pixel and half a pixel wide"), not in the story's letter: a ray includes a class whose upper bound, twice its lower, is no narrower than the receiver's pixel, so a receiver whose pixel is up to twice a tube's width still takes its shadow; the rule's range ends short of both readings for a tube under 3.125 mm, one of 400 mm or more, and a Mesh that mixes thin and ordinary Primitives: L1-S12 | `common.wgsl:282-288`; `src/render/acceleration_structures.rs:990-1008` |
+
+#### Registry keys
+
+| File | Keys | Verdict |
+|---|---|---|
+| `shadow_mask.wgsl:32` | `wachter-binder-2019-offset-error` | matches, unchanged in scope: the quote's "the distance of the intersection to the plane of the surface is proportional to the distance from the origin" and "the size of the surface [...] becomes dominant for triangles very close to the origin" are the offset's share of the largest coordinate and its 1 m floor (`:168-172`); the share 2^-16 rests on the comment's own 256-ulp argument, as M3.5 found |
+| `shadow_mask.wgsl:41`, `:42` | `d3d11.3-rasterizer-precision`, `vulkan-subpixel-precision-bits` | matches, unchanged: "EXACTLY 8 bits" of fraction is the comment's 1/256 of a pixel, the required minimum of 4 bits its "as coarse as 1/16" |
+| `shadow_mask.wgsl:94` | `nvidia-2022-rtx-best-practices-shadow-rays` | matches: "the query objects must hold state [...] This consumes registers and complex user code may limit occupancy" is the one call site every segment and both TLAS go through (`:99-125`, `:186`), now with the mask a run-time value too; "Terminate rays on the first hit when possible. When resolving the correct closest hit is not required (as for shadow rays)" is the second segment's `RAY_FLAG_TERMINATE_ON_FIRST_HIT` (`:200`); since the scope the first segment of every ray asks for the nearest hit (`:182`), which the back-face pass needs to know which triangle comes first, so the closest hit is required there and the quote's "when possible" holds |
+| `shadow_mask.wgsl:128` | `meshoptimizer-1.3-simplify-error` | matches in substance: the quote's "Target error is an approximate measure of the deviation from the original mesh using distance normalized to `[0..1]` range" is the comment's "an approximate measure"; the quote speaks of the target error, and the cooked error is the simplifier's reported error on the same normalised distance, summed down the chain and times `simplify_scale` (`src/cook/mesh.rs:299-310`, `:375`), so the comment applies the quote's word to the reported error; "no bound" is the comment's inference, which the quote's "approximate" supports. The second clause, "`orrery`'s spheres meet LOD 0 up to three times theirs high", rests on `docs/performance.md:34`, which reports pixel counts per margin (3.0 and 1,000.0 equal on all 33 frames), not a measured height (Notes) |
+| `shadow_mask.wgsl:148` | `tabellion-lamorlette-2004-ray-origin-offset` | matches what it is cited for: "the offset distance used in this algorithm needs to be bigger than the maximum offset between the coarse and micro-polygon geometric tessellations" is the comment's "a tolerance for hits near the origin has to exceed the largest offset between the two tessellations", with the roles mirrored (here the ray starts on the coarse tessellation and traces the fine one), and `LOD_ERROR_MARGIN` × the drawn LOD error stands in for that largest offset. The quote's first sentence, "Traditional biasing techniques that ignore intersections near the ray origin cannot be applied here, since they would create significant light or shadow leak problems", is answered for a surface's own Mesh by passing back faces only, and not for another Instance's open Mesh: L1-S10 |
+| `shadow_mask.wgsl:407`, `:617` | `lauritzen-2010-per-sample-scheduling` | matches, unchanged: "Shade sample 0 for the whole tile [...] Pack a list of pixels that require per-sample shading [...] Redistribute threads" is the nearest surface traced in place and the two lists traced by indirect dispatches (`:455-468`, `:631-642`) |
+| `shadow_mask.wgsl:431` | `lauritzen-2010-edge-detection` | matches in form, unchanged: "Compare sample depths to depth derivatives" is done against the nearest sample's triangle plane, with a one-pixel-width threshold the code chooses (`:439-447`) |
+| relied on uncited: `common.wgsl:282-287` (the ray's mask meets an entry's where they share a bit; the entry's mask is 8 bits) | `wgpu-30-tlas-instance-fields`, cited at `instance_mask` (`src/render/acceleration_structures.rs:989`), which `shadow_ray_mask`'s comment names | matches: "Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`" and "`mask: u8`" are the ordinary bit 0 and the seven class bits 1 to 7 that both sides use; the ray's mask always holds bit 0, so it is never 0 and never misses an ordinary entry |
+| relied on uncited: `shadow_mask.wgsl:191-192` (a hit's custom data is its Instance's slot) | `wgpu-30-tlas-instance-fields` | matches: "This must only use the lower 24 bits" holds for every slot the Budgets give, which `src/render/acceleration_structures.rs:1283` tests |
+| relied on uncited: `common.wgsl:284-286` (a float of 1 or more holds the floor of its base-2 logarithm in its exponent, bias 127) | none in the registry | the WGSL specification's binary32 format and `bitcast` are the source; the registry holds no key for them. Correct as read: for a normal f32 x ≥ 1, bits 23-30 hold ⌊log₂ x⌋ + 127 and bits 0-22 are 0 only at a power of two |
+| relied on, not applicable: loop bounding | `wgpu-types-30-loop-bounding` | not applicable: the shadow mask module is created with `create_shader_module` and keeps loop bounding (`src/render/shadow_mask_pass.rs:145`; `LOOPS_UNBOUNDED` is `[MAIN, CULLING]`, `src/render/shaders/mod.rs:193`); its back-face loop ends after two turns regardless (`:185-202`) |
+
+#### Oracles
+
+| Function | Test | Constant | WGSL floor | Stated error | Stated floor | Verdict |
+|---|---|---|---|---|---|---|
+| `shadow_ray_mask` (`common.wgsl:283-288`) | `a_shadow_ray_includes_the_width_classes_whose_upper_bound_its_receivers_pixel_is_within`, `shader_function_tests.rs:2463-2502`, 17 cases | exact: `assert_eq!` of each mask against a literal (`:2495-2500`) | 0 in the integer chain; one rounded product, `(0.5 · p) · 320`, decides the class, and flips a case only where 160 p lies within one rounding of a power of two from 2⁰ to 2⁶; seven cases (0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2, 0.4 m) sit 0.25u above one, and every quoted backend's rounding, to nearest or toward zero, lands them on it (block C1) | none | no: the doc comment (`:2463-2464`) gives the classes' bounds, not that seven cases sit on them and pass only because no backend rounds a product up: L1-S13 | exact; the seven bound cases depend on the rounding direction (block C1) |
+| `segment_meets_box` (`common.wgsl:75-103`) | `a_segment_meets_a_box_where_some_point_of_it_lies_in_the_box`, `:2013-2212`, 19 cases, unchanged in scope but for the floor comment | none: a boolean per case (`:2210`) | a verdict flips only within about 24u × M of a separating boundary, M the largest coordinate from the box's centre: ≤ 6e-5 box units for M ≤ 37.5 and 1.4e-3 for the ray from 1000 away at u = 2^-24; 1.1e-4 and 2.9e-3 at u = 2^-23 (block C2) | none | yes, `:2204-2209`, at u = 2^-24 only | exact: the smallest non-exact margin is 1.0 box unit, four orders over the floor in either rounding; the two on-face cases are exact by structure |
+| `position_at` (`common.wgsl:55-62`), unchanged in scope | `position_at_rebuilds_the_point_a_depth_shows_through_a_pixel`, `:1696-1765`; body changed in scope (a glam call renamed, comments) | Euclidean distance ≤ 2^-20 × the largest \|coordinate\| (`:1759`) | ≈ 41u · w over the three components, 2.5e-6 · w, 4.9e-6 · w at u = 2^-23, w the view depth (block C3) | none; the doc comment (`:1696-1702`) motivates the bound as "sixteen times inside the 2^-16 a shadow ray's origin leaves its surface by" | yes, `:1756-1758`, both roundings, and it says "tight" | tight, as the comment states: the floor is 2.6 to 6.4 times the constant, which passes where roundings do not align |
+| `octahedral_encode`, `octahedral_decode` (`common.wgsl:389-401`), round trip, unchanged in scope | `octahedral_coordinates_decode_to_the_unit_vector_they_encode`, `:1767-1862`; body changed in scope (comments) | 4 × `TOLERANCE` = 4e-6 on the direction (`:1851`) | ≈ 30u: 1.8e-6 at u = 2^-24, 3.6e-6 at 2^-23 (block C4) | `TOLERANCE`'s "Results land within 2e-7 of theirs on the M4 Pro" (`:15-16`), for every test that uses it | yes, `:1848-1849` | explained: the constant is 1.1 to 2.2 times the floor |
+| the same, from 8 bits (the store simulated on the CPU, `:1810-1818`) | the same test | 0.95° (`:1834`) | the quantisation's worst case: half an 8-bit step, 1/255, on each coordinate near a face's centre moves the vector by √6/255 = 9.606e-3 across a length of 1/√3, atan(√18/255) = 0.016638 rad = 0.9532°; f32 adds about 2e-6 rad (block C4) | none | stated, wrong: `:1831-1833` says "0.951°, which this takes to three figures" | tight: the worst case lies 0.0032° above the constant, and the direction normalize(84, 84, 87) reaches 0.9532° or 0.9527° whichever way its half code rounds: L1-S09 |
+
+##### Block C1: `shadow_ray_mask`
+
+The chain, `common.wgsl:284-287`, at `p` = `pixel_metres`:
+
+1. `0.5 * pixel_metres`: a multiplication by a power of two, exact for every p above 2^-125 (no subnormal result).
+2. `* NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE` (320.0, declared from `src/render/acceleration_structures.rs:971` by `src/render/shaders/mod.rs:316`): one product, correctly rounded on every backend the registry quotes (`wgsl-2026-float-accuracy`: "x * y: Correctly rounded"; `vulkan-spirv-precision`: "OpFMul [...] Correctly rounded"; `d3d11.3-fp32-rules`: "within 0.5 ULP [...] multiplication"; `msl-4.1-fast-math` Table 8.2: "x * y: Correctly rounded"), or rounded toward zero where Metal uses that mode (`msl-4.1-rounding`: "Either round ties to even or round toward zero rounding mode may be supported"). Metal's fast math may reassociate (`msl-4.1-fast-math`: "allow reassociation"), to `p · 160` (the constants folded) or `(p · 320) · 0.5`: each is still one rounding of the same exact value 160 p, since the halving, wherever it falls, is exact. No contraction applies: there is no addition.
+3. `max(…, 1.0)`: exact.
+4. `bitcast<u32>`, `>> 23u`, `- 127u`, `& 0x7fffffu`, `!= 0u`, `u32(…)`, `+`, `min(…, 7u)` (`:286`), then `0xfeu << n`, `& 0xffu`, `1u |` (`:287`): integer operations, exact. For x ≥ 1 the exponent field is ⌊log₂ x⌋ + 127, so `- 127u` cannot wrap, and n = ⌈log₂ x⌉ capped at 7; the shift is at most 7.
+
+So x = max(160 p, 1) and n = min(⌈log₂ x⌉, 7); the mask clears the bits of classes 0 to n − 1. Class k's upper bound is U_k = 2^(k+1)/320 m (`instance_mask`'s class is ⌊log₂ max(320 w, 1)⌋, `src/render/acceleration_structures.rs:1001-1002`), and k ≥ ⌈log₂(160 p)⌉ ⇔ 2^k ≥ 160 p ⇔ U_k ≥ p: a class is included exactly when its upper bound is no narrower than the pixel, as the comment at `:282` says. Edge inputs: p = 0 gives x = 1, n = 0, mask 0xff; p = +∞ gives exponent field 255, n = min(128, 7) = 7, mask 0x01; a NaN p gives 1.0 or the NaN from `max` (its exponent field 255), so 0xff or 0x01; every result holds bit 0.
+
+The cases against that, by hand (n, then the expected literal):
+
+| p (m) | 160 p, exact in the f32 input | n | mask |
+|---|---|---|---|
+| 0.0005, 0.003125, 0.004 | 0.08, 0.5, 0.64 → x = 1 | 0 | 1111_1111 |
+| 0.00625 | 1.0000000149 → 1.0 | 0 | 1111_1111 |
+| 0.007 | 1.12 | 1 | 1111_1101 |
+| 0.0125 | 2.0000000298 → 2.0 | 1 | 1111_1101 |
+| 0.025 | 4.0000000596 → 4.0 | 2 | 1111_1001 |
+| 0.03 | 4.8 | 3 | 1111_0001 |
+| 0.05 | 8.000000119 → 8.0 | 3 | 1111_0001 |
+| 0.0501 | 8.016 | 4 | 1110_0001 |
+| 0.1 | 16.00000024 → 16.0 | 4 | 1110_0001 |
+| 0.147 | 23.52 | 5 | 1100_0001 |
+| 0.2 | 32.00000048 → 32.0 | 5 | 1100_0001 |
+| 0.21 | 33.6 | 6 | 1000_0001 |
+| 0.4 | 64.00000095 → 64.0 | 6 | 1000_0001 |
+| 0.41 | 65.6 | 7 | 0000_0001 |
+| 5.0 | 800 | 7 (10 capped) | 0000_0001 |
+
+All seventeen literals match. The seven bound cases are 1.6 × 2^-k decimals whose f32 is 1.600000023841858 × 2^-k (1.6's f32 rounds up), 1.49e-8 = 0.25u above the decimal, so the exact product is 2^j (1 + 0.25u). The f32 neighbours are 2^j and 2^j (1 + 2u): to nearest it rounds to 2^j (0.25u < u), toward zero to 2^j. A product rounded up, which no quoted specification allows, would give 2^j (1 + 2u), a nonzero mantissa, n one higher, and each of the seven masks one class bit short. The other ten cases lie at least 2.0e-3 relative from a power of two (8.016 against 8), about 3.4 × 10^4 u: no rounding reaches them. Floor 0 for the verdicts; the seven bound cases are exact by the rounding direction, not by margin.
+
+##### Block C2: `segment_meets_box`
+
+The function is unchanged since M3.5, and its test changed only by the comment at `:2204-2209`; M3.5's block ("Floor: `segment_meets_box`", `docs/audit/m3.5/correctness.md`) derives the chain at `common.wgsl:83-102`: about 10 roundings on each box-axis comparison and about 12u × |midpoint| on each cross-axis one, so a verdict flips only within about 24u × M of its boundary. At u = 2^-24: 24 × 5.96e-8 × 37.5 = 5.4e-5 (the comment's "below 6e-5") and 24 × 5.96e-8 × 1000 = 1.43e-3 (the comment's 1.4e-3). At u = 2^-23, which `msl-4.1-rounding` allows on Metal: 1.07e-4 and 2.86e-3, which the comment omits; the smallest non-exact margin, 1.0 box unit ("far box, ends short", every quantity dyadic), stays four orders above either. The cases are those M3.5 counted, 19; the scope added none.
+
+##### Block C3: `position_at`
+
+Unchanged since M3.5 (`common.wgsl:55-62`); M3.5's Oracles row and its block B derive ≈ 24u · w per component from the add-and-multiply chain and three divisions (2.5 ULP each on Vulkan per `wgsl-2026-float-accuracy`, "x / y: 2.5 ULP"), √3 of it over three components, ≈ 41u · w: 2.44e-6 · w at u = 2^-24 and 4.9e-6 · w at 2^-23. The constant is 2^-20 = 9.54e-7 times the largest coordinate, which on the view axis is 0.8/0.990 = 0.808 of w (the view direction is (0.3, −0.5, −0.8) normalised, `:1710-1711`) and larger toward the target's corners. 2.44e-6 / 9.54e-7 = 2.6 for a largest coordinate of w at u = 2^-24, and 4.9e-6 / (9.54e-7 × 0.808) = 6.4 on the view axis at u = 2^-23: the comment's "2.6 to 6.4 times this bound", which this reader takes as stated and did not re-derive case by case. The test's change in scope, `glam::camera::rh::view::look_to_mat4` for `glam::Mat4::look_to_rh`, builds the same right-handed view.
+
+##### Block C4: the octahedral codec
+
+Round trip: M3.5's block C, unchanged: ≈ 30u on the direction, 1.8e-6 and 3.6e-6, against 4e-6.
+
+From 8 bits (`:1815-1816`): a coordinate c is stored as round(255 (c + 1)/2)/255 · 2 − 1, off by at most 1/255 = 3.922e-3, the error reached where 255 (c + 1)/2 lies on a half code. Near a face's centre, where the pre-normalised vector v = (x, y, 1 − |x| − |y|) is shortest (|v| ≥ 1/√3 = 0.57735), both coordinates off by +1/255 move v by e = (1, 1, −2)/255, |e| = √6/255 = 9.606e-3, and e is nearly perpendicular to v there (e · v ∝ x + y − 2z ≈ 0), so the angle is atan(|e| / |v|) = atan(√18/255) = atan(0.016638) = 0.016636 rad = 0.9532°. Half codes lie at c = (2k + 1)/255 − 1; c = 84/255 = 0.32941 is one (255 × (c + 1)/2 = 169.5) beside the face's centre 1/3, and v = (84, 84, 87)/255. Decoded from the stored (85, 85)/255 it is 0.95319° off, and from (83, 83)/255 0.95266° off, both computed in f64; a brute force over every pair of half codes (k, j from 100 to 254) gives the same maximum, 0.953188°. The constant is 0.95° = 0.016581 rad. M3.5's block C reached "≤ 0.0166 rad = 0.951°" by rounding 0.016638 rad to 0.0166 before converting (0.0166 rad = 0.9511°); the scope's comment at `:1831-1833` carries that 0.951°.
+
+### Findings
+
+| id | claim | severity | where | evidence | expected | verifier | placement |
+|---|---|---|---|---|---|---|---|
+| L1-S01 | ADR 0027 says a small Instance's coverage "is the area they truly cover over a pixel's" and that it is scaled "until they cover a pixel's", and `vs_thin`'s comment and the oracle's doc comment say the same, but `small_instance_coverage` returns the larger of the bounds' area share and (the sphere's diameter in pixels / 4)², so a sliver keeps samples, and escapes the drop under an eighth, by its length: the oracle's own case of half extent (1, 0.01, 0.01) has an area share of 0.04 and is kept at coverage 0.25005, one sample, scaled to 0.16 of a pixel. | `drift`; load-bearing: a reader predicting which Instances are dropped or how far one is scaled is misled for every Instance whose sphere spans 1.41 px or more while its area share is under 1/8; the mean coverage is unaffected | `docs/adr/0027-coverage-in-the-main-pass-is-a-written-sample-mask.md`, Decision, "A small Instance's coverage"; `main.wgsl:108-110`; `src/render/shader_function_tests.rs:2368-2370`; code at `common.wgsl:267-274` | block below | The ADR, the comment and the doc comment say the coverage is the larger of the bounds' area share and the square of the sphere's width over four pixels, so that the scale 1/√coverage reaches 1 at four pixels across and a sliver's samples follow its length; or the code keeps the area share and caps the scale at four pixels across the sphere | | |
+| L1-S02 | Off the view axis, scaling a small Instance across the view by 1/√coverage does not make its bounds cover a pixel, so its mean coverage falls below the area it truly covers: the parts of the footprint that the bounds' depth extent draws through perspective keep their width, so at the 2560×1440 view's corner a cube's bounds at coverage 0.5 draw 0.84 of a pixel and at 0.125 draw 0.65, and keep 16% and 35% less coverage than their true area, against ADR 0027's "scaled ... until they cover a pixel's" and its Consequence that a small Instance "keeps its mean coverage whatever its Mesh". | `correctness`; mean coverage low by 1 − (f + (1 − f)√c), f the front faces' share of the footprint: 0 on the view axis, 16% at c = 0.5 and 35% at c = 0.125 at the corner of the 45° 16:9 view, 15% at c = 0.5 for the oracle's own off-axis case; suspected visible as Instances at the screen's edges fading faster than at its centre (`town`'s far flocks) | `main.wgsl:154-160`; `common.wgsl:253-256`, `:278-280`; `docs/adr/0027-coverage-in-the-main-pass-is-a-written-sample-mask.md`, Decision, "A small Instance's coverage", and Consequences, fifth bullet | block below | Either the scale solves f s² + (1 − f) s = 1/c from the same face terms `small_instance_coverage` already sums, so the scaled bounds cover a pixel at any angle, or the ADR states that the scaling restores a pixel on the view axis only and records the loss off it | | |
+| L1-S03 | Three oracle tests added since M3.5 for the coverage functions state no WGSL accuracy floor beside their tolerance or exact comparison: `thin_drawn_radius`'s 1e-6, `small_instance_coverage`'s 2e-6 and `small_instance_scale`'s 1e-5 are unnamed literals with no comment, and the `thin_kept_samples` test says nothing of why an exact comparison holds at its thresholds, where the two other oracles added beside them do (`:1417-1420`, `:2588`). | `drift`; not load-bearing: each constant sits over its derived floor (Oracles: 40×, 1.8 to 3×, 3 to 5×, exact); the lane brief's requirement, three tests, four comparisons | `src/render/shader_function_tests.rs:2327`, `:2360`, `:2427`, `:2430` | block below | A comment beside each constant naming its floor and its chain, as Blocks A2 and A3 give them: the halving exact and one 2.5 ULP division (≤ 2.5e-8 at 0.08); exact sums at the four thresholds; about 14u on the coverage (≤ 1.1e-6 with the literals' rounding at 2⁻²³) and 2 ULP of `inverseSqrt` plus half that on the scale | | |
+| L1-S04 | `instance_lod` takes the sphere about an Instance's Mesh bounds with the half-diagonal times the Instance's largest column length as its radius, and scales the LOD error by that length, which bounds the Instance and its error only while its rotation-scale columns are orthogonal; for a sheared Instance a corner lies up to √3 times the radius from the centre, so the distance, and with it the LOD, can be coarser than the threshold allows, while the comment says no nearer point strays further than the threshold allows. | `correctness`; ADR 0019 line 15's "distance to the Instance's bounding sphere" broken for a sheared Instance: a corner 21% past the sphere for two unit axes 45° apart, at most √3 times the radius; none on an Instance whose axes are orthogonal, which `WorldTransform::drawn` says every hierarchy here composes | `culling.wgsl:269-292`; `common.wgsl:216` | block below | the comment and ADR 0019 name the limit as `clip_space_bounds` does ("only while the axes are orthogonal"), or the radius and the error's scale use a bound that holds under shear, such as the sum of the three half axes' lengths, as `small_instance_coverage` bounds its farthest corner | | |
+| L1-S05 | ADR 0003 and ADR 0017 give an Instance slot as 136.2 bytes with its offsets and visibility bit, and ADR 0003 517,376 slots at the checked-in Budgets, but a slot's offsets are four u32 since the culling pass's scan gained its third component and the LOD error word: 144.2 bytes a slot and 488,448 slots, as `RenderCapacities` computes and its test pins. | `drift`; not load-bearing (the code derives the capacity itself); a reader of either ADR overstates the slots by 28,928, 5.9%, and the bytes a slot by 8; a research note repeats "136.2 bytes a slot today" | `docs/adr/0003-persistent-scene-transform-buffer.md:3`; `docs/adr/0017-textures-stream-by-mip-geometry-lives-in-fixed-arenas.md:18`; `docs/research/rain-snow-wetness-and-wind.md:131`; made false by `culling.wgsl:453-456` and `src/render/bind_groups.rs:131` | block below | the ADRs say 144.2 bytes a slot and 488,448 slots, or the arithmetic without the figure | | |
+| L1-S06 | The WGSL floors stated beside `PRECISION_BAR` count the composition's own roundings only, but the precision oracles compare the GPU's result with the f64 reference from offsets rounded to f32, up to 2⁻¹⁹ m each per axis; added to the comment's figures the worst other order is 4.63e-5 m, over the 4.3e-5 bar the comment presents its 3.97e-5 as under. | `drift`; not load-bearing: the test's verdict holds, as the cases' actual magnitudes bound it at 3.31e-5 m (Block B2); misleads a reader judging the any-order margin, which is 1.30×, not the 1.08× the comment implies, and under the comment's own model negative | `src/render/shader_function_tests.rs:1864-1871`; inputs at `:2237-2251` and `src/render/instance.rs:8-12`; comparisons at `:1943`, `:2005` | block below | the comment states the floor of what the assertion measures: the chain plus the two offsets' rounding (64u per axis), and the bound that keeps the any-order case under the bar | | |
+| L1-S07 | The test that `mod.rs` rests its `unsafe` call on passes a counted loop whose body writes the loop's bound, so a loop that never ends, which the registry's quote says a backend may take for unreachable code, can join `MAIN` or `CULLING` with every test green; no loop in either module does so today. | `correctness`; the guarantee behind `create_shader_module_trusted` with loop bounding off is incomplete; no defect in the code at this commit (every bound is a `let`, a parameter, a constant, a uniform field or a `var` its body does not write) | `src/render/shader_tests.rs:682-746`, `:754-765`; `mod.rs:191-193`, `:242-246` | block below | `loop_problems` also refuses a counted loop whose bound names a variable the body writes, or requires bounds that are not `var`s, with a case in `a_loop_whose_text_does_not_end_it_fails` | | |
+| L1-S08 | The LOD oracle, added since M3.5, asserts its LODs exactly and states no WGSL floor beside the assertion, as M5.5's exit asks of every oracle test added since M3.5; its boundary cases pass only because their products are exact. | `drift`; not load-bearing (the floor is 0 and the test is right, Block B1); one oracle without the stated floor the exit requires | `src/render/shader_function_tests.rs:2503-2569`, assertion at `:2560` | block below | a line beside the assertion: floor 0, two correctly rounded products and an exact comparison; the four boundary cases multiply dyadic values, exact, so equality holds bit for bit, fused or not; every other case lies at least 13% from its boundary | | |
+| L1-S09 | The octahedral oracle's comment gives the 8-bit store's worst case as 0.951° and the test takes 0.95° as its bound, but the worst case is atan(√18/255) = 0.9532°, which the direction normalize(84, 84, 87) reaches (0.9532° or 0.9527°, whichever way its half code rounds), so the constant sits under the bound it claims to carry and the test passes only because its 4,110 directions miss such a one. | `drift`; load-bearing for the oracle (a valid input fails it by 0.0032°), not for the engine: the margins it backs, sin 2° (`shadow_mask.wgsl:64-77`), cover twice the true bound, 1.906° | `src/render/shader_function_tests.rs:1831-1834` | block below | the comment states 0.9532° (atan(√18/255)), and the constant is at or above it, as is the "within 0.95°" the margins' comment repeats at `shadow_mask.wgsl:67-68` | | |
+| L1-S10 | `shadowed` passes the back face of whichever Instance a ray leaving its surface meets first, the receiver's own or another's, when it lies no higher above the surface than `LOD_ERROR_MARGIN` times that Instance's drawn LOD error, so an open (single-sided) Mesh drawn at a coarser LOD stops shadowing another Instance's surface whose ray meets its back within that height: the leak `tabellion-lamorlette-2004-ray-origin-offset` warns that ignoring near intersections creates, which the rule's purpose, a drawn LOD lying inside its own LOD 0, does not need. | `correctness`; the source's warning broken in a band up to 3 drawn LOD errors high, under 3 pixels' width at the Instance's distance by the LOD threshold; no capture shows it, and `world`'s frames 59, 300 and 599 change by no pixel from no rule (`docs/performance.md:34`) | `src/render/shaders/shadow_mask.wgsl:193-195` | block below | a back face is passed only where it can be the receiver's own drawn LOD's LOD 0, or the leak under another Instance's open Mesh is accepted and recorded as a Deviation of `tabellion-lamorlette-2004-ray-origin-offset` | | |
+| L1-S11 | `first_intersection`'s doc comment says it returns "The first triangle either TLAS holds" along the segment, naming every argument but `mask`, which the scope added; it returns the first triangle of an entry whose instance mask shares a bit with `mask`, so a Thin Primitive of a width class the mask leaves out is passed though a TLAS holds it. | `drift`; not load-bearing: `shadowed`'s comment (`:149-150`) says the ray passes such a Thin Primitive; a reader of `first_intersection` alone misses the filter | `src/render/shaders/shadow_mask.wgsl:83-87` (signature `:99`) | block below | the comment names `mask` and the entries it admits | | |
+| L1-S12 | `CONTEXT.md` defines a Thin Primitive as one "whose shadow ends where it would fall between a pixel and half a pixel wide", but the width classes give that end only to a Mesh of Thin Primitives alone whose widest tube is 3.125 mm to under 400 mm wide: a narrower tube takes the narrowest class and keeps its shadow until a 6.25 mm pixel, where a 1 mm tube's shadow is 0.16 of a pixel wide, and a tube of 400 mm or more, or any tube of a Mesh with an ordinary Primitive, takes the ordinary bit and casts onto every pixel. | `drift`; not load-bearing: no Reference scene's tube falls outside the range that this reader found (`town`'s wire is 30 mm); a reader of the glossary expects every Thin Primitive's shadow to end | `CONTEXT.md:22` | block below | the glossary's sentence states the range the classes cover, 3.125 mm to 400 mm, in a Mesh of Thin Primitives alone, as the shaders do | | |
+| L1-S13 | The width-class oracle, added in scope, states no WGSL floor, though seven of its 17 cases (0.00625 to 0.4 m) sit on a class bound, where the expected mask holds only because each f32 literal lies 0.25u above the bound and every quoted backend rounds the product to nearest or toward zero; the neighbouring oracles state theirs beside their assertions. | `drift`; not load-bearing: the test is right on every quoted backend; the M5.5 exit asks each oracle added since M3.5 for its floor, and a backend that rounds a product up would fail the seven cases with no comment saying why | `src/render/shader_function_tests.rs:2463-2500` | block C1 (Oracles) and below | a floor comment beside the assertion: one rounded product, floor 0, the seven bound cases exact under round to nearest and round toward zero | | |
+
+#### L1-S01
+
+`common.wgsl:267-274`:
+
+```wgsl
+    let sphere_diameter_squared = 4.0 * (dot(half_axes[0], half_axes[0])
+        + dot(half_axes[1], half_axes[1])
+        + dot(half_axes[2], half_axes[2])
+        + 2.0 * farthest_skew);
+    let sphere_share = sphere_diameter_squared
+        / (SMALL_INSTANCE_WIDEST_PIXELS * SMALL_INSTANCE_WIDEST_PIXELS * pixel_area);
+    let coverage = max(area_share, sphere_share);
+    return select(1.0, coverage, view_depth > 0.0 && coverage < 1.0);
+```
+
+ADR 0027, Decision, "A small Instance's coverage": "An Instance whose Mesh
+bounds cover under a pixel's area is scaled about their centre, across the
+view, until they cover a pixel's, each vertex keeping its depth, and its
+coverage is the area they truly cover over a pixel's. With culling on, the
+culling pass drops it once that rounds to no sample, under an eighth. An
+Instance that draws four pixels wide across the sphere about its bounds is
+scaled no further". `main.wgsl:108-110`: "any other vertex, of a small
+Instance, moved out from the centre of its Mesh bounds across the view
+until they cover a pixel's area". `shader_function_tests.rs:2368-2370`: "An
+Instance whose bounds cover under a pixel's area keeps that share of its
+samples and is scaled until they cover a pixel's, and keeps none under an
+eighth". M5 story 39 asks for "its coverage by area".
+
+The sphere term is (d / 4p)², d the sphere's diameter and p a pixel, so it
+reaches 1/8, the drop, at d = 4p/√8 = 1.41 p, and 1 at d = 4p, where it
+stops the scaling as the ADR's last sentence asks. Between, the coverage
+is the sphere term wherever it exceeds the area share, which a long thin
+box does: the oracle's case at `shader_function_tests.rs:2444`, half
+extent (1, 0.01, 0.01) at 1,000 m under a pixel of 1 m, has an area share
+of 4 · 0.01 · 1000 / 1000 = 0.04, under the eighth at which the ADR drops
+it, and the test asserts coverage 0.250_05, scale 1.999_8 and one sample
+kept. Its scaled bounds cover 0.04 · 1.9998² = 0.16 of a pixel, not one.
+The mean coverage is right either way (0.16 × 1/4 = 0.04), which is why
+this is drift: the code's rule is a coherent one, the documents name
+another. The sheared case (`:2458-2460`) is the same: area share 0.002,
+coverage 0.5625, two samples.
+
+#### L1-S02
+
+`main.wgsl:154-160`:
+
+```wgsl
+        // Across the view only: each vertex keeps its depth, as the culling pass's box does.
+        let view_axis = vec3<f32>(camera.view_proj[0].w, camera.view_proj[1].w, camera.view_proj[2].w);
+        let from_centre = out.camera_relative_position - bounds_centre;
+        let along_view = view_axis * (dot(from_centre, view_axis) / max(dot(view_axis, view_axis), 1e-30));
+        out.camera_relative_position = bounds_centre + along_view
+            + (from_centre - along_view) * small_instance_scale(instance_coverage);
+```
+
+`common.wgsl:253-256` measures the footprint as the sum over the box's
+three face pairs of 4 \|centre · (aᵢ × aⱼ)\| / w³, in pixels after
+dividing by the pixel's area. For a box of half extent h at (X, Y, −W)
+in camera space, axis-aligned, the three terms are 4h²W (the face across
+the view axis), 4h²\|X\| and 4h²\|Y\| (the faces along it, which the
+footprint shows through perspective). Scaling every vertex's offset across
+the view by s about the centre and keeping its component along the view
+axis multiplies the first face's two edges by s and each of the other two
+faces' one cross-view edge by s, its edge along the view axis unchanged:
+the footprint becomes 4h²(s²W + s\|X\| + s\|Y\|) / W³. With f =
+W / (W + \|X\| + \|Y\|) and s² = 1/c, the scaled footprint is c (f s² +
+(1 − f) s) = f + (1 − f)√c pixels, one pixel only where f = 1, on the
+view axis. The mask keeps c of the samples, so the mean coverage is c (f +
+(1 − f)√c), against c.
+
+Numbers: at the corner of the 2560×1440 view with a 45° vertical field
+of view, X/W = tan 22.5° × 16/9 = 0.736 and Y/W = 0.414, so f = 1 / 2.150
+= 0.465. At c = 0.5: 0.465 + 0.535 × 0.707 = 0.843, 16% low. At c =
+0.125: 0.465 + 0.535 × 0.354 = 0.654, 35% low. The oracle's own off-axis
+case, ASIDE at (1000, 0, −1000) with half extent 0.25 (`:2443`): f = 0.5,
+c = 0.5, scale √2, footprint 0.5 + 0.5 × 0.707 = 0.854, 15% low; checked
+against the exact projection: the face across the view becomes 0.354 m
+square, 0.5 px at 1,000 m under a pixel of 1 m, and the side face keeps
+its 0.5 px of perspective width at 0.707 px of height, 0.354 px, sum
+0.854. The test asserts the coverage and the scale, not the drawn
+footprint, so it passes.
+
+The clauses: ADR 0027, Decision: "scaled about their centre, across the
+view, until they cover a pixel's, each vertex keeping its depth";
+Consequences, fifth bullet: "A small Instance keeps its mean coverage
+whatever its Mesh, since the samples it keeps fall by the area it gains."
+The area it gains is 1/c on the axis only. For the verifier: no capture
+can isolate this at native resolution; the arithmetic above can be
+checked by drawing one small box through the small-Instance twin at the
+view's centre and at its corner at equal coverage and counting the
+samples its depth writes (a sample-count readback, as `coverage_tests.rs`
+does for IDs), or by the projection above. A visible effect, if any, is
+`town`'s far flocks thinning toward the screen's edges in a pan.
+
+#### L1-S03
+
+`shader_function_tests.rs:2325-2328`:
+
+```rust
+    for ([radius, pixel, expected], result) in cases.into_iter().zip(results) {
+        assert!(
+            (result[0] - expected).abs() < 1e-6,
+```
+
+`:2424-2430`:
+
+```rust
+            assert_close(
+                result[0],
+                coverage,
+                2e-6,
+                format_args!("the coverage of {case}"),
+            );
+            assert_close(result[1], scale, 1e-5, format_args!("the scale of {case}"));
+```
+
+and the `thin_kept_samples` test's `assert_eq!` at `:2360` with no
+comment on its thresholds. The lane brief, `docs/agents/audit.md:73`:
+"every function under an oracle that is in the audit's scope against its
+literature number, with the WGSL accuracy floor for its expression chain
+written beside the test's constant". The two other tests added in scope
+that this reader owns state theirs: `:1417-1420` ("WGSL floor 0: binary16
+widens exactly [...] but z is sqrt(1), exact only where sqrt rounds
+correctly") and `:2588` ("Layers stay below 2^24, so f32 carries them
+exactly"). The floors themselves are in Oracles, Blocks A2 and A3.
+
+#### L1-S04
+
+`culling.wgsl:269-292`:
+
+```wgsl
+// An Instance's largest scale along an axis.
+fn instance_scale(instance: InstanceData) -> f32 {
+    return max(
+        max(length(instance.rotation_scale[0]), length(instance.rotation_scale[1])),
+        length(instance.rotation_scale[2])
+    );
+}
+
+// The LOD an Instance draws of its Mesh: the one forced, or the one selected
+// at the distance to the sphere about its Mesh bounds, under the Instance's
+// largest scale along an axis, so no nearer point of it and no axis strays
+// further than the LOD threshold allows: [...]
+    let scale = instance_scale(instance);
+    let radius = 0.5 * length(bounds_max - bounds_min) * scale;
+    let distance_metres = max(length(bounds_centre(instance, bounds_min, bounds_max)) - radius, 0.0);
+```
+
+ADR 0019 line 15: "The pass draws, of each Instance, the coarsest LOD whose
+LOD error times the Instance's scale is under the LOD threshold, one pixel
+of the target's height, at the distance to the Instance's bounding sphere."
+`meshoptimizer-1.3-lod-selection`: "float d = max(0, distance(camera_position,
+mesh_center) - mesh_radius)".
+
+A box corner at half-extent v from the centre lands at `rotation_scale * v`,
+whose length is at most Σ|vᵢ| ‖cᵢ‖ ≤ √3 ‖v‖ maxᵢ ‖cᵢ‖, and equals at most
+‖v‖ maxᵢ ‖cᵢ‖ only when the columns cᵢ are orthogonal. Example: columns
+(1, 0, 0), (0.7071, 0.7071, 0), (0, 0, 1), each of length 1, over the unit
+cube's bounds: radius 0.5 × ‖(2, 2, 2)‖ × 1 = 1.732; the corner (1, 1, 1)
+lands at (1.7071, 0.7071, 1), of length √4.4142 = 2.101, 0.369 past the
+sphere, 21% of its radius. A camera 0.369 m from that corner reads a
+distance of up to 0.369 m where the Instance's nearest point is at 0; an
+error along that corner's direction is scaled by the matrix's largest
+singular value, √1.7071 = 1.307, not 1. Shear exists in the World transform:
+`src/transform/mod.rs:21-23` ("a shear, a non-uniformly scaled parent's
+turned child, has no such reading"), and two other culling functions guard
+it: `small_instance_coverage` ("The farthest corner's, which an Instance
+that shears moves past the axes' summed squares", `common.wgsl:257`) and
+`clip_space_bounds` ("holds every vertex only while the axes are
+orthogonal", `culling.wgsl:145-146`). `instance_lod` states neither the
+limit nor a bound that holds past it. The verifier checks whether any
+Reference scene places a non-uniformly scaled parent with a turned child;
+none known, so no capture is named.
+
+#### L1-S05
+
+`docs/adr/0003-persistent-scene-transform-buffer.md:3`: "30% of it at
+136.2 bytes a slot, its Instance, offsets and visibility bit, in whole
+256-slot scan blocks of the culling pass: 517,376 slots at the Budgets M4
+set". `docs/adr/0017-[...].md:18`: "the Instance slots 30% of the scene and
+pass buffers', at 136.2 bytes a slot with its offsets and visibility bit, in
+whole scan blocks". `docs/research/rain-snow-wetness-and-wind.md:131`: "(ADR
+0003, 136.2 bytes a slot today)".
+
+`culling.wgsl:453-456` writes four words a slot:
+
+```wgsl
+        instance_offsets[slot] = vec4<u32>(
+            select(NOT_DRAWN, vec3<u32>(record_small_and_lod, offset.yz), drawn),
+            bitcast<u32>(lod_error_metres)
+        );
+```
+
+and `src/render/renderer.rs:213-218` sizes the slots by them:
+
+```rust
+const INSTANCE_SCAN_BLOCK_BYTES: u64 = SCAN_BLOCK_SIZE as u64
+    * (size_of::<InstanceData>() + size_of::<[u32; 4]>()) as u64
+    + size_of::<[u32; 4]>() as u64
+    + SCAN_BLOCK_SIZE as u64 / u8::BITS as u64;
+```
+
+`InstanceData` is 128 bytes (two `mat3x3<f32>` of 48, a `vec3<i32>` and a
+`u32`, a `vec3<f32>` and a `u32`; `common.wgsl:177-184`, pinned by the twin
+test): 256 × 144 + 16 + 32 = 36,912 bytes a block, 144.19 a slot. The
+checked-in scene and pass buffers' Budget, 234,881,024 bytes
+(`bench/budgets.json:17`), gives 234,881,024 × 300 / 1000 = 70,464,307, less
+the phase's two entries' 32 = 70,464,275; / 36,912 = 1,908.98, so 1,908
+blocks, 488,448 slots, as `src/render/renderer.rs:1092` pins. With two-word
+offsets a block is 256 × 136 + 8 + 32 = 34,856 bytes, 136.16 a slot, and
+70,464,275 / 34,856 = 2,021.6, so 2,021 blocks, 517,376 slots: the ADRs'
+figures, which date from before the offsets widened.
+
+#### L1-S06
+
+`src/render/shader_function_tests.rs:1864-1871`:
+
+```rust
+/// [...] WGSL floors:
+/// `camera_relative_position`, 192.6u per axis in its written order, 2.0e-5 m
+/// (4.0e-5 under round toward zero), and 384.9u in the worst other order,
+/// (offset + local position) − camera offset and the anchor term last,
+/// 3.97e-5 m (7.9e-5, over this, if a GPU both reorders and rounds toward
+/// zero); `point_light_position`, with no local position, 64.3u per axis,
+/// 6.6e-6 m (1.3e-5), and 64.6u in the worst other order, 6.7e-6 m (1.3e-5).
+const PRECISION_BAR: f64 = 4.3e-5;
+```
+
+The inputs: `Case::test_vectors` (`:2237-2239`) calls `anchor_and_offset`,
+which returns `offset.as_vec3()` (`src/render/instance.rs:11`), the f64
+remainder in [0, 64] rounded to f32; the reference is the exact f64
+`camera_relative`, and the assertions at `:1943` and `:2005` measure
+`gpu.distance(case.camera_relative)`. Each offset's rounding is up to 2⁻¹⁹ m
+= 1.91e-6 m in [32, 64), 32u with u = 2⁻²⁴ m-units; two per axis, 64u. With
+them: written order 256.6u, √3 × 256.6 × 2⁻²⁴ = 2.65e-5 m; worst other order
+448.9u, √3 × 448.9 × 2⁻²⁴ = 4.63e-5 m, over 4.3e-5; point light 128.3u,
+1.33e-5 m. The CPU's any-order check (`:1948-1952`) and the measured
+0.0185 mm (ADR 0014 line 19) are under the bar because the cases' partial
+sums are smaller than the u·|x| model takes (Block B2: 3.31e-5 m), which the
+comment does not say. The numbers it does state are right for the chain
+alone (192.6u × √3 × 2⁻²⁴ = 1.99e-5; 384.9u → 3.97e-5; 64.3u → 6.64e-6;
+64.6u → 6.67e-6).
+
+#### L1-S07
+
+`mod.rs:242-246`:
+
+```rust
+        // SAFETY: without loop bounding a backend compiler may take an
+        // infinite loop for unreachable code [ref:wgpu-types-30-loop-bounding],
+        // so the module holds none: each loop of its parts ends whatever its
+        // buffers hold, which `shader_tests` checks.
+        unsafe { device.create_shader_module_trusted(self.descriptor(capacities), runtime_checks) }
+```
+
+`wgpu-types-30-loop-bounding`: "If false, the caller MUST ensure that all
+passed shaders do not contain any infinite loops. If it does, backend
+compilers MAY treat such a loop as unreachable code".
+
+`src/render/shader_tests.rs:682-686` documents the check: a loop must be
+pinned or "counted, by a counter its header declares, compares with `<`
+alone and steps by `++`, which reaches any bound; a `for` loop whose body
+writes its counter [...]" is refused. `for_counter` (`:754-765`) accepts
+`name < <anything>` without writes of `name`, and the body scan (`:735-743`)
+looks for writes of the counter alone:
+
+```rust
+                if writes(body_line, name) {
+                    problems.push(format!("{location}: its body writes `{name}`"));
+```
+
+So `for (var entry = 0u; entry < point_light_count; entry++) {
+point_light_count += 1u; }` passes: `++` reaches a fixed bound, not one the
+body raises each step. `main.wgsl:437`'s bound is a `var`
+(`var point_light_count = light.point_light_count;`, `:429`), written only
+before the loop (`:435`); every other bound in the two modules is a `let`
+(`culling.wgsl:478`, `:489`, `:597`), a field of a `let` copy (`:335`), a
+parameter (`common.wgsl:215`), a uniform field (`main.wgsl:407`) or a
+constant (`culling.wgsl:94`, `:231`, `:647`). `a_loop_whose_text_does_not_end_it_fails`
+(`:174-229`) holds no case of a bound the body writes.
+
+#### L1-S08
+
+`src/render/shader_function_tests.rs:2503-2509` (the doc) and `:2557-2568`:
+
+```rust
+    for ((lod_count, errors, scale, distance, threshold, expected), result) in
+        cases.into_iter().zip(results)
+    {
+        assert_eq!(
+            result[0], expected,
+```
+
+No comment beside it states a floor, where the precision oracles
+(`:1864-1871`), `pack_index`'s (`:1677`, "WGSL floor 0: integer shifts and
+masks, on halves f32 holds exactly"), `position_at`'s and the octahedral
+codec's each gained one in scope. Block B1 gives the floor and the margins.
+
+#### L1-S09
+
+Test, `src/render/shader_function_tests.rs:1831-1834`:
+
+```rust
+// The 8-bit rounding's bound, half a step per coordinate over a vector no
+// shorter than 1/√3, is 0.951°, which this takes to three figures; f32
+// adds about 2e-6 rad.
+let largest_8_bit_error = 0.95f64.to_radians();
+```
+
+and the store it bounds, `:1815-1816`: `(((coordinate * 0.5 + 0.5) * 255.0).round() / 255.0) * 2.0 - 1.0`. Half a step per coordinate is 1/255 in [−1, 1]. With both coordinates off by +1/255, the pre-normalised vector (x, y, 1 − |x| − |y|) moves by (1, 1, −2)/255, of length √6/255 = 9.606e-3; near a face's centre that move is nearly perpendicular to a vector of length 1/√3, so the angle is atan(√6/255 × √3) = atan(√18/255) = atan(0.016638) = 0.016636 rad = 0.9532°. The comment's 0.951° is 0.0166 rad converted (0.9511°), the same quotient rounded to three figures before conversion; the M3.5 report's Block C made the same step ("≤ 0.0166 rad = 0.951°, the constant") and gave the row `explained`. The direction normalize(84, 84, 87) = (0.57048, 0.57048, 0.59085) encodes to (84/255, 84/255), each 169.5 codes up the 8-bit range, a half code: stored as 170 it decodes to normalize(1, 1, 1), 0.95319° away; stored as 169, to normalize(83, 83, 89), 0.95266° away; both over 0.95°. Computed in f64; a brute force over every pair of half codes from 100 to 254 gives the maximum 0.953188°. The test's directions (6 axes, 8 edges, a 4,096-point Fibonacci lattice, `:1776-1800`) contain no such point, so it passes. The shadow mask's margins' comment, `shadow_mask.wgsl:66-69`, says the stored normals hold "each within 0.95° where the store rounds to the nearest step [...] and about twice that where it may round to either", which sin 2° (`:75-76`) covers at the true 0.9532° and twice it, 1.906°.
+
+#### L1-S10
+
+Code, `src/render/shaders/shadow_mask.wgsl:189-195`:
+
+```wgsl
+// The stored normal errs by as much as the margin, so the height is its upper bound.
+let height = offset + hit.t * (facing + AGREEING_TRIANGLE_TURN_MARGIN);
+// A TLAS entry's custom data is its Instance's slot, whose fourth word the culling pass wrote.
+let drawn_lod_error = bitcast<f32>(instance_offsets[hit.instance_custom_data].w);
+let shadows = any_hit
+    || hit.front_face
+    || (leaves_surface && height > LOD_ERROR_MARGIN * drawn_lod_error);
+```
+
+The hit's Instance is whatever the nearest-hit query found (`:182-186`); nothing compares it with the receiver's, which the pass does not know (it rebuilds the receiver from depth and normals, `:233-243`). The comment's case is the receiver's own: "every BLAS holds its Mesh's LOD 0 (ADR 0020), and the LOD drawn can lie inside it" (`:144-146`), and its closed-mesh premise is "A ray that enters a closed mesh meets a front face first, so whatever stands beyond still shadows the point" (`:141-143`). A single-sided Mesh seen from behind has no front face for the ray to meet first: its back face is the occluder. The source the comment cites, `tabellion-lamorlette-2004-ray-origin-offset`: "Traditional biasing techniques that ignore intersections near the ray origin cannot be applied here, since they would create significant light or shadow leak problems. [...] the offset distance used in this algorithm needs to be bigger than the maximum offset between the coarse and micro-polygon geometric tessellations": the tolerance it justifies is the offset between one surface's two tessellations, the receiver's. M5 story 13 states the same purpose, "so that a drawn LOD sitting just inside LOD 0 does not shadow itself". Open Meshes that shadow with their backs exist: the message of commit `481abfca` (2026-11-17), which added the rule, says "the shadows that open Meshes cast with their backs in `world` stay" at LOD 0, where the error is 0, and that "No source found bounds the tolerance by the drawn LOD's own error; that part is this change's". Magnitude: the culling pass draws a LOD whose error times the Instance's scale is under the LOD threshold times the distance to its bounds (`common.wgsl:216`; `culling.wgsl:284-299`), so 3 × the error is under 3 pixels' width at that distance; a receiver under an open Mesh's back within that height, such as a wall top under a single-sided eave, takes the light the eave should hide. For the verifier: `praxis shadow-mask-difference world <png> 2560x1440 --frame <n>` at frames where buildings with single-sided roofs or awnings stand within the Load radius at a LOD past 0, checking whether the differing pixels lie under an open Mesh's back.
+
+#### L1-S11
+
+`src/render/shaders/shadow_mask.wgsl:83-87`: "The first triangle either TLAS holds from `start_distance` to `end_distance` (the ray's tmin and tmax) along the ray from `origin`, in the TLAS's frame, along `direction`, a unit vector: with RAY_FLAG_TERMINATE_ON_FIRST_HIT in `flags`, any one, and otherwise the nearest." The signature at `:99` is `fn first_intersection(flags: u32, mask: u32, origin: vec3<f32>, direction: vec3<f32>, start_distance: f32, end_distance: f32)`, and both queries pass `mask` as the ray's cull mask (`:102`, `:118`). By `wgpu-30-tlas-instance-fields`, a query "Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`", and `shadowed` passes `shadow_ray_mask(pixel_width)` (`:181`), which leaves out the narrower width classes (`common.wgsl:282-287`). The scope's diff added the argument and changed no word of the comment.
+
+#### L1-S12
+
+`CONTEXT.md:22`: "A Primitive declared a tube of a given radius, drawn a pixel wide where it would be narrower, whose shadow ends where it would fall between a pixel and half a pixel wide." The entry's mask, `src/render/acceleration_structures.rs:990-1008`: with no thin radius (a Mesh with any ordinary Primitive) it returns `ORDINARY_MASK`, 1; otherwise `narrowest_bounds = (width_metres * 320.0).max(1.0)`, `class = (narrowest_bounds as u32).ilog2()`, bit `2 << class` while `class < 7`, else 1. A width under 1/320 m = 3.125 mm gives `narrowest_bounds` 1 and class 0, whose upper bound is 6.25 mm; a width of 128/320 = 0.4 m or more gives class 7 or more and the ordinary bit. The ray's mask always holds bit 0 (`common.wgsl:287`). So a 1 mm tube's shadow ends where the receiver's pixel passes 6.25 mm, 1/6.25 = 0.16 of a pixel wide, short of half a pixel, and a 0.5 m tube, or a tube in a lamp Mesh with an ordinary head, never ends. The classes' two ends and the mixed Mesh's ordinary bit are calls the implementing commit (`0c133356`, 2026-11-16) records ("A width under 3.125 mm takes the narrowest class, and one of 400 mm or more the ordinary bit"; "A Mesh that mixes thin and ordinary Primitives takes the ordinary bit"); the glossary entry did not take them.
+
+#### L1-S13
+
+`src/render/shader_function_tests.rs:2463-2464`: "Each case's mask is a literal: the classes' upper bounds are 6.25, 12.5, 25, 50, 100, 200 and 400 mm, bits 1 to 7." No other comment in the test (`:2465-2502`) speaks of rounding. Beside it, the scope's other oracle comments state theirs, e.g. `:1677` "WGSL floor 0: integer shifts and masks, on halves f32 holds exactly", `:1756-1758`, `:1848-1849`, `:2204-2209`. Block C1 under *Oracles* gives the floor: one product rounded once, so a case's verdict can move only within one rounding of a class bound; the seven bound cases are 0.25u above one, exact under the rounding to nearest that `wgsl-2026-float-accuracy` ("x * y: Correctly rounded") requires and the rounding toward zero that `msl-4.1-rounding` permits.
+
+### Notes for the verifier
+
+Two Findings are drift in documents lane 7 also reads: L1-S05, ADR 0003's
+and ADR 0017's slot figures, and L1-S12, `CONTEXT.md`'s Thin Primitive
+entry; where lane 7 files the same sentence, the triage keeps one. Two
+leads the render reader passed on, the `unsafe` creation of the main and
+culling modules with wgpu's loop bounding off and the culling pass's 256
+invocations a workgroup, were judged by reader B and filed as neither;
+the gap in the loop check that `unsafe` rests on is L1-S07.
+
+#### surface shading, coverage, Thin Primitives, small Instances and Texture classes
+
+- **The same samples in every fragment of a pixel.** ADR 0027 and
+  `common.wgsl:230` say every fragment of a pixel keeps the same samples.
+  The mask depends on the count alone, and the masks of the five counts
+  are nested (0b0001 ⊂ 0b1001 ⊂ 0b1011 ⊂ 0b1111), but a Thin Primitive's
+  count is computed per fragment from `pixel_metres`, interpolated at the
+  centroid, and from the provoking vertex's flat `radius_metres`. Two
+  fragments of one pixel, from two faces of a tube, can therefore round to
+  different counts where the coverage sits at a threshold. With a uniform
+  Instance scale every vertex of a ring has the same centre and radius, and
+  the faces' interpolated spans differ by about the radius over the
+  distance (1e-4 relative for a 1 cm tube at 100 m), so the disagreement is
+  confined to a band that narrow at each threshold, and nested masks keep
+  the pixel's total monotone. Under a non-uniform Instance scale the radius
+  `length(rotation_scale * normal * r)` differs per vertex, so faces of one
+  tube can disagree everywhere; no Reference scene scales a Thin Primitive
+  non-uniformly that this reader found (`src/scenes/town.rs:976-1180` places them),
+  so nothing is filed. To settle: a GPU readback of the depth twin's sample
+  mask for a tube under a scale of (2, 1, 1).
+- **`discard` before `lit` in `fs_thin_main`.** WGSL defines `discard` as
+  demoting the invocation to a helper, so the five `textureSample` calls and
+  `dpdx(normal)` after it stay in uniform control flow and the module
+  validates. Whether Metal's lowering (`discard_fragment()`) keeps a
+  discarded member of a quad computing for its neighbours' derivatives is a
+  backend behaviour the registry does not quote. A thin fragment discards
+  where its kept samples are 0, which near a tube's end varies inside a
+  quad. To settle: dump the lit module's MSL (`RUST_LOG=wgpu_hal=debug`)
+  and look at a tube's end in `town` at 8x for a mip or roughness seam on
+  the last pixels.
+- **Culling and `vs_thin` agree on the coverage.** The culling pass
+  (`culling.wgsl:316-326`, `:401-411`) calls the same
+  `small_instance_coverage` with the same composed centre and the same w,
+  in another module. Where its compiled rounding differs and the coverage
+  lies at 1 or at an eighth, the two can disagree by one rounding: a
+  culling verdict of "small" over a `vs_thin` coverage of 1 draws the
+  Instance unscaled through the twin, and a drop decided at 0.1249999 loses
+  an Instance `vs_thin` would have kept one sample of. Both are one
+  rounding wide; no Finding.
+- **Metal's fast math and the NaN guards.** `msl-4.1-fast-math` lets the
+  compiler assume no NaNs and no infinities. `small_instance_coverage`
+  divides by `view_depth · pixel_area`, 0 at w = 0, and relies on
+  `view_depth > 0.0` in the select, which is evaluated on the input, not
+  on the quotient, so the assumption cannot lose it; `coverage < 1.0` on a
+  NaN is never reached with w > 0 and a camera whose
+  `pixel_size_per_metre` is positive (`src/render/renderer.rs:199-201`).
+  `surface_normals`' `crossed * inverseSqrt(0)` is M3.5's.
+- **The neutral normal test emulates the sampler.** It decodes the texel
+  with `unpack2x16float`, where the lit pass samples a 1×1 `Rgba16Float`
+  slice through `data_sampler`, trilinear at 4x anisotropy. Filtering one
+  repeated texel returns it where the filter's weights sum to exactly 1,
+  which the registry does not promise. A capture of a Material without a
+  normal Texture (`pbr-sweep`) at the lit pass is the end-to-end check.
+  The test's floor comment names Vulkan's `sqrt` allowance only; Metal's
+  "sqrt(x): Implemented as x * rsqrt(x)" (`msl-4.1-fast-math`) allows the
+  same, and the M4 Pro passing says its `rsqrt(1)` is 1.
+- **Far proxies and point lights.** The M5 spec's Far proxy decision says a
+  proxy is "Lit by the sun and the ambient term only"; it is not a story
+  and ADR 0026 has no such clause. `lit` does not tell a Far proxy from a
+  Placement, so a point light within the Load radius whose range reaches a
+  proxy's pixel, which the Froxel lists allow, lights it. Whether `world`
+  has a light near enough to its Load radius for this to show is the
+  verifier's to check (a night frame at the Load radius), or the owner's
+  to rule a non-issue.
+- **Unwidened tubes are recomposed.** `vs_thin` rewrites every Thin
+  Primitive vertex in front of the camera as `centre + radial · (drawn /
+  radius)`, factor 1 where the tube is wider than a pixel, so its position
+  differs from `vertex_output`'s by up to two roundings (and a 2.5 ULP
+  quotient where `radius / radius` is not exactly 1). The depth and lit
+  twins compute it alike, so depth-equal holds; a Thin Primitive sharing
+  an edge with an ordinary Primitive of its Mesh could open a crack of
+  that size, 12 µm at 100 m, under the precision bar.
+- **Checked and sound.** `THIN_NARROWEST_VIEW`'s comment, an equilateral
+  triangle's narrowest width 1.5 R = 0.75 · 2R; the farthest-corner skew
+  (the four sign patterns of ±a ± b ± c give the four expressions at
+  `common.wgsl:263-266`); the face-pair projected area 4 \|c · (aᵢ × aⱼ)\|
+  / w³, checked against the exact projection for the oracle's ASIDE case
+  (Block A3); `froxel_mask_bit`'s new midpoint, equal to the old for every
+  count; the M3.5 exit's rewritten tolerance comments (`:15-23`,
+  `:1227-1247`), whose figures equal M3.5's derived floors, the GGX peak's
+  1.3e-6 being 2.5 × 2⁻²¹ + f32(π)'s 1.4e-7 at 5.09; `shading.wgsl:262`'s
+  "(M6)" for the probes, as `docs/agents/audit.md:95` names M6's scope;
+  the two timing comments moved to `docs/performance.md:27-28`, whose rows
+  hold the removed figures (10 to 12%, 25 µs and 5%);
+  `pixel_size_per_metre` is 2 tan(fov/2) / height (`renderer.rs:199-201`),
+  a pixel of the target's height, as ADR 0027's "a pixel wide" reads it.
+- **Untested functions.** `thin_fragment_samples` (a select between two
+  oracled functions) and `surface_normals` (the former entry point's body)
+  have no oracle; neither is a shading function, so the checklist does not
+  ask for one.
+
+#### culling, LOD selection and module assembly
+
+Checked and sound, but subtle:
+
+- **The three-component scan and the frame's draw.** Offsets are exclusive
+  prefix sums in slot order, within a block by a Hillis and Steele scan
+  between barriers in uniform control flow (`culling.wgsl:92-109`; every
+  invocation calls it, none returns early), across blocks by one workgroup
+  whose loops have the same bound in every invocation (`:474-496`).
+  Saturating addition, min(a + b, 2³² − 1) on unsigned values, is
+  associative, so the scan's order does not change a saturated sum, and a
+  saturated sum is past every capacity (`NOT_DRAWN`, `:79-81`). Atomics take
+  only maxima and counts (`:581-592`) and the workgroup's visibility words
+  (`:438`, read after the scan's barriers at `:442-445`, the words
+  zero-initialised by wgpu's default `zero_initialize_workgroup_memory`,
+  `src/render/bind_groups.rs:578-581`).
+- **The slot word.** `SLOT_LOD_SHIFT` 28 leaves the LOD bits 28-31, the
+  small bit 27 and 27 bits of in-block record offset. `MESH_MAX_LODS` 8 < 16
+  is asserted (`src/render/culling_pass.rs:75`), so a drawn slot's x word is
+  at most `0x7FFF_FFFF` and never `NOT_DRAWN`; the record capacity, 2²⁰, is
+  asserted under 2²⁷ − 1 (`:223`), so a saturated in-block offset, 2²⁷ − 1,
+  plus any block offset is past the records and `fits` refuses it. No legal
+  capacity overflows the field: `DrawCapacity::FIXED` is a constant, not a
+  Budget's.
+- **Overlap of the two phases' regions.** Phase two's Thin Primitive indices
+  fill [capacity − P₁ − P₂, capacity − P₁) while phase one's ordinary
+  indices, already drawn, end at E₁ ≤ capacity − P₁. A phase-two Instance
+  writes only where it fits, which needs its first ordinary index ≤
+  capacity − P₁ − P₂ (`:552-553`), and that index is at least phase one's
+  ordinary sum S₁ ≥ E₁; so no written index of phase two lands on phase
+  one's. If phase one overflowed, S₁ (or its record sum) is already past the
+  capacity and phase two draws nothing.
+- **Thin indices reserved for Instances that do not fit.** P, a phase's
+  Thin Primitive index sum, counts every drawn slot's, and `fits` takes all
+  of it off the ordinary indices' capacity (`:547-553`): a later slot's Thin
+  Primitive indices can push an earlier Instance out, and past the buffer's
+  size no Instance of the phase draws. The set drawn stays a prefix in slot
+  order and every refused Instance is counted, so the comment at `:540-545`
+  holds in its letter; the Renderer test of overflow
+  (`src/render/renderer.rs:1344`) exercises ordinary indices, not Thin
+  Primitives'. Not filed.
+- **Loops of the unbounded modules.** Every loop of `CULLING` and `MAIN`
+  ends at this commit: `exclusive_scan`'s stride takes powers of two up to
+  2³¹ and the bound is at most 2³¹ (`mod.rs:47`); `append_triangles`' index
+  starts under 32 and steps 32 to at most 3 × 124 = 372, under 2³¹;
+  `froxel_mask_bit`'s binary search shrinks [low, high) each step whatever
+  the list holds (`main.wgsl:286-293`); the rest are counted loops with
+  fixed bounds (L1-S07 lists them). No counter or bound wraps.
+- **`instance_lod` edge cases.** Distance 0 or the camera inside the sphere
+  gives LOD 0, the Deviation row's case. A zero scale gives every error 0,
+  so the coarsest LOD at any distance above 0, of an Instance that draws
+  nothing visible, and `small_instance_coverage` gives it coverage 0, which
+  CULLING drops. `FORCED_LOD` is clamped to each Mesh's coarsest and to 7 on
+  the CPU. A Mesh with `lod_count` 0 selects LOD 0. The LOD error word is
+  written in phase one for every slot with a Mesh, shadow proxies included.
+- **The widest tube.** `widest_tube_coverage` reads LOD 0's Meshlets while
+  the Instance may draw a coarser LOD; the cook locks a Thin Primitive's
+  vertices in every LOD (`src/cook/mesh.rs:293-297`, `:340-347`) and the Mesh
+  table keeps each Meshlet's radius, so the widest is the same.
+- **The bounds' growth.** The thin widening is taken at the box's farthest
+  w before growth; no vertex lies past it, so the radius bounds every
+  vertex's move. A degenerate axis (`half_lengths` 0) gets a growth near
+  1e27 times a zero clip vector, which stays 0: the widening along a flat
+  axis is lost, as the comment's orthogonality limit already admits.
+- **`COMPOSITION_ERROR` and Far proxies.** ADR 0014's 0.041 mm assumes
+  vertices within 128 m of the pivot; a Far proxy's reach 190 m (ADR 0026
+  line 21), unrotated. Its rounding then exceeds 0.041 mm only for a vertex
+  past 128 m drawn within a few metres of the camera, and there
+  `OCCLUSION_ROUNDING` × w, 6.1e-5 of the depth, already passes 1e-4 m
+  beyond 1.6 m. A Late Chunk's proxy is the one drawn that near. Not filed.
+- **The cooked order comment** at `culling.wgsl:636-637` ("so the draw
+  rasterizes as the cooked index stream does") reads within each draw: the
+  Mesh table puts a LOD's Thin Primitives' Meshlets after its others
+  (`src/assets/pools.rs:539-543`) and they draw apart. Not filed.
+- **ADR 0027 line 29**, "so whether it is drawn does not follow the frame
+  before": which phase draws a small Instance still follows the frame
+  before's bit, as every Instance's does; whether it shows does not. Not
+  filed.
+
+Leads passed on by the render reader, judged and not filed:
+
+- **The `unsafe` of loop bounding and ADR 0021's "the one `unsafe`".** The
+  call is `unsafe`: wgpu 30.0.2 (the version `Cargo.lock` pins) declares
+  `pub unsafe fn create_shader_module_trusted` with a `# Safety` section
+  making the caller answer for what the disabled checks would catch
+  (`wgpu-30.0.2/src/api/device.rs:164-184`). No ADR records it: the only
+  `unsafe` an ADR mentions is ADR 0021 line 15, "Ray queries need
+  `ExperimentalFeatures::enabled()`, an `unsafe` call [...]; it is the one
+  `unsafe` this ADR adds". That sentence counts what ADR 0021 adds, not the
+  codebase's `unsafe`, and stays true (`src/gpu/mod.rs:78`); the source has
+  `unsafe` in eight other files as well. No ADR clause asks for an `unsafe`
+  to be recorded in an ADR. The project's rule is `CLAUDE.md`'s "No
+  `unsafe` unless absolutely necessary and clearly explained", which the
+  SAFETY comment at `mod.rs:242-245` meets in form, citing the registry's
+  quote of what the caller must ensure; the gap in what it relies on is L1-S07.
+  Whether turning a runtime check off is a decision for an ADR is the
+  owner's call; it is reversible by one field. Not filed.
+- **256 invocations a workgroup against the floor.** The floor requests and
+  checks the limit: `floor_limits()` is `..wgpu::Limits::default()` past
+  four raised fields (`src/gpu/mod.rs:310-323`), so it carries the
+  default's `max_compute_invocations_per_workgroup` 256,
+  `max_compute_workgroup_size_x` 256 and `max_compute_workgroup_storage_size`
+  16,384; the device is requested with exactly those limits
+  (`src/gpu/mod.rs:79`), and `check_floor` compares every field of them
+  with the adapter's before that (`:335`). The culling module's workgroups
+  are 256 × 1 × 1 (`culling.wgsl:383`, `:472`, `:569`, `SCAN_BLOCK_SIZE` =
+  256 at `src/render/culling_pass.rs:67`) and 32 × 1 × 1 (`:616`), with
+  4,128 bytes of workgroup storage, all within the floor; wgpu-core checks a
+  pipeline's workgroup size against the device's limits at creation, so a
+  larger `SCAN_BLOCK_SIZE` would fail at device creation, not at run time.
+  At the floor's edge with no margin, and no compile-time assert ties the
+  constant to it (the unasserted constraints below). Not filed.
+
+Could not settle without running code:
+
+- **The LOD in the two phases.** Phase two recomputes `instance_lod` in a
+  pipeline specialised with other overrides; under Metal's default fast
+  math ("FP contract to be fast", `msl-4.1-fast-math`) the two pipelines
+  could round `selected_lod`'s products differently, so at a boundary a
+  phase-two Instance might draw a LOD whose error differs from the one phase
+  one wrote into the fourth word, which the shadow mask reads. To settle: a
+  GPU test placing Instances at distances straddling a LOD boundary within
+  an ulp, hidden in phase one and drawn in phase two, comparing `slot_lod`
+  with the error word.
+- **Shear in a Reference scene** (L1-S04): whether any scene places a
+  non-uniformly scaled parent with a turned child; grep the scene builders
+  for a parent `Transform` with unequal scale components and a child with a
+  rotation.
+- **Unasserted constraints.** `SCAN_BLOCK_SIZE` must be a multiple of 32
+  (`visible_words`, `culling.wgsl:77`, `:438`, `:442-444`; the visibility
+  buffer of `instances / 32` words, `src/render/culling_pass.rs:279`) and at
+  most the floor's 256 invocations a workgroup; neither is asserted, and 256
+  meets both. Pipeline creation would fail on the second; the first would
+  index past `visible_words` silently clamped.
+
+#### the shadow mask and its rays
+
+Checked and sound, but subtle:
+
+- The back-face loop ends. `shadowed`'s loop (`shadow_mask.wgsl:185-202`) runs at most twice: the second turn sets `RAY_FLAG_TERMINATE_ON_FIRST_HIT` (`:200`), so `any_hit` is true and the `if` at `:196` breaks whatever the hit. The module also keeps wgpu's loop bounding (`src/render/shadow_mask_pass.rs:145` uses `create_shader_module`; `LOOPS_UNBOUNDED` is `[MAIN, CULLING]`, `src/render/shaders/mod.rs:193`).
+- A ray past a passed back face cannot pass a real occluder beyond it: the second segment starts at `hit.t + offset` (`:201`) and any triangle of either TLAS shadows it; a front face nearer than the back face is the nearest hit and shadows at once. Only a triangle within `offset` (at least 2^-16 of the coordinate, 1/32 of a pixel) past the back face is skipped.
+- On a miss, `hit.instance_custom_data` is read and used as an index (`:192`) before `found` is tested. Its value is undefined without a committed hit, but the module is created with wgpu's default runtime checks, bounds checks included, and the result enters only `shadows`, which `hidden = found && shadows` (`:197`) discards. No defect; a reordering would also skip the load on a miss.
+- The height is an upper bound as its comment says: the stored triangle normal is within 0.9532° of the true one (L1-S09's figure) under rounding to nearest, so |d · (n_true − n_stored)| ≤ 2 sin(0.4766°) = 0.0166, under `AGREEING_TRIANGLE_TURN_MARGIN` = sin 2° = 0.0349; under rounding to either, 2 sin(0.953°) = 0.03327, still under it.
+- Units: the cooked LOD error is meshoptimizer's relative error times `simplify_scale`, summed down the chain, in metres of the Mesh (`src/cook/mesh.rs:375`); the culling pass multiplies it by the Instance's largest axis scale (`culling.wgsl:270-275`, `:428-431`), so the word the mask reads is in World metres, the TLAS frame's, as `height` is. An unevenly scaled Instance passes back faces by its largest axis, which overstates the error along a smaller one; the implementing commit (`481abfca`) lists this as known.
+- Phase one writes every slot's drawn LOD error, drawn or not, and phase two copies it back (`culling.wgsl:428-431`, `:446-456`), so the mask does not depend on culling. Two stale cases the implementing commit lists as "known and left": a static TLAS entry whose slot was reused before its rebuild reads the new Instance's error, and an entry whose slot lies past `instance_slot_count`, which `offset_slots` does not write (`culling.wgsl:446`), reads an earlier frame's word. The ADR 0008 row reads this as the static TLAS's decided lag, not screen-space history; a stricter reading would make the second case a read of history.
+- `shadow_ray_mask` never returns 0 and always meets ordinary geometry and Far proxies (bit 0); its widest class, class 6, ends at 400 mm, past which a tube takes the ordinary bit; a pixel width of 0, or any up to 6.25 mm, gives every class, an infinite one none, a NaN one or the other, every result with bit 0 (Oracles, block C1).
+- The width classes' Rust and WGSL sides agree at the bounds: a tube exactly on a lower bound 2^k/320 takes class k (`ilog2` of an exact power), and a receiver pixel exactly on an upper bound includes the class (n = k at x = 2^k), the "no narrower than" of the comment.
+- The re-anchored static TLAS and the dynamic TLAS share the frame each frame: the Renderer takes `static_tlas.anchor()` after `update` swaps the spare in and passes the same value to `dynamic_tlas.fill` and the uniform (`src/render/renderer.rs:724-737`).
+
+Could not settle without running or a source the registry lacks:
+
+- L1-S10's visible extent. `world`'s frames 59, 300 and 599 show nothing (`docs/performance.md:34`). To settle: `praxis shadow-mask-difference world <png> 2560x1440 --frame <n>` at frames with buildings at a LOD past 0 inside the Load radius, and a probe that marks, per differing pixel, whether the passed back face belongs to another Instance than the receiver's (the receiver's slot is not in the mask's inputs, so this needs a probe that reads the depth pass's Instance or compares against a build where the pass is limited to `hit.t` below the first front face of the hit Instance).
+- Whether meshoptimizer's `result_error` from `simplify_with_attributes_and_locks` (`src/cook/mesh.rs:357-369`) includes the weighted attribute error. If it does, the cooked "LOD error" can exceed the geometric deviation, and `LOD_ERROR_MARGIN` passes higher back faces than the geometry needs (more of L1-S10's band). The registry's `meshoptimizer-1.3-simplify-error` quote speaks of the target error only; meshoptimizer 1.3's `meshopt_simplifyWithAttributes` documentation would settle it.
+- `LOD_ERROR_MARGIN`'s comment says "`orrery`'s spheres meet LOD 0 up to three times theirs high". `docs/performance.md:34` reports pixel counts per margin, 3.0 and 1,000.0 equal on all 33 frames of the moving view, not a measured height. The equality is consistent with every passed back face lying within 3 errors, not a measurement of it.
+- Mirrored Instances. The back-face pass trusts `hit.front_face`. If a backend decides facing in object space, as some ray-tracing APIs do for Instances whose transform mirrors, a mirrored Instance's faces read the other way round, and a leaving ray would pass its true front faces within the band. The registry holds no key on facing under a mirroring transform; whether any Placement has a negative determinant was not checked. The rule existed for rays starting inside the surface before the scope; the scope extends it to leaving rays.
+- Small Instances scaled up to a pixel (ADR 0027) and Thin Primitives widened: the receiver point lies on the drawn, enlarged surface, outside the true LOD 0 the BLAS holds. For a widened tube, convex about its centre line, a leaving ray cannot meet the true tube; for a non-convex small Instance scaled up to eight times, a leaving ray could meet its own true front faces. Sub-pixel either way; `town`'s far flocks are where it would show.
+- The figure "the camera adds less than 4.9 mm to a shadow ray's offset once that build is bound" holds for the anchor the build took; the build re-anchors at the camera's Anchor when the worker starts (`src/render/acceleration_structures.rs:572-581`), and the camera moves in the frames until it is bound. The ADR words it "once that build is bound"; the strict bound is render's to state.
+- Story 13's letter (a pixel's width along the ray) and the code's rule (3 drawn LOD errors of height) differ; the change that made the rule measured both (`docs/performance.md:34`) and its message says the owner decided under the change's Decide items. If the spec's letter is meant to bind, that is a Finding; this reader read the spec's purpose clause as the bar.
+
+Suspicions without evidence of the lane's kind:
+
+- Cost, for the budget lane: every hit now reads a slot's word through `instance_custom_data` (`:192`), which the implementing commit measured at 0.44 ms of `town`'s shadow-ray time (3.9%) on the M4 Pro, and every leaving ray's first segment is now a nearest-hit query where it was an any-hit one; both were accepted in that change.
+- `max(NaN, 1.0)` in `shadow_ray_mask`: WGSL leaves which operand a NaN `max` returns to the backend; either result holds bit 0, so no ray misses ordinary geometry. No pixel width the pass computes is NaN for a depth above 0.
+
+### Counts
+
+| Severity class | Findings |
+|---|---|
+| `image` | 0 |
+| `budget` | 0 |
+| `correctness` | 4 (L1-S02, L1-S04, L1-S07, L1-S10) |
+| `drift` | 9 (L1-S01, L1-S03, L1-S05, L1-S06, L1-S08, L1-S09, L1-S11, L1-S12, L1-S13) |
+| `health` | 0 |
+
+Clause verdicts: 173 rows (A 64, B 59, C 50); `holds` 154, seven of them
+with a Finding on the clause, its wording or its record (L1-S01 twice,
+L1-S04, L1-S06, L1-S07, L1-S10, and one row carrying L1-S11 and L1-S12);
+`broken` 4 (L1-S02 on ADR 0027's scaling and its mean-coverage
+Consequence, L1-S05 on ADR 0003's and ADR 0017's slot figures);
+`superseded` 0; split between this module and render 2, the shader half
+holding; falls in another reader or module 11; not applicable 2. Spec
+stories: 34 rows (A 8, B 15, C 11); 22 hold, M5 story 8 with L1-S04, M5
+story 13 in intent and not in letter with L1-S10, M5 story 37 in the
+glossary's reading with L1-S12, M5 story 39 on the view axis only with
+L1-S01 and L1-S02; 5 hold in part, the rest falling in another reader;
+6 fall in another reader or module; 1 not applicable. Registry keys: 25
+rows (A 7, B 7, C 11), every cited key matching its quote:
+`meshoptimizer-1.3-lod-selection` as its Deviation row says, `greene-hiz`
+and `meshoptimizer-1.3-simplify-error` in substance,
+`tabellion-lamorlette-2004-ray-origin-offset` for what it is cited for
+with L1-S10 on its warning; one rule relied on with no key (the binary32
+exponent `shadow_ray_mask` reads) and one key not applicable (loop
+bounding, which the shadow mask module keeps). Oracles: 16 rows over 13
+tests; `exact` 7, `explained` 5, `tight` 3 (the neutral normal's
+`sqrt(1)`, `position_at` as its comment says, the octahedral 8-bit bound,
+L1-S09), `loose` 1 (`thin_drawn_radius`, about 40×), `unexplained` 0;
+the 36 tests of the file pass on the M4 Pro.
