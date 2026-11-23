@@ -112,7 +112,12 @@ impl Configuration {
             (width, height, warm_up_frames, measured_frames)
         };
         let reference = frames(self) == frames(Self::REFERENCE);
-        if scene == ReferenceScene::World && reference {
+        if reference && crate::render::probe_ray_pass::held_camera_position().is_some() {
+            Self {
+                measured_frames: crate::render::probe_ray_pass::HELD_MEASURED_FRAMES,
+                ..self
+            }
+        } else if scene == ReferenceScene::World && reference {
             Self {
                 measured_frames: BENCH_SEGMENT_FRAMES - self.warm_up_frames,
                 ..self
@@ -884,7 +889,13 @@ fn render_run(
         context,
         scene,
         glam::DVec3::ZERO,
-        &|frame| scene.camera_at(frame, glam::DVec3::ZERO),
+        &|frame| match crate::render::probe_ray_pass::held_camera_position() {
+            Some(position) => crate::camera::Camera {
+                ev100: scene.camera_at(frame, glam::DVec3::ZERO).ev100,
+                ..crate::camera::Camera::looking_at(position, position - glam::DVec3::Z)
+            },
+            None => scene.camera_at(frame, glam::DVec3::ZERO),
+        },
         configuration.width,
         configuration.height,
         0..configuration.warm_up_frames + configuration.measured_frames,
@@ -938,7 +949,14 @@ fn measure(
             })
             .collect::<BTreeMap<_, _>>()
     };
-    let every_pass: Vec<usize> = (0..TIMED_PASSES.len()).collect();
+    let every_pass: Vec<usize> = (0..TIMED_PASSES.len())
+        .filter(|&pass| {
+            TIMED_PASSES[pass] != crate::render::probe_ray_pass::PROBE_RAY_PASS
+                || measured_gpu
+                    .iter()
+                    .any(|gpu| gpu.pass_log.get(pass).is_some())
+        })
+        .collect();
     let gpu_pass_microseconds = pass_spreads(measured_gpu, &every_pass);
     let position_of = |name: &str| {
         let position = TIMED_PASSES.iter().position(|&pass| pass == name);
@@ -2696,7 +2714,10 @@ mod tests {
             .map(|(kind, bytes)| (kind.to_owned(), bytes))
             .into()
         );
-        assert_eq!(reference.gpu_pass_microseconds.len(), TIMED_PASSES.len());
+        assert_eq!(
+            reference.gpu_pass_microseconds.len(),
+            TIMED_PASSES.len() - 1
+        );
         // The gate's passes with shadow rays off: culling phase one to the
         // lit pass, less the passes only shadow rays run.
         assert_eq!(

@@ -822,6 +822,13 @@ fn flocks(grid: &FlockGrid) -> Vec<Flock> {
 
 /// Spawns the town's flocks.
 pub(crate) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
+    if let Some(crowd) = crate::render::probe_ray_pass::town_crowd() {
+        return if crowd {
+            super::spawn_probe_crowd(world, loader)
+        } else {
+            Ok(())
+        };
+    }
     let bird = loader.mesh(ReferenceScene::Town.mesh_id(TownMesh::Bird.name()))?;
     spawn_flocks(world, bird, &TOWN_FLOCKS);
     Ok(())

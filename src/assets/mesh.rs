@@ -46,6 +46,9 @@ pub struct MeshData {
     /// The box's lowest corner, then its highest, in mesh space.
     pub bounds_min: [f32; 3],
     pub bounds_max: [f32; 3],
+    /// The index Arena's entries from `first_index` count from `first_vertex`.
+    pub first_vertex: u32,
+    pub first_index: u32,
 }
 
 /// A Meshlet as the Meshlet Arena holds it: its vertices in the Meshlet

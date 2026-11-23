@@ -61,7 +61,10 @@ fn only_the_shadow_mask_pass_and_the_dynamic_tlas_markers_declare_a_tlas() {
         })
         .map(|module| module.name)
         .collect();
-    assert_eq!(declaring, ["shadow_mask", "dynamic_tlas_marker"]);
+    assert_eq!(
+        declaring,
+        ["shadow_mask", "probe_rays", "dynamic_tlas_marker"]
+    );
 }
 
 /// A group's layout serves every module that declares it, so a binding is
@@ -375,6 +378,8 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             lod_errors_metres,
             bounds_min,
             bounds_max,
+            first_vertex,
+            first_index,
         }),
         twin!(MeshletData {
             first_vertex,

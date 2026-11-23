@@ -9,6 +9,7 @@ pub mod instance;
 pub mod light_count_pass;
 pub mod main_pass;
 pub mod prepare;
+pub mod probe_ray_pass;
 pub mod readback;
 pub mod renderer;
 pub mod shaders;

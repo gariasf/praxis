@@ -905,6 +905,7 @@ mod tests {
         let steps = (2.0 * WORLD_HALF_SIZE_METRES / step_metres) as u32;
         let (mut most_loaded, mut most_held, mut most_materials) = (0, 0, 0);
         let (mut most_far_proxies, mut most_baked) = (0, 0);
+        let (mut most_traced, mut densest_camera) = (0, glam::DVec3::ZERO);
         let mut most_arena_bytes = [0; 5];
         let (mut most_pool_bytes, mut most_classes) = (0, 0);
         for column in 0..=steps {
@@ -946,6 +947,16 @@ mod tests {
                     }
                 }
                 most_far_proxies = most_far_proxies.max(far_proxy_count);
+                let view_distance_metres = scene.view_distance_metres();
+                let traced = instances_within(load_radius_metres)
+                    + (far_proxies.iter())
+                        .filter(|proxy| {
+                            distance_metres(camera, proxy.coordinates) <= view_distance_metres
+                        })
+                        .count() as u32;
+                if traced > most_traced {
+                    (most_traced, densest_camera) = (traced, camera);
+                }
                 most_baked = most_baked.max(baked);
                 for (most, bytes) in most_arena_bytes.iter_mut().zip(arena_bytes) {
                     *most = (*most).max(bytes);
@@ -963,7 +974,7 @@ mod tests {
         let pool_budget = Budgets::checked_in().gpu_memory_bytes_by_kind.texture_pool;
         writeln!(
             std::io::stderr(),
-            "{} static Instances, {most_loaded} at most within the Load radius of {} static TLAS entries, {most_held} within the hold radius of {} slots, {most_far_proxies} Far proxies, {most_baked} baked; {most_materials} Materials; Arenas {most_arena_bytes:?} bytes of {arena_capacities:?}; texture pool {most_pool_bytes} bytes of {pool_budget}, {most_classes} Texture classes",
+            "densest view {densest_camera} with {most_traced} static TLAS entries; {} static Instances, {most_loaded} at most within the Load radius of {} static TLAS entries, {most_held} within the hold radius of {} slots, {most_far_proxies} Far proxies, {most_baked} baked; {most_materials} Materials; Arenas {most_arena_bytes:?} bytes of {arena_capacities:?}; texture pool {most_pool_bytes} bytes of {pool_budget}, {most_classes} Texture classes",
             placements.len(),
             capacities.static_tlas_instances,
             capacities.instances,

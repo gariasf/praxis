@@ -279,6 +279,29 @@ pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
+pub const PROBE_RAY_TRACE: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Probe Ray Trace Bind Group",
+    bindings: &[
+        uniform("camera", "CameraUniform", wgpu::ShaderStages::COMPUTE),
+        uniform("light", "LightUniform", wgpu::ShaderStages::COMPUTE),
+        read_only_storage("lights", "array<LightData>", wgpu::ShaderStages::COMPUTE),
+        read_only_storage(
+            "instances",
+            "array<InstanceData>",
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        read_only_storage("meshes", "array<MeshData>", wgpu::ShaderStages::COMPUTE),
+        read_only_storage(
+            "vertices",
+            "array<CookedVertex>",
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        read_only_storage("indices", "array<u32>", wgpu::ShaderStages::COMPUTE),
+        storage("probe_ray_results", "array<u32>"),
+    ],
+};
+
 /// Group 3 of the main pass: the Meshlet records of the frame's draw, which
 /// the culling pass writes, and the shadow mask and which samples show its
 /// second surface, which the shadow mask pass writes.

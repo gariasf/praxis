@@ -198,6 +198,8 @@ struct MeshData {
     lod_errors_metres: array<f32, MESH_MAX_LODS>,
     bounds_min: array<f32, 3>,
     bounds_max: array<f32, 3>,
+    first_vertex: u32,
+    first_index: u32,
 }
 
 // The LOD an Instance draws of a Mesh's `lod_count`: the coarsest whose LOD

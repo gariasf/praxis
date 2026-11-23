@@ -1304,6 +1304,46 @@ fn spawn_crowd_as(
     Ok(())
 }
 
+pub(crate) fn spawn_probe_crowd(
+    world: &mut World,
+    loader: &mut dyn AssetLoader,
+) -> anyhow::Result<()> {
+    const COLUMNS: u32 = 25;
+    const SPACING: f64 = 5.12;
+    let scene = ReferenceScene::Crowd;
+    let rest = loader.bent_mesh(scene.mesh_id("figure"))?;
+    let proxy = loader.shadow_proxy(scene.mesh_id("proxy"))?;
+    let centre = f64::from(COLUMNS - 1) / 2.0;
+    for index in 0..COLUMNS * COLUMNS {
+        let (row, column) = (index / COLUMNS, index % COLUMNS);
+        let position =
+            glam::dvec3(f64::from(column) - centre, 0.0, f64::from(row) - centre) * SPACING;
+        let sway = Sway {
+            phase: (f64::from(index) * GOLDEN_ANGLE).rem_euclid(std::f64::consts::TAU),
+        };
+        let curvature = sway.curvature(0.0);
+        let bend = Bend {
+            rest,
+            azimuth: sway.phase as f32,
+            curvature,
+            previous_curvature: curvature,
+        };
+        let figure = world
+            .spawn((Transform::from_translation(position), bend, sway))
+            .id();
+        for bone in 0..CROWD_BONES {
+            world.spawn((
+                bone_transform(bone, &bend),
+                ChildOf(figure),
+                MeshRef(proxy),
+                Bone(bone),
+                PreviousWorldTransform::default(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Sways a crowd figure: its middle bends towards its azimuth and back,
 /// from its phase at Tick 0.
 #[derive(Component)]

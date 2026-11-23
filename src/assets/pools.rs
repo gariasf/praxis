@@ -249,7 +249,7 @@ impl MeshPool {
             // read it.
             index_arena: arena(
                 "Index Arena",
-                wgpu::BufferUsages::BLAS_INPUT,
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::BLAS_INPUT,
                 index_bytes,
                 capacities.index_arena_bytes,
             ),
@@ -529,6 +529,8 @@ impl MeshPool {
         let mut mesh_data = MeshData {
             bounds_min: mesh.bounds[0],
             bounds_max: mesh.bounds[1],
+            first_vertex: vertices.offset,
+            first_index: indices.offset,
             ..bytemuck::Zeroable::zeroed()
         };
         for (lod, (error_metres, _, primitives)) in drawn_lods(mesh, mesh_use).enumerate() {

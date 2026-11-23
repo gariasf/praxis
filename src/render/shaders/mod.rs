@@ -18,7 +18,7 @@ use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
 use crate::render::bind_groups::BLAS_REFIT_MARKERS;
 use crate::render::bind_groups::{
     BENDS, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
-    FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, SCENE_GEOMETRY,
+    FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, PROBE_RAY_TRACE, SCENE_GEOMETRY,
     SHADOW_MASK_BUILD, SHADOW_RAY_SCENE, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::{MAX_WORKGROUPS_PER_DIMENSION, SCAN_BLOCK_SIZE, SLOT_LOD_SHIFT};
@@ -114,6 +114,13 @@ pub const SHADOW_MASK: ShaderModule = ShaderModule {
     parts: &[COMMON, FROXEL_GRID, part!("shadow_mask.wgsl")],
 };
 
+pub const PROBE_RAYS: ShaderModule = ShaderModule {
+    name: "probe_rays",
+    enables: &["wgpu_ray_query"],
+    bind_groups: &[&SHADOW_RAY_SCENE, &PROBE_RAY_TRACE],
+    parts: &[COMMON, part!("probe_rays.wgsl")],
+};
+
 /// The culling pass.
 pub const CULLING: ShaderModule = ShaderModule {
     name: "culling",
@@ -194,10 +201,11 @@ pub const LOOPS_UNBOUNDED: [ShaderModule; 2] = [MAIN, CULLING];
 
 /// Every module, which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 11] = [
+pub const MODULES: [ShaderModule; 12] = [
     SHARED,
     MAIN,
     SHADOW_MASK,
+    PROBE_RAYS,
     CULLING,
     FROXEL,
     LIGHT_COUNT,

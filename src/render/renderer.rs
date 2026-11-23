@@ -13,6 +13,7 @@ use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
 use crate::render::light_count_pass::LightCountPass;
 use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass, PHASE_TWO_DEPTH_PASS};
+use crate::render::probe_ray_pass::{PROBE_RAY_PASS, ProbeRayPass, ProbeRaySwitches};
 use crate::render::readback::{FrameTimestamps, GpuStatsReadback};
 use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
 use crate::render::targets::RenderTargets;
@@ -35,7 +36,7 @@ use crate::stats::{
 /// those frames with the crowd's refit form; phase two's depth pass and the
 /// shadow mask pass only with shadow rays on. The rebuild form, an oracle,
 /// times neither its rebuild nor its build.
-pub(crate) const TIMED_PASSES: [&str; 14] = [
+pub(crate) const TIMED_PASSES: [&str; 15] = [
     DYNAMIC_TLAS_BUILD,
     BEND_PASS,
     BLAS_REFIT_PASS,
@@ -48,6 +49,7 @@ pub(crate) const TIMED_PASSES: [&str; 14] = [
     CullingPhase::Two.triangles_label(),
     PHASE_TWO_DEPTH_PASS,
     SHADOW_MASK_PASS,
+    PROBE_RAY_PASS,
     LIT_PASS,
     TONEMAPPING_PASS,
 ];
@@ -310,6 +312,7 @@ pub struct Renderer {
     culling_pass: CullingPass,
     main_pass: MainPass,
     shadow_mask_pass: ShadowMaskPass,
+    probe_ray_pass: Option<ProbeRayPass>,
     /// Whether the frame traces shadow rays, which the shadow mask pass and
     /// phase two's depth pass run for.
     shadow_rays: bool,
@@ -573,6 +576,24 @@ impl Renderer {
             switches,
             &capacities,
         );
+        let probe_ray_pass = ProbeRaySwitches::from_environment().map(|probe_switches| {
+            ProbeRayPass::new(
+                &device,
+                &static_tlas,
+                &dynamic_tlas,
+                [
+                    ("camera", &camera_buffer),
+                    ("light", &light_uniform_buffer),
+                    ("lights", &light_buffer),
+                    ("instances", &instance_buffer),
+                    ("meshes", mesh_pool.mesh_table()),
+                    ("vertices", mesh_pool.vertex_arena()),
+                    ("indices", mesh_pool.index_arena()),
+                ],
+                probe_switches,
+                &capacities,
+            )
+        });
         let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets, &capacities);
         let tonemapping_pass = TonemappingPass::new(
             &device,
@@ -599,6 +620,7 @@ impl Renderer {
             culling_pass,
             main_pass,
             shadow_mask_pass,
+            probe_ray_pass,
             shadow_rays: switches.shadow_rays,
             blas_refit,
             marks_dynamic_tlas_build: switches.crowd_form != CrowdForm::Rebuild,
@@ -919,6 +941,15 @@ impl Renderer {
                     .as_mut()
                     .map(|timestamps| timestamps.pass(SHADOW_MASK_PASS).compute()),
             );
+            if let Some(probe_ray_pass) = &self.probe_ray_pass {
+                probe_ray_pass.record(
+                    &mut encoder,
+                    self.static_tlas.bound_index(),
+                    timestamps
+                        .as_mut()
+                        .map(|timestamps| timestamps.pass(PROBE_RAY_PASS).compute()),
+                );
+            }
         }
         self.main_pass.record_lit_pass(
             &mut encoder,
@@ -988,6 +1019,9 @@ impl Renderer {
     /// Waits until the GPU stats of every frame rendered are read back,
     /// for `gpu_frame_stats`: the end of a run.
     pub fn flush_gpu_frame_stats(&mut self) -> anyhow::Result<()> {
+        if let Some(probe_ray_pass) = self.probe_ray_pass.as_ref().filter(|_| self.shadow_rays) {
+            probe_ray_pass.log_hits(&self.device, &self.queue);
+        }
         self.gpu_stats.flush(&self.device, &self.queue)
     }
 
