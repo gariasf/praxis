@@ -158,6 +158,22 @@ turned from the sun are brighter by the ambient light without visibility.
 
 ![Town's top rail at frame 900, at 8x: praxis's line brightens where its one kept sample meets the sunlit face](differences/thin-primitive-kept-samples.png)
 
+## Back faces of a double-sided Material
+
+Tag: `deliberate until double-sided Materials land`.
+
+praxis culls every triangle seen from behind, and a cooked Material does not
+carry glTF's `doubleSided`; Cycles draws a surface from both sides. Shows
+where a Material that sets it covers an open surface seen from behind:
+`normal-tangent`'s "Front" label is two quads 2 cm apart, one facing forward
+and one back, with no face joining them, and the camera, above the label,
+sees the back quad's top over the front quad's. Cycles draws that strip,
+three pixel rows tall along the label's whole top (x 1112 to 1447, y 1221 to
+1223 at 2560×1440), where praxis shows the sky. With back faces drawn, those
+1,008 pixels are all of the scene's image that changes.
+
+![Normal-tangent's Front label, its top left corner: Cycles draws the back quad's top, praxis the sky](differences/double-sided-back-faces.png)
+
 ## A coarser LOD against the source Mesh
 
 Tag: `deliberate until ADR 0019's LOD selection is superseded`.
