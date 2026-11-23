@@ -242,9 +242,10 @@ pub struct RenderCapacities {
     /// capacity, filled or not.
     pub static_tlas_instances: u32,
     /// A frame's share of what the frame staging's slots leave of the
-    /// staging Budget: a frame's load staging lives until the GPU has run its
-    /// copies, so the frames in flight and the one being written hold at
-    /// most that rest between them.
+    /// staging Budget: a frame's load staging is in use until the GPU has
+    /// run its copies, so the frames in flight and the one being written
+    /// hold at most that rest between them, as a slot each where the load
+    /// staging keeps slots.
     pub load_bytes_per_frame: u64,
 }
 
@@ -674,8 +675,7 @@ impl Renderer {
     /// Keeps load staging slots of a frame's load bytes, so a frame's
     /// streamed loads within them create no staging.
     pub fn keep_load_staging_slots(&mut self) {
-        let slot_bytes = self.capacities.load_bytes_per_frame / wgpu::COPY_BUFFER_ALIGNMENT
-            * wgpu::COPY_BUFFER_ALIGNMENT;
+        let slot_bytes = self.capacities.load_bytes_per_frame;
         self.load_staging.keep_slots(&self.memory, slot_bytes);
     }
 
@@ -1109,20 +1109,21 @@ pub(crate) mod tests {
     /// Arenas, the acceleration structures and the scene and pass buffers
     /// fits their Budgets, its TLASes at no more than
     /// `TLAS_BYTES_PER_INSTANCE` an entry; and its frame staging's slots at
-    /// their largest, with the load staging of each frame they serve, fit
-    /// the staging Budget.
+    /// their largest, with the load staging's slots, fit the staging Budget.
     #[test]
     fn what_the_renderer_creates_fits_the_checked_in_budgets() {
         let Some(context) = gpu_context() else {
             return;
         };
-        let renderer = Renderer::new(
+        let mut renderer = Renderer::new(
             &context,
             TARGET_FORMAT,
             SIZE,
             SIZE,
             RenderSwitches::default(),
         );
+        renderer.grow_frame_staging_to_largest();
+        renderer.keep_load_staging_slots();
         let budgets = Budgets::checked_in().gpu_memory_bytes_by_kind;
         let created = renderer.gpu_memory_bytes_by_kind();
         for kind in [
@@ -1141,9 +1142,12 @@ pub(crate) mod tests {
                 <= u64::from(tlas_entries) * TLAS_BYTES_PER_INSTANCE + size_query_inputs
         );
         let frames = FRAMES_IN_FLIGHT as u64 + 1;
-        let staging =
-            frames * (renderer.frame_staging.max_slot_size + capacities.load_bytes_per_frame);
+        let staging = created[GpuMemoryKind::Staging as usize];
         assert!(staging <= budgets.staging, "{staging}");
+        assert!(
+            staging > frames * renderer.frame_staging.max_slot_size,
+            "{staging}"
+        );
     }
 
     #[test]

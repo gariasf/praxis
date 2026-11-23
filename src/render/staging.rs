@@ -192,14 +192,20 @@ pub struct LoadStaging {
     written_bytes: u64,
     /// Bytes the pending Texture moves copy.
     moved_bytes: u64,
-    /// The slots `keep_slots` made, each mapped again once the GPU has run
-    /// the copies of the frame that wrote it.
-    slots: Vec<StagingSlot>,
+    /// The slots `keep_slots` made.
+    slots: Vec<LoadSlot>,
     /// The slot the writes since the last submit go into, the one written
     /// longest ago.
     next_slot: usize,
     /// The bytes of that slot those writes took.
     slot_offset: u64,
+}
+
+/// A slot the load staging keeps: mapped for writing but from the submit of
+/// the frame that wrote it until the GPU has run that frame's copies.
+struct LoadSlot {
+    buffer: Counted<wgpu::Buffer>,
+    is_mapped: Arc<AtomicBool>,
 }
 
 impl LoadStaging {
@@ -215,13 +221,16 @@ impl LoadStaging {
         }
     }
 
-    /// Keeps `SLOT_COUNT` mapped slots of `slot_bytes`, a multiple of
-    /// `wgpu::COPY_BUFFER_ALIGNMENT`, counted in `memory`: each frame's
-    /// writes then go into one in turn, and through the belt only past its
-    /// end or while the GPU still reads it.
+    /// Keeps `SLOT_COUNT` mapped slots of `slot_bytes`, less what passes a
+    /// multiple of `wgpu::COPY_BUFFER_ALIGNMENT`, counted in `memory`: each
+    /// frame's writes then go into one in turn, and through the belt only
+    /// past its end or while the GPU still reads it. Called before any
+    /// frame writes into a slot.
     pub fn keep_slots(&mut self, memory: &GpuMemory, slot_bytes: u64) {
+        debug_assert_eq!(self.slot_offset, 0, "a kept slot holds pending writes");
+        let slot_bytes = slot_bytes / wgpu::COPY_BUFFER_ALIGNMENT * wgpu::COPY_BUFFER_ALIGNMENT;
         self.slots = (0..SLOT_COUNT)
-            .map(|_| StagingSlot {
+            .map(|_| LoadSlot {
                 buffer: memory.create_buffer(
                     &self.device,
                     GpuMemoryKind::Staging,
@@ -233,7 +242,6 @@ impl LoadStaging {
                     },
                 ),
                 is_mapped: Arc::new(AtomicBool::new(true)),
-                map_requested: false,
             })
             .collect();
     }
@@ -408,15 +416,22 @@ impl LoadStaging {
     pub fn submit(&mut self, queue: &wgpu::Queue) -> u64 {
         if let Some((mut belt, encoder)) = self.pending.take() {
             belt.finish();
-            let written_slot = (self.slot_offset > 0).then(|| &mut self.slots[self.next_slot]);
-            if let Some(slot) = &written_slot {
+            let written_slot = (self.slot_offset > 0).then(|| &self.slots[self.next_slot]);
+            if let Some(slot) = written_slot {
                 slot.buffer.unmap();
                 slot.is_mapped.store(false, Ordering::Release);
             }
             queue.submit(std::iter::once(encoder.finish()));
             if let Some(slot) = written_slot {
-                slot.map_requested = false;
-                slot.request_map();
+                let is_mapped = slot.is_mapped.clone();
+                let mapped = move |result: Result<(), wgpu::BufferAsyncError>| match result {
+                    Ok(()) => is_mapped.store(true, Ordering::Release),
+                    Err(error) => tracing::error!(
+                        %error,
+                        "load staging slot not mapped again; loads go through the belt"
+                    ),
+                };
+                slot.buffer.map_async(wgpu::MapMode::Write, .., mapped);
                 self.next_slot = (self.next_slot + 1) % SLOT_COUNT;
                 self.slot_offset = 0;
             }

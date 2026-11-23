@@ -13373,6 +13373,6 @@ quote = '''It follows that the technique examined here does not work for normal 
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-core/src/device/mod.rs#L253-L295"
 section = "wgpu-core 30.0.2, map_buffer (L229), which Device::create_buffer calls over the whole of a buffer created mapped with MAP_WRITE (device/resource.rs L1145-L1155)"
 quote = '''Zero out uninitialized parts of the mapping. (Spec dictates all resources
-    // behave as if they were initialized with zero) [...] If this is a write mapping zeroing out the memory here is the only
-    // reasonable way as all data is pushed to GPU anyways. [...] mapped[fill_range].fill(0);'''
+// behave as if they were initialized with zero) [...] If this is a write mapping zeroing out the memory here is the only
+// reasonable way as all data is pushed to GPU anyways. [...] mapped[fill_range].fill(0);'''
 checked = 2026-11-23
