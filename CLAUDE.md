@@ -286,7 +286,8 @@ When reviewing changes, check for:
       the GPU stats readback's buffers stay out, as they measure the frame (ADR 0013); per-frame GPU
       writes add to `uploaded_bytes`, and systems are added inside
       `SystemTimer::scope`
-- [ ] Streaming uploads go through the `StagingBelt`, never
+- [ ] Streaming uploads go through the load staging (`LoadStaging`: its
+      kept slots, else a `StagingBelt`), never
       `Queue::write_texture`; no GPU buffer grows at runtime, and a
       request past a buffer's capacity is refused and logged. Only
       per-frame staging grows, up to the buffers a frame writes, which

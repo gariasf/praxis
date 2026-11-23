@@ -34,6 +34,147 @@ its commit.
 | `LOD_ERROR_MARGIN` (`src/render/shaders/shadow_mask.wgsl`) | `orrery` frame 59 at 2560×1440: 870 shadow mask pixels differ from LOD 0 forced at a margin of 1.0, 522 at 1.5 and 500 at 2.0 and at 3.0, against 4,100 with a pixel's width along the ray and 16,426 with no rule. With time held at frame 59 and the camera 2.25 m further back along its view, where a sphere has just stepped to LOD 1: 1,759 at 1.0, 714 at 2.0 with two triangles of patch on that sphere, and 623 at 3.0, 4.0, 8.0 and 1,000.0; 6 m back, where the next steps: 2,285, 761 and 711. Over the 33 frames from 0 to 8 m back, 3.0 and 1,000.0 read the same count on every frame. `world`'s frames 59, 300 and 599 change by no pixel from no rule at 3.0, at 2560×1440 and at 640×360, and `pbr-sweep`'s Golden keeps specks on its spheres at 1.5 that 2.0 clears | M4 Pro, Metal | 34cea25e (2026-11-16, #880) | `praxis shadow-mask-difference orrery <png> 2560x1440 --frame <n>`, a build per margin; for the camera further back, a probe that advances no Tick past frame 59 and moves the camera back 0.25 m a frame; `praxis capture world` at each rule and `praxis difference` of the pairs |
 | `FAR_GROUND_DEPTH_METRES` (`src/scenes/world.rs`) | `world` frames 59 and 1500 at 2560×1440, with the ground past the View distance, 1,024 km from the world's middle to its edge, given another Material: it shows in 107,414 and 107,233 pixels, one band under the horizon, at 0.5, 0.1 and 0.02 m under the tiles, and on frame 59 as many pixels show the background without it; at 0.005 m it shows in 107,414 and 2,538,251, through the tiles. Reaching 102.4 km, it shows in 104,854 and 104,673 pixels, a row fewer, at 0.05, 0.01 and 0.002 m, and through the tiles at 0.0005 m | M4 Pro, Metal | 13fa4920 with #815's change (2026-11-18) | A probe that draws the ground past the View distance with `slate` and reads its reach and its depth from the environment; `praxis capture world <png> 2560x1440 --frame 59,1500` at each depth, and `praxis difference` against the capture that draws it with `grass` |
 | `WHOLE_VIEW_ARRAY_BYTES` (`src/assets/material.rs`) | wgpu's zero-fill of a new Texture class's array took 6.6 to 7.1 µs of `submit` and 18.0 to 21.5 µs of GPU a MiB (two 2,048² classes of 64 slices, 672 MiB: 4.4 and 12.1 ms; of 128 slices, 1,344 MiB: 9.6 and 28.9 ms); a view of the slices placed on every array instead cost 509 to 510 bind group builds a traversal against 173 to 175, and `world`'s `encode` median 4 to 30 µs | M4 Pro, Metal | f24809ca with the change (2026-11-22, #988) | "The traversal's fill frame" below |
+| `LoadStaging::keep_slots` (`src/render/staging.rs`, called by `State::new` for `world`) | Taking a `StagingBelt` buffer for each Texture write cost 90.6 to 108.9 µs a MiB written, 1.07 to 1.29 ms a frame of the Far field's fill on average and 12.8 ms in one frame, beside a copy of 70.3 to 83.8 µs a MiB; into a kept slot it reads 1.8 to 1.9 µs a frame, and `world`'s CPU p99 3,538.6 to 3,753.0 µs against `main`'s 5,062.5 to 5,524.6 over three interleaved quiet rounds | M4 Pro, Metal | e8922330 with the change (2026-11-23, #989) | "`world`'s CPU p99: a fill frame's Texture writes created and zeroed their staging" below |
+
+## `world`'s CPU p99: a fill frame's Texture writes created and zeroed their staging (2026-11-23, #989)
+
+**Summary.** After the Fast travel, the Far field's fill loads 222 Far
+proxies in 79 frames, three a frame, and writes 933.6 MiB of their Textures
+into the load staging, up to 25,729 KiB in one frame. That is where a fill
+frame's `stream_chunks` goes: 1.93 to 2.15 ms of its 2.63 to 2.93 ms, on
+average over the fill, are those writes, and 1.07 to 1.29 ms of that is not
+the copy but taking the staging to copy into. Each write past 1 MiB got a
+`StagingBelt` buffer of its own, which wgpu-core creates mapped and
+zero-fills on the main thread before the copy
+[ref:wgpu-core-30-map-zero-fill]. The load staging now keeps three mapped
+slots of a frame's load bytes for `world`, and a frame's writes go into its
+slot: taking the staging reads 1.8 to 1.9 µs a fill frame, no write of the
+measured frames went through the belt, and `world`'s CPU p99 reads 3,538.6
+to 3,753.0 µs over three interleaved quiet rounds against `main`'s 5,062.5
+to 5,524.6.
+The fill still takes 79 frames and 596.4 to 598.8 ms, within 80 and 650.
+The slots are 79,920,528 bytes of staging, which brings `world`'s counted
+staging to 268,435,452 of its Budget's 268,435,456 bytes.
+
+Apple M4 Pro, Metal, release builds, 2560×1440, on AC power under
+`caffeinate -dims`, in one quiet turn after three quiet preflight reads in a
+row: `world`'s bench of `e5c55a8d` (`main`; `e8922330`, the change's base,
+differs from it in no file under `src`) and of the change, three rounds
+after a warm-up, the order alternating, then three runs of each with the
+probe, interleaved. The probe adds a row per bench frame and times the steps
+of `stream_chunks` on the main thread. The bench stamps every round after
+the warm-up not quiet: the GPU load reads 96 to 98% straight after the run
+before, and the one-minute load 2.05 to 2.74 from the runs themselves; no
+round lists a busy process.
+
+### What a fill frame's `stream_chunks` spends its time on
+
+| A fill frame's `stream_chunks`, mean over the fill's frames, µs | `main` | The change |
+|---|---:|---:|
+| `stream_chunks` | 2,633.5 to 2,933.6 | 1,462.2 to 1,605.8 |
+| Far proxies' loads into the pools | 2,434.6 to 2,736.7 | 1,284.7 to 1,432.5 |
+| – Texture writes into the load staging | 1,928.6 to 2,150.1 | 859.9 to 979.2 |
+| – – taking the staging to write into | 1,070.9 to 1,287.0 | 1.8 to 1.9 |
+| – – copying the mips into it | 830.2 to 990.5 | 842.9 to 960.2 |
+| – – recording the copies | 5.6 to 5.9 | 5.1 to 6.0 |
+| – the Material's entry and Texture placement | 309.0 to 387.3 | 339.4 to 355.1 |
+| – the Mesh into its Arenas, and its BLAS's build | 180.2 to 196.9 | 85.1 to 107.0 |
+| – taking the decoded Mesh | 0.6 to 0.7 | 0.5 to 0.7 |
+| Far proxies' sizing, waits and receives | 15.1 to 15.4 | 14.6 to 15.8 |
+| Far proxies' streamer, the rest | 28.8 to 30.0 | 28.6 to 29.6 |
+| Chunks' streamer | 27.4 to 38.6 | 23.9 to 37.3 |
+| Mips applied | 24.0 to 27.4 | 5.4 to 6.5 |
+| Mip plan and requests | 86.4 to 89.0 | 87.7 to 89.7 |
+| Kept Chunks and Far proxies | 2.0 to 2.4 | 2.2 to 2.3 |
+
+Of the fill's 79 frames, 68 make three loads, 9 make two and 2 none; 26
+write more than 20,000 KiB and 17 less than 1 MiB. Over the fill, taking the
+staging cost `main` 90.6 to 108.9 µs a MiB written and the copy 70.3 to 83.8
+µs a MiB; with the change the copy reads 71.3 to 81.2 µs a MiB. In the 26
+frames past 20,000 KiB, `stream_chunks` reads 4.9 to 5.6 ms on `main` and
+2.8 to 2.9 ms with the change, on average. The Far proxy's reads and decodes
+are the IO pool's, off the main thread; the mip plan reads 86 to 90 µs a
+fill frame either way; and Texture class work, the arrays the fill opens
+and each Texture's placement, lies in the Material's row.
+
+| Probed runs 1 / 2 / 3 | `main` | The change |
+|---|---:|---:|
+| Measured frames | 3,356 / 3,356 / 3,356 | 3,355 / 3,357 / 3,356 |
+| The fill's frames | 79 / 79 / 79 | 79 / 79 / 79 |
+| The hold's frames | 4 / 4 / 4 | 3 / 5 / 4 |
+| CPU frame p99, µs | 5,441.0 / 5,363.4 / 6,829.0 | 4,686.5 / 4,445.0 / 4,298.8 |
+| Frames at or above the p99 | 34 / 34 / 34 | 34 / 34 / 34 |
+| – of them in the hold or the fill | 34 / 34 / 30 | 34 / 30 / 34 |
+| `stream_chunks`, median over the segment, µs | 87.9 / 91.8 / 89.6 | 89.2 / 86.9 / 88.0 |
+| `stream_chunks`, largest in the fill, µs | 7,198.6 / 17,799.8 / 6,670.0 | 4,129.6 / 4,287.4 / 3,719.9 |
+| CPU frame, mean over the fill, µs | 5,135.2 / 5,485.7 / 5,543.4 | 4,227.8 / 4,079.9 / 3,945.0 |
+| CPU frame, largest in the fill, µs | 10,133.3 / 22,390.6 / 11,208.0 | 7,243.8 / 8,188.0 / 8,309.1 |
+| CPU frame, largest in the hold, µs | 9,074.5 / 9,599.8 / 8,838.1 | 8,295.4 / 9,236.2 / 10,372.0 |
+| Bytes a fill frame's Far proxy loads write, mean, KiB | 12,101.8 / 12,101.8 / 12,101.8 | 12,101.8 / 12,101.8 / 12,101.8 |
+| – largest, KiB | 25,729 / 25,729 / 25,729 | 25,729 / 25,729 / 25,729 |
+| Far proxy loads over the fill | 222 / 222 / 222 | 222 / 222 / 222 |
+| Textures written over the fill | 386 / 386 / 386 | 386 / 386 / 386 |
+| Mips written over the fill | 4,063 / 4,063 / 4,063 | 4,063 / 4,063 / 4,063 |
+| Writes through the belt, measured frames | every write | 0 / 0 / 0 |
+| – in the fill | every write | 0 / 0 / 0 |
+
+With the change, the probed runs read a p99 0.5 to 1.1 ms above the rounds
+without the probe; that gap is not placed. In one run of each, four of the
+34 frames at or above the p99 lie outside the hold and the fill. One fill
+frame of `main`'s second probed run, frame 1822, read 22,390.6 µs of CPU:
+taking the staging for its 22,629 KiB took 12,795.4 µs of it, where its
+copy took 1,648.5 µs. No round without the probe read such a frame.
+
+### Against `main`
+
+| `world`'s bench segment, rounds 1 / 2 / 3 | `main` | The change |
+|---|---:|---:|
+| CPU frame median, µs | 1,622.8 / 1,625.5 / 1,633.5 | 1,625.0 / 1,648.0 / 1,629.5 |
+| CPU frame p95, µs | 2,766.7 / 2,763.7 / 2,759.0 | 2,365.2 / 2,351.2 / 2,328.5 |
+| CPU frame p99, µs | 5,524.6 / 5,062.5 / 5,149.0 | 3,538.6 / 3,753.0 / 3,726.0 |
+| CPU frame maximum, µs | 8,715.4 / 8,770.8 / 9,175.5 | 8,727.2 / 8,587.1 / 8,825.6 |
+| GPU frame median, µs | 6,045.6 / 6,060.9 / 6,067.5 | 6,039.0 / 6,054.8 / 6,060.5 |
+| GPU frame p99, µs | 9,344.4 / 9,424.2 / 9,366.1 | 9,279.7 / 9,468.9 / 9,266.3 |
+| GPU frame maximum, µs | 13,144.3 / 13,143.7 / 13,299.9 | 13,548.7 / 13,498.2 / 13,334.8 |
+| Gate, rays off, p99, µs | 2,990.6 / 4,129.7 / 3,616.0 | 3,695.2 / 3,111.4 / 3,484.5 |
+| Far-field fill, ms | 600.9 / 599.8 / 598.4 | 598.6 / 598.8 / 596.4 |
+| Far-field fill, frames | 79 | 79 |
+| Fast-travel hold, ms | 24.5 / 24.9 / 25.3 | 24.6 / 24.1 / 24.3 |
+| Fast-travel hold, frames | 3 | 3 |
+| Frames until traced, most | 7 | 6 |
+| Late Chunks | 0 | 0 |
+| Late Far proxies | 0 | 0 |
+| Late mips | 8 | 12 |
+| `heap_allocations`, frames 8..72 | 10,670 | 10,670 |
+| `gpu_memory_bytes`, frames 8..72 | 2,608,362,647 | 2,688,283,175 |
+| `stream_chunks` median, µs | 86.3 / 84.0 / 86.0 | 85.8 / 87.5 / 86.1 |
+| `stream_chunks` p95, µs | 737.8 / 749.6 / 723.1 | 297.8 / 305.6 / 292.1 |
+| `stream_chunks` p99, µs | 3,145.6 / 2,678.4 / 2,787.0 | 1,022.8 / 1,127.5 / 1,219.3 |
+| `stream_chunks` maximum, µs | 5,939.6 / 5,738.3 / 5,189.4 | 3,452.4 / 3,101.5 / 3,305.5 |
+
+Counters over frames 8 to 72 are equal but `gpu_memory_bytes`, the three
+slots. Over the segment, the change's three rounds read 12 late mips against
+8, 65,113 fewer bytes read and a Chunk traced 6 frames after its load at the
+most against 7; each round of a kind reads the same. Those follow the main
+thread's timing against the IO pool's and the GPU's rather than what a
+frame writes: the change's binary read 8 late mips and `main`'s bytes in two runs
+taken afterwards with the machine not quiet, as did a build of the change
+that writes a row per frame, with its slots and without, in four runs each.
+The frames that hold the 4 are therefore not placed: every run with a row
+per frame read 8. Late mips are reported, not judged.
+
+### Why not a cap
+
+The ticket asks whether a fill frame can be capped without the fill passing
+its 80 frames and 650 ms. It cannot: the fill is 79 frames because 222 loads
+go three a frame (`LOADS_PER_FRAME`), 68 of its frames at that count, so a
+lower count, or a lower cap on a frame's bytes, which 39 of the frames pass
+half of, moves loads to later frames and the fill past 80. The frames' cost
+fell instead, with the same loads in the same frames.
+
+What is left of a fill frame's `stream_chunks` is the copy, 0.84 to 0.96 ms
+on average and 1.8 to 1.9 ms in the frames past 20,000 KiB, which the main
+thread makes from the IO pool's decoded bytes (ADR 0016).
 
 ## The traversal's fill frame: wgpu zero-filled a new Texture class's whole array (2026-11-22, #988)
 
