@@ -214,13 +214,28 @@ From the code and documents on `main` at 300116fb and the M5 decisions on #790. 
 3. **:17, steady state.** What "does not flicker at steady state" means while Chunks swap inside the cascades, and what the probes owe after a Fast travel.
 4. **:17 to :19, the scene.** The Reference scene the criteria are read on: `town` has no interior, door or moving sun.
 5. **:3 and :22, probes alone.** Whether the contact term is charted with the probes or stays behind its Golden.
-6. **:3, "every light bounces".** How a probe ray's hit finds its Material and its lights without hit shaders or a Froxel.
+6. **:3, "every light bounces".** How a probe ray's hit finds its Material and its lights without hit shaders or a Froxel. Where that hit's own rays start is [added below](#added-2026-11-23-where-a-ray-from-a-probe-hit-starts).
 7. **:18, the far field.** The cooked sky-visibility field, an outer cascade over Far proxies, or sky light alone; and the bounced term's known error.
 8. **:19, Interior volumes.** The attribution (AC Shadows and Ghost of Yōtei, not Ghost of Tsushima's surface mask), two states or one per interior, and a wall-thickness rule.
 9. **:20, the TLAS.** Probe rays in the reading that reopens a far TLAS, and the static build's lag counted in the convergence figure.
 10. **:21, reflections.** Runtime ray-traced cubemaps against radiance kept per probe.
 
 Also a wording, not a decision: option E's "shown only in research scenes" is no longer true of a shipped mobile game; its trigger stands.
+
+### Added 2026-11-23: where a ray from a probe hit starts
+
+For clause 6: a probe ray's hit that the sun lights traces a shadow ray of its own, and two published techniques place that ray's origin. Neither is in the engine, whose shadow rays start from points rebuilt from depth (`shadow_mask.wgsl`), not from hits. Both sources were opened for this section. Nothing was measured, and it decides nothing.
+
+**The hit point, rebuilt from its triangle.** van Antwerpen builds a secondary ray's spawn point from the hit triangle's vertices and the hit's barycentrics with the base vertex added last, and transforms it to world space with the translation added last, because the rounding of the base vertex and of the translation dominates the error of each step; the listings rely on HLSL's `precise` [ref:van-antwerpen-2023-hit-point]. The article then bounds the error of that reconstruction, of the transform and of the traversal, and offsets the origin along the triangle's normal by the bound, at a fixed cost per shading point and with no any-hit shader. The bound grows with the distance from the scene's origin, "1 mm of offset for every 4 km", so it advises a scene translated to the camera, and one of its constants "is tuned for NVIDIA RTX hardware" [ref:van-antwerpen-2023-error-bounds]. Fit: a ray query's intersection carries the barycentrics, the primitive index and both transforms (naga 30.0.2, `RayIntersection`), a hit that fetches its triangle for a normal holds the vertices, and both TLAS already sit in a frame anchored near the camera (ADR 0014). WGSL has `fma` and no `precise`, which is a reserved word there (naga 30.0.2, `src/keywords/wgsl.rs`). The shadow mask pass offsets by 2⁻¹⁶ of a point's largest coordinate [ref:wachter-binder-2019-offset-error], 64 times d2⁻²² (computed), for a point rebuilt from depth; a hit's point has no depth in it. Sample code: [NVIDIA/self-intersection-avoidance](https://github.com/NVIDIA/self-intersection-avoidance/tree/5a5c45bc61aca5d095032860058481e0497350e0), HLSL and GLSL, BSD-3-Clause by its `LICENSE`; nothing of it was read but the licence.
+
+**The shadow ray's origin, lifted off the flat triangle.** Hanika moves the point a shadow ray starts from towards a smooth surface: the vector from each corner to the point is projected onto the tangent plane the corner's vertex normal defines, and the three results are blended by the barycentrics; a clamp keeps the origin from moving inside a concave shape [ref:hanika-2021-shadow-ray-origin]. It needs the triangle's three positions, its three vertex normals and the barycentrics, and where the vertex normals equal the triangle's own it moves nothing (computed from its Listing 4-1). Limits its author names: it "does not work for normal maps", shadow boundaries can turn "slightly more wobbly", face-varying vertex normals break the origins at an edge, and it was shown for direct light's shadow rays [ref:hanika-2021-terminator-limits]. Fit: the shadow mask pass treats the terminator another way, from the depth target's Surface normals, starting the ray inside the surface and passing the first back face it meets; a probe hit has no sample of the depth target, so that does not carry to a hit's sun ray, and this would. Whether a terminator error at a hit shows in a probe's irradiance is not known.
+
+Options (no recommendation):
+
+- **A hit's point.** P1: the probe ray's origin plus its hit distance along its direction, offset as the shadow mask pass offsets. P2: rebuilt from the triangle, offset the same way. P3: rebuilt, and offset by the article's bound, its hardware constant fitted on the M4 Pro and the RTX 2070 SUPER.
+- **A hit's terminator.** T1: the sun ray starts on the flat triangle. T2: it starts on the lifted point.
+
+Not checked: what naga's Metal and SPIR-V output, and the drivers behind them, keep of the listings' order of operations without `precise`; either technique's cost or effect in a praxis scene. The chapter was read in its author's copy of the published pages (jo.dreggn.org), as Springer's PDF refused a scripted download.
 
 ### Not verified in this refresh
 
