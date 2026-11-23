@@ -1309,7 +1309,7 @@ pub(crate) fn spawn_probe_crowd(
     loader: &mut dyn AssetLoader,
 ) -> anyhow::Result<()> {
     const COLUMNS: u32 = 25;
-    const SPACING: f64 = 5.12;
+    const SPACING_METRES: f64 = 5.12;
     let scene = ReferenceScene::Crowd;
     let rest = loader.bent_mesh(scene.mesh_id("figure"))?;
     let proxy = loader.shadow_proxy(scene.mesh_id("proxy"))?;
@@ -1317,7 +1317,7 @@ pub(crate) fn spawn_probe_crowd(
     for index in 0..COLUMNS * COLUMNS {
         let (row, column) = (index / COLUMNS, index % COLUMNS);
         let position =
-            glam::dvec3(f64::from(column) - centre, 0.0, f64::from(row) - centre) * SPACING;
+            glam::dvec3(f64::from(column) - centre, 0.0, f64::from(row) - centre) * SPACING_METRES;
         let sway = Sway {
             phase: (f64::from(index) * GOLDEN_ANGLE).rem_euclid(std::f64::consts::TAU),
         };

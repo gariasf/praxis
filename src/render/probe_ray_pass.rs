@@ -141,7 +141,7 @@ impl ProbeRayPass {
         );
         let descriptor = shaders::PROBE_RAYS.descriptor(capacities);
         let shader = if switches.unchecked {
-            // SAFETY: every index the module reads a buffer at comes from a hit in a TLAS built over that buffer.
+            // SAFETY: every index comes from a hit in a TLAS built over the buffers read, in scenes that free no Instance slot.
             unsafe {
                 device.create_shader_module_trusted(
                     descriptor,
@@ -235,7 +235,7 @@ impl ProbeRayPass {
         let query_set = device.create_query_set(&wgpu::QuerySetDescriptor {
             label: Some("Probe Ray Alone Queries"),
             ty: wgpu::QueryType::Timestamp,
-            count: 2,
+            count: 2 * ALONE_SUBMISSIONS,
         });
         let buffer = |label, size, usage| {
             device.create_buffer(&wgpu::BufferDescriptor {
@@ -245,15 +245,15 @@ impl ProbeRayPass {
                 mapped_at_creation: false,
             })
         };
-        let submission_bytes = 2 * u64::from(wgpu::QUERY_SIZE);
+        let timestamp_bytes = 2 * u64::from(ALONE_SUBMISSIONS) * u64::from(wgpu::QUERY_SIZE);
         let resolved = buffer(
             "Probe Ray Alone Resolve",
-            submission_bytes,
+            timestamp_bytes,
             wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
         );
         let read = buffer(
             "Probe Ray Alone Read",
-            u64::from(ALONE_SUBMISSIONS) * submission_bytes,
+            timestamp_bytes,
             wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         );
         let wait = || device.poll(wgpu::PollType::wait_indefinitely());
@@ -265,24 +265,22 @@ impl ProbeRayPass {
                 let timestamp_writes =
                     (first || last).then_some(wgpu::ComputePassTimestampWrites {
                         query_set: &query_set,
-                        beginning_of_pass_write_index: first.then_some(0),
-                        end_of_pass_write_index: last.then_some(1),
+                        beginning_of_pass_write_index: first.then_some(2 * submission),
+                        end_of_pass_write_index: last.then_some(2 * submission + 1),
                     });
                 self.record_once(&mut encoder, static_tlas_index, timestamp_writes);
             }
             queue.submit(std::iter::once(encoder.finish()));
-            // Metal reads a timestamp resolved before its submission completed as 0 or stale.
             if let Err(error) = wait() {
                 tracing::error!(%error, "probe rays not timed alone");
                 return;
             }
-            let mut encoder =
-                device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-            encoder.resolve_query_set(&query_set, 0..2, &resolved, 0);
-            let offset = u64::from(submission) * submission_bytes;
-            encoder.copy_buffer_to_buffer(&resolved, 0, &read, offset, submission_bytes);
-            queue.submit(std::iter::once(encoder.finish()));
         }
+        // Metal reads a timestamp resolved before its submission completed as 0 or stale.
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        encoder.resolve_query_set(&query_set, 0..2 * ALONE_SUBMISSIONS, &resolved, 0);
+        encoder.copy_buffer_to_buffer(&resolved, 0, &read, 0, timestamp_bytes);
+        queue.submit(std::iter::once(encoder.finish()));
         read.map_async(wgpu::MapMode::Read, .., |_| {});
         let view = match wait().map(|_| read.get_mapped_range(..)) {
             Ok(Ok(view)) => view,
@@ -302,14 +300,18 @@ impl ProbeRayPass {
             })
             .collect();
         microseconds.sort_by(f64::total_cmp);
-        let at =
+        if microseconds[0] <= 0.0 {
+            tracing::error!("a submission of probe ray passes read no time");
+            return;
+        }
+        let ranked =
             |fraction: f64| microseconds[(fraction * (microseconds.len() - 1) as f64) as usize];
-        let median = at(0.5);
+        let median = ranked(0.5);
         ALONE_NANOSECONDS.store((median * 1e3) as u64, std::sync::atomic::Ordering::Relaxed);
         tracing::info!(
             median_microseconds = median,
-            p10_microseconds = at(0.1),
-            p90_microseconds = at(0.9),
+            tenth_percentile_microseconds = ranked(0.1),
+            ninetieth_percentile_microseconds = ranked(0.9),
             "probe ray pass alone"
         );
     }

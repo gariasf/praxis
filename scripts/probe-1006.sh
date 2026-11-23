@@ -1,8 +1,5 @@
 #!/bin/bash
-# Usage: scripts/probe-1006.sh <results directory>
-# ROUNDS (3), CHOSEN (the variant run again without shader runtime checks),
-# QUIET_WAIT_SECONDS (300) and PRAXIS_BINARY (target/release/praxis) are read
-# from the environment.
+# Usage: [ROUNDS=3] [CHOSEN=<variant>] [QUIET_WAIT_SECONDS=300] [PRAXIS_BINARY=<path>] scripts/probe-1006.sh <results directory>
 set -u
 
 results=${1:?results directory}

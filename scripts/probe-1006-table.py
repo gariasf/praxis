@@ -12,7 +12,7 @@ import sys
 
 results = pathlib.Path(sys.argv[1])
 rounds = sorted(results.glob("round-*"))
-variants = sorted({directory.name for round in rounds for directory in round.iterdir()})
+variants = sorted({directory.name for round_directory in rounds for directory in round_directory.iterdir()})
 
 metrics = {
     "alone": lambda run: run.get("probe_ray_pass_alone_microseconds"),
@@ -28,8 +28,8 @@ print("| variant | metric | rounds | median | quiet |")
 print("|---|---|---|---|---|")
 for variant in variants:
     runs = []
-    for round in rounds:
-        files = list((round / variant).glob("*.json"))
+    for round_directory in rounds:
+        files = list((round_directory / variant).glob("*.json"))
         if files:
             runs.append(json.loads(files[0].read_text()))
     for metric, read in metrics.items():
