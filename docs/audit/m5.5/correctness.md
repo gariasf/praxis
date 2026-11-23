@@ -706,3 +706,705 @@ Registry keys: 5 keys at 7 citations, all match, one
 (`ue-5.8-texture-streaming-hidden-prefetch`) as its `deviations.md` row.
 Oracles: no function in the module is tested against a literature number;
 two analytic tests in the frame's files hold by arithmetic.
+
+## render
+
+Scope: `src/render/` outside the shaders and the oracle test modules, and
+`src/gpu/`, as far as they changed after `8bc34eb1`: `renderer.rs`
+(3,895 lines, 1,874 changed), `prepare.rs` (2,366, 1,545),
+`acceleration_structures.rs` (1,861, 1,563), `readback.rs` (1,355, 667),
+`staging.rs` (624, 326), `blas_refit.rs` (560, 151),
+`shadow_mask_pass.rs` (467, 135), `culling_pass.rs` (490, 267),
+`main_pass.rs` (387, 225), `targets.rs` (423, 174), `bind_groups.rs`
+(698, 87), `tonemapping_pass.rs` (372, 88), `froxel_pass.rs` (149, 77),
+`bend_pass.rs` (303, 74), `depth_pyramid_pass.rs` (421, 35),
+`light_count_pass.rs` (122, 28), `uniforms.rs`, `mod.rs`, `instance.rs`
+and `src/gpu/mod.rs` (1,000, 139). Four readers at high effort shared the
+module by file, each with the lane brief verbatim: the frame's
+orchestration (`renderer.rs`, `mod.rs`, `instance.rs`, `uniforms.rs`);
+prepare, staging and the GPU stats readback; the ray-tracing files
+(`acceleration_structures.rs`, `blas_refit.rs`, `shadow_mask_pass.rs`,
+`bend_pass.rs`); and the raster passes with `targets.rs`,
+`bind_groups.rs` and `src/gpu/`. Each read the non-test part of its
+files in full and their diff since `8bc34eb1` hunk by hunk; test modules
+were read where a test is cited. ADRs read whole: 0001, 0003, 0004, 0005,
+0007, 0014, 0015, 0016, 0017, 0019, 0020, 0021, 0026 and 0027; read for
+the clauses that fall here: 0013, 0018, 0022 and 0023. The `CLAUDE.md`
+review checklist was read as the operational form of those clauses. A
+WGSL part was opened only to confirm what a Rust-side constant, layout,
+binding or format must match; every shader-side clause is marked for the
+shaders section. The wgpu, wgpu-hal and wgpu-types 30.0.2 sources that
+`Cargo.lock` pins, and the vendored wgpu-core, were read where a registry
+quote is load-bearing. Every `where` is `path:line` at the frozen commit,
+under `src/render/` unless given in full. `deviations.md` holds no row at
+a site in these files; `DIFFERENCES.md` was read for what is not a
+Finding. Of the last audit's render Findings, the three that ADR
+amendments answered are found fixed (rows marked below), and the slot a
+skipped Renderable lost is kept now.
+
+### Clause verdicts
+
+| ADR | Clause (quoted, shortened) | Verdict | Where |
+|---|---|---|---|
+| 0001 | "one bind group serves every material" | holds: one `MATERIALS` group, refreshed once a frame, bound in the depth and lit passes | `renderer.rs:425-431`, `:813`, `:878-882`; `bind_groups.rs:49-66` |
+| 0001, 0005 | "indexed by the Material ID that each Meshlet record carries, its Primitive's unless the Instance overrides it"; the Instance slot read from the record | holds, Rust side: a 12-byte record (slot, Meshlet, Material ID) read by the vertex stage; the Instance carries its override or `NO_MATERIAL`; the per-Meshlet pick is the shaders' | `culling_pass.rs:250-255`; `bind_groups.rs:285-296`; `instance.rs:23-30`, `:37`; `prepare.rs:162` |
+| 0003 | "one GPU buffer, the Instance buffer, in a slot per Renderable, and are updated incrementally through dirty flags; there are no per-entity uniform buffers" | holds: one `STORAGE` buffer bound in `SCENE_GEOMETRY`; `Changed` filters | `renderer.rs:502-512`, `:541-558`; `prepare.rs:86-93`, `:807-825` |
+| 0003 | "each Renderable keeps a slot in the Instance buffer until it stops being a Renderable" | holds: a skipped Renderable keeps its slot, written an Instance with no Mesh once; a slot is freed only for an entity that left the Renderable query (the last audit's slot Finding is fixed) | `prepare.rs:737-744`, `:784-798`, `:425-430` |
+| 0003 | "a freed slot is taken again before a fresh one" | holds for a slot a Renderable freed (`free.pop().or(fresh)`); a Renderable never takes a slot of a Chunk's free range: L1-R01 | `prepare.rs:330-331` |
+| 0003 | "the buffer holds a fixed number of slots, past which a Renderable is refused, warned about once, counted in Frame stats and retried every frame" | broken where Chunks' free ranges hold slots: a Renderable is refused while the buffer has free slots: L1-R01; warned once, counted and retried hold | `prepare.rs:326-345`, `:752`, `:784-787`, `:818-823`; `src/state.rs:313` |
+| 0003 | "sized at device creation from the scene and pass buffers' GPU memory Budget" | holds: created once at `RenderCapacities::instances` slots from the checked-in Budgets, never resized | `renderer.rs:253-261`, `:402`, `:502-512`; `prepare.rs:505-508` |
+| 0003 | "30% of it at 136.2 bytes a slot, its Instance, offsets and visibility bit ... 517,376 slots at the Budgets M4 set" | broken: the code takes 144.2 bytes a slot and gives 488,448 slots at the same Budgets: L1-R03 | `renderer.rs:204`, `:215-218`, `:259-261`; test `:1088-1098`; `docs/adr/0003-persistent-scene-transform-buffer.md:3` |
+| 0003 | "prepare writes only the slots of new Renderables and of those whose World transform, Mesh or Material changed ... through the per-frame staging path, so camera motion writes no Instance" | holds: the camera is no Instance field and a uniform of its own; Instance writes go through `FrameStaging` only | `prepare.rs:86-93`; `instance.rs:33-38`; `renderer.rs:743-750`, `:765-781`; `uniforms.rs:31-62` |
+| 0003 | "A freed slot is written an Instance with no Mesh ... and is taken again from the next frame" | holds: `freed` is written after the visit and joins `free` at the end of `prepare` | `prepare.rs:841-844` |
+| 0003, 0014 | "the buffer stores an integer anchor plus an f32 offset per Renderable" | holds | `instance.rs:8-12`, `:36`, `:38`; `prepare.rs:157` |
+| 0003, 0020, 0022 | "prepare also rewrites every Moving Instance each frame, changed or not" | holds; the amendment answers the last audit's drift Finding on it | `prepare.rs:91`, `:805` |
+| 0003 | "On the frame after the Mesh or Material pool frees an entry, prepare writes again every Renderable's Instance and the Placements of each drawn Chunk one of whose Placements names an entry no longer in its pool ... free ranges, free slots and held Chunks ... are not written again" | holds: free ranges and slots are rewritten only on `rewrite_every_instance`; a held Chunk is skipped | `prepare.rs:670-672`, `:681-685`, `:700-708`, `:836-840`, `:925-937` |
+| 0003 | "each loaded Chunk owns a contiguous range of slots, one per Placement, taken on the first frame prepare sees the Chunk, before new Renderables take theirs, and kept until it unloads" | holds | `prepare.rs:351-387`, `:391-402`, `:694-733` before `:734-825` |
+| 0003 | "its Placements' Instances are written there in the order the Chunk holds them ... and its point lights join the frame's lights" | holds | `prepare.rs:702`, `:952-970`, `:1020-1024` |
+| 0003 | "A Placement whose Handles find nothing, or that lacks a Material Handle its Mesh needs, is written an Instance with no Mesh and ... not retried" | holds | `prepare.rs:952-977` |
+| 0003 | "A Chunk the buffer has no room for is refused, warned about once and its Placements counted as refused every frame" | holds | `prepare.rs:371-381`, `:697`, `:713-718`; test `:1310-1354` |
+| 0003 | "A range is the first free range long enough, else fresh slots past the highest taken" | holds | `prepare.rs:351-387` |
+| 0003 | "an unloaded Chunk's range is written Instances with no Mesh and joins the free ranges the next frame, merged with those it touches" | holds | `prepare.rs:391-402`, `:406-423`, `:677`, `:686-693`; test `:1361-1420` |
+| 0003 | "A held Chunk keeps its range, written Instances with no Mesh until it is drawn again, and its point lights stay out of the frame's" | holds | `prepare.rs:700-728`, `:1022` |
+| 0004 | "The renderer never reads the ECS World mid-frame: a prepare pass builds Frame data ... it lists no draws" | holds: `renderer.rs` imports `bevy_ecs` only in its test module; `upload` and `render` take `&FrameData`; `FrameData` has no draw list; the culling pass reads `frame.instance_slot_count` alone | `renderer.rs:1-26`, `:685`, `:802-807`; `prepare.rs:23-50`; `culling_pass.rs:340-356` |
+| 0004 | "every Frame data must reach the renderer, in order" | holds: `upload` asserts the previous frame's encoder was taken by `render`; a lost upload makes the next `prepare` rewrite every Instance | `renderer.rs:691-694`, `:785-790`, `:809-812`; `src/state.rs:299-312`; `prepare.rs:916-920` |
+| 0004, 0016 | "Frame data is an owned, `Send` value with no borrow into the ECS World" | holds: compile-time assertion | `prepare.rs:52-55` |
+| 0005 | "Per-Instance data (model matrix, normal matrix, Material ID) sits in a structured buffer"; "there is no bind group per mesh or per instance" | holds: 128 bytes, `STORAGE` | `instance.rs:31-40`; `renderer.rs:503-511`, `:541-558` |
+| 0005, 0019 | "each index packs a Meshlet record in its high bits and a vertex within that Meshlet in its low six" | holds, Rust side: the record capacity is asserted below the bits above the vertex | `culling_pass.rs:219-221` |
+| 0007 | "using `wgpu-hal` only for a subsystem that exceeds wgpu's safe API" | holds: the refit in `blas_refit.rs` and the acceleration-structure size query are the module's only wgpu-hal use | `blas_refit.rs:190-270`; `acceleration_structures.rs:115-173`; `src/gpu/mod.rs:494-498` |
+| 0007 | reopen: "`vendor/` carries more than five upstream commits, which `vendor/README.md` lists, or a fix upstream has declined" | holds: one commit, gfx-rs/wgpu `59209f27`, merged upstream; the vendored `ray_tracing.rs` is the registry's 30.0.1 plus exactly that commit | `vendor/README.md:13-35`; `Cargo.toml` `[patch.crates-io]` |
+| 0007 | reopen: the newest wgpu release cannot meet the floor, or the pinned wgpu is more than two majors behind | not judged from code: needs the newest published release, which is the exit's dependency review | `Cargo.toml:8` |
+| 0007 | "on 2026-11-14 a copy of wgpu-core 30.0.1 carries one upstream fix" | holds as dated; the copy has been 30.0.2 with the same fix since 2026-11-15 (see *Notes for the verifier*) | `vendor/README.md:13` |
+| 0013 | GPU memory "counted as the bytes of the buffers and textures the engine has created"; "the GPU stats readback's buffers are left out" | holds: every buffer and texture the Renderer and its passes create goes through the ledger under its kind; `GpuStatsReadback::new` takes none; `gpu_memory_bytes_by_kind` reads the ledger's running totals | `renderer.rs:394`, `:440-469`, `:503-512`, `:524-527`, `:585`, `:1007-1014`; `readback.rs:193-224`; `culling_pass.rs:227-238`; `froxel_pass.rs:73-95`; `targets.rs:119-136`, `:153-164`, `:177-191`; `tonemapping_pass.rs:87-104`; `shadow_mask_pass.rs:159-191`; `bend_pass.rs:62-71`; test `renderer.rs:1106-1139` |
+| 0013, 0017 | a `TRANSIENT_ATTACHMENT` "counts as zero only when `transient_saves_memory` is `Some(true)`" | holds: the ledger is made from the adapter's info, which carries it | `renderer.rs:394`; `src/stats/gpu_memory.rs:128-131`, `:285-289` |
+| 0013, 0019 | the culling phases' per-slot stages timed apart from `append_triangles` | holds: each phase is two Timed passes, slots then triangles | `renderer.rs:38-53`, `:863-869`, `:898-904`, `:1017-1028`; `culling_pass.rs:42-63`, `:340-388` |
+| 0014 | "The GPU never holds a World position in f32: it reads an integer anchor on a 64 m grid plus an f32 offset" | holds: `anchor_and_offset` splits in f64 and rounds the offset once for the camera, every Instance and Placement pivot and every point light; a directional light's `offset` is a unit direction; `view_proj` is projection times the rotation-only view; both TLASes compose every entry's translation from its Anchor and offset against the TLAS's Anchor in f64, rounded once | `instance.rs:1-12`; `uniforms.rs:33-60`; `prepare.rs:157`, `:606-615`, `:960-964`, `:1007-1009`, `:1028`; `src/camera/mod.rs:84-86`; `acceleration_structures.rs:701-731`, `:869-876`, `:1043-1049`, `:1058-1066` |
+| 0014 | "ray-tracing acceleration structures ... convert at their boundary into a local frame they own" | holds | `acceleration_structures.rs:243-252` (`AnchoredTlas`), `:1058-1066` |
+| 0014 | "The static TLAS's frame is the corner of the camera's Anchor when its first static Instance was written" | holds: both TLASes follow the camera's Anchor, with no build, until an entry is first filled | `acceleration_structures.rs:394`, `:426-435`; test `:1290` |
+| 0014, 0020 | "a build moves it only once the camera's Anchor strays more than a Chunk's edge (4 cells) along an axis"; "a build runs though no static Instance changed and re-anchors it at the camera's" | holds: `REANCHOR_CELLS` is 256 m / 64 m = 4; a strayed camera makes `start` record a build at the camera's Anchor; exactly 4 cells starts none | `acceleration_structures.rs:195`, `:572-581`, `:596-604`; `src/assets/cooked.rs:58`; `instance.rs:3`; test `acceleration_structures.rs:1382-1415` |
+| 0014, 0020 | "the camera is again within 320 m ... adds less than 4.9 mm to a shadow ray's offset" | holds, Rust side: 5 cells of 64 m times `SHADOW_RAY_OFFSET_SCALE` 2^-16 is 4.88 mm; the offset itself falls in shaders | `acceleration_structures.rs:190-195`; `shaders/shadow_mask.wgsl:36`, `:169-172` |
+| 0014, 0020 | the dynamic TLAS "rebuilt each frame in the bound static TLAS's frame, follows in the frame a new one is bound" | holds: `upload` reads the static TLAS's Anchor after its update, which may have bound the spare, and fills the dynamic TLAS and the camera uniform's `tlas_anchor` with it; the shadow mask pass binds the same index in that frame's `render` | `renderer.rs:711-742`, `:915-921`; `acceleration_structures.rs:407-416`, `:844-887` |
+| 0015 | "Depth is cleared to 0"; "compared with `Greater`"; "in `Depth32Float`" | holds for all six main-pass pipelines, the twins included; phase two's depth pass and the lit pass load; the lit pipelines compare `Equal` and write nothing | `targets.rs:12`, `:194-199`, `:328-337`, `:341-350`, `:357-370`, `:405-423`; `main_pass.rs:127`, `:211` |
+| 0015 | "a Hi-Z pyramid keeps the minimum depth, which is the farthest" | holds, Rust side: one dispatch per level, the GPU test against a CPU minimum of every sample; the reduction is the shaders' | `depth_pyramid_pass.rs:1-4`, `:97-122`; test `:141-153` |
+| 0016 | "Only the main thread submits, presents or polls the wgpu `Queue` and `Device`" | holds: every submit and poll the module reaches runs on the thread calling `upload`, `render` or `flush_gpu_frame_stats`: the poll that retires frames, the frame staging, the load staging, BLAS compaction, the static TLAS's collect, the refit, the dynamic TLAS's build and the frame; the static TLAS's worker submits nothing | `renderer.rs:688`, `:698-700`, `:712-718`, `:832-838`, `:962-964`, `:970`, `:990-992`; `staging.rs:97`, `:358-365`; `readback.rs:319-347`; `acceleration_structures.rs:531-555`, `:594-621`; `blas_refit.rs:133-140`, `:147-153` |
+| 0016 | "Workers record `CommandEncoder`s and return `CommandBuffer`s; they push no error scopes" | holds, newly applicable: the static TLAS's worker creates an encoder, records the build, finishes it and hands the command buffer back for the main thread to submit; it pushes no error scope | `acceleration_structures.rs:544-547`, `:592-623` |
+| 0016 | the refit's SAFETY premise "only the main thread calls into wgpu meanwhile (ADR 0016)" | broken in the comment, not in the ADR: the static TLAS's worker calls into wgpu while `render` records the refits: L1-R05 | `blas_refit.rs:193-196`; `acceleration_structures.rs:592-622` |
+| 0016 | "the compute pool is created with `available_parallelism() − 1` workers (at least 1), one pool per State's `FramePreparer`" | holds | `prepare.rs:487-489`, `:520`; `src/threading.rs:11-19` |
+| 0016 | "prepare fills the Renderables' Instances on the pool once there are enough to split among its threads" | holds: two or more tasks of 1,024 Instances, batches of 128 taken dynamically, the main thread joining | `prepare.rs:195-264` |
+| 0016 | "`desired_maximum_frame_latency` stays 2" | holds | `mod.rs:41-44` (`FRAMES_IN_FLIGHT = 2`) |
+| 0016 | "Per-frame data the GPU reads is written into the per-frame staging ring ..., a ring of mapped buffers whose slot is ... reused only after its `map_async` callback fires"; no `Queue::write_*` | holds: the camera and light uniforms, lights, bends, Instances and the slot count are the frame staging's six buffers; a slot is written only once `is_mapped`, which only the callback sets; no `Queue::write_*` outside tests | `renderer.rs:515-527`, `:765-781`; `staging.rs:90-107`, `:163-172`, `:432-441` |
+| 0016 | "the GPU stats come back through a ring of mapped readback buffers on the same rule"; "wgpu completes a map only after the last submission using the buffer finishes ... so the ring decides whether the CPU waits"; callbacks "at a known point of the frame" | holds: a slot is read and reused only at `MAP_DONE` or `MAP_FAILED`; a timestamp copy is recorded only into a slot `Recorded` for a completed frame; `render` never waits on a map; `on_submitted_work_done` on the frame's last encoder fires in a submit or poll on the main thread | `readback.rs:251-268`, `:305-313`, `:388-419`, `:510-522` |
+| 0016, checklist | bind groups are snapshots; whatever recreates a target rebuilds the groups holding it in one function called at creation and after every resize | holds: `resize` recreates the targets and calls `bind_render_targets` on the pyramid, culling, main, shadow mask, tonemapping and light count passes, and re-derives the per-height LOD threshold and pixel size; the shadow mask's TLAS groups hold TLASes rebuilt in place | `targets.rs:61-65`; `renderer.rs:629-650`; `culling_pass.rs:292-293`, `:392-399`; `depth_pyramid_pass.rs:56`, `:62-94`; `main_pass.rs:80-85`, `:242-249`; `tonemapping_pass.rs:108`, `:119-122`; `light_count_pass.rs:66`, `:78-81`; `shadow_mask_pass.rs:192-207`, `:232-253`; test `renderer.rs:1165` |
+| 0017 | "the Instance slots 30% of the scene and pass buffers', at 136.2 bytes a slot with its offsets and visibility bit" | broken, the same Finding: L1-R03 | `renderer.rs:204`, `:215-218`; `docs/adr/0017-textures-stream-by-mip-geometry-lives-in-fixed-arenas.md:18` |
+| 0017 | "the lights 0.1%, at 48 bytes" | holds: `LIGHTS_PER_MILLE = 1`, `LightData` 48 bytes, 4,893 lights pinned | `renderer.rs:207`, `:262-265`; `uniforms.rs:17-29`; test `:1093` |
+| 0017 | "the static TLAS's two TLASes 57% of the acceleration structures', at 289 bytes an entry" | holds: `STATIC_TLAS_PER_MILLE = 570`, two TLASes at `TLAS_BYTES_PER_INSTANCE = 289`; the fit test bounds the created TLASes by it | `renderer.rs:211`, `:223`, `:271-274`; test `:1128-1134` |
+| 0017 | "the staging Budget the frame staging's slots at their largest"; the Chunk loads take what those slots leave of it, over the frames in flight and the one being written | holds: frame staging slots are created through the ledger as `Staging`, never past `max_slot_size`; `load_bytes_per_frame` is the rest over three; `most_uploaded_bytes` sums the six buffers `FrameStaging` is bounded by | `renderer.rs:244-248`, `:266-275`, `:279-287`, `:515-527`; `staging.rs:81-87`, `:137-153`; test `renderer.rs:1135-1138` |
+| 0017 | "What ADR 0013 leaves out, the GPU stats readback and the load staging, bypasses [the ledger]" | holds in code; ADR 0013 does not leave the load staging out: L1-R04 | `staging.rs:179-184`, `:344-353`; `readback.rs:193-200` |
+| 0017 | "Streaming uploads go through a `StagingBelt`, never `Queue::write_texture`" | holds: every write, re-pitched mip and Texture class move is recorded on the load encoder, the dither mask included; no runtime `write_texture` or `write_buffer` outside tests | `staging.rs:207-215`, `:225-278`, `:284-334`; `tonemapping_pass.rs:105`; `renderer.rs:403`, `:698` |
+| 0017 | "the engine caps the bytes written into it per frame at the staging Budget" | holds, staging side: `written_bytes` counts row padding, `mips_written_bytes` sizes the same; enforcing the cap is the streaming module's | `staging.rs:211`, `:241`, `:368-394` |
+| 0017 | "Residency changes are batched so that bind group is rebuilt at most once per frame" | holds, Rust side: `render` calls `refresh_bind_group` once; whether it rebuilds is the Material pool's | `renderer.rs:813` |
+| 0017, 0018, checklist | no GPU buffer grows at runtime; only per-frame staging grows, up to the buffers a frame writes, which it asserts | holds: the Instance, light and uniform buffers, both static TLASes and the dynamic TLAS are made at their capacities; the frame staging asserts its bound | `renderer.rs:440-469`, `:502-527`; `staging.rs:79-87`; `acceleration_structures.rs:334-354`, `:776-786` |
+| 0018 | "Rows are stored unpadded, and the loader re-pitches them to 256 bytes as it writes into the `StagingBelt`" | holds | `staging.rs:225-256`, `:407-426` |
+| 0019 | pass order: culling one, Froxel lists, depth pre-pass, pyramid, culling two, phase two's depth and the shadow mask with rays on, lit, tonemapping | holds; the Froxel pass after the first culling dispatch is the last audit's note, unchanged | `renderer.rs:863-938` |
+| 0019 | "a compute pass appends the Meshlets of the LOD selected for each Instance ... in slot order, in two phases" | holds, Rust side: offset scans, then records, then triangles, per phase; each phase is now two wgpu compute passes (see *Notes for the verifier*) | `culling_pass.rs:1-20`, `:340-388`, `:364-374` |
+| 0019 | "Phase one appends those visible the frame before, one bit per slot" | holds: `capacities.instances / 32` words, zeroed at creation | `culling_pass.rs:276-281` |
+| 0019 | "a depth pre-pass draws them into 4x MSAA reverse-Z `Depth32Float` cleared to 0 ... and stores it" | holds | `main_pass.rs:110-114`, `:291-292`; `targets.rs:328-337` |
+| 0019 | "A compute pass reduces that depth into the Hi-Z pyramid, each texel the minimum of every sample below it" | holds, Rust side | `depth_pyramid_pass.rs:97-122`; `targets.rs:172-191`, `:212-222` |
+| 0019 | "Phase two appends the others whose bounds lie anywhere nearer than the pyramid's minimum ... and rewrites the bits" | holds, Rust side: the whole pyramid is bound in `FRAME_DRAW` | `culling_pass.rs:463-490`; `bind_groups.rs:126-144` |
+| 0019 | "Phase two's Instances draw into depth: with shadow rays off, at the start of the lit pass; with them on, in a pass of their own, which like the pre-pass then writes each sample's surface normals too" | holds, the twins included | `main_pass.rs:283-330`, `:358-363`; `renderer.rs:905-922` |
+| 0019 | "a transient 4x colour attachment, memoryless on Apple GPUs, that it resolves into the `Rgba16Float` HDR target, which a tonemapping pass then writes into the target" | holds: `TRANSIENT_ATTACHMENT`, cleared, `Discard`, resolved into `hdr` | `targets.rs:200-205`, `:377-400`; `tonemapping_pass.rs:151-177` |
+| 0019, 0027 | "one `draw_indexed_indirect` per phase for the depth pipeline and one of both phases for the lit pipeline, and one more per phase and pipeline for Thin Primitives and small Instances"; "No count draws" | holds: seven indirect draws and the tonemapping triangle, counted as 8 with rays on or off; no `multi_draw_indirect` or count draw | `main_pass.rs:315-368`; `tonemapping_pass.rs:176`; `renderer.rs:943-948`; test `:1156` |
+| 0019 | "with shadow rays on, the depth passes also write each sample's triangle normal and the normal interpolated over it, 4 bytes per sample ... the target is allocated either way" | holds | `targets.rs:42-45`, `:247-252`; `main_pass.rs:141-169`, `:300-310` |
+| 0019 | "the coarsest LOD whose LOD error times the Instance's scale is under the LOD threshold, one pixel of the target's height"; "It reads the camera and the Instance alone, so both phases draw the same LOD and no earlier frame decides it" | holds, Rust side: `lod_error_per_metre` is one pixel at a metre on the target's height, set at creation and on resize and sent in the camera uniform each frame; the culling pass binds no earlier frame's data for it; the comparison is the shaders' | `renderer.rs:186-201`, `:594-595`, `:648-649`, `:733-742`; `uniforms.rs:43-46`; `culling_pass.rs:1-5`, `:299-312`; test `renderer.rs:3130` |
+| 0019 | "Culling tests Instances"; "Render pipelines are vertex pipelines" | holds: six vertex pipelines, no mesh stage | `culling_pass.rs:1-20`; `main_pass.rs:115-222` |
+| 0019 | "the light buffer ... of fixed capacity" | holds: made once at `capacities.lights` | `renderer.rs:460-469` |
+| 0019 | gate "timed from the first culling dispatch to the end of the lit pass"; "Shadow-ray time is reported beside the gate as its own line" | holds: from culling phase one's start to the latest end of the passes up to the lit pass; the shadow mask pass is a Timed pass | `readback.rs:728-745`; `renderer.rs:38-53` |
+| 0019 | "A fragment stage that reads any flat input is never merged ... both read a flat input" | falls in shaders | |
+| 0019, 0020 | "a shadow mask ... which holds 59 lights per pixel: a light past them casts no shadow there, and Frame stats count it" | holds: 59, asserted to fill 64 bits with the Froxel slice; the overflow buffer cleared each frame and read back | `shadow_mask_pass.rs:35`, `:66-70`, `:351`, `:406-408`; `renderer.rs:949-954` |
+| 0019, 0020 | "for one of the first seven directional lights ... toward that light again from each other sample" | holds, Rust side: `SHADOW_EDGE_LIGHTS` 7, asserted to fit with the samples in 32 bits; the edge list is the fourth, indirect dispatch | `shadow_mask_pass.rs:55`, `:60-64`, `:384-401` |
+| 0019 | the shadow mask traced after phase two's depth pass and before the lit pass, at the nearest sample and, at the farthest of the others, from a packed list; 4x MSAA pinned where the pass reads samples | holds, Rust side | `renderer.rs:905-931`; `shadow_mask_pass.rs:44-49`, `:58`, `:352-353`, `:360-383` |
+| 0019, 0021 | "`max_storage_buffers_per_shader_stage` at least 9, since the culling pass's compute stage reads and writes nine" | holds, exactly nine: four in `SCENE_GEOMETRY` and five in `FRAME_DRAW`; the shadow mask pass's compute stage now binds nine too (see *Notes for the verifier*) | `bind_groups.rs:20-42`, `:71-102`, `:126-144`, `:212-280` |
+| 0020 | "it holds exactly the static Instances of the loaded, drawn Chunks, the drawn Far proxies and the static spawned Renderables, each in an entry of its own whatever its slot" | holds, Rust side: an entry per written static Instance with a BLAS, mapped by slot; a freed slot, a Moving Instance's write or a Mesh without a BLAS frees the entry; which Far proxies are drawn is the streaming module's | `acceleration_structures.rs:448-506`, `:629-666`; tests `:1723`, `:1746` |
+| 0020 | "leaves out only those written while it is full, which take the entries it frees" | holds: left out by slot, taken lowest slot first as entries free, counted in Frame stats, warned once per run of leaving out | `acceleration_structures.rs:502-525`, `:693-696`; `renderer.rs:723`; test `:1835` |
+| 0020 | "two static TLASes, each with its own bind group, and a worker thread takes the static Instance changes the spare lacks, records and finishes its build, which the main thread submits"; "the spare is bound from the frame after that submit" | holds: `upload` hands Frame data to `StaticTlas::update` on the main thread; a `Submitted` spare is swapped in at the start of the next `update`; the shadow mask pass binds the bound TLAS's group by index | `renderer.rs:711-719`, `:915-921`; `acceleration_structures.rs:217-241`, `:385-424`, `:531-555`, `:563-625`; `shadow_mask_pass.rs:83-84`, `:134-143`, `:361-365`; test `acceleration_structures.rs:1547-1601` |
+| 0020 | "a capture waits for the worker so its images never depend on the worker's timing" | holds: with `wait_for_static_tlas`, which every capture path sets, `update` waits for each worker and every change starts a build | `renderer.rs:106-111`, `:615`, `:712-718`; `acceleration_structures.rs:398-403`, `:417-422`, `:531-537`; `src/capture/mod.rs:171-174`, `:277-280`; `src/state.rs:681` |
+| 0020 | both static TLASes "built empty at creation, so rays can always query them" | holds | `acceleration_structures.rs:355-361` |
+| 0020, 0026 | "a Far proxy's entry change alone ... joins the next build and starts one only once it is 120 frames old" | holds: a Far proxy's write or release does not set `starts_build`; the oldest change the bound TLAS lacks starts one at 120 frames | `acceleration_structures.rs:197-199`, `:466-500`, `:513`, `:566-576`; test `:1611` |
+| 0020 | "Moving Instances form the dynamic TLAS, rebuilt each frame ... from at most 10,000 of them, those in the lowest slots" | holds: `DYNAMIC_TLAS_CAPACITY` 10,000; prepare lists the 10,000 in the lowest slots and the fill takes them | `acceleration_structures.rs:13-17`, `:850-855`; `prepare.rs:846-862`; test `prepare.rs:1615`; `renderer.rs:737-738`; `uniforms.rs:51-52` |
+| 0020 | "its build's recording and submit, and the build itself on the GPU, are timed in each frame that builds it"; the rebuild form "times neither those rebuilds nor the dynamic TLAS's build, which reads as zero" | holds: recording (`prepare_encoder`, `fill`, `record`) and submit are CPU stages; the build reads its bracket, from no earlier than the frame before's last pass, except under the rebuild form; the amendment answers the last audit's drift Finding on the rebuild form | `renderer.rs:55-57`, `:68-69`, `:604`, `:705-709`, `:728-731`, `:844-857`, `:959-965`; `readback.rs:464-480`, `:668-677`; `acceleration_structures.rs:889-916`, `:942-961` |
+| 0020 | "That submit, and each frame's that binds a static TLAS, walks one dependency per distinct BLAS since `vendor/wgpu-core` carries" the upstream fix | holds: the vendored wgpu-core dedups by BLAS tracker index | `vendor/wgpu-core/src/command/ray_tracing.rs:233-248`; `vendor/README.md` |
+| 0020 | the crowd's refit form, "refitted to its bent shape each frame through wgpu-hal on Metal ... the dynamic TLAS's build waits for the refits on the GPU through a Metal shared event; the refits are timed on the GPU from the end of the bend pass to a marker after them" | holds: with a refit or rebuild form and a bend, the head is submitted with the updates before the build is recorded, and the submission is split in the timestamp log | `blas_refit.rs:64-70`, `:120-145`, `:225-270`, `:470-544`; `renderer.rs:824-843`; `readback.rs:620-630`, `:731-733` |
+| 0020 | "Its rebuild form ... rebuilds each figure's BLAS through wgpu each frame" | holds | `blas_refit.rs:116-118`; `src/assets/pools.rs:710-717` |
+| 0020 | "each Mesh rays trace gets a BLAS at load, compacted unless it is loaded to be refitted or rebuilt each frame"; "Every BLAS is built from its Mesh's LOD 0" | falls in cook with assets (`src/assets/pools.rs`); the refit reads the pool's `REFITTED_BLAS_FLAGS` and the geometry the pool built the BLAS from | `src/assets/pools.rs:152-154`, `:691-705`; `blas_refit.rs:168`, `:205-207`, `:256`, `:313-335` |
+| 0020 | one hard shadow ray per pixel per light, the edge rays, the origin offset, "a shadow ray the static TLAS lets through is traced against [the dynamic]" | falls in shaders; the Rust side dispatches the four passes, binds both TLASes and passes the TLAS Anchor | `shadow_mask_pass.rs:345-402`; `renderer.rs:733-741` |
+| 0021 | required features: the three binding-array features, `TEXTURE_COMPRESSION_BC`, `EXPERIMENTAL_RAY_QUERY`, `TIMESTAMP_QUERY` | holds: requested exactly; no other feature used by `src/render/` or `src/gpu/` outside tests; `sample_mask` needs no naga capability | `src/gpu/mod.rs:68-86`, `:269-280` |
+| 0021 | downlevel flags `ANISOTROPIC_FILTERING`, `VERTEX_STORAGE`, `COMPUTE_SHADERS`, `INDIRECT_EXECUTION` | holds | `src/gpu/mod.rs:284-297` |
+| 0021 | `TIMESTAMP_QUERY_INSIDE_ENCODERS` and `_INSIDE_PASSES` stay optional | holds: one Timestamp query set, every timestamp a pass's `timestamp_writes`, none inside an encoder or pass | `readback.rs:202-207`, `:582-630`; `culling_pass.rs:438-441`; `main_pass.rs:303-314`, `:346-356` |
+| 0021 | "4x MSAA on every attachment format the main pass uses ... Those formats are `Depth32Float`, the HDR target's `Rgba16Float` and the surface normals' `Rgba8Unorm` ... the floor checks no resolve on it" | holds: `MULTISAMPLED_FORMATS` lists the three, the floor reads each and asks the resolve of the HDR format alone, and `RenderTargets::new` asserts no multisampled target of another format; the last audit's floor Finding is fixed | `targets.rs:47-52`, `:114-118`; `src/gpu/mod.rs:57-66`, `:363-374` |
+| 0021 | "returns one typed error naming ... each attachment format without 4x MSAA or, on colour, its resolve" | broken in the ADR's text: the floor names a missing resolve on the HDR format only, as the ADR's first Consequence says: L1-R06 | `docs/adr/0021-capability-floor.md:17`; `src/gpu/mod.rs:363-374` |
+| 0021 | "the window's surface and the capture target take only the tonemapping pass's single-sample output" | holds | `tonemapping_pass.rs:83` |
+| 0021 | "`ExperimentalFeatures::enabled()`, an `unsafe` call; it is the one `unsafe` this ADR adds, and its comment cites ADR 0020" | holds: the other `unsafe` blocks in the module belong to ADR 0020's refit and to the acceleration-structure size query, each with a SAFETY comment | `src/gpu/mod.rs:72-78`; `acceleration_structures.rs:128-130`, `:165-173`; `blas_refit.rs:190-270`, `:298-309`, `:345-367`, `:483-494`, `:526-556` |
+| 0021 | limits: defaults with `using_minimum_supported_acceleration_structure_values()`, `max_buffer_size` 2^31 − 1, binding-array elements 65,536, acceleration structures 2, storage buffers 9 | holds; `max_texture_array_layers` is written out at the default 256, raising nothing; five Channels of 13,107 classes take 65,535 elements in the fragment stage; two `SHADOW_RAY_SCENE` groups, one per static TLAS, each binding two TLASes | `src/gpu/mod.rs:303-323`; `bind_groups.rs:49-66`, `:111-118`, `:672-686`; `src/assets/material.rs:19-20` |
+| 0021 | the other per-stage counts at wgpu's defaults | holds: storage textures at most 2 of 4, sampled textures at most 2 outside binding arrays of 16, uniforms at most 2 of 12, samplers 2 of 16, colour bytes per sample 8 of 32, bind groups 0 to 3 of 4; storage texture formats `R32Float`, `Rg32Uint`, `R32Uint`, each guaranteed | `bind_groups.rs:20-409`; wgpu-types 30.0.2 `limits.rs:421-445`, `texture/format.rs:969-986` |
+| 0021 | "`max_storage_buffer_binding_size` stays at the default 128 MiB ... that Arena stays within it, as a test checks" | holds: the vertex Arena, the Instance buffer and the light buffer are tested against it; the packed indices are 2^25 × 4 bytes, the limit exactly | `src/gpu/mod.rs:821-845`; `culling_pass.rs:93-101`, `:256-260` |
+| 0021 | `max_compute_workgroups_per_dimension` default 65,535 | holds: asserted against the device; `append_triangles` is indirect in rows of it; the slots passes dispatch 1,909 workgroups at the checked-in Budgets | `culling_pass.rs:77-81`, `:224-226`, `:364-387` |
+| 0021 | "Headless contexts, tests and Goldens included, use the same floor"; "`praxis capabilities` runs without the floor" | holds | `src/gpu/mod.rs:31-93`, `:122-129` |
+| 0022 | "prepare blends the previous and current World transform in f64 into Frame data"; a spawned or Teleported entity is drawn at its current transform | holds: Instances, both light kinds and bends blend by `blend_weight`; `drawn` returns the current transform when the previous is `None` | `prepare.rs:215`, `:1004`, `:1017`, `:1099`; `src/transform/mod.rs:26-29` |
+| 0023 | "a `DirectionalLight` gives illuminance in lux and a `PointLight` luminous intensity in candela"; "Exposure is an EV100" | holds: carried as colour times intensity; the camera uniform carries `Camera::exposure`; the background pre-exposed | `prepare.rs:617`, `:1010`, `:1033`; `uniforms.rs:1-10`, `:25-28`, `:40` |
+| 0023, checklist | HDR colour clamped to 65504; sRGB encoded once, by the tonemapping pass, into 8-bit UNORM | holds: the clear is clamped and weighted; `debug_assert!(!target_format.is_srgb())`; the surface is `Bgra8Unorm` or `Rgba8Unorm`, tested | `targets.rs:377-400`; `tonemapping_pass.rs:52-55`; `src/gpu/mod.rs:458-485`; test `:691-707` |
+| 0026 | "Under it the Instance slots, the static TLAS and the flat cull keep M4's capacities" | holds on its purpose: the densest 2 km view fits the capacities, tested; the slots fell from 517,376 to 488,448 when Thin Primitives landed, which L1-R03 records | `renderer.rs:1088-1098`; `src/scenes/world.rs:858`, `:879` |
+| 0026 | "The Resident Far proxies are in the World beside the loaded Chunks, each a Chunk of one Placement that takes one Instance slot"; "A Far proxy is held, its slot an Instance with no Mesh, while it is past the View distance or its Chunk is drawn" | holds, prepare side: `ResidentFarProxies` and `FarGround` take ranges after the loaded Chunks'; when one is held is the streaming module's | `prepare.rs:630-642`, `:699`, `:725-728` |
+| 0026 | "A Far proxy is a Mesh and the culling pass selects its LOD as any Instance's" | holds, Rust side: the culling pass has no Far proxy case | `culling_pass.rs:1-20` |
+| 0026 | "While drawn it holds one static TLAS entry under the mask bit an ordinary Instance has" | holds: a Far proxy's Mesh has no Thin Primitive, so its entry takes `ORDINARY_MASK` | `acceleration_structures.rs:990-994`; `src/assets/pools.rs:862-869` |
+| 0026 | "a swap is a static change: the static TLAS takes both sides of it from its own next build, and the draw does not wait"; "a capture, which waits for the static TLAS's worker, builds each at once" | holds: Chunk, Far proxy and far ground writes are never Moving; the Placements written or released in the swap's frame start the build that carries the Far proxy's change too; the draw reads the Instance buffer, not the TLAS | `prepare.rs:727`, `:969`; `acceleration_structures.rs:398-405`, `:466-500` |
+| 0026 | "the proxy is placed once that BLAS is ready, as a Chunk is" | falls in streaming; the TLAS asserts it in debug builds only (see *Notes for the verifier*) | `acceleration_structures.rs:454-458` |
+| 0026 | the ground past the View distance is "placed by the scene as a Chunk of one Placement that is never held, and traced by no ray" | holds: drawn as a Chunk of one Placement; a `MeshUse::Drawn` Mesh has no BLAS, so its write frees any entry | `prepare.rs:636-642`; `acceleration_structures.rs:452-476`; `src/assets/pools.rs:113-139`; `src/scenes/world.rs:246-252` |
+| 0026 | "Thin Primitives carry an instance-mask bit per width class, one class per doubling" | holds, Rust side: bits 1 to 7 for classes from 3.125 mm, each twice the one before; 400 mm and wider take the ordinary bit; declared into WGSL from Rust | `acceleration_structures.rs:969-1008`; `shaders/mod.rs:316-317`; test `acceleration_structures.rs:1441-1470` |
+| 0027 | "No pipeline of the main pass enables alpha-to-coverage" | holds: one `MultisampleState`, count 4, `alpha_to_coverage_enabled: false`, shared by all six pipelines | `main_pass.rs:110-114`, `:128`, `:212`, `:216-222` |
+| 0027 | "The depth passes write the mask ... The lit pass ... writes none" | holds, Rust side: the depth twins run `fs_thin_depth` or `fs_thin_surface_normals`, which output `sample_mask`; the lit twin runs `fs_thin_main`, which reads it; what they compute falls in shaders | `main_pass.rs:157-186`, `:217-222` |
+| 0027 | "Each pipeline of the main pass has a twin ... The twins draw every frame, since any Instance can be small" | holds: three pipelines, three twins, each recorded unconditionally after its pipeline, every frame | `main_pass.rs:39-42`, `:323-329`, `:358-368`; `renderer.rs:883-931` |
+| 0027 | "the culling pass lists the geometry drawn through the twins apart, in slot order within each phase"; "the twins' packed indices share the frame's draw's buffer: each phase's fill its end" | holds, Rust side: each phase's Thin draw in `FrameDraw`, its packed indices at the buffer's end; the storage-buffer count stays nine; the order is the shaders' | `culling_pass.rs:6-11`, `:104-122`, `:137-142`, `:256-260` |
+| 0027 | a Thin Primitive's and a small Instance's coverage "reads the camera and the Instance alone" | holds, Rust side: `pixel_size_per_metre` is in the camera uniform, set from the target's height at creation and on resize | `renderer.rs:197-201`, `:595`, `:649`, `:733-735`; `uniforms.rs:57-59` |
+| 0027 | the five levels, the Thin Primitive and small Instance coverage, the culling drop, the second-surface listing of a split pixel | falls in shaders | |
+| 0008, 0020, checklist | the main pass reads no screen-space history, and nothing rules out its 4x MSAA | holds: `MAIN_PASS_INPUTS` binds this frame's records, mask and mask samples | `bind_groups.rs:285-317` |
+| checklist | GPU memory through the ledger under its kind; acceleration structures "at the size wgpu-hal's query gives (`blas_bytes`, `tlas_bytes`), a compacted BLAS at its adapter's estimated fraction" | holds: the query is built as wgpu-core builds its own at creation, plus wgpu-core's instance buffer; the fraction is chosen by vendor and backend as its doc says; the refit scratch and both TLAS marker results are counted | `acceleration_structures.rs:29-188`, `:340-351`, `:776-799`; `blas_refit.rs:372-381`, `:413-422`; `src/stats/gpu_memory.rs:188-209`; `vendor/wgpu-core/src/device/ray_tracing.rs:56-117`, `:242-282` |
+| checklist | "per-frame GPU writes add to `uploaded_bytes`" | broken for the static TLAS's builds, whose instance records wgpu-core stages and uploads in the frame that submits them, uncounted: L1-R02; holds for the frame staging's six buffers, the dynamic TLAS's records, the streamer's load staging bytes and the Texture class moves | `acceleration_structures.rs:544-552`; `renderer.rs:698`, `:712-723`, `:778-781`, `:851-856`; `staging.rs:132`, `:358-365`; `src/state.rs:287` |
+| checklist | the indirect buffer is not read-write bound in an active group | holds: each indirect dispatch runs with the stand-in bound for the buffer it reads; the main pass's groups hold no `frame_draw` | `culling_pass.rs:376-387`, `:466-490`; `main_pass.rs:373-386`; `shadow_mask_pass.rs:99-101`, `:266-270`, `:377-383`, `:395-401` |
+| checklist | the GPU builds the frame's draw in slot order within each phase, never in the order atomics land | holds, Rust side: prefix sums by block, then blocks, then records; static TLAS entries are taken on the main thread in write order; the shadow mask's lists are appended by atomics but each listed pixel writes only its own pixel | `culling_pass.rs:364-374`; `acceleration_structures.rs:440-527`, `:629-666` |
+| checklist | a binding is written once, in its definition; no WGSL part declares one | holds | `bind_groups.rs:513-541`; `shaders/mod.rs:98-179` |
+| checklist | matrices column-major; Rust-only padding starts with `_`; `FrameDraw` matches `culling.wgsl` | holds: `padded_columns` pads each column; the uniforms' padding fields are `_pad*`; `FrameDraw` is 112 bytes, its fields at WGSL's offsets by inspection | `instance.rs:14-18`; `uniforms.rs:9`, `:24`, `:28`, `:61`; `culling_pass.rs:111-128`; `culling.wgsl:28-61` |
+| checklist | no `unwrap()` on a GPU operation in the render path; no `unsafe` unless necessary and explained | holds: the poll failure is logged; the new size-query `unsafe` is the only way to the driver's size, since wgpu-core keeps it crate-private [ref:wgpu-30-blas-compacted-size-private]; one premise of the refit's comment is stale, L1-R05 | `renderer.rs:688-690`; `acceleration_structures.rs:29-35`, `:128-130`, `:165` |
+
+### Spec stories
+
+| Story | Verdict | Where |
+|---|---|---|
+| M4 story 2, Placements as Instances in a slot range their Chunk owns | holds: a Chunk is a range, not entities | `prepare.rs:294-321`, `:351-387`, `:694-733` |
+| M4 story 17, Moving Instances spawned by scene systems, outside Chunks | holds, prepare side: a Placement's Instance is never written as Moving | `prepare.rs:727`, `:969` |
+| M4 story 20, Chunks leaving the Load radius unloaded | holds, prepare side: the range is written Instances with no Mesh and freed for the next frame | `prepare.rs:391-402`, `:686-693` |
+| M4 story 24, the bytes a frame writes into the staging belt capped by the staging Budget | holds, render side: the cap is computed in `from_budgets`, and `written_bytes` and `mips_written_bytes` count the belt's bytes with row padding; enforcing it is the streaming module's | `renderer.rs:244-248`, `:275`; `staging.rs:211`, `:241`, `:382-394` |
+| M4 story 28, a stale Handle refused, never drawn as the Asset that reused its index | holds, prepare side: Mesh lookups and Material generations checked for Renderables and Placements, and every Instance that may name a freed index rewritten on the frame after a free | `prepare.rs:670-672`, `:756-783`, `:925-937`, `:953-958` |
+| M4 story 32, each Channel a binding array of texture arrays, one per class | holds, Rust side | `bind_groups.rs:44-66`, `:672-686` |
+| M4 story 33, the floor kept at 256 layers per texture array | holds: `FLOOR_TEXTURE_ARRAY_LAYERS` is wgpu's default | `src/gpu/mod.rs:303-306`, `:315` |
+| M4 story 37, a Texture moved to its new class by copy through the staging belt, safe API only | holds: `copy_texture_to_texture` per mip on the load encoder, its bytes returned at `submit` into `uploaded_bytes` | `staging.rs:284-334`, `:358-365`; `renderer.rs:698` |
+| M4 story 43, every fixed capacity sized from its Budget at device creation, not a compile-time constant | holds for the Instance slots, the light buffer, the static TLAS's entries, the load bytes a frame and the culling pass's per-slot buffers; the frame's draw and the Froxel lists are fixed by the floor and held in the scene and pass buffers' Budget; `DYNAMIC_TLAS_CAPACITY` and `BEND_CAPACITY` stay constants (see *Notes for the verifier*) | `renderer.rs:209-211`, `:251-293`, `:402`; `prepare.rs:495-508`; `culling_pass.rs:83-101`, `:244-281`; `froxel_pass.rs:26-31`; `acceleration_structures.rs:13-17`; `bend_pass.rs:22` |
+| M4 story 44, GPU memory counted by kind where it is created, "so that no buffer or texture escapes `gpu_memory_bytes`" | holds for every buffer, texture and acceleration structure the module creates; the load staging's belt buffers escape it, as ADR 0017 allows and ADR 0013 does not record: L1-R04 | `renderer.rs:440-469`, `:503-512`, `:1012-1014`; `staging.rs:140-149`, `:344-353` |
+| M4 story 45, acceleration-structure bytes counted exactly | holds: the driver's size through wgpu-hal, a compacted BLAS at a measured per-adapter fraction, labelled an estimate | `acceleration_structures.rs:29-188` |
+| M4 story 46, the vertex Arena within one 128 MiB binding | holds: tested | `src/gpu/mod.rs:817-825` |
+| M4 story 47, a request past any capacity refused, logged and counted | holds for Chunk ranges, lights, the frame's draw, the static and dynamic TLAS and bends; a Renderable is refused early while free ranges hold slots, though counted, not silently: L1-R01 | `prepare.rs:332-338`, `:372-379`, `:661-668`, `:846-862`, `:871-878`; `culling_pass.rs:113-116`, `:337-339`; `acceleration_structures.rs:502-525`, `:693-696`; `renderer.rs:723`; `src/state.rs:313-317` |
+| M4 story 48, the static TLAS holds exactly the static Instances of the loaded Chunks | holds, Rust side: held and unloaded Chunks' slots are written Instances with no Mesh and free their entries; Chunk writes are static | `prepare.rs:686-693`, `:725-731`; `acceleration_structures.rs:448-506`; test `:1746` |
+| M4 story 49, the static TLAS's anchor moves with the camera | holds | `acceleration_structures.rs:563-604`; test `:1382` |
+| M4 story 50, the static TLAS rebuilt off the frame's critical path and swapped in whole | holds | `renderer.rs:711-719`; `acceleration_structures.rs:407-416`, `:563-625`; test `:1547` |
+| M4 story 51, frames before a newly loaded Chunk casts shadows measured | holds: `frames_until_traced` into Frame stats; the ceiling falls in tooling | `acceleration_structures.rs:322-328`, `:414-415`; `renderer.rs:722` |
+| M4 story 52, the dynamic TLAS follows the static TLAS's anchor in the frame it swaps in | holds | `renderer.rs:724-741` |
+| M4 story 53, waits on BLAS compaction measured on frames that load | holds, render side: a `blas_compaction` stage on frames that wait; the compaction is the cook and assets module's | `renderer.rs:71-73`, `:699-704` |
+| M4 story 54, lights stream with their Chunks | holds | `prepare.rs:1020-1024` |
+| M4 story 55, the light buffer filled by distance from the camera | holds: past the capacity the farthest point lights are cut, directional lights first; tested | `prepare.rs:1038-1061`; test `:2134` |
+| M4 story 60, 10,000 Moving Instances | holds, prepare side: the dynamic TLAS takes the 10,000 in the lowest slots | `prepare.rs:846-862` |
+| M4 story 65, the same content at the origin and the far corner gives identical images | falls in tests (the capture seam); the TLAS side composes every translation against its Anchor in f64 | `acceleration_structures.rs:1058-1066` |
+| M4 story 70, the static TLAS's build time reported apart from the frame's critical path | holds: the worker's time into `static_tlas_build_time`, read in the frame that submits its build, and the main thread's share as the `static_tlas_update` stage | `renderer.rs:64-66`, `:719-721`; `acceleration_structures.rs:319-324`, `:547`, `:616-620` |
+| M4 story 71, GPU memory a running total | holds: read from the ledger's totals | `renderer.rs:1012-1014` |
+| M5 story 8, every Instance at the coarsest LOD whose error is under a pixel | holds, Rust side; the selection falls in shaders | `renderer.rs:186-201`, `:733-735`; `culling_pass.rs:1-5` |
+| M5 story 9, selection reads no earlier frame | holds, Rust side: no history is bound for it; the visibility bits pick a phase only | `renderer.rs:733-742`; `culling_pass.rs:200-202`, `:276-281` |
+| M5 story 10, Render switches forcing LOD 0 and a given LOD | holds: `forced_lod`, `None` as it ships, clamped to the coarsest LOD and declared into WGSL | `renderer.rs:112-115`, `:169`; `culling_pass.rs:299-311` |
+| M5 story 12, every BLAS from LOD 0, so a LOD switch starts no static build | falls in cook with assets; the TLAS starts builds from Instance writes alone, and selection writes no Instance | `acceleration_structures.rs:448-506` |
+| M5 story 18, Chunks outside the Load radius drawn as their Far proxy | holds, prepare side: every Resident Far proxy not held is written | `prepare.rs:630-642`, `:699-731` |
+| M5 story 19, the swap whole at the Load radius | holds, prepare side: a Chunk's and its Far proxy's whole ranges are written in the `prepare` that sees their held state change | `prepare.rs:700-731` |
+| M5 story 21, flat ground to the horizon past the View distance | holds, prepare side: `FarGround` drawn as a Chunk of one Placement | `prepare.rs:636-642` |
+| M5 story 27, Far proxies cast and receive the sun's shadows | holds, Rust side: written static, entries under the ordinary bit | `prepare.rs:727`, `:969`; `acceleration_structures.rs:478-500`, `:990-994` |
+| M5 story 28, a swap traced within N = 10 frames, no static TLAS build on the critical path | holds, Rust side: a swap starts a build in its frame, built by the worker; the frames until traced are counted; the reading of N falls in tooling | `renderer.rs:711-722`; `acceleration_structures.rs:466-500`, `:563-625` |
+| M5 story 29, shadow-ray time with Far proxies traced and not | falls in tooling: no Render switch untraces Far proxies | `renderer.rs:78-115` |
+| M5 story 35, a Thin Primitive drawn a pixel wide | holds, Rust side: the pixel size per metre in the camera uniform, the twins drawn and counted; the five levels fall in shaders | `renderer.rs:733-735`, `:943-948`; `main_pass.rs:157-186`, `:217-222` |
+| M5 story 36, masked geometry drawn through pipelines of its own | holds | `main_pass.rs:1-13`, `:39-42`, `:323-368`; `renderer.rs:943-948` |
+| M5 story 37, a Thin Primitive's shadow only onto receivers no wider than it | holds, Rust side: the width-class bits; the receiver's ray mask falls in shaders | `acceleration_structures.rs:969-1008` |
+| M5 story 39, a sub-pixel Instance scaled to a pixel, dropped at zero coverage | falls in shaders; Rust side it draws through the twins with the camera's pixel size | `culling_pass.rs:6-11`; `renderer.rs:733-735` |
+| M5 story 40, the Instance slots in use in the Bench record and the culling phases' per-slot stages judged against 1 ms | holds, Rust side: `instance_slot_count` is one past the highest slot taken, written each frame; the per-slot steps run in passes of their own, timed and read back apart; the judgment falls in tooling | `prepare.rs:845`; `renderer.rs:38-53`, `:782`; `culling_pass.rs:42-63`, `:340-388`; `readback.rs:728-738` |
+
+### Registry keys
+
+Every key cited in the module was read against its registry quote, and
+against the wgpu, wgpu-hal and wgpu-types 30.0.2 sources `Cargo.lock`
+resolves and the vendored wgpu-core where a quote is load-bearing; each
+quote is found verbatim in 30.0.2, though the registry's URLs name
+v30.0.1 (see *Notes for the verifier*). All 84 match, by file:
+
+| File | Keys | Verdict |
+|---|---|---|
+| `renderer.rs:192` | `meshoptimizer-1.3-lod-selection` | matches: a pixel's size a metre from the camera, `2 tan(fov / 2) / height`, is the quote's `tan(camera_fovy / 2) * 2 / screen_height` with the projection's own vertical field of view; the quote's `lod_factor` is `LOD_THRESHOLD_PIXELS`, 1; the comparison's direction is the shaders' and has its `deviations.md` row |
+| `renderer.rs:680` | `wgpu-30-poll-retires` | matches: a `PollType::Poll` maintains the device without waiting, and the queue's maintain retires finished submissions (`vendor/wgpu-core/src/device/resource.rs`) |
+| `prepare.rs:172-177` | `openmp-5.2-schedule-dynamic`, `async-executor-1.14.0-woken-ticker-notifies-next`, `onetbb-2023.2-grainsize` | matches: each task and the main thread take `INSTANCES_PER_BATCH` until none are left, the last batch shorter (`:281-290`) |
+| `prepare.rs:225-226` | `rust-1.96-mutex-boxes-on-first-lock`, `rust-1.96-queue-rwlock-allocation-free` | matches: the batches sit behind a `RwLock`, taken by `write`, no `Mutex` |
+| `prepare.rs:258-260` | `bevy-tasks-0.20.1-scope-polls-results-first`, `futures-lite-2.6.1-or-polls-first-future-first`, `async-executor-1.14.0-run-makes-a-runner` | matches: the `spawn_on_scope(async {})` task keeps the scope's results pending at their first poll, so a runner is made in every scope |
+| `prepare.rs:487-488` | `concurrent-queue-2.5.0-push-allocates-block` | matches: one pool per `FramePreparer` |
+| `prepare.rs:2327-2330` (test) | `futures-lite-2.6.1-block-on-caches-a-parker`, `parking-2.2.1-park-locks-and-waits`, `std-1.96.0-pthread-mutex-boxed-on-first-use`, `std-1.96.0-pthread-condvar-boxed-on-first-use` | matches: the test parks the main thread in `block_on` three times before counting |
+| `staging.rs:25`; `readback.rs:35-38` | `wgpu-30-handle-mapping`, `wgpu-30-submit-maintains`, `wgpu-30-map-after-submission` | matches: a map requested once the copy is seen complete is finished by the next submit's maintain; the vendored 30.0.2 lines (`device/life.rs:246`, `:400-404`; `device/queue.rs:1541`) are unchanged |
+| `readback.rs:77`, `:704` | `metal-feature-set-tables-sample-buffers`, `apple-metal-fence-per-stage` | matches: one query set of 7 × 28 = 196 timestamps within one sample buffer; a render pass's time counts from the latest end of the passes it waits on (`:715-727`) |
+| `culling_pass.rs:79`, `:198` | `wgpu-types-30-default-workgroups-per-dimension`, `wgpu-core-30-dispatch-usage-scope` | matches: 65,535 in 30.0.2's `defaults()`, asserted against the device; the stand-in keeps `frame_draw` out of `append_triangles`'s usage scope |
+| `targets.rs:32`, `:57` | `salvi-2012-sbaa-surfaces`, `bt709-6-luma`, `bt2087-rec709-to-xyz` | matches: two surfaces; `[0.2126, 0.7152, 0.0722]` |
+| `tonemapping_pass.rs:22` | `peters-blue-noise` | matches, Rust side: the mask compiled in and tested as the asset's red channel; the remap is the shaders' |
+| `bind_groups.rs:108-110` | `wgpu-pr-9835`, `wgpu-30-use-tlas-per-flush`, `wgpu-30-submit-tlas-dependencies` | matches: "one per distinct BLAS" holds because the vendored wgpu-core carries the PR's commit (`vendor/wgpu-core/src/command/ray_tracing.rs:235-280`) |
+| `shadow_mask_pass.rs:41` | `vulkan-standard-sample-locations` | matches, unchanged |
+| `acceleration_structures.rs:23-27`, `:1100-1101` | `pci-vendor-id-nvidia`, `vulkan-vendorid-pci`, `dxgi-adapter-desc2-vendorid`, `wgpu-30-dx12-vendor-id`, `vulkan-vendor-id-mesa`, `lavapipe-vendor-id-mesa` | matches, unchanged: `NVIDIA_VENDOR = 0x10DE` against `AdapterInfo::vendor` |
+| `acceleration_structures.rs:29-35` | `wgpu-30-blas-compacted-size-private` | matches: `BlasCompactState::Ready { size }` is `pub(crate)` (`vendor/wgpu-core/src/resource.rs:2519-2525`) |
+| `acceleration_structures.rs:53-57`, `:115-121` | `wgpu-hal-30-metal-instances-buffer-unwrap`, `wgpu-30-device-as-hal`, `wgpu-hal-30-build-sizes`, `wgpu-30-blas-size-at-create`, `wgpu-30-tlas-size-at-create`, `wgpu-30-tlas-instance-buffer`, `wgpu-hal-30-metal-instance-bytes`, `wgpu-hal-30-instance-bytes` | matches: the Triangles entry has wgpu-core's fields; the Instances entry has a buffer, as Metal unwraps one (`wgpu-hal-30.0.2/src/metal/conv.rs:390`); the instance buffer is one backend record per entry for at least one entry, as wgpu-core sizes it; Vulkan's record is 64 bytes (`vulkan/adapter.rs:1825`) |
+| `acceleration_structures.rs:750`, `:821-828` | `wgpu-30-tlas-instance-staging`, `metal-indirect-instance-descriptor`, `vulkan-acceleration-structure-instance`, `d3d12-raytracing-instance-desc` | matches: wgpu-core stages the filled entries only (`vendor/wgpu-core/src/command/ray_tracing.rs:237-258`), 72 bytes an entry on Metal and 64 elsewhere, so the dynamic TLAS counts `uploaded_entries` |
+| `acceleration_structures.rs:908-913` | `wgpu-30-tlas-scratch-per-build`, `gpu-allocator-0.28-chunk-map`, `hashbrown-0.16-rehash-grows` | matches: a scratch sized by the TLAS's `build_scratch_size` per build (`vendor/wgpu-core/src/command/ray_tracing.rs:218-228`, `:323`); `chunks: HashMap`; in-place rehash at half full |
+| `acceleration_structures.rs:920`, `:930` | `wgpu-30-command-encoder-pool`, `wgpu-hal-30-metal-command-state` | matches: LIFO `free_encoders.pop()` and `push` (`vendor/wgpu-core/src/command/allocator.rs:38`, `:50`); `CommandState::reset` clears and keeps |
+| `acceleration_structures.rs:989`, `:1281` | `wgpu-30-tlas-instance-fields` | matches: an 8-bit mask, hit when it shares a bit with the ray's; the slot as `custom_data` below 2^24, checked for the checked-in Budgets (test `:1283-1287`) |
+| `acceleration_structures.rs:1012` | `msl-4.1-sin-fast-accuracy` | matches the quoted 2^-13 within ±π; `BEND_ROUNDING_SHARE` is the last audit's noted estimate, unchanged |
+| `blas_refit.rs:4`, `:6`, `:47` | `wgpu-30-metal-refit`, `wgpu-30-blas-rebuild-only`, `wgpu-issue-9215` | matches: `refitAccelerationStructure_...` for `Update` (`wgpu-hal-30.0.2/src/metal/command.rs:1865`); "only rebuild implemented" (`vendor/wgpu-core/src/command/ray_tracing.rs:1116`); Metal's `place_acceleration_structure_barrier` is empty |
+| `blas_refit.rs:198-224` | `wgpu-30-as-hal-mut-safety`, `wgpu-30-mixed-encoding-panics`, `wgpu-30-metal-retain-references`, `metal-hazard-tracking-default`, `wgpu-30-metal-buffer-tracked`, `wgpu-30-tlas-blas-build-order`, `wgpu-30-metal-barriers-empty` | matches, each quote found in 30.0.2; the stale premise beside them, L1-R05, is no key's quote |
+| `blas_refit.rs:291`, `:306`, `:528`, `:532` | `wgpu-30-metal-scratch-alignment`, `wgpu-30-raw-boxed`, `wgpu-30-metal-event-staging`, `wgpu-30-core-flush-submit` | matches: the static TLAS's worker submits nothing and maps nothing, so the event staging is still consumed by the refit's and the build's submits |
+| `src/gpu/mod.rs:5-18` | `wgpu-hal-30-manual-memory-hints`, `gpu-allocator-0.28-personal-block`, `wgpu-hal-30-vulkan-texture-allocation`, `nvidia-vulkan-dos-donts-dedicated-memory` | matches: 16 MiB lies within the `Manual` arm's 4 to 256 MiB clamp (`lib.rs:457-470`); Metal's adapter ignores the hints; a resource above a block gets a personal block; Vulkan textures are `GpuAllocatorManaged`; the comment's 2048² BC7 example is under *Notes for the verifier* |
+| `src/gpu/mod.rs:75`, `:288`, `:464`, `:492` | `wgpu-types-30-experimental-features-unsafe`, `wgpu-core-30-anisotropy-clamp`, `wgpu-hal-30-vulkan-downlevel-flags`, `wgpu-core-30-backend-order` | matches |
+| `src/gpu/mod.rs:564-574` | `wgpu-types-30-memory-budget-thresholds`, `wgpu-issue-9745`, `wgpu-core-30-lose-if-oom` | matches: DX12 refuses creation past 100% of the reported budget; Vulkan is left without for the quoted fallback; `for_device_loss` unset everywhere, tested `:879-889` |
+| `src/gpu/mod.rs:610`, `:819-820` (tests) | `wgpu-hal-30-metal-downlevel-flags`, `vulkan-max-storage-buffer-range`, `mesa-25.2.8-gallivm-max-shader-buffer-size` | matches: indirect execution by GPU family, anisotropy always; 2^27 bytes both |
+
+`mod.rs`, `instance.rs`, `uniforms.rs`, `staging.rs` past `:25`,
+`main_pass.rs`, `froxel_pass.rs`, `light_count_pass.rs`,
+`depth_pyramid_pass.rs` and `bend_pass.rs` cite no key.
+
+### Findings
+
+| id | claim | severity | where | evidence | expected | verifier | placement |
+|---|---|---|---|---|---|---|---|
+| L1-R01 | A Renderable that needs a new slot is refused, warned "the Instance buffer is full" and counted once Chunk ranges have carried the highest slot taken to the capacity and no Renderable has freed one, though the free ranges unloaded Chunks gave back hold free slots. | `correctness`; clause "past which a Renderable is refused"; no Reference scene reaches it at shipped capacities: `world`'s timed frames hold 307,263 slots in use (`docs/performance.md:330-331`) of 488,448 | `prepare.rs:330-331` | block below | ADR 0003: "the buffer holds a fixed number of slots, past which a Renderable is refused, warned about once, counted in Frame stats and retried every frame"; the struct's own doc, `prepare.rs:297-298`: "once all `capacity` are taken a Renderable is refused one" | | |
+| L1-R02 | A static TLAS build uploads every filled entry's instance record in the frame that submits it, and Frame stats' `uploaded_bytes` counts none of it, while the dynamic TLAS's records, staged the same way, are counted. | `correctness`; one counter misses one kind of work: up to 264,720 × 72 = 19,059,840 bytes per static build on Metal at the checked-in capacity (64 bytes an entry elsewhere), in every frame that submits a build | `acceleration_structures.rs:544-552`; `renderer.rs:712-723` | block below | `CLAUDE.md` checklist: "per-frame GPU writes add to `uploaded_bytes`"; the dynamic TLAS's own rule, `acceleration_structures.rs:748-751`, `:884-885` | | |
+| L1-R03 | ADRs 0003 and 0017 give the Instance slots 136.2 bytes a slot, and ADR 0003 517,376 slots at the M4 Budgets, where the code takes 144.2 bytes a slot, four offsets per slot since Thin Primitives' twin draws, and gives 488,448 slots at the same Budgets. | `drift`; not load-bearing for code, which derives the figure; misleads a reader by 28,928 slots (5.6%), which `docs/research/vegetation-and-grass.md` and `docs/audit/m5/scalability.md` repeat | `renderer.rs:215-218`, `:259-261`; `docs/adr/0003-persistent-scene-transform-buffer.md:3`; `docs/adr/0017-textures-stream-by-mip-geometry-lives-in-fixed-arenas.md:18` | block below | ADRs 0003 and 0017 state the bytes a slot and the slot count the code derives: 144.2 and 488,448 at the checked-in Budgets | | |
+| L1-R04 | ADR 0017 says ADR 0013 leaves the load staging out of GPU memory, but ADR 0013's list of what `gpu_memory_bytes` leaves out, and the `CLAUDE.md` checklist's, do not name it; the load staging's belt buffers, written in every streaming frame since M4, bypass the ledger with no ADR 0013 clause recording it. | `drift`; load-bearing for the staging Budget's reading: `from_budgets` reserves the staging Budget past the frame staging for the load staging, which the `Staging` kind of `gpu_memory_bytes` can never show | `docs/adr/0017-textures-stream-by-mip-geometry-lives-in-fixed-arenas.md:18`; `staging.rs:179-184` | block below | ADR 0013's exclusions name the load staging, or the load staging is counted under `Staging`; M4 story 44: "so that no buffer or texture escapes `gpu_memory_bytes`" | | |
+| L1-R05 | The refit's SAFETY comment rests one premise on "only the main thread calls into wgpu meanwhile (ADR 0016)", which is false since the static TLAS's worker records and finishes builds while `render` records the refits, and which ADR 0016 does not say. | `drift`; one premise of one `unsafe` block's SAFETY comment; the block stays sound, as the worker destroys none of the objects the refit holds unguarded | `blas_refit.rs:193-196` | block below | ADR 0016: "Only the main thread submits, presents or polls ... Workers record `CommandEncoder`s and return `CommandBuffer`s"; the premise states what keeps the unguarded objects alive, that nothing destroys them | | |
+| L1-R06 | ADR 0021's fourth Consequence says the floor's error names each attachment format without 4x MSAA "or, on colour, its resolve", but since the floor asks the resolve of the HDR format alone it never names the surface normals' `Rgba8Unorm`, a colour attachment format, for its resolve. | `drift`; one ADR sentence contradicting the ADR's own amended first Consequence; zero adapters affected, as wgpu-types 30.0.2 guarantees `MULTISAMPLE_RESOLVE` on `Rgba8Unorm` | `docs/adr/0021-capability-floor.md:17` | block below | the sentence says "or, on the HDR format, its resolve", as `:14` and `src/gpu/mod.rs:363-374` do | | |
+| L1-R07 | The doc comment of `adapter_report` says the capability report checks 4x MSAA on the main pass's attachment formats "resolved on colour ones", but the report asks the resolve of the HDR format alone, so it prints `Rgba8Unorm yes` without checking its resolve. | `drift`; one doc comment; no adapter affected, as L1-R06 | `src/gpu/mod.rs:143` | block below | the comment says "resolved on the HDR format", as `floor_format_features` decides | | |
+
+#### L1-R01
+
+Code, `prepare.rs:326-340`:
+
+```rust
+fn get_or_take(&mut self, entity: Entity) -> Option<u32> {
+    if let Some(&slot) = self.by_entity.get(&entity) {
+        return Some(slot);
+    }
+    let fresh = (self.end < self.capacity).then_some(self.end);
+    let Some(slot) = self.free.pop().or(fresh) else {
+        if self.refused.insert(entity) {
+            tracing::warn!(
+                ?entity,
+                capacity = self.capacity,
+                "Renderable refused: the Instance buffer is full"
+            );
+        }
+        return None;
+    };
+```
+
+`free` holds only slots a Renderable gave back (`:425-430` push into
+`freed`, which `:844` appends to `free`). A Chunk's range, once it
+unloads, goes to `freed_ranges` (`:391-402`) and then `free_ranges`
+(`:406-423`), which only `take_range` reads (`:351-366`); `end` never
+falls. So once Chunks have taken fresh ranges up to `capacity`
+(`take_range`'s fresh path, `:367-386`, sets `end` to the range's end, up
+to `capacity` inclusive) and the World holds no slot a Renderable freed,
+every new Renderable is refused, warned that the buffer is full and
+counted in `renderables_refused` (`:784-787`), while `free_ranges` may
+hold every slot of the Chunks unloaded since. It is retried every frame
+but takes a slot only when a Renderable frees one; a free range is never
+offered to it.
+
+ADR 0003: "each Renderable keeps a slot ... and a freed slot is taken
+again before a fresh one; the buffer holds a fixed number of slots, past
+which a Renderable is refused, warned about once, counted in Frame stats
+and retried every frame", and of ranges: "A range is the first free range
+long enough, else fresh slots past the highest taken ... An entity's slot
+is still per entity". The amendment that added ranges does not say a
+Renderable may not take a slot of a free range, and the struct's doc
+(`:294-298`) says a Renderable is refused "once all `capacity` are
+taken". No test covers it:
+`a_renderable_past_capacity_is_refused_and_warned_about_once_until_a_slot_frees`
+(`:1268-1303`) fills the buffer with Renderables alone, and
+`a_chunk_past_capacity_is_refused_whole_and_warned_about_once`
+(`:1310-1354`) refuses a Chunk, not a Renderable. Not visible on any
+Reference scene: no benched run is shown to carry `end` to the capacity
+(488,448 slots at the checked-in Budgets, test `renderer.rs:1092`), and a
+refused Renderable draws nothing rather than drawing wrong. Either
+`get_or_take` falls back to the first free range's first slot, shrinking
+it as `take_range` does, or ADR 0003 and the doc say a Renderable never
+takes a Chunk's freed slots, which makes this `drift`.
+
+#### L1-R02
+
+Code, `acceleration_structures.rs:544-552`, where the main thread takes
+the worker's build:
+
+```rust
+self.spare = Some(match work.build {
+    Some(build) => {
+        queue.submit(std::iter::once(build));
+        update.build_time = Some(work.time);
+        Spare::Submitted {
+            tlas: work.tlas,
+            built_from,
+        }
+    }
+```
+
+`StaticTlasUpdate` (`:319-329`) carries the worker's time and
+`frames_until_traced`, and `renderer.rs:712-723` copies those and
+`static_instances_left_out` into the counters; nothing adds bytes. The
+worker's build (`:605-615`) builds the whole TLAS: wgpu-core converts and
+stages every filled entry [ref:wgpu-30-tlas-instance-staging], the quote
+being `instance_buffer_staging_source.extend(state.device.raw().tlas_instance_to_bytes(`,
+over `package.instances.iter().flatten()`
+(`vendor/wgpu-core/src/command/ray_tracing.rs:237-258`), into a staging
+buffer copied on the build's command buffer (`:386-392`). The dynamic
+TLAS counts exactly this for its own build: `entry_upload_bytes`, "Bytes
+each entry uploads to the GPU per build: the backend's own instance
+record, which wgpu-core converts it to and stages" (`:748-751`), returned
+by `record` and added at `renderer.rs:851-856`. The field's doc,
+`src/stats/mod.rs:25-31`, names "the dynamic TLAS's instances its build
+uploads" and not the static TLAS's. The `CLAUDE.md` checklist: "per-frame
+GPU writes add to `uploaded_bytes`".
+
+Magnitude: the static TLAS holds 264,720 entries at the checked-in
+Budgets (test `renderer.rs:1094`), so a full build stages 19,059,840
+bytes on Metal (72 a record, `acceleration_structures.rs:823`) and
+16,942,080 elsewhere, against `load_bytes_per_frame` of 26,640,177; ADR
+0020 records 402 builds over `world`'s bench segment before Far proxies'
+changes were held back. At the last audit's commit the static build ran
+only at load and on a spawn and was not counted either; what landed
+since makes it recur with every Chunk streamed, every re-anchor and every
+120-frame Far proxy build, in frames the worker's timing picks. That
+timing may be why the omission is deliberate, since a counter that moves
+with the worker would break counter equality between runs, but no
+comment or doc records it. The fix is either to add the bytes in the
+frame that submits the build, or to name the exclusion and its reason in
+the counter's doc. Not visible: nothing drawn changes.
+
+#### L1-R03
+
+Code, `renderer.rs:213-218`:
+
+```rust
+/// Bytes a scan block of Instance slots takes: each slot's Instance, offsets
+/// and visibility bit, and the block's offsets.
+const INSTANCE_SCAN_BLOCK_BYTES: u64 = SCAN_BLOCK_SIZE as u64
+    * (size_of::<InstanceData>() + size_of::<[u32; 4]>()) as u64
+    + size_of::<[u32; 4]>() as u64
+    + SCAN_BLOCK_SIZE as u64 / u8::BITS as u64;
+```
+
+`InstanceData` is 128 bytes (`instance.rs:31-40`), so a block is
+256 × (128 + 16) + 16 + 32 = 36,912 bytes, 144.19 a slot. `from_budgets`
+(`:259-261`) takes 30% of the scene and pass buffers' Budget less two
+16-byte entries in whole blocks, and the test pins the result at the
+checked-in Budgets, `renderer.rs:1092`: `instances: 488_448`. The offsets
+grew from two `u32`s to four with Thin Primitives' twin draws, which
+changed `[u32; 2]` to `[u32; 4]` here and `517_376` to `488_448` in the
+test; ADR 0027's Consequences record that the twins' packed indices share
+the frame's draw's buffer, but no ADR records what the change cost a
+slot.
+
+ADR 0003, `docs/adr/0003-persistent-scene-transform-buffer.md:3`: "the
+number is sized at device creation from the scene and pass buffers' GPU
+memory Budget ..., 30% of it at 136.2 bytes a slot, its Instance, offsets
+and visibility bit, in whole 256-slot scan blocks of the culling pass:
+517,376 slots at the Budgets M4 set". 136.2 is 128 + 8 + 1/8 + 16/256,
+the two-offset layout. ADR 0017,
+`docs/adr/0017-textures-stream-by-mip-geometry-lives-in-fixed-arenas.md:18`:
+"the Instance slots 30% of the scene and pass buffers', at 136.2 bytes a
+slot with its offsets and visibility bit, in whole scan blocks". The
+Budgets are M4's (the share and the Budget are unchanged), so both
+figures are false at the frozen commit. The capacity itself was put to
+the owner when the offsets grew, so the number is decided; the ADRs were
+not amended. The code is consistent with itself (the culling pass's
+offset buffer is four `u32`s per slot plus per block plus two,
+`culling_pass.rs:244-249`, and `tests/frame_stats.rs:173-176` sums the
+same), and no `deviations.md` row covers an ADR's figure. The M5 source
+check saw the same sentence and left it to the docs and rules drift lane
+(`docs/audit/m5/sources.md:1000-1002`) without filing it; it is filed
+here because the clause is a decision clause of ADR 0003 that this lane
+gives a verdict on. Not visible: nothing reads the ADR's figure at run
+time.
+
+#### L1-R04
+
+ADR 0017, `docs/adr/0017-textures-stream-by-mip-geometry-lives-in-fixed-arenas.md:18`,
+amended 2026-11-05: "The Renderer and its Pools create the buffers,
+textures and TLASes they count through one ledger ... and
+`gpu_memory_bytes` is the sum of those totals. What ADR 0013 leaves out,
+the GPU stats readback and the load staging, bypasses it". ADR 0013,
+`docs/adr/0013-reference-hardware-and-provisional-budgets.md:3`: "the GPU
+stats readback's buffers are left out of that sum, since they measure the
+frame rather than hold it ...; so are the target the frame is presented
+into, a window's surface textures or capture's stand-in for them, and
+capture's read-back buffer". The load staging is not in that list. The
+`CLAUDE.md` checklist: "GPU buffers, textures and acceleration structures
+are created through the GPU memory ledger (`GpuMemory`) under their kind
+...; the GPU stats readback's buffers stay out, as they measure the frame
+(ADR 0013)".
+
+Code, `staging.rs:179-184`: "Staging for load-time uploads (ADR 0017):
+each write goes through a `StagingBelt` ... The belt goes with it, so its
+staging buffers live only until the GPU has run the copies and never
+count in `gpu_memory_bytes`", and `:344-353` creates the belt with
+`wgpu::util::StagingBelt::new(device.clone(), LOAD_CHUNK_BYTES)`, outside
+`GpuMemory`. Since M4 the streamer writes through it in every frame that
+loads a Chunk, a Far proxy or a mip, and `RenderCapacities::from_budgets`
+sizes its per-frame cap as the staging Budget past the frame staging's
+slots, over the frames in flight plus one (`renderer.rs:266-275`): the
+staging Budget is set to hold it, while the `Staging` kind the Budget is
+compared against counts only the frame staging's slots
+(`staging.rs:140-149`). The code follows ADR 0017; the defect is ADR
+0017's statement about ADR 0013, which ADR 0013's text does not bear out,
+and the checklist that names one exception. The fix is an ADR 0013
+amendment naming the load staging among what `gpu_memory_bytes` leaves
+out, with the checklist line, or counting the belt's chunks under
+`Staging`.
+
+#### L1-R05
+
+Code, `blas_refit.rs:190-196`:
+
+```rust
+// SAFETY: wgpu-hal's refit is sound under these invariants, each
+// held here:
+// - Every handle is Metal's: `new` refuses the refit off Metal.
+// - Every wgpu-hal object outlives its use past its guard
+//   (`metal::unguarded`): the Mesh pool, this refit and `blases`
+//   hold their handles throughout, nothing destroys them, and only
+//   the main thread calls into wgpu meanwhile (ADR 0016).
+```
+
+Since the static TLAS's worker landed, `StaticTlas::start` hands the
+spare to a `std::thread` that calls `device.create_command_encoder`,
+`build_acceleration_structures` and `finish`
+(`acceleration_structures.rs:592-622`), and replaces TLAS entries,
+dropping the `TlasInstance`s it replaces (`:713-716`). `start` runs in
+`Renderer::upload` (`renderer.rs:712-718`), and without
+`wait_for_static_tlas`, as the window and the bench run, the worker is
+collected only by a later frame's `update`
+(`acceleration_structures.rs:531-537`), so it runs while
+`Renderer::render` records the refits under the comment
+(`renderer.rs:826-843`). ADR 0016 does not claim what the comment cites
+it for: "Only the main thread submits, presents or polls the wgpu `Queue`
+and `Device` ... Workers record `CommandEncoder`s and return
+`CommandBuffer`s". The block stays sound: what `unguarded` needs is that
+the resource "is neither destroyed nor dropped while the reference lives"
+(`blas_refit.rs:298-301`), and the worker destroys none of the Arenas,
+refitted BLASes or scratch, since the static TLAS holds no Moving
+Instance's BLAS and wgpu-core snatches a raw resource only on `destroy`.
+The neighbouring premise in `Order::stage`, "only the main thread submits
+(ADR 0016)" (`:526-532`), still holds: the worker submits nothing. Not
+visible; the fix is the comment's clause, replaced by one that says no
+thread destroys them.
+
+#### L1-R06
+
+Code, `src/gpu/mod.rs:363-374`:
+
+```rust
+/// The format features the floor requires of a main-pass attachment format:
+/// 4x MSAA, and on the HDR format its resolve, since the lit pass resolves
+/// its multisampled colour into the HDR target (ADR 0019). No other target
+/// is resolved.
+fn floor_format_features(format: wgpu::TextureFormat) -> wgpu::TextureFormatFeatureFlags {
+    let msaa_x4 = wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4;
+    if format == crate::render::HDR_FORMAT {
+        msaa_x4 | wgpu::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE
+    } else {
+        msaa_x4
+    }
+}
+```
+
+`check_floor` (`:345-349`) names a format in `missing_format_features`
+with what `floor_format_features` asks of it and the adapter lacks, so
+the typed error can name a missing resolve on `Rgba16Float` only; the
+test `the_surface_normals_format_needs_no_resolve` (`:722-748`) pins it.
+ADR 0021, Consequences, fourth bullet
+(`docs/adr/0021-capability-floor.md:17`): "`GpuContext` checks the whole
+floor before requesting the device and returns one typed error naming
+each missing feature and downlevel flag, each attachment format without
+4x MSAA or, on colour, its resolve, and each limit with its required and
+adapter values". The first bullet (`:14`), amended in scope: "with its
+resolve (`MULTISAMPLE_RESOLVE`) on the HDR colour format ... Those
+formats are `Depth32Float`, the HDR target's `Rgba16Float` and the
+surface normals' `Rgba8Unorm`, which the depth passes write with shadow
+rays on and nothing resolves, so the floor checks no resolve on it". At
+`8bc34eb1`, `floor_format_features` asked the resolve of every non-depth
+format, so "on colour" matched; the change in scope that narrowed it to
+the HDR format amended the first bullet and left the fourth, which now
+contradicts it within the ADR. Not visible: the code is right and the
+first bullet says so; wgpu-types 30.0.2 guarantees `msaa_resolve` on
+`Rgba8Unorm` (`texture/format.rs:975`), so no adapter's error would
+differ.
+
+#### L1-R07
+
+Comment, `src/gpu/mod.rs:139-144`:
+
+```rust
+/// The adapter, its backend, and whether the adapter supports each
+/// feature the roadmap plans on, with the related features and limits.
+/// One line per entry, followed by two of the Capability floor's limits, the
+/// buffer size and the acceleration structures per stage, then 4x MSAA on
+/// the main pass's attachment formats, resolved on colour ones, and
+/// anisotropic filtering.
+```
+
+beside the code it describes, `:230-244`, which prints each of
+`MULTISAMPLED_FORMATS` as `yes` when `floor_format_features(format) -
+flags` is empty, and `floor_format_features` asks `MULTISAMPLE_RESOLVE`
+of the HDR format alone (`:367-374`). `Rgba8Unorm` is a colour format of
+`MULTISAMPLED_FORMATS` (`targets.rs:51-52`) whose resolve the report
+never checks, so "resolved on colour ones" misdescribes the line it
+prints. The comment was last edited before `8bc34eb1`; the changes in
+scope that added `Rgba8Unorm` to the multisampled formats and narrowed
+the resolve to the HDR format made it false. One fix serves L1-R06 and
+L1-R07. Not visible.
+
+### Notes for the verifier
+
+Not filed, since each needs a run, an owner's reading or another lane;
+recorded so the next audit does not re-find them.
+
+- The spare static TLAS is rebuilt while frames still in flight may trace
+  it: under `wait_for_static_tlas` the build is submitted in the very
+  frame that unbinds it (`acceleration_structures.rs:407-422`), and the
+  GPU may still be running the frame before's shadow mask pass, which
+  read it. Metal's `place_acceleration_structure_barrier` is empty
+  (`wgpu-hal-30.0.2/src/metal/command.rs:1877-1881`), so the order rests
+  on Metal tracking hazards on the `MTLAccelerationStructure` across
+  command buffers, which [ref:wgpu-issue-9215] doubts for builds. Run:
+  Metal API validation on a `world` traversal under `wait_for_static_tlas`,
+  or a capture that re-anchors every frame, against the same capture with
+  a `device.poll(Wait)` before each static build's submit.
+- `entry_changes` asserts a static Instance's BLAS is ready in debug
+  builds only (`acceleration_structures.rs:454-458`); a release build that
+  placed one early would put a BLAS not yet built or compacted into the
+  build. Whether streaming can place one early is the streaming reader's.
+- M4 story 43 asks for TLAS entries "not a compile-time constant", while
+  `DYNAMIC_TLAS_CAPACITY = 10_000` (`acceleration_structures.rs:17`)
+  stays one, as ADR 0020 caps it, and `docs/audit/m5/scalability.md` reads
+  it as surviving; `BEND_CAPACITY` (`bend_pass.rs:22`) is the same case.
+  An owner's reading whether the story meant the static TLAS alone.
+- `compacted_blas_fraction` gives a non-NVIDIA Vulkan GPU lavapipe's 1.0
+  and a non-NVIDIA DX12 GPU the M4 Pro's 45.5/94.0
+  (`acceleration_structures.rs:36-51`), as its doc says; whether the
+  checklist's "its adapter's estimated fraction" allows a stand-in
+  adapter's figure is an owner's reading.
+- A Mesh with Thin Primitives and other Primitives takes the ordinary
+  mask (`src/assets/pools.rs:862-869`, `acceleration_structures.rs:990-994`),
+  so its thin parts cast at every receiver width, short of M5 story 37.
+  Whether the cook allows such a Mesh is the cook reader's.
+- The doc of `StaticTlas::update` says that with `wait` "no frame depends
+  on the worker's timing or on the frames before it"
+  (`acceleration_structures.rs:383-384`); the bound Anchor still depends
+  on the camera's path within 4 cells, which a capture fixes. An M4 story
+  65 run (the same Chunk at the origin and the far corner) would show
+  whether it moves a bit of an image.
+- Lost-upload recovery (`renderer.rs:783-790`, `src/state.rs:301-303`,
+  `prepare.rs:681-693`, `:836-843`) still has no test that induces a
+  failed staging map, as the last audit noted. Two cases are new: with
+  Chunk ranges a slot can be written twice in one Frame data, the later
+  write landing last (`staging.rs:119-127`, the static TLAS reading writes
+  in order, `acceleration_structures.rs:448-450`); and after a re-anchor
+  the failed frame keeps the previous camera uniform, its `tlas_anchor`
+  included, while the shadow mask binds the newly bound TLAS
+  (`renderer.rs:915-921`), one frame of shadows in the wrong frame. Run:
+  force `FrameStaging::write` to return 0 for one frame of `world` after a
+  Chunk unloads, and again in the frame after a re-anchor, and compare
+  the next frame's capture with an unbroken run.
+- With the crowd's refit form, a frame whose refits are refused (no
+  scratch: "an Arena is not Metal's", `blas_refit.rs:180-185`) still splits
+  the submission after the bend pass and brackets the dynamic TLAS's
+  build, so `frame_times` takes the build as spanned
+  (`readback.rs:667-677`) and may read it as zero though it ran. A run
+  that forces `metal::scratch` to return `None` under `crowd` with the
+  refit form would show whether `dynamic_tlas_build` reads zero there.
+- A Chunk refused a range still has its point lights drawn:
+  `prepare_lights` reads every Chunk not held (`prepare.rs:1020-1024`),
+  refused or not. ADR 0003 says a loaded Chunk's "point lights join the
+  frame's lights" and is silent on a refused one; an owner's reading.
+- A GPU stats slot whose map fails is logged and freed but not counted in
+  `gpu_readbacks_skipped` (`readback.rs:503-506`); the module doc counts
+  skips of a slot "not ready" (`:5-7`), which a failed map is not. No run
+  has shown a failed map.
+- The camera uniform's `dynamic_tlas_entries` is the Frame data's Moving
+  Instance count (`renderer.rs:737-738`), not the dynamic TLAS's filled
+  entries: a Moving Instance whose Mesh has no BLAS fills no entry
+  (`acceleration_structures.rs:860-879`), so the count can be non-zero
+  with an empty TLAS. The shader only tests it against zero
+  (`uniforms.rs:51-52`), so a ray then traces an empty TLAS and finds
+  nothing; no image or counter changes.
+- `uploaded_bytes`'s doc (`src/stats/mod.rs:25-31`) ends "The pools' own
+  loads are not counted", while `src/state.rs:287` adds the streamer's
+  `written_bytes`, the loads it writes into the pools through the load
+  staging, to it. Whether "the pools' own loads" means only those at a
+  scene's load is the tooling and streaming readers' to judge; the stats
+  doc is the tooling module's.
+- The load staging's belt allocates chunks on demand at run time, which
+  ADR 0017 permits ("it allocates more on demand"), while the checklist
+  says "Only per-frame staging grows"; the checklist's wording lags ADR
+  0017. The docs and rules drift lane's.
+- ADR 0007's exit says "on 2026-11-14 a copy of wgpu-core 30.0.1 carries
+  one upstream fix"; the copy became 30.0.2 on 2026-11-15, which updated
+  `vendor/README.md`, `CLAUDE.md` and `docs/agents/project-shape.md` but
+  not the ADR. The sentence is dated, so it holds as dated. The README's
+  "the only difference is the commit above" could be checked only against
+  30.0.1, whose `ray_tracing.rs` is the vendored one less exactly the
+  commit; the other seven differing files carry the changes the bump
+  names. Run: download `wgpu-core` 30.0.2 from crates.io and `diff -r` it
+  with `vendor/wgpu-core`. Every registry URL for a wgpu 30 quote still
+  names v30.0.1, though each quote reads the same in 30.0.2.
+- ADR 0019 says "a compute pass appends the Meshlets ... in two phases";
+  each phase is now two wgpu compute passes, the per-slot steps and
+  `append_triangles`, so Frame stats time them apart
+  (`culling_pass.rs:16-20`, `:340-388`). Whether "a compute pass" names
+  the culling pass as a whole is a reading; `CONTEXT.md` does not define
+  the culling pass.
+- The shadow mask pass's compute stage now binds nine storage buffers,
+  the floor exactly, since `instance_offsets` joined `SHADOW_MASK_BUILD`
+  (`bind_groups.rs:227-234`); ADR 0021 names only the culling pass as the
+  reason for nine. Not a defect; a tenth buffer in either pass raises the
+  floor.
+- The second-surface and shadow-edge lists hold (pixels + 1) × 4 bytes
+  and are bound whole (`targets.rs:165-171`); at 8192 × 4096 pixels or
+  more they pass the floor's 128 MiB `max_storage_buffer_binding_size`,
+  so a resize there fails in wgpu's validation rather than being refused.
+  7680 × 4320 fits. Reachable only past 8K UHD, like the last audit's
+  note on `height <= 1 << 14`. Run: a headless capture at 8192 × 4096.
+- `src/gpu/mod.rs:8-9`: "a 2048² BC7 Texture with its mips still shares
+  one, so Textures cost few allocations". Textures now live in Texture
+  class arrays created at the class's slice count
+  (`src/assets/material.rs:430-448`), so whether a slice shares a 16 MiB
+  block depends on its class's size, not its own; the conclusion, few
+  allocations, still holds. Run: `generate_allocator_report` on Vulkan
+  after `town` settles.
+- `RenderCapacities`'s doc (`renderer.rs:225-232`) cites ADR 0013 for the
+  shares, which ADR 0017 writes (with ADRs 0003 and 0019), while ADR 0013
+  records the Budgets themselves. The docs and rules drift lane's.
+- `bend_pass.rs:111` dispatches `longest.div_ceil(64)` workgroups in x
+  with no check against 65,535, so a bent Mesh past 4,194,240 vertices
+  would fail; the line is unchanged since `8bc34eb1`.
+- With Far proxies changing each frame and no build due, `start` spawns
+  an OS thread per frame to catch the spare up
+  (`acceleration_structures.rs:563-625`), and wgpu-core's per-build
+  scratch and instance staging live outside the GPU memory ledger: costs
+  for the performance and scalability lanes, not clauses.
+
+### Counts
+
+| Severity class | Findings |
+|---|---|
+| `image` | 0 |
+| `budget` | 0 |
+| `correctness` | 2 (L1-R01, L1-R02) |
+| `drift` | 5 (L1-R03, L1-R04, L1-R05, L1-R06, L1-R07) |
+| `health` | 0 |
+
+Before the verifier. Clause verdicts: 128 rows, of which 6 are
+`broken` and 1 holds in code with the ADRs disagreeing, each naming its
+Finding; 5 fall in shaders or another module and 1 is not judged from
+code; none is `superseded`. Spec stories: 40 rows. Registry keys: 84 keys
+in 29 rows, all matching their quotes.
