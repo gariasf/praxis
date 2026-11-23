@@ -13345,3 +13345,27 @@ url = "https://blog.maximeheckel.com/posts/the-art-of-dithering-and-retro-shadin
 section = "Heckel, The Art of Dithering and Retro Shading for the Web, 2024-08-06, Dithering techniques and A first pass at dithering in React Three Fiber"
 quote = '''Today, dithering is more an artistic choice than a workaround. [...] Output a white or black pixel based on whether the luminance falls above or below said random number.'''
 checked = 2026-11-21
+
+["van-antwerpen-2023-hit-point"]
+url = "https://developer.nvidia.com/blog/solving-self-intersection-artifacts-in-directx-raytracing/"
+section = "van Antwerpen, Solving Self-Intersection Artifacts in DirectX Raytracing, NVIDIA Technical Blog, 2023-08-31, sections Method overview and Hit point"
+quote = '''The spawn point of a secondary ray coincides with the hit point on a triangle of an incoming ray. [...] The hit point is computed by interpolating the triangle vertices v0, v1, and v2 using the 2D barycentric hit coordinates barys. Although it is possible to compute the interpolated hit point using two fused multiply-add operations, adding the base vertex v0 last reduces the maximum rounding error on the base vertex, which in practice dominates the rounding error in this computation. Use the precise keyword to force the compiler to perform the computations exactly as specified. [...] Instead of using the HLSL matrix mul intrinsic, write out the transformation. [...] This again reduces the rounding error on the translation, which in practice tends to dominate the error in this computation.'''
+checked = 2026-11-23
+
+["van-antwerpen-2023-error-bounds"]
+url = "https://developer.nvidia.com/blog/solving-self-intersection-artifacts-in-directx-raytracing/"
+section = "van Antwerpen, Solving Self-Intersection Artifacts in DirectX Raytracing, NVIDIA Technical Blog, 2023-08-31, introduction and sections Method overview, Error bounds and Camera space"
+quote = '''Finally, the method does not rely on self-intersection rejection using an any-hit shader and has a fixed overhead per shading point. [...] The ray origin is offset along the triangle normal beyond the final uncertainty interval to prevent self-intersections. [...] The exact bound on the ray-triangle intersection test will be hardware-specific. The constant c1 is tuned for NVIDIA RTX hardware, but may require some adjusting on different platforms. [...] Instanced geometry at a distance d from the scene origin in world-space will have a maximum rounding error in the order of d2⁻²², or 1 mm of offset for every 4 km distance. [...] Note that the error is proportional to the world-space distance to the scene origin, not the scene camera. [...] This problem can be reduced by translating the entire scene into camera space.'''
+checked = 2026-11-23
+
+["hanika-2021-shadow-ray-origin"]
+url = "https://doi.org/10.1007/978-1-4842-7185-8_4"
+section = "Hanika, Hacking the Shadow Terminator, Ray Tracing Gems II (Apress, 2021), ch. 4, §4.3, pp. 70-71, and §4.4, p. 73"
+quote = '''As a minimally invasive change to fix the harsh shadow from coarsely tessellated geometry, we want to move only the primary intersection point away from the triangle, ideally to a location on a smooth freeform surface [...] An intermediate triangle is constructed, and the final point P′ is placed in it by interpolation using the barycentric coordinates u, v, w. [...] the vector from each corner of the triangle to the flat intersection point P is computed and subsequently projected onto the tangent plane at this corner. [...] Because we clamp away positive dot products, such a case will evaluate to the flat surface instead of bulging to the inside of the shape. This is the desired behavior: we don’t push shadow ray origins inside the object.'''
+checked = 2026-11-23
+
+["hanika-2021-terminator-limits"]
+url = "https://doi.org/10.1007/978-1-4842-7185-8_4"
+section = "Hanika, Hacking the Shadow Terminator, Ray Tracing Gems II (Apress, 2021), ch. 4, §4.2, pp. 69-70, and §4.5, pp. 74-75"
+quote = '''It follows that the technique examined here does not work for normal maps, but could likely be combined with a microfacet model addressing the hemisphere problem. [...] The larger offsets for small variations may lead to shadow boundaries that are slightly more wobbly than expected. [...] If such creases are instead modeled using face-varying vertex normals, the shadow ray origins will have a discontinuous break at the edge. [...] We only discussed shadow rays for evaluation of direct lighting.'''
+checked = 2026-11-23
