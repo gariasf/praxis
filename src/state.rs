@@ -175,6 +175,7 @@ impl State {
         let mut renderer = Renderer::new(context, target_format, width, height, switches);
         if scene == ReferenceScene::World {
             renderer.grow_frame_staging_to_largest();
+            renderer.keep_load_staging_slots();
         }
         let load_bytes_per_frame = renderer.capacities().load_bytes_per_frame;
         let Renderer {

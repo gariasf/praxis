@@ -13368,4 +13368,11 @@ checked = 2026-11-23
 url = "https://doi.org/10.1007/978-1-4842-7185-8_4"
 section = "Hanika, Hacking the Shadow Terminator, Ray Tracing Gems II (Apress, 2021), ch. 4, §4.2, pp. 69-70, and §4.5, pp. 74-75"
 quote = '''It follows that the technique examined here does not work for normal maps, but could likely be combined with a microfacet model addressing the hemisphere problem. [...] The larger offsets for small variations may lead to shadow boundaries that are slightly more wobbly than expected. [...] If such creases are instead modeled using face-varying vertex normals, the shadow ray origins will have a discontinuous break at the edge. [...] We only discussed shadow rays for evaluation of direct lighting.'''
+
+["wgpu-core-30-map-zero-fill"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-core/src/device/mod.rs#L253-L295"
+section = "wgpu-core 30.0.2, map_buffer (L229), which Device::create_buffer calls over the whole of a buffer created mapped with MAP_WRITE (device/resource.rs L1145-L1155)"
+quote = '''Zero out uninitialized parts of the mapping. (Spec dictates all resources
+    // behave as if they were initialized with zero) [...] If this is a write mapping zeroing out the memory here is the only
+    // reasonable way as all data is pushed to GPU anyways. [...] mapped[fill_range].fill(0);'''
 checked = 2026-11-23

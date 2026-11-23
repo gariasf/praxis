@@ -176,20 +176,30 @@ impl StagingSlot {
 /// of its own.
 const LOAD_CHUNK_BYTES: u64 = 1 << 20;
 
-/// Staging for load-time uploads (ADR 0017): each write goes through a
-/// `StagingBelt` into a copy on one encoder, with the BLAS builds that read
-/// them and the copies that move Textures between Texture classes, which
-/// `submit` sends ahead of the next frame's. The belt goes with it, so its
-/// staging buffers live only until the GPU has run the copies and never
-/// count in `gpu_memory_bytes`.
+/// Staging for load-time uploads (ADR 0017): each write goes into a copy on
+/// one encoder, with the BLAS builds that read them and the copies that move
+/// Textures between Texture classes, which `submit` sends ahead of the next
+/// frame's. A write goes through a `StagingBelt`, which goes with the
+/// submit, so its staging buffers live only until the GPU has run the copies
+/// and never count in `gpu_memory_bytes`; or, with slots kept, into the
+/// frame's slot while it has room, as a belt's new buffer is created, and
+/// zeroed by wgpu-core [ref:wgpu-core-30-map-zero-fill], on the frame that
+/// writes it.
 pub struct LoadStaging {
     device: wgpu::Device,
     pending: Option<(wgpu::util::StagingBelt, wgpu::CommandEncoder)>,
-    /// Bytes written into the belt since the last submit, row padding
-    /// included.
+    /// Bytes written since the last submit, row padding included.
     written_bytes: u64,
     /// Bytes the pending Texture moves copy.
     moved_bytes: u64,
+    /// The slots `keep_slots` made, each mapped again once the GPU has run
+    /// the copies of the frame that wrote it.
+    slots: Vec<StagingSlot>,
+    /// The slot the writes since the last submit go into, the one written
+    /// longest ago.
+    next_slot: usize,
+    /// The bytes of that slot those writes took.
+    slot_offset: u64,
 }
 
 impl LoadStaging {
@@ -199,7 +209,33 @@ impl LoadStaging {
             pending: None,
             written_bytes: 0,
             moved_bytes: 0,
+            slots: Vec::new(),
+            next_slot: 0,
+            slot_offset: 0,
         }
+    }
+
+    /// Keeps `SLOT_COUNT` mapped slots of `slot_bytes`, a multiple of
+    /// `wgpu::COPY_BUFFER_ALIGNMENT`, counted in `memory`: each frame's
+    /// writes then go into one in turn, and through the belt only past its
+    /// end or while the GPU still reads it.
+    pub fn keep_slots(&mut self, memory: &GpuMemory, slot_bytes: u64) {
+        self.slots = (0..SLOT_COUNT)
+            .map(|_| StagingSlot {
+                buffer: memory.create_buffer(
+                    &self.device,
+                    GpuMemoryKind::Staging,
+                    &wgpu::BufferDescriptor {
+                        label: Some("Load Staging Slot"),
+                        size: slot_bytes,
+                        usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+                        mapped_at_creation: true,
+                    },
+                ),
+                is_mapped: Arc::new(AtomicBool::new(true)),
+                map_requested: false,
+            })
+            .collect();
     }
 
     /// Records a copy of `bytes` to `target` at `offset`; the length and the
@@ -209,19 +245,23 @@ impl LoadStaging {
             return;
         };
         self.written_bytes += size.get();
-        let (belt, encoder) = self.pending();
-        belt.write_buffer(encoder, target, offset, size)
+        let alignment = wgpu::BufferSize::new(wgpu::MAP_ALIGNMENT).expect("8 is not zero");
+        let (staged, encoder) = self.staged(size, alignment);
+        staged
+            .get_mapped_range_mut()
+            .expect("a staged slice is mapped")
             .copy_from_slice(bytes);
+        encoder.copy_buffer_to_buffer(staged.buffer(), staged.offset(), target, offset, size.get());
     }
 
-    /// Bytes written into the belt since the last submit.
+    /// Bytes written since the last submit.
     pub fn written_bytes(&self) -> u64 {
         self.written_bytes
     }
 
     /// Records a copy of `bytes`, mip `level` of array layer `slice` of
     /// `texture` as rows of blocks without padding, re-pitching each row to
-    /// `wgpu::COPY_BYTES_PER_ROW_ALIGNMENT` as it is written into the belt.
+    /// `wgpu::COPY_BYTES_PER_ROW_ALIGNMENT` as it is staged.
     pub fn write_texture(&mut self, texture: &wgpu::Texture, level: u32, slice: u32, bytes: &[u8]) {
         let format = texture.format();
         let MipCopy {
@@ -239,16 +279,14 @@ impl LoadStaging {
             return;
         };
         self.written_bytes += staged_bytes.get();
-        let (belt, encoder) = self.pending();
         // A copy's offset is a multiple of the block size, which divides 256.
         let alignment = wgpu::BufferSize::new(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT.into())
             .expect("256 is not zero");
-        let staged = belt.allocate(staged_bytes, alignment);
+        let (staged, encoder) = self.staged(staged_bytes, alignment);
         {
-            // The belt maps every chunk before handing out a slice of it.
             let mut view = staged
                 .get_mapped_range_mut()
-                .expect("a StagingBelt slice is mapped");
+                .expect("a staged slice is mapped");
             for (index, row) in bytes.chunks(row_bytes).enumerate() {
                 view.slice(index * pitch..index * pitch + row_bytes)
                     .copy_from_slice(row);
@@ -340,17 +378,29 @@ impl LoadStaging {
         encoder.build_acceleration_structures(std::iter::once(entry), std::iter::empty());
     }
 
+    /// `size` mapped bytes at a multiple of `alignment`, to copy from with
+    /// the encoder beside them: of the frame's slot while one is kept, mapped
+    /// and has room, else of the belt.
+    fn staged(
+        &mut self,
+        size: wgpu::BufferSize,
+        alignment: wgpu::BufferSize,
+    ) -> (wgpu::BufferSlice<'_>, &mut wgpu::CommandEncoder) {
+        let (belt, encoder) = pending_of(&self.device, &mut self.pending);
+        if let Some(slot) = self.slots.get(self.next_slot) {
+            let start = self.slot_offset.next_multiple_of(alignment.get());
+            let end = start + size.get();
+            if end <= slot.buffer.size() && slot.is_mapped.load(Ordering::Acquire) {
+                self.slot_offset = end;
+                return (slot.buffer.slice(start..end), encoder);
+            }
+        }
+        (belt.allocate(size, alignment), encoder)
+    }
+
     /// The belt and encoder of the copies not yet submitted.
     fn pending(&mut self) -> &mut (wgpu::util::StagingBelt, wgpu::CommandEncoder) {
-        let device = &self.device;
-        self.pending.get_or_insert_with(|| {
-            (
-                wgpu::util::StagingBelt::new(device.clone(), LOAD_CHUNK_BYTES),
-                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Load Encoder"),
-                }),
-            )
-        })
+        pending_of(&self.device, &mut self.pending)
     }
 
     /// Submits the copies recorded since the last call, if any, and returns
@@ -358,15 +408,41 @@ impl LoadStaging {
     pub fn submit(&mut self, queue: &wgpu::Queue) -> u64 {
         if let Some((mut belt, encoder)) = self.pending.take() {
             belt.finish();
+            let written_slot = (self.slot_offset > 0).then(|| &mut self.slots[self.next_slot]);
+            if let Some(slot) = &written_slot {
+                slot.buffer.unmap();
+                slot.is_mapped.store(false, Ordering::Release);
+            }
             queue.submit(std::iter::once(encoder.finish()));
+            if let Some(slot) = written_slot {
+                slot.map_requested = false;
+                slot.request_map();
+                self.next_slot = (self.next_slot + 1) % SLOT_COUNT;
+                self.slot_offset = 0;
+            }
         }
         self.written_bytes = 0;
         std::mem::take(&mut self.moved_bytes)
     }
 }
 
-/// The bytes `write_texture` writes into the belt for every mip `texture`
-/// holds, row padding included.
+/// `pending`'s belt and encoder, made on `device` when it holds none.
+fn pending_of<'pending>(
+    device: &wgpu::Device,
+    pending: &'pending mut Option<(wgpu::util::StagingBelt, wgpu::CommandEncoder)>,
+) -> &'pending mut (wgpu::util::StagingBelt, wgpu::CommandEncoder) {
+    pending.get_or_insert_with(|| {
+        (
+            wgpu::util::StagingBelt::new(device.clone(), LOAD_CHUNK_BYTES),
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Load Encoder"),
+            }),
+        )
+    })
+}
+
+/// The bytes `write_texture` stages for every mip `texture` holds, row
+/// padding included.
 pub fn texture_written_bytes(texture: &CookedTexture) -> u64 {
     let end = texture.first_level + texture.levels.len() as u32;
     mips_written_bytes(
@@ -377,7 +453,7 @@ pub fn texture_written_bytes(texture: &CookedTexture) -> u64 {
     )
 }
 
-/// The bytes `write_texture` writes into the belt for mips `levels` of a
+/// The bytes `write_texture` stages for mips `levels` of a
 /// `width` × `height` Texture in `format`, row padding included.
 pub fn mips_written_bytes(
     format: wgpu::TextureFormat,
@@ -393,14 +469,14 @@ pub fn mips_written_bytes(
         .sum()
 }
 
-/// One mip's copy from the belt, as rows of blocks.
+/// One mip's copy from staging, as rows of blocks.
 struct MipCopy {
     /// Its size in texels, whole blocks: a mip smaller than a block still
     /// copies a whole one.
     size: wgpu::Extent3d,
     row_bytes: usize,
     rows: u32,
-    /// The bytes between rows in the belt.
+    /// The bytes between rows as staged.
     pitch: usize,
 }
 
@@ -619,6 +695,110 @@ mod tests {
         for (level, bytes) in levels[1..].iter().enumerate() {
             let read = read_back(&coarser, level as u32, 0, (1, 1));
             assert_eq!(read, *bytes, "mip {level} from mip {}", level + 1);
+        }
+    }
+
+    /// Load staging that keeps slots counts them as staging, `SLOT_COUNT` of
+    /// 1,024 bytes here. Each frame writes a 4-byte word, a mip of two
+    /// 256-byte rows and two mips of 16 bytes, each of those staged as 256:
+    /// the word and the first mip fill a slot to 768 and the second mip its
+    /// rest, and the third goes through the belt. Over more frames than
+    /// slots, each reads back as written, the ledger unchanged.
+    #[test]
+    fn writes_that_fit_a_kept_slot_and_one_past_it_read_back_as_written() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let memory = gpu_memory(&context);
+        let mut staging = LoadStaging::new(context.device.clone());
+        staging.keep_slots(&memory, 1024);
+        let staging_bytes = || memory.bytes_by_kind()[GpuMemoryKind::Staging as usize];
+        assert_eq!(staging_bytes(), SLOT_COUNT as u64 * 1024);
+
+        let buffer = |label, size, usage| {
+            context.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size,
+                usage,
+                mapped_at_creation: false,
+            })
+        };
+        let target_usage = wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC;
+        let word = buffer("Staging Test Word", 4, target_usage);
+        let texture = context.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Staging Test Texture"),
+            size: wgpu::Extent3d {
+                width: 64,
+                height: 8,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 7,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Bc5RgUnorm,
+            usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        // Mip 0 is 16 blocks by 2; mips 4 and 5 are one block each.
+        let mips: [(u32, usize); 3] = [(0, 512), (4, 16), (5, 16)];
+        for frame in 0..2 * SLOT_COUNT as u8 + 1 {
+            let bytes_of = |write: u8, length: usize| -> Vec<u8> {
+                (0..length)
+                    .map(|byte| (byte as u8).wrapping_mul(7) ^ (frame * 16 + write))
+                    .collect()
+            };
+            staging.write(&word, 0, &bytes_of(0, 4));
+            for (write, (level, length)) in mips.into_iter().enumerate() {
+                let bytes = bytes_of(write as u8 + 1, length);
+                staging.write_texture(&texture, level, 0, &bytes);
+            }
+            assert_eq!(staging.written_bytes(), 4 + 512 + 256 + 256);
+            assert_eq!(staging.slot_offset, 1024, "frame {frame}");
+            staging.submit(&context.queue);
+            assert_eq!(staging_bytes(), SLOT_COUNT as u64 * 1024);
+
+            let read_back = buffer(
+                "Staging Test Read-back",
+                3 * 512 + 4,
+                wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            );
+            let mut encoder = context
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            encoder.copy_buffer_to_buffer(&word, 0, &read_back, 3 * 512, 4);
+            for (write, (level, _)) in mips.into_iter().enumerate() {
+                encoder.copy_texture_to_buffer(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &texture,
+                        mip_level: level,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    wgpu::TexelCopyBufferInfo {
+                        buffer: &read_back,
+                        layout: wgpu::TexelCopyBufferLayout {
+                            offset: 512 * write as u64,
+                            bytes_per_row: Some(256),
+                            rows_per_image: None,
+                        },
+                    },
+                    texture
+                        .size()
+                        .mip_level_size(level, wgpu::TextureDimension::D2)
+                        .physical_size(texture.format()),
+                );
+            }
+            submit_and_map(&context, encoder, &read_back).expect("read-back mapped");
+            let mapped = read_back.get_mapped_range(..).expect("read-back range");
+            assert_eq!(mapped[3 * 512..], bytes_of(0, 4)[..], "frame {frame}: word");
+            for (write, (level, length)) in mips.into_iter().enumerate() {
+                let start = 512 * write;
+                assert_eq!(
+                    mapped[start..start + length],
+                    bytes_of(write as u8 + 1, length)[..],
+                    "frame {frame}: mip {level}"
+                );
+            }
         }
     }
 }

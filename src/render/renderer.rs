@@ -671,6 +671,14 @@ impl Renderer {
         self.frame_staging.grow_to_largest(&self.device);
     }
 
+    /// Keeps load staging slots of a frame's load bytes, so a frame's
+    /// streamed loads within them create no staging.
+    pub fn keep_load_staging_slots(&mut self) {
+        let slot_bytes = self.capacities.load_bytes_per_frame / wgpu::COPY_BUFFER_ALIGNMENT
+            * wgpu::COPY_BUFFER_ALIGNMENT;
+        self.load_staging.keep_slots(&self.memory, slot_bytes);
+    }
+
     /// Hands `frame`'s static Instance changes to the static TLAS, which
     /// binds, submits and starts its builds on its own, and records the
     /// copies of `frame`'s uniforms, the camera's with the static TLAS's
