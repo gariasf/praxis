@@ -125,7 +125,7 @@ fn first_intersection(flags: u32, mask: u32, origin: vec3<f32>, direction: vec3<
 }
 
 // A cooked LOD error is an approximate measure, no bound
-// [ref:meshoptimizer-0.25-simplify-error]: `orrery`'s spheres meet LOD 0 up to
+// [ref:meshoptimizer-1.3-simplify-error]: `orrery`'s spheres meet LOD 0 up to
 // three times theirs high (docs/performance.md, Measurements behind the code).
 const LOD_ERROR_MARGIN: f32 = 3.0;
 

@@ -279,7 +279,7 @@ fn instance_scale(instance: InstanceData) -> f32 {
 // largest scale along an axis, so no nearer point of it and no axis strays
 // further than the LOD threshold allows: a pixel's size at that distance
 // against the error, as meshoptimizer selects a LOD
-// [ref:meshoptimizer-0.25-lod-selection]. It reads the camera and the
+// [ref:meshoptimizer-1.3-lod-selection]. It reads the camera and the
 // Instance alone, so both phases draw an Instance's same LOD.
 fn instance_lod(instance: InstanceData, mesh: MeshData) -> u32 {
     if FORCED_LOD < MESH_MAX_LODS {

@@ -189,7 +189,7 @@ const LOD_THRESHOLD_PIXELS: f32 = 1.0;
 
 /// The LOD error, in metres, the LOD threshold allows a metre from the camera
 /// on a target `height` pixels high, which a pixel there spans
-/// 2 tan(fov / 2) / `height` of [ref:meshoptimizer-0.25-lod-selection].
+/// 2 tan(fov / 2) / `height` of [ref:meshoptimizer-1.3-lod-selection].
 fn lod_error_per_metre(height: u32) -> f32 {
     LOD_THRESHOLD_PIXELS * pixel_size_per_metre(height)
 }
