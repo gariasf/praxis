@@ -52,7 +52,8 @@ pub(crate) struct DecodedAssets {
     materials: HashMap<AssetId, CookedMaterial>,
     textures: HashMap<AssetId, CookedTexture>,
     /// Assets a load in flight claimed that the main thread read from the
-    /// Cooked cache first, whose decoded copies are dropped when they come.
+    /// Cooked cache first, whose decoded copies are dropped when they come,
+    /// until the pools free them.
     read_from_cache: HashSet<AssetId>,
 }
 
@@ -635,8 +636,10 @@ impl AssetReader for DecodedReader<'_> {
 
     fn forget(&self, assets: &[AssetId]) {
         let mut claimed = self.claimed.lock().unwrap_or_else(PoisonError::into_inner);
+        let read_from_cache = &mut self.decoded.borrow_mut().read_from_cache;
         for asset in assets {
             claimed.remove(asset);
+            read_from_cache.remove(asset);
         }
     }
 }
@@ -654,6 +657,7 @@ pub(crate) struct StreamedFrame {
     pub pool_entries_freed: u32,
     pub meshes_refused: u32,
     pub materials_refused: u32,
+    pub textures_refused: u32,
     pub chunks_not_loaded: u32,
     pub late_mips: u32,
     /// Whether the camera still waits for a Chunk within the Load radius
@@ -923,6 +927,7 @@ impl ChunkStreaming {
         streamed.pool_entries_freed = frees as u32;
         streamed.meshes_refused = renderer.mesh_pool.take_refusals();
         streamed.materials_refused = renderer.material_pool.take_refusals();
+        streamed.textures_refused = renderer.material_pool.take_texture_refusals();
         self.fast_travel.time(Instant::now(), &mut streamed);
         Ok(streamed)
     }
@@ -2151,6 +2156,41 @@ mod tests {
         reader.material(AssetId(1)).unwrap();
         assert!(claimed.lock().unwrap().contains(&AssetId(1)));
         assert!(decoded.read_from_cache.is_empty());
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    /// An Asset a failed read left claimed, which the main thread then read
+    /// from the Cooked cache, keeps the next copy the IO pool decodes once
+    /// the pools freed it and its claim went.
+    #[test]
+    fn an_asset_read_on_the_main_thread_keeps_its_next_decoded_copy_once_freed() {
+        let directory =
+            std::env::temp_dir().join(format!("praxis-io-reread-{}", std::process::id()));
+        let cache = CookedCache::new(&directory);
+        let material = CookedMaterial {
+            base_color: [1.0; 4],
+            metallic: 0.0,
+            roughness: 1.0,
+            emissive: [0.0; 3],
+            normal_scale: 1.0,
+            textures: [None; 5],
+        };
+        cache.write(AssetId(1), "key", &material.to_blob()).unwrap();
+        let claimed = Mutex::new(HashSet::from([AssetId(1)]));
+        let mut decoded = DecodedAssets::default();
+        let reader = DecodedReader {
+            decoded: RefCell::new(&mut decoded),
+            cache: &cache,
+            claimed: &claimed,
+            reads_resident_tails: false,
+        };
+
+        reader.material(AssetId(1)).unwrap();
+        reader.forget(&[AssetId(1)]);
+        let mut fresh = DecodedAssets::default();
+        fresh.materials.insert(AssetId(1), material);
+        decoded.extend(fresh);
+        assert!(decoded.materials.contains_key(&AssetId(1)));
         std::fs::remove_dir_all(&directory).ok();
     }
 

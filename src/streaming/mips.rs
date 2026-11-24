@@ -10,7 +10,7 @@ use std::ops::Range;
 
 use glam::DVec3;
 
-use crate::assets::material::EvictionRank;
+use crate::assets::material::{EvictionRank, MipRoom};
 use crate::assets::{LoadedMeshes, MaterialHandle, MaterialPool, MeshHandle};
 use crate::camera::FIELD_OF_VIEW;
 use crate::components::{MaterialRef, MeshRef, Transform};
@@ -108,13 +108,16 @@ pub(crate) struct MipPriority {
     /// mip or finer.
     last_used_plan: HashMap<AssetId, u64>,
     requests: Vec<MipRequest>,
-    /// The Textures whose mips are requested and not yet applied.
-    in_flight: HashSet<AssetId>,
+    /// The first mip and Texture of each request not yet applied, in the
+    /// order the IO pool's reads are applied.
+    in_flight: Vec<(u32, AssetId)>,
     /// Textures whose read failed, which are not requested again until the
     /// Material pool frees an entry.
     refused: HashSet<AssetId>,
     /// The Material pool's frees the last `plan` saw.
     material_frees: u64,
+    /// The room the last `plan`'s requests took, kept for its memory.
+    room: MipRoom,
 }
 
 impl MipPriority {
@@ -129,7 +132,8 @@ impl MipPriority {
     /// unless it `teleported`. Returns the late mips, those the drawn
     /// Placements and Renderables need from `camera` that are not Resident,
     /// and the requests for those not yet requested whose move finds room
-    /// in its Channel, free or by an eviction, finest-needed first, then by
+    /// in its Channel, free or by an eviction, besides the room the requests
+    /// in flight and those before it take, finest-needed first, then by
     /// Asset ID.
     pub(crate) fn plan<'chunks, 'renderables>(
         &mut self,
@@ -212,7 +216,7 @@ impl MipPriority {
                 self.last_used_plan.insert(texture, self.plans);
             }
             if need.ahead < resident
-                && !self.in_flight.contains(&texture)
+                && !(self.in_flight.iter()).any(|&(_, in_flight)| in_flight == texture)
                 && !self.refused.contains(&texture)
             {
                 self.requests.push(MipRequest {
@@ -221,6 +225,8 @@ impl MipPriority {
                 });
             }
         }
+        self.requests
+            .sort_unstable_by_key(|request| (request.levels.start, request.texture.0));
         let (needed_by_texture, last_used_plan) = (&self.needed, &self.last_used_plan);
         let eviction_rank = |texture, resident_level| {
             rank(
@@ -231,21 +237,25 @@ impl MipPriority {
                 0,
             )
         };
-        let mut evictable_needs = None;
-        self.requests.retain(|request| {
-            let needed = request.levels.start;
-            let Some(class) = materials.full_class_for_mips(request.texture, needed) else {
-                return true;
-            };
-            let needs = evictable_needs
-                .get_or_insert_with(|| materials.coarsest_evictable_needs(&eviction_rank));
-            needs.get(&class).is_some_and(|&coarsest| coarsest > needed)
-        });
-        self.requests
-            .sort_unstable_by_key(|request| (request.levels.start, request.texture.0));
-        for request in &self.requests {
-            self.in_flight.insert(request.texture);
+        if !self.requests.is_empty() {
+            let room = &mut self.room;
+            room.clear(materials);
+            for &(first_level, texture) in &self.in_flight {
+                room.take(materials, texture, first_level, &eviction_rank);
+            }
+            self.requests.retain(|request| {
+                room.take(
+                    materials,
+                    request.texture,
+                    request.levels.start,
+                    &eviction_rank,
+                )
+            });
         }
+        let requested =
+            (self.requests.iter()).map(|request| (request.levels.start, request.texture));
+        self.in_flight.extend(requested);
+        self.in_flight.sort_unstable();
         (late_mips, &self.requests)
     }
 
@@ -277,7 +287,8 @@ impl MipPriority {
 
     /// Ends `texture`'s request, `read_failed` when its mips were not read.
     pub(crate) fn finished(&mut self, texture: AssetId, read_failed: bool) {
-        self.in_flight.remove(&texture);
+        self.in_flight
+            .retain(|&(_, in_flight)| in_flight != texture);
         if read_failed {
             self.refused.insert(texture);
         }
@@ -528,12 +539,24 @@ mod tests {
     fn empty_pool(
         context: &crate::gpu::GpuContext,
     ) -> (MaterialPool, crate::render::staging::LoadStaging) {
+        let classes = crate::assets::PoolCapacities::checked_in().texture_classes_per_channel;
+        pool_of_classes(context, classes)
+    }
+
+    /// An empty Material pool whose Channels hold `classes` Texture classes.
+    fn pool_of_classes(
+        context: &crate::gpu::GpuContext,
+        classes: u32,
+    ) -> (MaterialPool, crate::render::staging::LoadStaging) {
         let mut staging = crate::render::staging::LoadStaging::new(context.device.clone());
         let pool = MaterialPool::new(
             &context.device,
             &crate::stats::gpu_memory::tests::gpu_memory(context),
             &mut staging,
-            &crate::assets::PoolCapacities::checked_in(),
+            &crate::assets::PoolCapacities {
+                texture_classes_per_channel: classes,
+                ..crate::assets::PoolCapacities::checked_in()
+            },
             false,
         );
         (pool, staging)
@@ -624,6 +647,63 @@ mod tests {
         assert_eq!(late_mips, 2);
         assert_eq!(requested, [(drawn, 1..3), (ahead, 1..3)]);
         staging.submit(&context.queue);
+    }
+
+    /// Two drawn 2,048² Textures at their tails, mip 3, each needing mip 1,
+    /// in a Channel of four Texture classes with room for one move to mip 1:
+    /// a class still to open, of one slice, or, with the Channel full, the
+    /// mip-1 chain of a Texture nothing samples, which eviction takes. Only
+    /// the first Texture's mips are requested, and while they are in flight
+    /// the next plan requests none.
+    #[test]
+    fn a_plan_makes_only_the_requests_whose_moves_find_room() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let [first, second, unsampled] = [10, 11, 12].map(AssetId);
+        for evicts in [false, true] {
+            let (mut pool, mut staging) = pool_of_classes(&context, 4);
+            let mut load = |texture, first_level| {
+                let reader = TextureReader {
+                    first_level,
+                    side: 2048,
+                };
+                let channel = crate::assets::MaterialChannel::Albedo;
+                let device = &context.device;
+                pool.load_texture(device, &mut staging, &reader, channel, texture, &mut |_| {
+                    false
+                })
+                .expect("the Texture loads");
+            };
+            if evicts {
+                load(unsampled, 1);
+            }
+            load(first, 3);
+            load(second, 3);
+            let drawn = chunk(1, false);
+            let mut priority = MipPriority::default();
+            let uses = vec![texture_use(first, 2.5), texture_use(second, 2.5)];
+            priority.uses.insert(drawn.id, uses);
+
+            let mut plan = || {
+                let (_, requests) = priority.plan(
+                    DVec3::ZERO,
+                    false,
+                    std::iter::once((&drawn, Sight::Drawn)),
+                    std::iter::empty(),
+                    &LoadedMeshes::default(),
+                    &pool,
+                );
+                let requested: Vec<_> = (requests.iter())
+                    .map(|request| (request.texture, request.levels.clone()))
+                    .collect();
+                requested
+            };
+
+            assert_eq!(plan(), [(first, 1..3)], "evicts: {evicts}");
+            assert_eq!(plan(), [], "evicts: {evicts}");
+            staging.submit(&context.queue);
+        }
     }
 
     /// A drawn 2,052² Texture at its tail, mip 3, needing mip 1: its mips 1
