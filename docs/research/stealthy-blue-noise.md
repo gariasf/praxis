@@ -12,7 +12,7 @@ Read 2026-11-11 at the owner's request: Moran, Donnelly and Wolfe, "Stealthy Blu
   - M5's LOD transitions: T2 dithers per pixel over a set time with "its pattern visible for the fade", and T3 cross-fades per sample through complementary `sample_mask` writes ([LOD note](lod-hlod-and-far-field.md), Options). W1 and W2's coverage fades for thin and small Instances need the same kind of mask.
   - M6's DDGI probes trace each update along "a stochastically-rotated Fibonacci spiral pattern" [ref:majercik-2019-ddgi-ray-directions], 64 rays a probe in its largest scenes (Table 1, p. 19).
   - The contact term, class (a) occlusion from short rays or spatial-only GTAO, is a fog line on #17 (ADR 0020).
-  - Terrain and vegetation scatter, a fog line on #17. The world generator places each settlement at its region's centre plus a hashed stray (`settlement_centre`, `src/scenes/world.rs`), which makes a jittered grid.
+  - Terrain and vegetation scatter, the Placement rules fog line on #17. The world generator places each settlement at its region's centre plus a hashed stray (`settlement_centre`, `src/scenes/world.rs`), which makes a jittered grid.
 
 ## What the paper does
 
