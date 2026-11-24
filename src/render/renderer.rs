@@ -728,6 +728,7 @@ impl Renderer {
         recorder.counters.static_tlas_build_time =
             static_tlas_update.build_time.unwrap_or_default();
         recorder.counters.frames_until_traced = static_tlas_update.frames_until_traced;
+        recorder.counters.uploaded_bytes += static_tlas_update.uploaded_bytes;
         recorder.counters.static_instances_left_out = self.static_tlas.instances_left_out();
         // Shadow rays start in the bound static TLAS's frame, which the
         // update may have just swapped in at a new Anchor, and the dynamic

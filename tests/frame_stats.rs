@@ -62,13 +62,19 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // Every frame writes the 144-byte camera and 32-byte light uniforms and
     // the sun and four point lights, 48 bytes each; only the first also
     // writes the ten 128-byte Instances and the 4-byte count of Instance
-    // slots in use, and streams the Chunks: the sphere Mesh's bytes in the
-    // Arenas, which the cook's simplifier leaves a few apart between machines,
-    // its 220-byte Mesh table entry and ten 80-byte Materials.
+    // slots in use, submits the static TLAS's build, which uploads their ten
+    // entries, each as its backend's instance record, and streams the
+    // Chunks: the sphere Mesh's bytes in the Arenas, which the cook's
+    // simplifier leaves a few apart between machines, its 220-byte Mesh
+    // table entry and ten 80-byte Materials.
+    let entry_bytes = match context.backend() {
+        wgpu::Backend::Metal => 72,
+        _ => 64,
+    };
     let streamed_bytes = last.arena_bytes_in_use + 220 + 10 * 80;
     assert_eq!(
         frames[0].uploaded_bytes,
-        10 * 128 + 144 + 32 + 5 * 48 + 4 + streamed_bytes
+        10 * 128 + 144 + 32 + 5 * 48 + 4 + 10 * entry_bytes + streamed_bytes
     );
     assert_eq!(last.uploaded_bytes, 144 + 32 + 5 * 48);
     // The sphere's triangles: 48 × 24 quads of two triangles but one at each
