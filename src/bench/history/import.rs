@@ -313,15 +313,19 @@ struct Baseline {
     provenance: Option<BaselineProvenance>,
 }
 
-/// What the import reads of a Baseline's own provenance.
+/// What the import reads of a Baseline's own provenance, each field absent
+/// before results carried it.
 #[derive(serde::Deserialize)]
 struct BaselineProvenance {
-    /// Absent before results carried it.
     gpu_frame_p95_over_neighbours: Option<f64>,
+    dirty: Option<bool>,
+    quiet: Option<bool>,
+    scene_content_hash: Option<String>,
 }
 
 /// An imported record's provenance: the Baseline and the commit it came
-/// from, and the Harness version then.
+/// from, the Harness version then, and the scene content hash the Baseline
+/// holds.
 #[derive(serde::Serialize)]
 struct ImportedProvenance<'baseline> {
     source: &'static str,
@@ -332,14 +336,17 @@ struct ImportedProvenance<'baseline> {
     gpu_frame_p95_over_median: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     gpu_frame_p95_over_neighbours: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scene_content_hash: Option<&'baseline str>,
 }
 
 /// The Baseline `json` that `commit` committed at `path`, as a Bench
 /// record of that commit's source: the file as it was, with the backend it
-/// ran on and an imported provenance. Baselines were recorded on a quiet
-/// machine, so only their own GPU frame spread can tag one as not quiet:
-/// against each frame's neighbours where the Baseline recorded that, else
-/// against the run's median.
+/// ran on and an imported provenance. A Baseline is tagged dirty or not
+/// quiet where its own provenance stamps it so, and not quiet where its own
+/// GPU frame spread reached the threshold: against each frame's neighbours
+/// where the Baseline recorded that, else against the run's median. One
+/// that holds no stamps counts as clean and quiet but for its spread.
 fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<BenchRecord> {
     let baseline: Baseline = serde_json::from_str(json)?;
     let serde_json::Value::Object(mut file) = serde_json::from_str(json)? else {
@@ -355,10 +362,9 @@ fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<B
         .gpu_frame_microseconds
         .filter(|spread| spread.median > 0.0)
         .map(|spread| spread.p95 / spread.median);
-    let p95_over_neighbours = baseline
-        .provenance
-        .as_ref()
-        .and_then(|provenance| provenance.gpu_frame_p95_over_neighbours);
+    let provenance = baseline.provenance.as_ref();
+    let p95_over_neighbours =
+        provenance.and_then(|provenance| provenance.gpu_frame_p95_over_neighbours);
     file.insert(
         "provenance".to_owned(),
         serde_json::to_value(ImportedProvenance {
@@ -369,18 +375,22 @@ fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<B
             harness_version: commit.harness_version,
             gpu_frame_p95_over_median: p95_over_median,
             gpu_frame_p95_over_neighbours: p95_over_neighbours,
+            scene_content_hash: provenance
+                .and_then(|provenance| provenance.scene_content_hash.as_deref()),
         })?,
     );
-    let quiet = p95_over_neighbours
-        .or(p95_over_median)
-        .is_none_or(|ratio| ratio < QUIET_P95_OVER_MEDIAN);
+    let dirty = provenance.and_then(|provenance| provenance.dirty) == Some(true);
+    let quiet = provenance.and_then(|provenance| provenance.quiet) != Some(false)
+        && p95_over_neighbours
+            .or(p95_over_median)
+            .is_none_or(|ratio| ratio < QUIET_P95_OVER_MEDIAN);
     BenchRecord::new(
         file,
         &baseline.scene,
         &commit.source_hash,
         commit.committed_unix_seconds,
         tags(
-            false,
+            dirty,
             true,
             Some(Run {
                 scene: &baseline.scene,
@@ -603,6 +613,11 @@ mod tests {
             HARNESS_BREAKS.len() as u64 + 1,
             "{row}"
         );
+        assert_eq!(
+            row["scene_content_hash"],
+            baseline.provenance.unwrap().scene_content_hash,
+            "{row}"
+        );
     }
 
     #[test]
@@ -719,6 +734,33 @@ mod tests {
             ["machine not quiet"]
         );
         assert_eq!(tags(&drifting("")), ["machine not quiet"]);
+    }
+
+    #[test]
+    fn a_rerecorded_baseline_keeps_its_dirty_and_quiet_stamps_and_its_scene_content_hash() {
+        let stamped = FIRST_BASELINE
+            .replace("gpu_main_pass_microseconds", "gpu_frame_microseconds")
+            .replace(
+                "\"draw_calls\"",
+                "\"provenance\": { \"dirty\": true, \"quiet\": false, \
+                 \"scene_content_hash\": \"6cf4cbac\", \"gpu_frame_p95_over_neighbours\": 1.01 },\n  \
+                 \"draw_calls\"",
+            );
+        let rerecorded = BaselineCommit {
+            source: RERECORDED_SOURCE,
+            ..commit(HARNESS_BREAKS.len() as u32 + 1)
+        };
+        let record = imported(
+            &rerecorded,
+            "bench/baselines/apple-m4-pro/pbr-sweep.json",
+            &stamped,
+        )
+        .unwrap();
+        assert_eq!(record.tags, ["dirty tree", "machine not quiet"]);
+        assert_eq!(
+            stored(&record).provenance.scene_content_hash.as_deref(),
+            Some("6cf4cbac")
+        );
     }
 
     #[test]
