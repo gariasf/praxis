@@ -283,8 +283,9 @@ When reviewing changes, check for:
       ledger (`GpuMemory`) under their kind, acceleration structures at
       the size wgpu-hal's query gives (`blas_bytes`, `tlas_bytes`), a
       compacted BLAS at its adapter's estimated fraction of it;
-      the GPU stats readback's buffers stay out, as they measure the frame (ADR 0013); per-frame GPU
-      writes add to `uploaded_bytes`, and systems are added inside
+      the GPU stats readback's buffers stay out, as they measure the
+      frame, and so does the load staging's belt, which `uploaded_bytes`
+      counts (ADR 0013); per-frame GPU writes add to `uploaded_bytes`, and systems are added inside
       `SystemTimer::scope`
 - [ ] Streaming uploads go through the load staging (`LoadStaging`: its
       kept slots, else a `StagingBelt`), never

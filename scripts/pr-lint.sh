@@ -101,7 +101,7 @@ else
       if grep -Eq '^tests/goldens/|\.wgsl$' <<<"$paths"; then
         miss "$linking; a PR that moves a Golden or changes a .wgsl file links all three (workflow.md, PRs)"
       elif ! perl -ne '$counted = 1 if /(?<![0-9])([1-9][0-9]*) of \1(?![0-9]) gallery images identical/; END { exit !$counted }' <<<"$images"; then
-        miss "$linking, or gives the gallery's count on one line when no image differs, as \"22 of 22 gallery images identical to the base's\" (workflow.md, PRs)"
+        miss "$linking, or gives the gallery's count on one line when no image differs, as \"23 of 23 gallery images identical to the base's\" (workflow.md, PRs)"
       fi
     fi
   fi

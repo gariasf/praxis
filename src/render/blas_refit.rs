@@ -192,8 +192,8 @@ impl BlasRefit {
         // - Every handle is Metal's: `new` refuses the refit off Metal.
         // - Every wgpu-hal object outlives its use past its guard
         //   (`metal::unguarded`): the Mesh pool, this refit and `blases`
-        //   hold their handles throughout, nothing destroys them, and only
-        //   the main thread calls into wgpu meanwhile (ADR 0016).
+        //   hold their handles throughout, and no thread destroys them
+        //   meanwhile, the static TLAS's worker included.
         // - The encoder is used through wgpu-hal alone, never ended here,
         //   and finished by wgpu [ref:wgpu-30-as-hal-mut-safety]; wgpu-core
         //   panics on a mix of the two [ref:wgpu-30-mixed-encoding-panics].

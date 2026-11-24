@@ -1767,7 +1767,7 @@ fn position_at_rebuilds_the_point_a_depth_shows_through_a_pixel() {
 /// Octahedral coordinates hold a unit vector: decoded, they give it back,
 /// over the axes, the octahedron's edges where the lower half folds, and an
 /// even spread of directions; stored as 8-bit unorms, as the surface normals
-/// store them, within 0.95° of it, the bound the shadow mask's margins take.
+/// store them, within 0.9532° of it, the bound the shadow mask's margins take.
 #[test]
 fn octahedral_coordinates_decode_to_the_unit_vector_they_encode() {
     let Some(context) = gpu_context() else {
@@ -1829,9 +1829,9 @@ fn octahedral_coordinates_decode_to_the_unit_vector_they_encode() {
     );
 
     // The 8-bit rounding's bound, half a step per coordinate over a vector no
-    // shorter than 1/√3, is 0.951°, which this takes to three figures; f32
-    // adds about 2e-6 rad.
-    let largest_8_bit_error = 0.95f64.to_radians();
+    // shorter than 1/√3, is atan(√18/255) = 0.95319°, which normalize(84, 84,
+    // 87) reaches; f32 adds about 2e-6 rad, 0.00012°.
+    let largest_8_bit_error = 0.9534f64.to_radians();
     for (((direction, coordinates), full), quantised) in directions
         .iter()
         .zip(&encoded)
@@ -1862,13 +1862,18 @@ fn octahedral_coordinates_decode_to_the_unit_vector_they_encode() {
 }
 
 /// ADR 0014's precision bar: 0.25 px at 1440p and a 45° vertical field of
-/// view, for a point 0.3 m from the camera, is 0.043 mm. WGSL floors:
-/// `camera_relative_position`, 192.6u per axis in its written order, 2.0e-5 m
-/// (4.0e-5 under round toward zero), and 384.9u in the worst other order,
-/// (offset + local position) − camera offset and the anchor term last,
-/// 3.97e-5 m (7.9e-5, over this, if a GPU both reorders and rounds toward
-/// zero); `point_light_position`, with no local position, 64.3u per axis,
-/// 6.6e-6 m (1.3e-5), and 64.6u in the worst other order, 6.7e-6 m (1.3e-5).
+/// view, for a point 0.3 m from the camera, is 0.043 mm. WGSL floors of what
+/// the assertions measure against the f64 reference, the chain's roundings
+/// plus the two offsets' rounding to f32, 32u each per axis:
+/// `camera_relative_position`, 256.6u per axis in its written order,
+/// 2.65e-5 m, and 448.9u in the worst other order, (offset + local position)
+/// − camera offset and the anchor term last, 4.63e-5 m, over this by the
+/// u·|x| model; the cases' partial sums, none past 256 m, hold any order to
+/// 320.25u per axis, 3.31e-5 m, and the written order under round toward
+/// zero to 384.5u, 3.97e-5 m (over this if a GPU both reorders and rounds
+/// toward zero); `point_light_position`, with no local position, 128.3u per
+/// axis, 1.32e-5 m (2.0e-5 under round toward zero), and 128.6u in the worst
+/// other order, 1.33e-5 m (2.0e-5).
 const PRECISION_BAR: f64 = 4.3e-5;
 
 /// Camera coordinates on each axis for the precision oracles: cell corners,
@@ -2568,6 +2573,10 @@ fn a_shadow_ray_includes_the_width_classes_whose_upper_bound_its_receivers_pixel
         &inputs,
     );
     for ((pixel_metres, expected), result) in cases.into_iter().zip(results) {
+        // WGSL floor 0: the halving is exact and the product by 320 rounds
+        // once; each of the seven cases on a class bound, 0.00625 to 0.4 m,
+        // is 0.25u over it as an f32, which rounding to nearest or toward
+        // zero takes to the bound exactly; the rest is integer.
         assert_eq!(
             result[0] as u32, expected,
             "a pixel of {pixel_metres} m traces mask {:08b}, not {expected:08b}",
@@ -2632,6 +2641,10 @@ fn the_selected_lod_is_the_coarsest_whose_scaled_error_is_under_the_threshold() 
     for ((lod_count, errors, scale, distance, threshold, expected), result) in
         cases.into_iter().zip(results)
     {
+        // WGSL floor 0: two correctly rounded products and an exact
+        // comparison. The four cases on a boundary multiply dyadic values,
+        // exactly, so equality holds bit for bit, fused or not; every other
+        // case lies at least 13% from its boundary.
         assert_eq!(
             result[0], expected,
             "{lod_count} LODs of errors {errors:?} at scale {scale}, {distance} m away, \
@@ -2660,7 +2673,6 @@ fn every_layer_of_texture_wall_decodes_to_the_class_and_slice_it_was_placed_in()
         .chain(std::iter::repeat_n(wall, TEXTURE_WALL_TEXTURES as usize))
         .map(|shape| table.place(shape).expect("a free Texture class"))
         .collect();
-    // Layers stay below 2^24, so f32 carries them exactly.
     let inputs: Vec<[f32; 4]> = placements
         .iter()
         .map(|placement| [placement.layer() as f32, 0.0, 0.0, 0.0])
@@ -2673,6 +2685,8 @@ fn every_layer_of_texture_wall_decodes_to_the_class_and_slice_it_was_placed_in()
 
     assert_eq!(placements[0].layer(), MaterialPool::DEFAULT_LAYER);
     for (placement, result) in placements.iter().zip(results) {
+        // WGSL floor 0: Layers stay below 2^24, so f32 carries them exactly,
+        // and the class and slice are a u32 division and remainder.
         assert_eq!(
             [result[0], result[1]],
             [placement.class as f32, placement.slice as f32],

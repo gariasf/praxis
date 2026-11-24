@@ -207,10 +207,10 @@ expect_pass "a rendering PR with images named by their links" "$(images_body "$g
 expect_pass "a rendering PR with titled image links" \
   "$(images_body "${gallery_table//.png)/.png \"town\")}")"
 expect_fail "a rendering PR without images" 'missing: before after difference' "$body"
-identical="22 of 22 gallery images identical to the base's"
+identical="23 of 23 gallery images identical to the base's"
 expect_pass "a rendering PR whose gallery images are identical" "$(images_body "$identical")"
 expect_fail "a rendering PR whose count leaves images out" 'missing: before after difference' \
-  "$(images_body "${identical/22 of/21 of}")"
+  "$(images_body "${identical/23 of/22 of}")"
 expect_fail "the count outside the Images section" 'missing: before after difference' \
   "$body"$'\n\n'"$identical"
 changed_paths=$'src/render/main_pass.rs\ntests/goldens/metal/town.png'

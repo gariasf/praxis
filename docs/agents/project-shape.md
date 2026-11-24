@@ -21,10 +21,13 @@ src/
                                  it, by Harness version era;
                                  history/suspects.rs, which Series
                                  records are Suspects;
+                                 history/night.rs, a Night's directory:
+                                 its Verdict, then a directory per run;
                                  history/rerecord.rs, `praxis history
-                                 rerecord`: a sweep's runs re-record the
-                                 counters of the Baselines they moved,
-                                 timings kept, with the commits between
+                                 rerecord`, which a session runs on runs
+                                 of `main`: they re-record the counters
+                                 of the Baselines they moved, timings
+                                 kept, with the commits between
   stats/                       # frame stats: CPU and GPU times, counts,
                                  the GPU memory ledger by kind,
                                  counting allocator
