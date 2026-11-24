@@ -198,6 +198,22 @@ const REANCHOR_CELLS: i32 = (CHUNK_EDGE_METRES / ANCHOR_CELL_SIZE) as i32;
 /// or a re-anchor starts before it starts one itself.
 const FAR_PROXY_BUILD_WAIT_FRAMES: u64 = 120;
 
+/// Bytes a TLAS build uploads per filled entry on `backend`: the backend's
+/// own instance record, which wgpu-core converts each to and stages
+/// [ref:wgpu-30-tlas-instance-staging].
+fn tlas_entry_upload_bytes(backend: wgpu::Backend) -> u64 {
+    match backend {
+        // `MTLIndirectAccelerationStructureInstanceDescriptor`
+        // [ref:metal-indirect-instance-descriptor].
+        wgpu::Backend::Metal => 72,
+        // `VkAccelerationStructureInstanceKHR`
+        // [ref:vulkan-acceleration-structure-instance],
+        // `D3D12_RAYTRACING_INSTANCE_DESC`
+        // [ref:d3d12-raytracing-instance-desc].
+        _ => 64,
+    }
+}
+
 /// The static TLAS (ADR 0020): each static Instance in an entry of its own,
 /// tagged with its slot, in a frame whose origin is the corner of an Anchor:
 /// the camera's when the first static Instance took an entry, or when a
@@ -238,6 +254,8 @@ pub struct StaticTlas {
     /// Whether each slot's static Instance is a Far proxy's, by slot, up to
     /// the highest slot that held one.
     far_proxy_by_slot: Vec<bool>,
+    /// Bytes each filled entry uploads per build.
+    entry_upload_bytes: u64,
 }
 
 /// One of the static TLAS's two TLASes, in the frame whose origin is the
@@ -284,10 +302,11 @@ enum Spare {
     /// builds, takes it to the bound TLAS's Anchor, or to the camera's once
     /// that is more than `REANCHOR_CELLS` away, and records its build.
     /// `built_from` is the frame of the earliest change the bound TLAS lacks
-    /// that starts a build.
+    /// that starts a build; `uploaded_bytes`, what its build uploads.
     Working {
         worker: std::thread::JoinHandle<Work>,
         built_from: Option<u64>,
+        uploaded_bytes: u64,
     },
     /// Its build submitted, bound from the next frame.
     Submitted {
@@ -326,6 +345,9 @@ pub struct StaticTlasUpdate {
     /// starts a build, the frames since the earliest such change it brings:
     /// how long a newly loaded Chunk's Instances waited to be traced.
     pub frames_until_traced: Option<u32>,
+    /// The bytes the build the update submitted uploads: every filled
+    /// entry's instance record; zero when it submitted none.
+    pub uploaded_bytes: u64,
 }
 
 impl StaticTlas {
@@ -371,6 +393,7 @@ impl StaticTlas {
             end: 0,
             left_out: BTreeMap::new(),
             far_proxy_by_slot: Vec::new(),
+            entry_upload_bytes: tlas_entry_upload_bytes(device.adapter_info().backend),
         }
     }
 
@@ -535,7 +558,12 @@ impl StaticTlas {
         if !wait && !worker.is_finished() {
             return;
         }
-        let Some(Spare::Working { worker, built_from }) = self.spare.take() else {
+        let Some(Spare::Working {
+            worker,
+            built_from,
+            uploaded_bytes,
+        }) = self.spare.take()
+        else {
             unreachable!("matched")
         };
         let work = worker
@@ -545,6 +573,7 @@ impl StaticTlas {
             Some(build) => {
                 queue.submit(std::iter::once(build));
                 update.build_time = Some(work.time);
+                update.uploaded_bytes = uploaded_bytes;
                 Spare::Submitted {
                     tlas: work.tlas,
                     built_from,
@@ -588,6 +617,8 @@ impl StaticTlas {
             unreachable!("matched")
         };
         let batches = std::mem::take(&mut self.behind[spare_index]);
+        let filled_entries = u64::from(self.end) - self.free_entries.len() as u64;
+        let uploaded_bytes = filled_entries * self.entry_upload_bytes;
         let device = records_build.then(|| device.clone());
         let worker = std::thread::Builder::new()
             .name("Static TLAS Worker".to_string())
@@ -620,7 +651,11 @@ impl StaticTlas {
                 }
             })
             .expect("the OS starts a thread");
-        self.spare = Some(Spare::Working { worker, built_from });
+        self.spare = Some(Spare::Working {
+            worker,
+            built_from,
+            uploaded_bytes,
+        });
         true
     }
 
@@ -745,9 +780,7 @@ pub struct DynamicTlas {
     /// The bytes the build of its last fill uploads, until `record` records
     /// it; none when that fill left nothing to build.
     unrecorded_upload_bytes: Option<u64>,
-    /// Bytes each entry uploads to the GPU per build: the backend's own
-    /// instance record, which wgpu-core converts it to and stages
-    /// [ref:wgpu-30-tlas-instance-staging].
+    /// Bytes each filled entry uploads per build.
     entry_upload_bytes: u64,
     /// One invocation that queries the TLAS, recorded on either side of its
     /// build: the GPU runs neither marker alongside the build, as it would a
@@ -817,16 +850,7 @@ impl DynamicTlas {
             tlas,
             filled: 0,
             unrecorded_upload_bytes: None,
-            entry_upload_bytes: match backend {
-                // `MTLIndirectAccelerationStructureInstanceDescriptor`
-                // [ref:metal-indirect-instance-descriptor].
-                wgpu::Backend::Metal => 72,
-                // `VkAccelerationStructureInstanceKHR`
-                // [ref:vulkan-acceleration-structure-instance],
-                // `D3D12_RAYTRACING_INSTANCE_DESC`
-                // [ref:d3d12-raytracing-instance-desc].
-                _ => 64,
-            },
+            entry_upload_bytes: tlas_entry_upload_bytes(backend),
             marker_pipeline,
             marker_bind_group,
             _marker_result: marker_result,

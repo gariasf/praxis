@@ -22,12 +22,15 @@ pub struct FrameStats {
     /// `None` until then, and for good if its readback was skipped.
     pub gpu: Option<GpuFrameStats>,
     pub draw_calls: u32,
-    /// Bytes the frame's uploads wrote to GPU buffers: the camera and light
-    /// uniforms, the light buffer, the bends, the Instances it wrote, the
-    /// Instance slot count when it changed, and the dynamic TLAS's instances
-    /// its build uploads; and the bytes that the moves of Textures between
-    /// Texture classes staged since the frame before copy. The pools' own
-    /// loads are not counted.
+    /// Bytes the frame uploads to the GPU: the camera and light uniforms,
+    /// the light buffer, the bends, the Instances it wrote and the Instance
+    /// slot count when it changed; the instance records of the dynamic
+    /// TLAS's build and of the static TLAS's build it submits; the bytes its
+    /// streamed loads of Chunks, Far proxies and mips write through the load
+    /// staging, rows padded as staged; and the bytes that the moves of
+    /// Textures between Texture classes staged since the frame before copy,
+    /// whatever load made them. What loads outside the streamers, as a
+    /// spawn's, write is not counted.
     pub uploaded_bytes: u64,
     /// The Instance slots in use: one past the highest slot taken, the slots
     /// each culling phase's pass over them scans.
