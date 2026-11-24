@@ -172,11 +172,14 @@ impl LaunchCook {
             SourceEntry::Chunk(index) => {
                 let (scene, coordinates) = sources.chunks[index];
                 let generated = self.sources.chunk(scene, coordinates)?;
+                let named: Vec<_> = generated.references().collect();
                 if generated.kept {
                     self.sources.kept_chunks.push(id);
+                    for (referrer, named) in named {
+                        self.cook_on_miss(cache, referrer, named)?;
+                    }
                     return Ok(());
                 }
-                let named = generated.references().collect();
                 self.cook_after_named(cache, id, &generated.cook_key, named, |_| {
                     generated.chunk.to_blob()
                 })
@@ -292,8 +295,9 @@ mod tests {
     use crate::assets::{MaterialPool, MeshPool, PoolCapacities, PoolLoader};
     use crate::cook::export::AssetRecorder;
     use crate::cook::{chunk, mesh};
+    use crate::cooked::CookedMaterial;
     use crate::render::LoadStaging;
-    use crate::scenes::ground_plane;
+    use crate::scenes::{ground_plane, sweep_material_name};
     use crate::stats::gpu_memory::tests::gpu_memory;
     use crate::streaming::load_chunk;
 
@@ -517,6 +521,41 @@ mod tests {
             assert_eq!(cache.chunk(chunk).unwrap().bounds[1].x, 2.0);
         }
         std::fs::remove_dir_all(&directory).ok();
+    }
+
+    /// With SciFiHelmet absent, a launch keeps helmet's Chunk (-1, -1), whose
+    /// Placements name it, and still re-cooks the stale Blob of a sweep
+    /// Material the Chunk names before the Chunk's Blobs are read, writing no
+    /// Blob of the Chunk's own.
+    #[test]
+    fn a_kept_chunk_re_cooks_a_stale_material_it_names() {
+        let scene = ReferenceScene::Helmet;
+        let directory = scratch("kept-chunk");
+        let cache = CookedCache::new(directory.join("cooked"));
+        let material = scene.material_id(&sweep_material_name(0.0, 0.1));
+        let stale = CookedMaterial {
+            base_color: [1.0; 4],
+            metallic: 1.0,
+            roughness: 0.9,
+            emissive: [0.0; 3],
+            normal_scale: 1.0,
+            textures: [None; 5],
+        };
+        cache.write(material, "stale", &stale.to_blob()).unwrap();
+        let mut recorder = AssetRecorder::default();
+        let assets = directory.join("assets");
+        let settings = CookSettings::default();
+        let loader = CookingLoader::new(scene, &assets, &cache, settings, &mut recorder).unwrap();
+        let chunk = scene.chunk_id([-1, -1]);
+        loader.into_cook().cook_for_scene(&cache, chunk).unwrap();
+
+        let cooked = cache.material(material).unwrap();
+        assert_eq!((cooked.metallic, cooked.roughness), (0.0, 0.1));
+        assert!(
+            cache.entry(chunk).is_none(),
+            "a kept Chunk's Blob was cooked"
+        );
+        std::fs::remove_dir_all(&directory).unwrap();
     }
 
     /// A Chunk placing a Mesh no source defines any more warns, naming the
