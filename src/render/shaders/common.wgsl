@@ -235,25 +235,37 @@ fn thin_kept_samples(coverage: f32) -> u32 {
 
 const SMALL_INSTANCE_WIDEST_PIXELS: f32 = 4.0;
 
+struct SmallInstanceCoverage {
+    coverage: f32,
+    scale: f32,
+}
+
 // First order in the bounds' size over their distance, which the sphere's share bounds.
 fn small_instance_coverage(
     centre: vec3<f32>,
     rotation_scale: mat3x3<f32>,
     half_extent: vec3<f32>,
+    view_axis: vec3<f32>,
     view_depth: f32,
     pixel_size_per_metre: f32
-) -> f32 {
+) -> SmallInstanceCoverage {
     let half_axes = mat3x3<f32>(
         rotation_scale[0] * half_extent.x,
         rotation_scale[1] * half_extent.y,
         rotation_scale[2] * half_extent.z
     );
+    let faces = mat3x3<f32>(
+        cross(half_axes[0], half_axes[1]),
+        cross(half_axes[1], half_axes[2]),
+        cross(half_axes[2], half_axes[0])
+    );
     let pixel_metres = pixel_size_per_metre * view_depth;
     let pixel_area = pixel_metres * pixel_metres;
-    let facing_volume = 4.0 * (abs(dot(centre, cross(half_axes[0], half_axes[1])))
-        + abs(dot(centre, cross(half_axes[1], half_axes[2])))
-        + abs(dot(centre, cross(half_axes[2], half_axes[0]))));
-    let area_share = facing_volume / (view_depth * pixel_area);
+    let pixel_shares = 4.0 / (view_depth * pixel_area);
+    let centre_along_view = view_axis * (dot(centre, view_axis) / max(dot(view_axis, view_axis), 1e-30));
+    let along_view = (centre_along_view * faces) * pixel_shares;
+    let across_view = ((centre - centre_along_view) * faces) * pixel_shares;
+    let area_share = dot(abs(along_view + across_view), vec3<f32>(1.0));
     // The farthest corner's, which an Instance that shears moves past the axes' summed squares.
     let skew = vec3<f32>(
         dot(half_axes[0], half_axes[1]),
@@ -270,13 +282,41 @@ fn small_instance_coverage(
         + 2.0 * farthest_skew);
     let sphere_share = sphere_diameter_squared
         / (SMALL_INSTANCE_WIDEST_PIXELS * SMALL_INSTANCE_WIDEST_PIXELS * pixel_area);
-    let coverage = max(area_share, sphere_share);
-    return select(1.0, coverage, view_depth > 0.0 && coverage < 1.0);
+    let least_coverage = max(area_share, sphere_share);
+    let mean_scale = small_instance_scale(along_view, across_view, area_share / max(least_coverage, 1e-30));
+    let sphere_scale = inverseSqrt(sphere_share);
+    let scale = min(mean_scale, sphere_scale);
+    let drawn_share = scale * dot(abs(scale * along_view + across_view), vec3<f32>(1.0));
+    // Stopped at four pixels across the sphere, it keeps its mean coverage with more samples.
+    let coverage = select(area_share / drawn_share, least_coverage, mean_scale <= sphere_scale);
+    let small = view_depth > 0.0 && least_coverage < 1.0;
+    // Under an eighth of coverage no sample is kept, so the Instance is not scaled.
+    return SmallInstanceCoverage(select(1.0, coverage, small), select(1.0, scale, small && coverage >= 0.125));
 }
 
-// Under an eighth of coverage no sample is kept, so the scale stops there.
-fn small_instance_scale(coverage: f32) -> f32 {
-    return inverseSqrt(clamp(coverage, 0.125, 1.0));
+// The least s past 1 at which bounds scaled across the view by s draw `drawn_share` of a
+// pixel. A face's share along the view axis grows by s², the rest by s, and a face can turn
+// from the camera, so the bounds' share is the largest over the faces' signs of
+// s (s Σ±along + Σ±across).
+fn small_instance_scale(along_view: vec3<f32>, across_view: vec3<f32>, drawn_share: f32) -> f32 {
+    let face_signs = mat3x4<f32>(
+        vec4<f32>(1.0, 1.0, 1.0, -1.0),
+        vec4<f32>(1.0, 1.0, -1.0, 1.0),
+        vec4<f32>(1.0, -1.0, 1.0, 1.0)
+    );
+    let along = face_signs * along_view;
+    let across = face_signs * across_view;
+    let reached = min(first_scale_drawing(along, across, drawn_share), first_scale_drawing(-along, -across, drawn_share));
+    return max(min(min(reached.x, reached.y), min(reached.z, reached.w)), 1.0);
+}
+
+// Per lane, the least s > 0 at which s (s along + across) reaches `drawn_share`. A lane
+// that peaks before s = 1 reaches it only before 1, so it reaches none past 1.
+fn first_scale_drawing(along: vec4<f32>, across: vec4<f32>, drawn_share: f32) -> vec4<f32> {
+    let discriminant = across * across + 4.0 * drawn_share * along;
+    let root = 2.0 * drawn_share / max(across + sqrt(max(discriminant, vec4<f32>(0.0))), vec4<f32>(1e-30));
+    let rises_past_one = (along >= vec4<f32>(0.0)) | (across + 2.0 * along >= vec4<f32>(0.0));
+    return select(vec4<f32>(1e30), root, (discriminant >= vec4<f32>(0.0)) & rises_past_one);
 }
 
 // The ordinary bit and each width class's whose upper bound, twice its lower, is no narrower than the pixel: `instance_mask` sets these bits.

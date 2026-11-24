@@ -2323,6 +2323,8 @@ fn a_thin_primitive_draws_a_pixel_wide_where_it_is_narrower() {
         &inputs,
     );
     for ([radius, pixel, expected], result) in cases.into_iter().zip(results) {
+        // WGSL floor 2.5e-8: the halving is exact, one 2.5 ULP division at
+        // most 0.08 (ULP 2⁻²⁷) and the literals' half ULP.
         assert!(
             (result[0] - expected).abs() < 1e-6,
             "a radius of {radius} m under a pixel of {pixel} m draws at {}, not {expected}",
@@ -2357,6 +2359,9 @@ fn a_thin_primitive_keeps_the_samples_nearest_its_coverage() {
         &inputs,
     );
     for ((coverage, expected), result) in cases.into_iter().zip(results) {
+        // WGSL floor 0: × 4 and + 0.5 are exact at the thresholds 0.125,
+        // 0.375, 0.625 and 0.875, and 0.124, 0.374 and 0.874 land 0.004 of a
+        // count, over 2¹⁴ ULP, under the next, past any rounding.
         assert_eq!(
             result[0] as u32, expected,
             "a coverage of {coverage} keeps samples {:04b}, not {expected:04b}",
@@ -2365,12 +2370,20 @@ fn a_thin_primitive_keeps_the_samples_nearest_its_coverage() {
     }
 }
 
-/// An Instance whose bounds cover under a pixel's area keeps that share of
-/// its samples and is scaled until they cover a pixel's, and keeps none
-/// under an eighth; one the sphere about its bounds draws four pixels wide is
-/// scaled no further. Each case's coverage is a literal: a face of area `a`
-/// and normal `n` covers `a |n · centre| / depth³` a metre along the view
-/// axis, and a pixel there 1e-6 m² in all but one case.
+/// An Instance whose bounds cover under a pixel's area keeps the larger of
+/// that share of its samples and the square of the sphere about them over
+/// four pixels, so a sliver's samples follow its length, and none under an
+/// eighth. It is scaled across the view until the area its bounds draw times
+/// that coverage is the area they truly cover, a pixel's but for a sliver, at
+/// any angle; stopped where the sphere is four pixels across, it keeps more
+/// samples instead. Each case's coverage and scale are literals: a face of
+/// area `a` and normal `n` covers `a |n · centre| / depth³` a metre along the
+/// view axis, and a pixel there 1e-6 m² in all but two cases; scaled across
+/// the view by s, the part of `n · centre` along the view axis grows by s²
+/// and the rest by s, so the cube aside, half its share each, draws
+/// s (s + 1) / 2 of it, the turned cube aside, which shows one face square to
+/// its ray and another edge on, draws s² of it, and the sliver aside draws
+/// s (0.04 s + 0.0004) of a pixel.
 #[test]
 fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
     let Some(context) = gpu_context() else {
@@ -2386,7 +2399,6 @@ fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
     const AHEAD: [f32; 3] = [0.0, 0.0, -1000.0];
     const ASIDE: [f32; 3] = [1000.0, 0.0, -1000.0];
     const PIXEL_SIZE_PER_METRE: f32 = 0.001;
-    const SQRT_2: f64 = std::f64::consts::SQRT_2;
     // Each case: the bounds' centre, with the view axis -Z, and half extent,
     // then the coverage, the scale and the samples kept.
     type Case = ([f32; 3], [f32; 3], f64, f64, u32);
@@ -2399,20 +2411,21 @@ fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
                     [first[0], first[1], first[2], half_extent[0]],
                     [second[0], second[1], second[2], half_extent[1]],
                     [third[0], third[1], third[2], half_extent[2]],
-                    [pixel_size_per_metre, 0.0, 0.0, 0.0],
+                    [pixel_size_per_metre, 0.0, 0.0, -1.0],
                 ]
             })
             .collect();
-        let coverage = "small_instance_coverage(
+        let small_instance = "small_instance_coverage(
             inputs[0].xyz,
             mat3x3<f32>(inputs[1].xyz, inputs[2].xyz, inputs[3].xyz),
             vec3<f32>(inputs[1].w, inputs[2].w, inputs[3].w),
+            inputs[4].yzw,
             inputs[0].w,
             inputs[4].x
         )";
         let expression = format!(
-            "vec4<f32>({coverage}, small_instance_scale({coverage}), \
-             f32(thin_kept_samples({coverage})), 0.0)"
+            "vec4<f32>({small_instance}.coverage, {small_instance}.scale, \
+             f32(thin_kept_samples({small_instance}.coverage)), 0.0)"
         );
         let results = evaluate_cases(&context, &expression, &inputs, &[]);
         for (&(centre, half_extent, coverage, scale, samples), result) in cases.iter().zip(results)
@@ -2421,16 +2434,51 @@ fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
                 "bounds of half extent {half_extent:?} at {centre:?}, turned by \
                  {rotation_scale:?}, under a pixel of {pixel_size_per_metre} m a metre away"
             );
+            // WGSL floor about 2.2e-6 at u = 2⁻²³: about 25u of the coverage
+            // for the area share (cross, the split along the view, dots, the
+            // pixel's area, two 2.5 ULP divisions), 31u where the sphere sets
+            // it (its 14u and `inverseSqrt`'s 2 ULP, squared), on coverages up
+            // to 0.5625, and the literals' rounding, 3.9e-7 at most.
             assert_close(
                 result[0],
                 coverage,
-                2e-6,
+                4e-6,
                 format_args!("the coverage of {case}"),
             );
+            // WGSL floor about 6.3e-6: `sqrt`'s 4.5 ULP, as WGSL inherits it
+            // from 1/`inverseSqrt`, a sum and a 2.5 ULP division, 15u of a
+            // scale up to 3.53, half the coverage's error, and the literals'.
             assert_close(result[1], scale, 1e-5, format_args!("the scale of {case}"));
             assert_eq!(result[2] as u32, samples, "the samples kept of {case}");
+            let drawn_share = |scale: f64| {
+                let centre = glam::DVec3::from_array(centre.map(f64::from));
+                let across_view = glam::DVec3::new(scale, scale, 1.0);
+                let half_axes: [glam::DVec3; 3] = std::array::from_fn(|axis| {
+                    glam::DVec3::from_array(rotation_scale[axis].map(f64::from))
+                        * f64::from(half_extent[axis])
+                        * across_view
+                });
+                let pixel_metres = f64::from(pixel_size_per_metre) * -centre.z;
+                (0..3)
+                    .map(|face| 4.0 * centre.dot(half_axes[face].cross(half_axes[(face + 1) % 3])))
+                    .map(f64::abs)
+                    .sum::<f64>()
+                    / (-centre.z * pixel_metres * pixel_metres)
+            };
+            if samples != 0 && coverage < 1.0 {
+                let mean_coverage = drawn_share(f64::from(result[1])) * coverage;
+                // WGSL floor about 3.7e-6: twice the scale's relative error,
+                // of a mean up to 0.5, and the coverage literals' 3.9e-7.
+                assert!(
+                    (mean_coverage - drawn_share(1.0)).abs() <= 1e-5,
+                    "the mean coverage of {case} is {mean_coverage}, not {}",
+                    drawn_share(1.0)
+                );
+            }
         }
     };
+    let sliver_scale = 1.0 / 0.250_05f64.sqrt();
+    let sliver_aside_coverage = 0.0404 / (sliver_scale * (0.04 * sliver_scale + 0.0004));
     check(
         IDENTITY,
         PIXEL_SIZE_PER_METRE,
@@ -2438,18 +2486,35 @@ fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
             (AHEAD, [0.5; 3], 1.0, 1.0, 0b1111),
             (AHEAD, [0.25; 3], 0.25, 2.0, 0b0001),
             (AHEAD, [0.18; 3], 0.1296, 2.777_778, 0b0001),
-            (AHEAD, [0.175; 3], 0.1225, 2.0 * SQRT_2, 0b0000),
-            (AHEAD, [0.0; 3], 0.0, 2.0 * SQRT_2, 0b0000),
-            (ASIDE, [0.25; 3], 0.5, SQRT_2, 0b1001),
+            (AHEAD, [0.175; 3], 0.1225, 1.0, 0b0000),
+            (AHEAD, [0.0; 3], 0.0, 1.0, 0b0000),
+            (ASIDE, [0.25; 3], 0.5, (17f64.sqrt() - 1.0) / 2.0, 0b1001),
             (AHEAD, [1.0, 0.01, 0.01], 0.250_05, 1.999_8, 0b0001),
+            (
+                ASIDE,
+                [1.0, 0.01, 0.01],
+                sliver_aside_coverage,
+                sliver_scale,
+                0b0001,
+            ),
             (AHEAD, [2.0, 0.01, 0.01], 1.0, 1.0, 0b1111),
             ([0.0, 0.0, -10.0], [0.5; 3], 1.0, 1.0, 0b1111),
             ([0.0, 0.0, 1000.0], [0.25; 3], 1.0, 1.0, 0b1111),
             ([1.0, 0.0, 0.0], [0.25; 3], 1.0, 1.0, 0b1111),
         ],
     );
+    // A power of two a pixel, so the eighth is exact.
+    let eighth_aside = (
+        [1024.0, 0.0, -1024.0],
+        [0.125; 3],
+        0.125,
+        (65f64.sqrt() - 1.0) / 2.0,
+        0b0001,
+    );
+    check(IDENTITY, 1.0 / 1024.0, &[eighth_aside]);
     let turned_cube = (AHEAD, [0.25; 3], 0.353_553, 1.681_793, 0b0001);
-    check(TURNED, PIXEL_SIZE_PER_METRE, &[turned_cube]);
+    let turned_aside = (ASIDE, [0.25; 3], 0.353_553, 1.681_793, 0b0001);
+    check(TURNED, PIXEL_SIZE_PER_METRE, &[turned_cube, turned_aside]);
     let whole_cube = (AHEAD, [0.5; 3], 0.25, 2.0, 0b0001);
     check(IDENTITY, 2.0 * PIXEL_SIZE_PER_METRE, &[whole_cube]);
     const SCALED: [[f32; 3]; 3] = [[2.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.5]];
