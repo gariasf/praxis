@@ -120,12 +120,14 @@ timing it held (a field ending `_microseconds`) and its Harness version as they
 were: new fields or changed counters alone measured nothing again. Two
 Baselines of one source meet the rules above with the later first: it stays
 unless the earlier goes on a Series and it does not, or the earlier's GPU frame
-spread is lower and neither is lavapipe's. A Baseline is a dirty tree, or a
-machine not quiet, where its own provenance stamps it so, and not quiet where
-the GPU frame spread it recorded reached 1.06, each frame's over the 31 around
-it where it recorded that, else the run's p95 over its median: one that
-recorded neither counts as clean and quiet unchecked. Its record keeps the
-scene content hash its provenance holds. Each import rewrites the records an earlier one wrote, with
+spread is lower and neither is lavapipe's. A Baseline's record is tagged dirty
+tree or machine not quiet where the Baseline's provenance stamps it so, and
+machine not quiet where the GPU frame spread it recorded reached 1.06, each
+frame's over the 31 around it where it recorded that, else the run's p95 over
+its median: one with no stamps counts as clean and as quiet as its spread, and
+one with neither stamps nor spread as clean and quiet unchecked. The record
+keeps the scene content hash the Baseline's provenance holds. Each import
+rewrites the records an earlier one wrote, with
 the tags the rules of its day give them. A record holds what the bench
 measured then, so a metric added later is absent from it: its Series row
 holds null for a time, Aliasing figure or scene content hash it lacks, and

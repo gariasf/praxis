@@ -310,22 +310,23 @@ struct Baseline {
     measured_frames: u32,
     /// Absent before the bench timed the whole frame.
     gpu_frame_microseconds: Option<Spread>,
-    provenance: Option<BaselineProvenance>,
+    #[serde(default)]
+    provenance: BaselineProvenance,
 }
 
 /// What the import reads of a Baseline's own provenance, each field absent
 /// before results carried it.
-#[derive(serde::Deserialize)]
+#[derive(Default, serde::Deserialize)]
 struct BaselineProvenance {
     gpu_frame_p95_over_neighbours: Option<f64>,
-    dirty: Option<bool>,
+    #[serde(default)]
+    dirty: bool,
     quiet: Option<bool>,
     scene_content_hash: Option<String>,
 }
 
 /// An imported record's provenance: the Baseline and the commit it came
-/// from, the Harness version then, and the scene content hash the Baseline
-/// holds.
+/// from, and the Harness version then.
 #[derive(serde::Serialize)]
 struct ImportedProvenance<'baseline> {
     source: &'static str,
@@ -362,9 +363,7 @@ fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<B
         .gpu_frame_microseconds
         .filter(|spread| spread.median > 0.0)
         .map(|spread| spread.p95 / spread.median);
-    let provenance = baseline.provenance.as_ref();
-    let p95_over_neighbours =
-        provenance.and_then(|provenance| provenance.gpu_frame_p95_over_neighbours);
+    let provenance = &baseline.provenance;
     file.insert(
         "provenance".to_owned(),
         serde_json::to_value(ImportedProvenance {
@@ -374,14 +373,13 @@ fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<B
             source_hash: &commit.source_hash,
             harness_version: commit.harness_version,
             gpu_frame_p95_over_median: p95_over_median,
-            gpu_frame_p95_over_neighbours: p95_over_neighbours,
-            scene_content_hash: provenance
-                .and_then(|provenance| provenance.scene_content_hash.as_deref()),
+            gpu_frame_p95_over_neighbours: provenance.gpu_frame_p95_over_neighbours,
+            scene_content_hash: provenance.scene_content_hash.as_deref(),
         })?,
     );
-    let dirty = provenance.and_then(|provenance| provenance.dirty) == Some(true);
-    let quiet = provenance.and_then(|provenance| provenance.quiet) != Some(false)
-        && p95_over_neighbours
+    let quiet = provenance.quiet != Some(false)
+        && provenance
+            .gpu_frame_p95_over_neighbours
             .or(p95_over_median)
             .is_none_or(|ratio| ratio < QUIET_P95_OVER_MEDIAN);
     BenchRecord::new(
@@ -390,7 +388,7 @@ fn imported(commit: &BaselineCommit, path: &str, json: &str) -> anyhow::Result<B
         &commit.source_hash,
         commit.committed_unix_seconds,
         tags(
-            dirty,
+            provenance.dirty,
             true,
             Some(Run {
                 scene: &baseline.scene,
