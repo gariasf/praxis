@@ -108,6 +108,9 @@ pub struct FrameStats {
     pub meshes_refused: u32,
     /// Materials the Material pool refused since the frame before.
     pub materials_refused: u32,
+    /// Resident tails and mip moves the Material pool refused a Texture
+    /// class since the frame before.
+    pub textures_refused: u32,
     /// Chunks whose loads failed this frame, each requested again later.
     pub chunks_not_loaded: u32,
     /// Late mips: mips the frame's drawn Chunks or Renderables need, by

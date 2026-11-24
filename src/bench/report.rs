@@ -343,6 +343,7 @@ impl std::fmt::Display for Traversal {
             ),
             ("Meshes refused", Some(self.meshes_refused as f64), 0),
             ("Materials refused", Some(self.materials_refused as f64), 0),
+            ("Textures refused", Some(self.textures_refused as f64), 0),
             (
                 "Renderables refused, most in a frame",
                 Some(self.renderables_refused as f64),

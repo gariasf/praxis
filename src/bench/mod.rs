@@ -629,6 +629,7 @@ pub struct Traversal {
     pub peak_gpu_memory_bytes_by_kind: [u64; GpuMemoryKind::COUNT],
     pub meshes_refused: u64,
     pub materials_refused: u64,
+    pub textures_refused: u64,
     /// The most Renderables and Placements one frame refused a slot.
     pub renderables_refused: u64,
     /// The most lights one frame had no room for.
@@ -678,6 +679,7 @@ impl Traversal {
             }),
             meshes_refused: total(|stats| stats.meshes_refused),
             materials_refused: total(|stats| stats.materials_refused),
+            textures_refused: total(|stats| stats.textures_refused),
             renderables_refused: most(|stats| stats.renderables_refused).into(),
             lights_refused: most(|stats| stats.lights_overflowed).into(),
             chunks_not_loaded: total(|stats| stats.chunks_not_loaded),
@@ -2957,6 +2959,7 @@ mod tests {
         frames[5].materials_refused = 2;
         frames[1003].materials_refused = 1;
         frames[6].meshes_refused = 1;
+        frames[8].textures_refused = 2;
         frames[400].renderables_refused = 4;
         frames[7].chunks_not_loaded = 2;
         frames[1004].chunks_not_loaded = 1;
@@ -2977,6 +2980,8 @@ mod tests {
             (traversal.materials_refused, traversal.meshes_refused),
             (3, 1)
         );
+        assert_eq!(traversal.textures_refused, 2);
+        assert!(traversal.to_string().contains("| Textures refused | 2 |"));
         assert_eq!(
             (traversal.renderables_refused, traversal.lights_refused),
             (4, 2)

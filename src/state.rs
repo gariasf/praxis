@@ -292,6 +292,7 @@ impl State {
         self.recorder.counters.pool_entries_freed = streamed.pool_entries_freed;
         self.recorder.counters.meshes_refused = streamed.meshes_refused;
         self.recorder.counters.materials_refused = streamed.materials_refused;
+        self.recorder.counters.textures_refused = streamed.textures_refused;
         self.recorder.counters.chunks_not_loaded = streamed.chunks_not_loaded;
         self.recorder.counters.late_mips = streamed.late_mips;
         self.recorder.counters.holding = streamed.holding;
