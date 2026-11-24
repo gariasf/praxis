@@ -335,8 +335,8 @@
       "end": 72
     },
     "draw_calls": 8,
-    "instances_drawn": 4607,
-    "triangles_drawn": 146533,
+    "instances_drawn": 4608,
+    "triangles_drawn": 146557,
     "instances_overflowed": 0,
     "uploaded_bytes": 2049376,
     "gpu_memory_bytes": 841147555,
