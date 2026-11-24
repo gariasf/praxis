@@ -53,8 +53,9 @@ const FAR_GROUND_DEPTH_METRES: f64 = 0.5;
 /// The settlement whose region the camera flies into, column then row.
 const CAMERA_SETTLEMENT: [u32; 2] = [4, 4];
 /// The camera flies north along a street, over the roofs and the birds, at
-/// 50 m/s, from farmland `APPROACH_METRES` south of its settlement's edge,
-/// looking at the ground `GAZE_METRES` ahead.
+/// 50 m/s, from `APPROACH_METRES` south of its settlement's edge, inside the
+/// square of the settlement south of it for its first 48 frames, looking at
+/// the ground `GAZE_METRES` ahead.
 const CAMERA_HEIGHT_METRES: f64 = 60.0;
 const CAMERA_METRES_PER_FRAME: f64 = 50.0 / 60.0;
 const APPROACH_METRES: f64 = 300.0;

@@ -54,32 +54,6 @@ enum TownMesh {
 }
 
 impl TownMesh {
-    /// Every Mesh, in the order of its discriminant, which indexes its
-    /// Handle when loaded.
-    const ALL: [TownMesh; 21] = [
-        TownMesh::Ground,
-        TownMesh::Box,
-        TownMesh::AirConditioner,
-        TownMesh::Vent,
-        TownMesh::WaterTank,
-        TownMesh::Dish,
-        TownMesh::Aerial,
-        TownMesh::SolarPanel,
-        TownMesh::RailingPost,
-        TownMesh::TopRail,
-        TownMesh::Lamp,
-        TownMesh::LampHead,
-        TownMesh::UtilityPole,
-        TownMesh::Wire,
-        TownMesh::Tree,
-        TownMesh::Bench,
-        TownMesh::RedCar,
-        TownMesh::BlueCar,
-        TownMesh::Bollard,
-        TownMesh::Bin,
-        TownMesh::Bird,
-    ];
-
     /// The name it cooks under.
     const fn name(self) -> &'static str {
         match self {
@@ -108,14 +82,6 @@ impl TownMesh {
     }
 }
 
-const _: () = {
-    let mut index = 0;
-    while index < TownMesh::ALL.len() {
-        assert!(TownMesh::ALL[index] as usize == index);
-        index += 1;
-    }
-};
-
 /// The Materials the box's Instances draw with; the other Meshes'
 /// Primitives name their own.
 #[derive(Clone, Copy)]
@@ -127,23 +93,9 @@ enum BoxMaterial {
     Rose,
     Slate,
     Glass,
-    Steel,
 }
 
 impl BoxMaterial {
-    /// Every Material, in the order of its discriminant, which indexes its
-    /// Handle when loaded.
-    const ALL: [BoxMaterial; 8] = [
-        BoxMaterial::Concrete,
-        BoxMaterial::Grass,
-        BoxMaterial::Ochre,
-        BoxMaterial::Cream,
-        BoxMaterial::Rose,
-        BoxMaterial::Slate,
-        BoxMaterial::Glass,
-        BoxMaterial::Steel,
-    ];
-
     /// The name it cooks under.
     const fn name(self) -> &'static str {
         match self {
@@ -154,18 +106,9 @@ impl BoxMaterial {
             BoxMaterial::Rose => "rose",
             BoxMaterial::Slate => "slate",
             BoxMaterial::Glass => "glass",
-            BoxMaterial::Steel => "steel",
         }
     }
 }
-
-const _: () = {
-    let mut index = 0;
-    while index < BoxMaterial::ALL.len() {
-        assert!(BoxMaterial::ALL[index] as usize == index);
-        index += 1;
-    }
-};
 
 /// The plasters the buildings are painted in.
 const PLASTERS: [BoxMaterial; 4] = [

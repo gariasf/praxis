@@ -79,7 +79,7 @@ Prose names no ticket or PR number except in a Finding's `placement`.
 ### Lane 2, image quality
 
 - Scope: every Reference scene through `scripts/gallery.sh` with `PRAXIS_BLENDER` at 2560×1440, and the 3x box-filtered supersampled reference where aliasing is the question.
-- Method: readers run AFK and prepare the gallery, each scene's mean 8-bit difference and linear-light RMSE against Cycles (recorded as that scene's first Cycles Baseline; the Baseline mechanism itself is a fix ticket the spec charts), and candidate 2x crops of terminators, highlights, silhouettes and shadow edges. The owner judges every crop in the room; no reader files an image Finding the owner has not seen. Each `DIFFERENCES.md` item is tagged in that file `deliberate until <trigger>` or `ticketed #n`.
+- Method: readers run AFK and prepare the gallery, each scene's mean 8-bit difference and linear-light RMSE against Cycles (judged against its Cycles Baseline in `bench/cycles/`, recorded with `PRAXIS_RECORD_CYCLES_BASELINES` only for a scene that has none; the Baseline mechanism itself is a fix ticket the spec charts), and candidate 2x crops of terminators, highlights, silhouettes and shadow edges. The owner judges every crop in the room; no reader files an image Finding the owner has not seen. Each `DIFFERENCES.md` item is tagged in that file `deliberate until <trigger>` or `ticketed #n`.
 - Evidence: scene, frame, pixel box, 2x crop praxis | Cycles | difference.
 - Severity: `image`.
 

@@ -128,7 +128,7 @@ A cooked Material is five Channels and their factors; normal and metallic-roughn
 | **A Render switch.** Either form compiled in or out when the Renderer is made | As the form | Nothing when off; a Game world whose weather changes keeps it on | As the form |
 | **A lobe.** A coat with its own roughness and normal | Up to three Channels and factors | A second specular evaluation per light per sample | Standing water over a rough base, lacquer, car paint |
 
-Where the scalars live is a second choice: in the weather state alone (one value for the Game world, masked by cover), or per Instance, written by prepare into the Instance's slot (ADR 0003, 136.2 bytes a slot today) as `docs/research/living-open-worlds.md` asks for characters. Snow cover is the input form with a second albedo and roughness to blend toward; snow under a roof is the cover question again.
+Where the scalars live is a second choice: in the weather state alone (one value for the Game world, masked by cover), or per Instance, written by prepare into the Instance's slot (ADR 0003, 144.2 bytes a slot today) as `docs/research/living-open-worlds.md` asks for characters. Snow cover is the input form with a second albedo and roughness to blend toward; snow under a roof is the cover question again.
 
 ## Fit to Praxis
 

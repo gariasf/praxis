@@ -583,7 +583,7 @@ pub(crate) fn far_field_contents(
 
 /// Cooks the sources `assets/manifest.json` lists that are present, and the
 /// procedural Assets of `scenes`, into `cache`; `praxis cook` cooks every
-/// Reference scene's.
+/// Reference scene's but `world`'s, which `praxis cook world` cooks.
 pub fn cook(
     assets: &Path,
     scenes: &[ReferenceScene],

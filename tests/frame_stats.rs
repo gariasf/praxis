@@ -125,7 +125,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // 1×1 neutral Textures, one per Channel (the spheres sample no other), RGBA8
     // but the normal Channel's RGBA16F, each a mip of 64 KiB or less; so nothing
     // in the texture pool.
-    let geometry_arenas = 34_225_520 + 22_229_808 + 838_860 + 12_163_480 + 14_428_404;
+    let geometry_arenas = 55_197_040 + 10_905_188 + 922_744 + 11_156_848 + 5_704_252;
     let resident_tails = 4 * 4 + 8;
     // The render targets: the 160×90 Depth32Float texture at 4 samples, its
     // 4x RGBA16F colour, which Apple GPUs keep in tile memory, so it counts

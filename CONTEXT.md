@@ -19,7 +19,7 @@ One contiguous range of a Mesh's vertices and, in each LOD, of its indices.
 _Avoid_: Submesh, surface
 
 **Thin Primitive**:
-A Primitive declared a tube of a given radius, drawn a pixel wide where it would be narrower, whose shadow ends where it would fall between a pixel and half a pixel wide.
+A Primitive declared a tube of a given radius, drawn a pixel wide where it would be narrower. In a Mesh of Thin Primitives alone whose widest tube is 3.125 mm to under 400 mm wide, its shadow ends where it would fall between a pixel and half a pixel wide; a narrower tube's shadow ends where its receiver's pixel passes 6.25 mm, and a tube of 400 mm or more, or one in a Mesh with an ordinary Primitive, casts its shadow onto every pixel.
 _Avoid_: Wire, strand, thin feature
 
 **LOD**:
@@ -80,7 +80,7 @@ Held in GPU memory now: said of streamed data, a Texture's mips and a Mesh's Are
 _Avoid_: Loaded (for GPU data), in memory, streamed in
 
 **Material ID**:
-The number that identifies a Material to the GPU. A Primitive's Material has one; an Instance carries one only when its Renderable overrides its Mesh's Materials.
+The number that identifies a Material to the GPU. A Primitive's Material has one; an Instance carries one only when its Renderable or Placement overrides its Mesh's Materials.
 _Avoid_: Material index
 
 ### Assets
@@ -244,7 +244,7 @@ The variants a Renderer is created with and keeps: whether Instances are culled,
 _Avoid_: Render settings, config, options, debug flags
 
 **Frame stats**:
-What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019's gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass's wait (from the latest end of the passes before it, culling phase one's onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, the Instance slots in use, Instances written, Renderables and Placements refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, the static TLAS worker's time on a build the frame submitted and, in a frame that binds one, the frames its earliest change waited to be traced, bends the bend pass had no room for, bytes uploaded, heap allocations and of them the dynamic TLAS build's, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.
+What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019's gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass's wait (from the latest end of the passes before it, culling phase one's onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, the Instance slots in use, Instances written, Renderables and Placements refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, the static TLAS worker's time on a build the frame submitted and, in a frame that binds one, the frames its earliest change waited to be traced, bends the bend pass had no room for, bytes uploaded, heap allocations and of them the dynamic TLAS build's, GPU memory, Arena bytes in use, the streaming counters (Late Chunks and Late Far proxies, late mips, Chunks loaded, unloaded and not loaded, bytes read, pool entries freed, and Meshes, Materials and Textures refused) and a Fast travel's hold and Far field fill, dropped time and the readbacks of GPU stats it skipped.
 _Avoid_: Metrics, telemetry
 
 **Timed pass**:
@@ -252,7 +252,7 @@ A span of a frame's GPU work that the GPU timestamps at its start and end for Fr
 _Avoid_: GPU pass (unqualified), timer, query
 
 **Baseline**:
-The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12. A commit re-records one when it changes a timing the Baseline held or its Harness version; a commit that changes only its counters does not, and starts no line on its Series.
+The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12. A commit re-measures one when it changes a timing the Baseline held or its Harness version, and only that starts a line on its Series or covers a Regression; a commit that re-records its counters alone, as `praxis history rerecord` does, does neither.
 _Avoid_: Benchmark result
 
 **Cycles Baseline**:
@@ -284,7 +284,7 @@ Bench records taken from a branch under a name, kept beside the Series and compa
 _Avoid_: Branch run, trial
 
 **Suspect**:
-A Bench record on a Series whose CPU or GPU frame median sits outside the median of up to 8 records before it, ± the larger of 4 median absolute deviations and 3% for the CPU frame, 1.25% for the GPU frame, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, imported or re-recorded Baseline, or commit a Verdict pinned judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.
+A Bench record on a Series whose CPU or GPU frame median sits outside the median of the 3 to 8 records before it on its line, ± the larger of 4 median absolute deviations and 3% for the CPU frame, 1.25% for the GPU frame, unless it only continues a Suspect among those 8, on the same side and within that Suspect's tolerance of its median. Only the records since the last Harness version, scene content, imported or re-measured Baseline, or commit a Verdict pinned judge it. A Suspect is a candidate, not a Regression: the sweep confirms or clears it.
 _Avoid_: Alert, outlier, anomaly
 
 **Verdict**:
@@ -296,7 +296,7 @@ One run of the sweep, nightly on the M4 Pro: the re-bench and bisect of at most 
 _Avoid_: sweep run, job
 
 **Regression**:
-A commit a Verdict pinned that no re-recorded Baseline of its scene covers. The sweep opens one `needs-triage` issue for it per scene, naming every judged timing the commit made slower there, and records the issue on the Verdict.
+A commit a Verdict pinned that no re-measured Baseline of its scene covers. The sweep opens one `needs-triage` issue for it per scene, naming every judged timing the commit made slower there, and records the issue on the Verdict.
 _Avoid_: Slowdown, perf bug
 
 **Budget**:

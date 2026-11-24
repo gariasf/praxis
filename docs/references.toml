@@ -1954,6 +1954,12 @@ section = "bevy_ecs 0.20.1, query/par_iter.rs, QueryParIter::for_each_init: a se
 quote = '''#[cfg(any(target_arch = "wasm32", not(feature = "multi_threaded")))] [...] .fold(init, func); [...] #[cfg(all(not(target_arch = "wasm32"), feature = "multi_threaded"))] { let thread_count = bevy_tasks::ComputeTaskPool::get().thread_num();'''
 checked = 2026-11-22
 
+["bevy-tasks-0.20.1-compute-pool-get-panics"]
+url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_tasks/src/usages.rs#L25-L39"
+section = "bevy_tasks 0.20.1, usages.rs, the taskpool! macro's get, which ComputeTaskPool takes (L59)"
+quote = '''#[doc = " # Panics"] #[doc = " Panics if the global instance has not been initialized yet."] pub fn get() -> &'static Self { $static.get().expect('''
+checked = 2026-11-24
+
 ["bevy-tasks-0.20.1-multi-threaded-pool"]
 url = "https://github.com/bevyengine/bevy/blob/v0.20.1/crates/bevy_tasks/src/lib.rs#L93-L105"
 section = "bevy_tasks 0.20.1, lib.rs: the threaded TaskPool and Scope with multi_threaded, the single-threaded ones without; bevy_ecs Cargo.toml L20 forwards the feature"

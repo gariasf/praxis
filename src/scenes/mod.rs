@@ -77,7 +77,8 @@ pub enum ReferenceScene {
     Town,
     /// A generated Game world of 40 × 40 Chunks, settlements with sparse
     /// farms between them, whose library of Textures outgrows the texture
-    /// pool, seen within its 256 m Load radius (`world.rs`).
+    /// pool, seen out to its 2 km View distance, its Chunks past the 256 m
+    /// Load radius as Far proxies, with flat ground beyond (`world.rs`).
     World,
 }
 
@@ -376,7 +377,8 @@ impl ReferenceScene {
     }
 
     /// The coordinates of the Chunks the scene's static content lies in, x
-    /// then z, in coordinate order: the Chunks its spawn loads.
+    /// then z, in coordinate order: the Chunks that exist, which the Chunk
+    /// streamer streams within the Load radius.
     pub(crate) fn chunk_coordinates(self) -> Vec<[i32; 2]> {
         match self {
             Self::Minification | Self::Shadows | Self::Crowd => vec![[0, 0]],

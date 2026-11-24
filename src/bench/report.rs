@@ -148,7 +148,7 @@ pub fn report(
 
     writeln!(
         report,
-        "\nThe Budget column bounds the median and p99; the CPU and GPU frames' maximum answers to {} µs. The culling phases' per-slot stages answer to a guard, at the median alone.",
+        "\nThe Budget column bounds the median, and the p99 of the CPU frame, GPU frame and gate (the CPU frame's p95 too); the CPU and GPU frames' maximum answers to {} µs. The culling phases' per-slot stages answer to a guard, at the median alone.",
         grouped(budgets.maximum_frame_microseconds, 1)
     )?;
 
@@ -572,7 +572,7 @@ mod tests {
 | `dynamic_tlas_build` | 48.7 | 462.9 | — | — | 50.0 | 400.0 | -1.3 | 0.974 | 1,000.0 |
 | `lit_pass` | 755.8 | 768.1 | — | — | 800.0 | 810.0 | -44.2 | 0.945 | — |
 
-The Budget column bounds the median and p99; the CPU and GPU frames' maximum answers to 16,667.0 µs. The culling phases' per-slot stages answer to a guard, at the median alone.
+The Budget column bounds the median, and the p99 of the CPU frame, GPU frame and gate (the CPU frame's p95 too); the CPU and GPU frames' maximum answers to 16,667.0 µs. The culling phases' per-slot stages answer to a guard, at the median alone.
 
 | Gate, rays off, µs | Median | p95 |
 |---|---:|---:|

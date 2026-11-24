@@ -64,7 +64,7 @@ const DYNAMIC_TLAS_BOUNDS_MARGIN_SCALE: f32 = 1.52587890625e-5; // 2^-16
 // The cosines, of a light's angle from a plane, past which a sample's normals
 // face the light or turn from it: sin 2° for the first two, the stored
 // normals' error, and sin 10° for the third. The surface normals'
-// 8-bit octahedral coordinates hold each within 0.95° where the store rounds
+// 8-bit octahedral coordinates hold each within 0.9532° where the store rounds
 // to the nearest step, as Metal's does, and about twice that where it may
 // round to either (`octahedral_decode`). Within the first, the stored
 // interpolated normal may turn from a light the lit pass's still faces; a
@@ -80,9 +80,10 @@ const TRIANGLE_TURN_MARGIN: f32 = 0.17364817766693033;
 // over it agree, as on a flat surface or a flat-shaded mesh: 3°.
 const NORMALS_AGREE: f32 = 0.9986295347545738;
 
-// The first triangle either TLAS holds from `start_distance` to
-// `end_distance` (the ray's tmin and tmax) along the ray from `origin`, in
-// the TLAS's frame, along `direction`, a unit vector: with
+// The first triangle either TLAS holds, of an entry whose instance mask
+// shares a bit with `mask`, from `start_distance` to `end_distance` (the
+// ray's tmin and tmax) along the ray from `origin`, in the TLAS's frame,
+// along `direction`, a unit vector: with
 // RAY_FLAG_TERMINATE_ON_FIRST_HIT in `flags`, any one, and otherwise the
 // nearest. Its kind is RAY_QUERY_INTERSECTION_NONE where there is none.
 // It traces the static TLAS, then the dynamic TLAS unless it is empty, as a
