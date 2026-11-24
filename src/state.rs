@@ -7,7 +7,7 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::system::RunSystemOnce;
 
 use crate::assets::{AssetLoader, PoolLoader};
-use crate::camera::fly_camera;
+use crate::camera::{Camera, CameraPath, fly_camera};
 use crate::components::Transform;
 use crate::cooked::{COOKED_CACHE_DIRECTORY, CookedCache};
 use crate::gpu::GpuContext;
@@ -143,14 +143,17 @@ impl Simulation {
         })
     }
 
-    /// Runs the Ticks `frame_delta` completes and moves the camera by it,
-    /// and returns the time past the Ticks' cap it dropped. A State's next
-    /// `prepare` writes every change since its last.
+    /// Moves the camera by `frame_delta`, runs the Ticks it completes, each
+    /// sampling the camera's move where the Tick ends, and returns the time
+    /// past the Ticks' cap it dropped. A State's next `prepare` writes every
+    /// change since its last.
     pub(crate) fn simulate(&mut self, frame_delta: Duration) -> Duration {
-        let dropped_time = run_ticks(&mut self.fixed_schedule, &mut self.world, frame_delta);
+        let start = self.world.resource::<Camera>().position;
         self.world.resource_mut::<Time>().delta_time = frame_delta.as_secs_f32();
         self.schedule.run(&mut self.world);
-        dropped_time
+        let end = self.world.resource::<Camera>().position;
+        self.world.insert_resource(CameraPath { start, end });
+        run_ticks(&mut self.fixed_schedule, &mut self.world, frame_delta)
     }
 }
 
@@ -256,8 +259,8 @@ impl State {
         self.renderer.resize(width, height);
     }
 
-    /// Runs the Ticks `frame_delta` completes, moves the camera by it,
-    /// streams the Chunks around it, prepares the frame's Frame data,
+    /// Moves the camera by `frame_delta`, runs the Ticks it completes,
+    /// streams the Chunks around the camera, prepares the frame's Frame data,
     /// blended between the two newest Ticks, and uploads it.
     pub fn update(&mut self, frame_delta: Duration) {
         if let Err(error) = self.advance(frame_delta, false) {
@@ -425,7 +428,6 @@ fn simulation_schedules(recorder: &FrameRecorder) -> (Schedule, Schedule) {
 mod tests {
     use super::*;
     use crate::assets::MeshHandle;
-    use crate::camera::Camera;
     use crate::components::Bend;
     use crate::time::{TICK, TICK_SECONDS};
     use crate::transform::{PreviousWorldTransform, Teleported, WorldTransform};
@@ -656,6 +658,68 @@ mod tests {
         });
         assert!(world.contains_resource::<Spawned>());
         assert!(frames_after_jump > 0, "no frame drawn just after the jump");
+    }
+
+    #[cfg(feature = "cook")]
+    #[derive(Resource, Default)]
+    struct FlockTrail(Vec<Vec<[u64; 12]>>);
+
+    #[cfg(feature = "cook")]
+    fn record_flocks(
+        centres: Query<&WorldTransform, With<WrapsAroundCamera>>,
+        mut trail: ResMut<FlockTrail>,
+    ) {
+        let bits = centres
+            .iter()
+            .map(|centre| centre.0.to_cols_array().map(f64::to_bits));
+        trail.0.push(bits.collect());
+    }
+
+    /// The bits of `world`'s flock centres' World transforms after each of
+    /// the first `ticks` Ticks, flown through at 200 m/s with frames of
+    /// `frame_deltas` in turn.
+    #[cfg(feature = "cook")]
+    fn flock_trail(ticks: usize, frame_deltas: &[Duration]) -> Vec<Vec<[u64; 12]>> {
+        let mut simulation = Simulation::spawned(
+            ReferenceScene::World,
+            glam::DVec3::ZERO,
+            CrowdForm::default(),
+            &mut crate::cook::AssetRecorder::default(),
+            &FrameRecorder::new(),
+        )
+        .unwrap();
+        let world = &mut simulation.world;
+        world.insert_resource(FlockTrail::default());
+        world.resource_mut::<Camera>().speed = 200.0;
+        let forward = winit::keyboard::KeyCode::KeyW;
+        world.resource_mut::<Input>().pressed.insert(forward);
+        let recorded = record_flocks.after(propagate_world_transforms);
+        simulation.fixed_schedule.add_systems(recorded);
+        for frame_delta in frame_deltas.iter().cycle() {
+            if simulation.world.resource::<FlockTrail>().0.len() >= ticks {
+                break;
+            }
+            simulation.simulate(*frame_delta);
+        }
+        let mut trail = simulation.world.remove_resource::<FlockTrail>().unwrap().0;
+        trail.truncate(ticks);
+        trail
+    }
+
+    #[cfg(feature = "cook")]
+    #[test]
+    fn worlds_flocks_wrap_on_the_same_ticks_whatever_the_frame_timing() {
+        const TICKS: usize = 192;
+        let steady = flock_trail(TICKS, &[crate::time::SIXTY_HERTZ]);
+        let mixed_rates = [6_944_444, 16_666_667, 33_333_333, 11_111_111].map(Duration::from_nanos);
+        let mixed = flock_trail(TICKS, &mixed_rates);
+        let translations = |tick: usize| -> Vec<_> {
+            steady[tick].iter().map(|bits| bits[9..].to_vec()).collect()
+        };
+        assert_ne!(translations(0), translations(TICKS - 1), "no flock jumped");
+        for (tick, (steady, mixed)) in steady.iter().zip(&mixed).enumerate() {
+            assert!(steady == mixed, "flock centres differ after Tick {tick}");
+        }
     }
 
     /// `shadows`'s Chunk, with a copy of it loaded 40 Chunks (10,240 m) along

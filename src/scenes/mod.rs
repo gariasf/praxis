@@ -5,7 +5,7 @@ use std::time::Duration;
 use bevy_ecs::prelude::*;
 
 use crate::assets::{AssetLoader, MaterialChannel};
-use crate::camera::{Camera, ev100_for_exposure};
+use crate::camera::{Camera, CameraPath, ev100_for_exposure};
 #[cfg(feature = "cook")]
 use crate::components::PointLight;
 use crate::components::{Bend, DirectionalLight, MaterialRef, MeshRef, Transform};
@@ -917,14 +917,16 @@ pub(crate) struct WrapsAroundCamera {
 }
 
 /// Moves each wrapping entity the whole spans that bring it within half a
-/// span of the camera on X and Z, as a jump.
+/// span, on X and Z, of where the camera is as the Tick ends, as a jump.
 pub(crate) fn wrap_around_camera(
     mut commands: Commands,
-    camera: Res<Camera>,
+    fixed_time: Res<FixedTime>,
+    camera_path: Res<CameraPath>,
     mut wrapping: Query<(Entity, &WrapsAroundCamera, &mut Transform)>,
 ) {
+    let camera = camera_path.at(fixed_time.frame_fraction);
     for (entity, wraps, mut transform) in &mut wrapping {
-        let spans = ((camera.position - transform.translation) / wraps.span_metres).round();
+        let spans = ((camera - transform.translation) / wraps.span_metres).round();
         let jump = glam::dvec3(spans.x, 0.0, spans.z) * wraps.span_metres;
         if jump != glam::DVec3::ZERO {
             transform.translation += jump;
@@ -1629,7 +1631,7 @@ mod tests {
         };
         let span_metres = 500.0;
         let mut world = World::new();
-        world.insert_resource(Camera::new());
+        world.insert_resource(FixedTime::default());
         let centre = world
             .spawn((
                 Transform::from_translation(glam::dvec3(100.0, 40.0, 0.0)),
@@ -1655,7 +1657,11 @@ mod tests {
                 .chain(),
         );
         let mut tick_with_camera_at = |x: f64, z: f64| {
-            world.resource_mut::<Camera>().position = glam::dvec3(x, 60.0, z);
+            let camera = glam::dvec3(x, 60.0, z);
+            world.insert_resource(CameraPath {
+                start: camera,
+                end: camera,
+            });
             schedule.run(&mut world);
             let drawn_at = |entity| world.get::<WorldTransform>(entity).unwrap().translation();
             let previous = world.get::<PreviousWorldTransform>(bird).unwrap().0;

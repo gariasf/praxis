@@ -43,6 +43,9 @@ pub struct FixedTime {
     /// How far time has moved past the newest Tick, in Ticks, in [0, 1): the
     /// weight α of the newest Tick's state in the frame's blend.
     pub blend_weight: f32,
+    /// Inside the fixed schedule, how far through the frame's delta the
+    /// running Tick ends, in (0, 1].
+    pub frame_fraction: f64,
     accumulator: Duration,
 }
 
@@ -78,8 +81,11 @@ pub fn fixed_schedule() -> Schedule {
 /// Advances the World's `FixedTime` by `frame_delta` and runs `schedule`
 /// once per Tick due. Returns the time dropped past the Tick cap.
 pub fn run_ticks(schedule: &mut Schedule, world: &mut World, frame_delta: Duration) -> Duration {
+    let carried = world.resource::<FixedTime>().accumulator;
     let (ticks, dropped) = world.resource_mut::<FixedTime>().advance(frame_delta);
-    for _ in 0..ticks {
+    for tick_in_frame in 1..=ticks {
+        world.resource_mut::<FixedTime>().frame_fraction =
+            (TICK * tick_in_frame - carried).div_duration_f64(frame_delta);
         schedule.run(world);
         world.resource_mut::<FixedTime>().tick += 1;
     }

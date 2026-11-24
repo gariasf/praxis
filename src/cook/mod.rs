@@ -18,7 +18,7 @@ use anyhow::Context;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-use export::AssetRecorder;
+pub(crate) use export::AssetRecorder;
 pub use export::{SCENE_FORMAT_VERSION, export_scene};
 pub use fetch::{Fetch, absent_fetched, fetch};
 pub(crate) use launch::CookingLoader;

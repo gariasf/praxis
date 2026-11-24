@@ -86,6 +86,21 @@ impl Camera {
     }
 }
 
+/// The camera's move over the frame being simulated: the input each Tick
+/// samples the camera from, never the camera itself (ADR 0022).
+#[derive(Resource, Default)]
+pub struct CameraPath {
+    pub start: glam::DVec3,
+    pub end: glam::DVec3,
+}
+
+impl CameraPath {
+    /// Where the camera is `fraction` of the way through the frame.
+    pub fn at(&self, fraction: f64) -> glam::DVec3 {
+        self.start.lerp(self.end, fraction)
+    }
+}
+
 /// Vertical field of view, in radians.
 pub(crate) const FIELD_OF_VIEW: f32 = std::f32::consts::FRAC_PI_4;
 /// Distance to the near plane in metres. There is no far plane (ADR 0015).

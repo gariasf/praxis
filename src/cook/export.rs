@@ -365,7 +365,7 @@ struct RenderableEntry {
 /// Notes the Asset ID behind each Handle a spawn takes, and loads nothing
 /// but the Chunks it is given.
 #[derive(Default)]
-pub(super) struct AssetRecorder<'chunks> {
+pub(crate) struct AssetRecorder<'chunks> {
     pub(super) meshes: Vec<AssetId>,
     pub(super) materials: Vec<AssetId>,
     textures: Vec<AssetId>,
