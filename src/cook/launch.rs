@@ -524,9 +524,9 @@ mod tests {
     }
 
     /// With SciFiHelmet absent, a launch keeps helmet's Chunk (-1, -1), whose
-    /// Placements name it, and still re-cooks the stale Blob of a sweep
-    /// Material the Chunk names before the Chunk's Blobs are read, writing no
-    /// Blob of the Chunk's own.
+    /// Placements name SciFiHelmet's Mesh. Cooking that Chunk, as streaming
+    /// does when it requests it, still re-cooks the stale Blob of a sweep
+    /// Material the Chunk names, and writes no Blob of the Chunk's own.
     #[test]
     fn a_kept_chunk_re_cooks_a_stale_material_it_names() {
         let scene = ReferenceScene::Helmet;
