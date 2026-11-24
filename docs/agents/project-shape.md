@@ -188,7 +188,8 @@ scripts/verify.sh              # the verify command: fmt, clippy, build,
                                  against Baselines and Budgets
 scripts/lavapipe-files.sh      # has CI record a pushed branch's lavapipe
                                  Goldens and Baselines, or takes a run's,
-                                 and copies the changed ones into the tree
+                                 and copies the changed ones into the tree,
+                                 removing those the run removed
 vendor/                        # crates.io crates carrying upstream fixes
                                  until their release (README.md): wgpu-core
                                  30.0.2 with the TLAS dependency dedup

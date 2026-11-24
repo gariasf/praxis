@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Copies into the checkout the lavapipe Goldens and Baselines a CI run
-# recorded: a run it dispatches on the current branch, or the run given.
+# recorded, and removes the Goldens it removed: a run it dispatches on the
+# current branch, or the run given.
 #
 # Usage: scripts/lavapipe-files.sh [<run id>]
 set -euo pipefail
@@ -57,7 +58,13 @@ fi
 download_directory=$(mktemp -d)
 for artifact in $artifacts; do
   gh run download "$run_id" --name "$artifact" --dir "$download_directory/$artifact"
-  cp -R "$download_directory/$artifact/." .
+  if [ "$artifact" = lavapipe-removed ]; then
+    while read -r removed_golden; do
+      rm -f -- "$removed_golden"
+    done < "$download_directory/$artifact/paths"
+  else
+    cp -R "$download_directory/$artifact/." .
+  fi
 done
 rm -r "$download_directory"
 git status --short tests/goldens bench/baselines
