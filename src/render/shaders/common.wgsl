@@ -254,7 +254,7 @@ fn small_instance_coverage(
         rotation_scale[1] * half_extent.y,
         rotation_scale[2] * half_extent.z
     );
-    let faces = mat3x3<f32>(
+    let face_areas = mat3x3<f32>(
         cross(half_axes[0], half_axes[1]),
         cross(half_axes[1], half_axes[2]),
         cross(half_axes[2], half_axes[0])
@@ -263,8 +263,8 @@ fn small_instance_coverage(
     let pixel_area = pixel_metres * pixel_metres;
     let pixel_shares = 4.0 / (view_depth * pixel_area);
     let centre_along_view = view_axis * (dot(centre, view_axis) / max(dot(view_axis, view_axis), 1e-30));
-    let along_view = (centre_along_view * faces) * pixel_shares;
-    let across_view = ((centre - centre_along_view) * faces) * pixel_shares;
+    let along_view = (centre_along_view * face_areas) * pixel_shares;
+    let across_view = ((centre - centre_along_view) * face_areas) * pixel_shares;
     let area_share = dot(abs(along_view + across_view), vec3<f32>(1.0));
     // The farthest corner's, which an Instance that shears moves past the axes' summed squares.
     let skew = vec3<f32>(
@@ -283,15 +283,14 @@ fn small_instance_coverage(
     let sphere_share = sphere_diameter_squared
         / (SMALL_INSTANCE_WIDEST_PIXELS * SMALL_INSTANCE_WIDEST_PIXELS * pixel_area);
     let least_coverage = max(area_share, sphere_share);
-    let mean_scale = small_instance_scale(along_view, across_view, area_share / max(least_coverage, 1e-30));
-    let sphere_scale = inverseSqrt(sphere_share);
+    // Under an eighth of coverage no sample is kept, so the scale stops there.
+    let mean_scale = small_instance_scale(along_view, across_view, area_share / clamp(least_coverage, 0.125, 1.0));
+    let sphere_scale = inverseSqrt(max(sphere_share, 1e-30));
     let scale = min(mean_scale, sphere_scale);
     let drawn_share = scale * dot(abs(scale * along_view + across_view), vec3<f32>(1.0));
-    // Stopped at four pixels across the sphere, it keeps its mean coverage with more samples.
-    let coverage = select(area_share / drawn_share, least_coverage, mean_scale <= sphere_scale);
+    let coverage = select(area_share / max(drawn_share, 1e-30), least_coverage, mean_scale <= sphere_scale);
     let small = view_depth > 0.0 && least_coverage < 1.0;
-    // Under an eighth of coverage no sample is kept, so the Instance is not scaled.
-    return SmallInstanceCoverage(select(1.0, coverage, small), select(1.0, scale, small && coverage >= 0.125));
+    return SmallInstanceCoverage(select(1.0, coverage, small), select(1.0, scale, small));
 }
 
 // The least s past 1 at which bounds scaled across the view by s draw `drawn_share` of a
@@ -304,9 +303,12 @@ fn small_instance_scale(along_view: vec3<f32>, across_view: vec3<f32>, drawn_sha
         vec4<f32>(1.0, 1.0, -1.0, 1.0),
         vec4<f32>(1.0, -1.0, 1.0, 1.0)
     );
-    let along = face_signs * along_view;
-    let across = face_signs * across_view;
-    let reached = min(first_scale_drawing(along, across, drawn_share), first_scale_drawing(-along, -across, drawn_share));
+    let signed_along = face_signs * along_view;
+    let signed_across = face_signs * across_view;
+    let reached = min(
+        first_scale_drawing(signed_along, signed_across, drawn_share),
+        first_scale_drawing(-signed_along, -signed_across, drawn_share)
+    );
     return max(min(min(reached.x, reached.y), min(reached.z, reached.w)), 1.0);
 }
 

@@ -2434,11 +2434,13 @@ fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
                 "bounds of half extent {half_extent:?} at {centre:?}, turned by \
                  {rotation_scale:?}, under a pixel of {pixel_size_per_metre} m a metre away"
             );
-            // WGSL floor about 2.2e-6 at u = 2⁻²³: about 25u of the coverage
-            // for the area share (cross, the split along the view, dots, the
-            // pixel's area, two 2.5 ULP divisions), 31u where the sphere sets
-            // it (its 14u and `inverseSqrt`'s 2 ULP, squared), on coverages up
-            // to 0.5625, and the literals' rounding, 3.9e-7 at most.
+            // WGSL floor about 3.1e-6 at u = 2⁻²³: the area share takes about
+            // 25u of the coverage (cross, the split along the view, dots, the
+            // pixel's area, two 2.5 ULP divisions), and over the drawn share,
+            // where the sphere stops the scale, about 45u (the sphere's 14u
+            // and `inverseSqrt`'s 2 ULP, squared, and the drawn share's sums):
+            // 45u of the sheared case's 0.5625, which sits on that stop, and
+            // its literal's 1.3e-7.
             assert_close(
                 result[0],
                 coverage,
@@ -2446,8 +2448,9 @@ fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
                 format_args!("the coverage of {case}"),
             );
             // WGSL floor about 6.3e-6: `sqrt`'s 4.5 ULP, as WGSL inherits it
-            // from 1/`inverseSqrt`, a sum and a 2.5 ULP division, 15u of a
-            // scale up to 3.53, half the coverage's error, and the literals'.
+            // from 1/`inverseSqrt` [ref:wgsl-2026-float-accuracy], a sum and a
+            // 2.5 ULP division, 15u of a scale up to 3.53, half the coverage's
+            // error, and the literals'.
             assert_close(result[1], scale, 1e-5, format_args!("the scale of {case}"));
             assert_eq!(result[2] as u32, samples, "the samples kept of {case}");
             let drawn_share = |scale: f64| {
@@ -2468,7 +2471,8 @@ fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
             if samples != 0 && coverage < 1.0 {
                 let mean_coverage = drawn_share(f64::from(result[1])) * coverage;
                 // WGSL floor about 3.7e-6: twice the scale's relative error,
-                // of a mean up to 0.5, and the coverage literals' 3.9e-7.
+                // up to 55u with half the coverage's, of a mean up to 0.5,
+                // and the coverage literals' 3.9e-7.
                 assert!(
                     (mean_coverage - drawn_share(1.0)).abs() <= 1e-5,
                     "the mean coverage of {case} is {mean_coverage}, not {}",
@@ -2486,7 +2490,13 @@ fn a_small_instance_keeps_its_bounds_share_of_a_pixel_and_scales_to_one() {
             (AHEAD, [0.5; 3], 1.0, 1.0, 0b1111),
             (AHEAD, [0.25; 3], 0.25, 2.0, 0b0001),
             (AHEAD, [0.18; 3], 0.1296, 2.777_778, 0b0001),
-            (AHEAD, [0.175; 3], 0.1225, 1.0, 0b0000),
+            (
+                AHEAD,
+                [0.175; 3],
+                0.1225,
+                2.0 * std::f64::consts::SQRT_2,
+                0b0000,
+            ),
             (AHEAD, [0.0; 3], 0.0, 1.0, 0b0000),
             (ASIDE, [0.25; 3], 0.5, (17f64.sqrt() - 1.0) / 2.0, 0b1001),
             (AHEAD, [1.0, 0.01, 0.01], 0.250_05, 1.999_8, 0b0001),
