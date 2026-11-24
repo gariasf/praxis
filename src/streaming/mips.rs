@@ -81,8 +81,9 @@ struct Need {
     drawn: u32,
 }
 
-/// The mips one Texture needs that are not Resident: the request that
-/// brings them.
+/// The mips one Texture needs that are not Resident, from the
+/// `TextureShape::whole_block_level` of the finest: the request that brings
+/// them.
 #[derive(Clone, Debug)]
 pub(crate) struct MipRequest {
     pub texture: AssetId,
@@ -203,7 +204,7 @@ impl MipPriority {
         let mut late_mips = 0;
         self.requests.clear();
         for (&texture, need) in &self.needed {
-            let Some((_, resident)) = materials.texture_residency(texture) else {
+            let Some((shape, resident)) = materials.texture_residency(texture) else {
                 continue;
             };
             late_mips += resident.saturating_sub(need.drawn);
@@ -216,7 +217,7 @@ impl MipPriority {
             {
                 self.requests.push(MipRequest {
                     texture,
-                    levels: need.ahead..resident,
+                    levels: shape.whole_block_level(need.ahead)..resident,
                 });
             }
         }
@@ -251,8 +252,9 @@ impl MipPriority {
     /// How eviction ranks `texture`, whose finest Resident mip is
     /// `resident_level`, to make room for a move to `first_level`, by the
     /// last `plan`: `None` when it needs `first_level` or finer, or its
-    /// finest Resident mip within one level, as it loaded at that need and
-    /// so stays until its need coarsens by two (ADR 0017).
+    /// finest Resident mip within one level, as it loaded at that need, or
+    /// at the whole-block mip holding it, and so stays until its need
+    /// coarsens by two (ADR 0017).
     pub(crate) fn eviction_rank(
         &self,
         texture: AssetId,
@@ -481,10 +483,11 @@ mod tests {
         );
     }
 
-    /// Gives every Texture as a 2,048² BC7 Texture with its mips from
+    /// Gives every Texture as a `side`² BC7 Texture with its mips from
     /// `first_level`, and the Material `id` as one sampling the Texture `id`.
     struct TextureReader {
         first_level: u32,
+        side: u32,
     }
 
     impl crate::assets::AssetReader for TextureReader {
@@ -500,15 +503,18 @@ mod tests {
         }
         fn texture(&self, _id: AssetId) -> anyhow::Result<crate::cooked::CookedTexture> {
             let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
+            let side = self.side;
             let zeroed_level = |level: u32| {
-                vec![0; crate::cooked::level_bytes(format, 2048, 2048, level as usize)]
+                vec![0; crate::cooked::level_bytes(format, side, side, level as usize)]
             };
             Ok(crate::cooked::CookedTexture {
                 format,
-                width: 2048,
-                height: 2048,
+                width: side,
+                height: side,
                 first_level: self.first_level,
-                levels: (self.first_level..12).map(zeroed_level).collect(),
+                levels: (self.first_level..side.ilog2() + 1)
+                    .map(zeroed_level)
+                    .collect(),
             })
         }
         fn mesh(&self, id: AssetId) -> anyhow::Result<crate::cooked::CookedMesh> {
@@ -533,13 +539,17 @@ mod tests {
         (pool, staging)
     }
 
-    /// A Material pool holding `textures`, 2,048² BC7 Textures with only
+    /// A Material pool holding `textures`, `side`² BC7 Textures with only
     /// their Resident tails, from mip 3, Resident.
     fn pool_of_tails(
         context: &crate::gpu::GpuContext,
         textures: &[AssetId],
+        side: u32,
     ) -> (MaterialPool, crate::render::staging::LoadStaging) {
-        let reader = TextureReader { first_level: 3 };
+        let reader = TextureReader {
+            first_level: 3,
+            side,
+        };
         let (mut pool, mut staging) = empty_pool(context);
         for &texture in textures {
             let channel = crate::assets::MaterialChannel::Albedo;
@@ -589,7 +599,7 @@ mod tests {
             return;
         };
         let [drawn, ahead, replaced] = [10, 11, 12].map(AssetId);
-        let (pool, mut staging) = pool_of_tails(&context, &[drawn, ahead, replaced]);
+        let (pool, mut staging) = pool_of_tails(&context, &[drawn, ahead, replaced], 2048);
         let chunks = [chunk(1, false), chunk(2, true), chunk(3, true)];
         let mut priority = MipPriority::default();
         for (chunk, texture) in chunks.iter().zip([drawn, ahead, replaced]) {
@@ -616,6 +626,37 @@ mod tests {
         staging.submit(&context.queue);
     }
 
+    /// A drawn 2,052² Texture at its tail, mip 3, needing mip 1: its mips 1
+    /// and 2 are not whole blocks, so its request starts at mip 0.
+    #[test]
+    fn a_need_of_a_mip_not_whole_blocks_is_requested_from_a_whole_block_mip() {
+        let Some(context) = crate::assets::pools::tests::gpu_context() else {
+            return;
+        };
+        let texture = AssetId(10);
+        let (pool, mut staging) = pool_of_tails(&context, &[texture], 2052);
+        let drawn = chunk(1, false);
+        let mut priority = MipPriority::default();
+        priority
+            .uses
+            .insert(drawn.id, vec![texture_use(texture, 2.5)]);
+
+        let (late_mips, requests) = priority.plan(
+            DVec3::ZERO,
+            false,
+            std::iter::once((&drawn, Sight::Drawn)),
+            std::iter::empty(),
+            &LoadedMeshes::default(),
+            &pool,
+        );
+
+        let requested: Vec<_> = (requests.iter())
+            .map(|request| (request.texture, request.levels.clone()))
+            .collect();
+        assert_eq!((late_mips, requested), (2, vec![(texture, 0..3)]));
+        staging.submit(&context.queue);
+    }
+
     /// A drawn Texture at its tail, mip 3, 8.5 m away, then 8.2 m: closing
     /// 0.3 m a frame, it is 3.4 m away `LEAD_FRAMES` later, so mip 1 is
     /// requested while mip 3 still serves it and none is late; after a
@@ -629,7 +670,7 @@ mod tests {
             return;
         };
         let texture = AssetId(10);
-        let (pool, mut staging) = pool_of_tails(&context, &[texture]);
+        let (pool, mut staging) = pool_of_tails(&context, &[texture], 2048);
         let chunks = [chunk(1, false)];
         let plan_from = |first_z: f64, second_z: f64, teleported: bool| {
             let mut priority = MipPriority::default();
@@ -678,7 +719,10 @@ mod tests {
             .load_making_room(
                 &context.device,
                 &mut staging,
-                &TextureReader { first_level },
+                &TextureReader {
+                    first_level,
+                    side: 2048,
+                },
                 texture,
                 crate::assets::MaterialUse::Ordinary,
                 &mut |_| false,

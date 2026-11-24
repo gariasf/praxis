@@ -248,20 +248,36 @@ pub struct CookedTexture {
 
 /// The first mip of the Resident tail of a `width` × `height` Texture of
 /// `mip_level_count` mips in `format`: the first of
-/// `RESIDENT_TAIL_LEVEL_BYTES` or less, or 0 when that mip is not whole
-/// blocks, which a Texture of its own cannot start with.
+/// `RESIDENT_TAIL_LEVEL_BYTES` or less, or, when that mip is not whole
+/// blocks, the `whole_block_level` that holds it.
 pub(crate) fn resident_tail_level(
     format: wgpu::TextureFormat,
     width: u32,
     height: u32,
     mip_level_count: u32,
 ) -> u32 {
-    let (block_width, block_height) = format.block_dimensions();
-    (0..mip_level_count)
+    let tail_level = (0..mip_level_count)
         .find(|&level| {
             level_bytes(format, width, height, level as usize) as u64 <= RESIDENT_TAIL_LEVEL_BYTES
         })
-        .filter(|&level| {
+        .unwrap_or(0);
+    whole_block_level(format, width, height, tail_level)
+}
+
+/// The coarsest mip at or finer than `level` of a `width` × `height`
+/// Texture in `format` whose sides are whole blocks, the only mips a
+/// Texture class can start with: mip 0 at worst, as the reader's side check
+/// makes it whole blocks.
+pub(crate) fn whole_block_level(
+    format: wgpu::TextureFormat,
+    width: u32,
+    height: u32,
+    level: u32,
+) -> u32 {
+    let (block_width, block_height) = format.block_dimensions();
+    (0..=level)
+        .rev()
+        .find(|&level| {
             (width >> level).is_multiple_of(block_width)
                 && (height >> level).is_multiple_of(block_height)
         })
@@ -385,14 +401,16 @@ impl CookedTexture {
 
     /// Parses a Texture Blob as `from_blob` does, decoding its mips from the
     /// one `finest_level` picks from its side, its mip 0's larger dimension,
-    /// or from its Resident tail's first where that is finer.
+    /// or from its Resident tail's first where that is finer, each taken at
+    /// its `whole_block_level`.
     pub fn down_to_from_blob(
         blob: &[u8],
         finest_level: impl FnOnce(u32) -> u32,
     ) -> anyhow::Result<Self> {
         Self::decode(blob, |format, width, height, mip_level_count| {
             let tail_level = resident_tail_level(format, width, height, mip_level_count);
-            finest_level(width.max(height)).min(tail_level)
+            let level = finest_level(width.max(height)).min(tail_level);
+            whole_block_level(format, width, height, level)
         })
     }
 
@@ -1356,6 +1374,35 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("6x4: re-cook"), "{error}");
+    }
+
+    /// A Texture class starts only at a mip whose sides are whole blocks: a
+    /// 1,000² BC7 Texture's first mip of 64 KiB or less, mip 2, is 250², so
+    /// its Resident tail starts at mip 1, 500²; and a 2,052² one read down to
+    /// mip 2, 513², is read from mip 0.
+    #[cfg(feature = "cook")]
+    #[test]
+    fn a_texture_class_starts_only_at_a_mip_of_whole_blocks() {
+        let format = wgpu::TextureFormat::Bc7RgbaUnormSrgb;
+        let tail_level = resident_tail_level(format, 1000, 1000, 10);
+        let resident_bytes: usize = (tail_level..10)
+            .map(|level| level_bytes(format, 1000, 1000, level as usize))
+            .sum();
+        assert_eq!((tail_level, resident_bytes), (1, 335_360));
+
+        let texture = CookedTexture {
+            format,
+            width: 2052,
+            height: 2052,
+            first_level: 0,
+            levels: (0..12)
+                .map(|level| vec![0; level_bytes(format, 2052, 2052, level)])
+                .collect(),
+        };
+        assert_eq!(resident_tail_level(format, 2052, 2052, 12), 3);
+        let blob = texture.to_blob(1).unwrap();
+        let read = CookedTexture::down_to_from_blob(&blob, |_| 2).unwrap();
+        assert_eq!(read.first_level, 0);
     }
 
     /// A Mesh round-trips with its LOD chain, a Primitive that a LOD leaves
