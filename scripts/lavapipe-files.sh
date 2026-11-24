@@ -59,8 +59,8 @@ download_directory=$(mktemp -d)
 for artifact in $artifacts; do
   gh run download "$run_id" --name "$artifact" --dir "$download_directory/$artifact"
   if [ "$artifact" = lavapipe-removed ]; then
-    while read -r file; do
-      rm -f -- "$file"
+    while read -r removed_golden; do
+      rm -f -- "$removed_golden"
     done < "$download_directory/$artifact/paths"
   else
     cp -R "$download_directory/$artifact/." .

@@ -1,9 +1,9 @@
 name: lavapipe files
 
 # No job here may take the name of one of CI's: its result would replace
-# CI's on the commit. `scripts/lavapipe-files.sh` copies each artifact over
-# the checkout, so a file sits in it at its path in the repository, but
-# removes each path `lavapipe-removed` lists.
+# CI's on the commit. `scripts/lavapipe-files.sh` copies each artifact but
+# `lavapipe-removed` over the checkout, so a file sits in it at its path in
+# the repository, and removes each path `lavapipe-removed` lists.
 on:
   workflow_dispatch:
 
