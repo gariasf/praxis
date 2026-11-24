@@ -1872,7 +1872,7 @@ fn octahedral_coordinates_decode_to_the_unit_vector_they_encode() {
 /// 320.25u per axis, 3.31e-5 m, and the written order under round toward
 /// zero to 384.5u, 3.97e-5 m (over this if a GPU both reorders and rounds
 /// toward zero); `point_light_position`, with no local position, 128.3u per
-/// axis, 1.33e-5 m (2.0e-5 under round toward zero), and 128.6u in the worst
+/// axis, 1.32e-5 m (2.0e-5 under round toward zero), and 128.6u in the worst
 /// other order, 1.33e-5 m (2.0e-5).
 const PRECISION_BAR: f64 = 4.3e-5;
 
@@ -2673,7 +2673,6 @@ fn every_layer_of_texture_wall_decodes_to_the_class_and_slice_it_was_placed_in()
         .chain(std::iter::repeat_n(wall, TEXTURE_WALL_TEXTURES as usize))
         .map(|shape| table.place(shape).expect("a free Texture class"))
         .collect();
-    // Layers stay below 2^24, so f32 carries them exactly.
     let inputs: Vec<[f32; 4]> = placements
         .iter()
         .map(|placement| [placement.layer() as f32, 0.0, 0.0, 0.0])
@@ -2686,6 +2685,8 @@ fn every_layer_of_texture_wall_decodes_to_the_class_and_slice_it_was_placed_in()
 
     assert_eq!(placements[0].layer(), MaterialPool::DEFAULT_LAYER);
     for (placement, result) in placements.iter().zip(results) {
+        // WGSL floor 0: Layers stay below 2^24, so f32 carries them exactly,
+        // and the class and slice are a u32 division and remainder.
         assert_eq!(
             [result[0], result[1]],
             [placement.class as f32, placement.slice as f32],

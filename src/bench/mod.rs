@@ -1171,8 +1171,9 @@ impl std::fmt::Display for Measurements {
 /// Compares `current` with its `baseline` and the Budgets. The CPU frame's,
 /// the GPU frame's, each pass's, the gate's and shadow-ray time's medians
 /// count against Baselines; counters count too, aliasing's included, but the
-/// late mips, which depend on when the IO pool's reads land, and the TLAS build's
-/// allocations, which the heap allocations already hold, are reported only. Against the Budgets, the CPU frame, the GPU
+/// late mips, which depend on when the IO pool's reads land, and the TLAS
+/// build's allocations, which the heap allocations already hold, are
+/// reported only. Against the Budgets, the CPU frame, the GPU
 /// frame and the gate count at the median and p99, the CPU frame at the p95
 /// too, and the CPU and GPU frames' maximums against one 60 Hz period, and
 /// GPU memory in total and by kind; other p95s are reported only, as they

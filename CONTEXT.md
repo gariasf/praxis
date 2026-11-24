@@ -19,7 +19,7 @@ One contiguous range of a Mesh's vertices and, in each LOD, of its indices.
 _Avoid_: Submesh, surface
 
 **Thin Primitive**:
-A Primitive declared a tube of a given radius, drawn a pixel wide where it would be narrower. In a Mesh of Thin Primitives alone whose widest tube is 3.125 mm to under 400 mm wide, its shadow ends where it would fall between a pixel and half a pixel wide; a narrower tube's shadow ends where its receiver's pixel passes 6.25 mm, and a tube of 400 mm or more, or one in a Mesh with an ordinary Primitive, casts its shadow onto every pixel.
+A Primitive declared a tube of a given radius, drawn a pixel wide where it would be narrower. In a Mesh of Thin Primitives alone whose widest tube is 3.125 mm to under 400 mm wide, a Primitive's shadow ends where it would fall between a pixel and half a pixel wide; a narrower tube's shadow ends where its receiver's pixel passes 6.25 mm, and a tube of 400 mm or more, or one in a Mesh with an ordinary Primitive, casts its shadow onto every pixel.
 _Avoid_: Wire, strand, thin feature
 
 **LOD**:
