@@ -194,6 +194,7 @@
     "commit": "2032db50478203100483d23316a0d7629c7c98e2",
     "gpu_frame_p95_over_median": 1.0103761978761978,
     "harness_version": 11,
+    "scene_content_hash": "a21bfec6550dced38435d0ff5b706b3badeceecbc75c23fb07b7ed9de7fff787",
     "source": "baseline-rerecorded",
     "source_hash": "d9bad5bb16521723c28bd837af5bf7521961334c"
   },

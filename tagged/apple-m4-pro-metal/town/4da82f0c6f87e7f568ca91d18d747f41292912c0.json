@@ -128,6 +128,7 @@
     "commit": "daaba8ce275f4a89644e4de8094b03a3027dfa6d",
     "gpu_frame_p95_over_median": 1.0288725571153317,
     "harness_version": 10,
+    "scene_content_hash": "a1be4c5882044dde73928763be5b8cf0552a87c9f2ad7b11d42f7dd6ae31435e",
     "source": "baseline-rerecorded",
     "source_hash": "4da82f0c6f87e7f568ca91d18d747f41292912c0"
   },
@@ -136,6 +137,9 @@
     "median": 10779.165999999997,
     "p95": 11695.75
   },
+  "tags": [
+    "dirty tree"
+  ],
   "triangles_drawn": 5552214,
   "uploaded_bytes": 2049376,
   "width": 2560

@@ -352,6 +352,7 @@
     "gpu_frame_p95_over_median": 1.0082614694197363,
     "gpu_frame_p95_over_neighbours": 1.0107566927334541,
     "harness_version": 12,
+    "scene_content_hash": "123bdf80c8a73f745fbf42e113bb6435c2ef6650a891774b932104d64a5d64c8",
     "source": "baseline-rerecorded",
     "source_hash": "9cd0be2a3f0f3627d9c7cbb9b197fcbf4aecbe05"
   },
