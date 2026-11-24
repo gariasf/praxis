@@ -107,8 +107,10 @@ struct ThinVertexOutput {
 // lies the radius behind it along its normal, until the tube draws a pixel
 // wide where it would draw narrower; or any other vertex, of a small
 // Instance, moved out from the centre of its Mesh bounds across the view
-// until they cover a pixel's area. Every pipeline that draws one runs this
-// stage, so the lit pass meets the depths the depth passes kept.
+// until the area they draw times its coverage is the area they truly cover,
+// a pixel's but for a sliver, which keeps samples by its length, or until
+// the sphere about them is four pixels across. Every pipeline that draws one
+// runs this stage, so the lit pass meets the depths the depth passes kept.
 @vertex
 fn vs_thin(@builtin(vertex_index) packed_index: u32) -> ThinVertexOutput {
     var out = vertex_output(packed_index);
@@ -144,19 +146,21 @@ fn vs_thin(@builtin(vertex_index) packed_index: u32) -> ThinVertexOutput {
             camera.offset,
             instance.rotation_scale * (0.5 * (bounds_min + bounds_max))
         );
-        instance_coverage = small_instance_coverage(
+        let view_axis = vec3<f32>(camera.view_proj[0].w, camera.view_proj[1].w, camera.view_proj[2].w);
+        let small_instance = small_instance_coverage(
             bounds_centre,
             instance.rotation_scale,
             0.5 * (bounds_max - bounds_min),
+            view_axis,
             (camera.view_proj * vec4<f32>(bounds_centre, 1.0)).w,
             camera.pixel_size_per_metre
         );
+        instance_coverage = small_instance.coverage;
         // Across the view only: each vertex keeps its depth, as the culling pass's box does.
-        let view_axis = vec3<f32>(camera.view_proj[0].w, camera.view_proj[1].w, camera.view_proj[2].w);
         let from_centre = out.camera_relative_position - bounds_centre;
         let along_view = view_axis * (dot(from_centre, view_axis) / max(dot(view_axis, view_axis), 1e-30));
         out.camera_relative_position = bounds_centre + along_view
-            + (from_centre - along_view) * small_instance_scale(instance_coverage);
+            + (from_centre - along_view) * small_instance.scale;
         out.clip_position = camera.view_proj * vec4<f32>(out.camera_relative_position, 1.0);
     }
     return ThinVertexOutput(

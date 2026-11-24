@@ -313,13 +313,14 @@ fn lod_counts(mesh_index: u32, lod: u32, small: bool) -> vec3<u32> {
     );
 }
 
-fn instance_coverage(instance: InstanceData, mesh: MeshData, view_depth: f32) -> f32 {
+fn instance_coverage(instance: InstanceData, mesh: MeshData, view_depth: f32) -> SmallInstanceCoverage {
     let bounds_min = vec3<f32>(mesh.bounds_min[0], mesh.bounds_min[1], mesh.bounds_min[2]);
     let bounds_max = vec3<f32>(mesh.bounds_max[0], mesh.bounds_max[1], mesh.bounds_max[2]);
     return small_instance_coverage(
         bounds_centre(instance, bounds_min, bounds_max),
         instance.rotation_scale,
         0.5 * (bounds_max - bounds_min),
+        vec3<f32>(camera.view_proj[0].w, camera.view_proj[1].w, camera.view_proj[2].w),
         view_depth,
         camera.pixel_size_per_metre
     );
@@ -399,9 +400,10 @@ fn offset_slots(
         var coverage = 1.0;
         // vs_thin takes a Meshlet with a radius as a Thin Primitive's, whatever its Instance.
         if mesh.thin_triangle_counts[0] == 0u {
-            coverage = instance_coverage(instance, mesh, bounds.centre.w);
+            let small_instance = instance_coverage(instance, mesh, bounds.centre.w);
+            coverage = small_instance.coverage;
             // The tests below take the bounds as vs_thin draws them: wider across the view, as deep.
-            let widening = vec4<f32>(vec3<f32>(small_instance_scale(coverage)), 1.0);
+            let widening = vec4<f32>(vec3<f32>(small_instance.scale), 1.0);
             bounds.half_axes = mat3x4<f32>(
                 bounds.half_axes[0] * widening,
                 bounds.half_axes[1] * widening,
