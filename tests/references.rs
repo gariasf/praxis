@@ -232,7 +232,7 @@ fn collect_files(root: &Path, directory: &Path, files: &mut Vec<(String, String)
             .expect("a path under the crate root")
             .to_string_lossy()
             .replace('\\', "/");
-        let is_text = ["rs", "wgsl", "md", "sh", "toml"]
+        let is_text = ["rs", "wgsl", "md", "sh", "py", "toml"]
             .iter()
             .any(|extension| path.extension().is_some_and(|found| found == *extension));
         if is_text && relative != REGISTRY && relative != "tests/references.rs" {
