@@ -26,10 +26,11 @@ pub struct FrameStats {
     /// the light buffer, the bends, the Instances it wrote and the Instance
     /// slot count when it changed; the instance records of the dynamic
     /// TLAS's build and of the static TLAS's build it submits; the bytes its
-    /// streamed Chunk loads and mips write through the load staging, rows
-    /// padded as staged; and the bytes that the moves of Textures between
-    /// Texture classes staged since the frame before copy. Loads outside the
-    /// Chunk streamer, as a spawn's, are not counted.
+    /// streamed loads of Chunks, Far proxies and mips write through the load
+    /// staging, rows padded as staged; and the bytes that the moves of
+    /// Textures between Texture classes staged since the frame before copy,
+    /// whatever load made them. What loads outside the streamers, as a
+    /// spawn's, write is not counted.
     pub uploaded_bytes: u64,
     /// The Instance slots in use: one past the highest slot taken, the slots
     /// each culling phase's pass over them scans.
