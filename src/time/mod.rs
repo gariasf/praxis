@@ -81,11 +81,11 @@ pub fn fixed_schedule() -> Schedule {
 /// Advances the World's `FixedTime` by `frame_delta` and runs `schedule`
 /// once per Tick due. Returns the time dropped past the Tick cap.
 pub fn run_ticks(schedule: &mut Schedule, world: &mut World, frame_delta: Duration) -> Duration {
-    let carried = world.resource::<FixedTime>().accumulator;
+    let carried_time = world.resource::<FixedTime>().accumulator;
     let (ticks, dropped) = world.resource_mut::<FixedTime>().advance(frame_delta);
     for tick_in_frame in 1..=ticks {
         world.resource_mut::<FixedTime>().frame_fraction =
-            (TICK * tick_in_frame - carried).div_duration_f64(frame_delta);
+            (TICK * tick_in_frame - carried_time).div_duration_f64(frame_delta);
         schedule.run(world);
         world.resource_mut::<FixedTime>().tick += 1;
     }

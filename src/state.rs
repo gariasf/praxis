@@ -662,24 +662,23 @@ mod tests {
 
     #[cfg(feature = "cook")]
     #[derive(Resource, Default)]
-    struct FlockTrail(Vec<Vec<[u64; 12]>>);
+    struct FlockTrail(Vec<Vec<glam::DAffine3>>);
 
     #[cfg(feature = "cook")]
     fn record_flocks(
         centres: Query<&WorldTransform, With<WrapsAroundCamera>>,
         mut trail: ResMut<FlockTrail>,
     ) {
-        let bits = centres
-            .iter()
-            .map(|centre| centre.0.to_cols_array().map(f64::to_bits));
-        trail.0.push(bits.collect());
+        trail
+            .0
+            .push(centres.iter().map(|centre| centre.0).collect());
     }
 
-    /// The bits of `world`'s flock centres' World transforms after each of
-    /// the first `ticks` Ticks, flown through at 200 m/s with frames of
-    /// `frame_deltas` in turn.
+    /// `world`'s flock centres' World transforms after each of the first
+    /// `ticks` Ticks, flown through at 200 m/s with frames of `frame_deltas`
+    /// in turn.
     #[cfg(feature = "cook")]
-    fn flock_trail(ticks: usize, frame_deltas: &[Duration]) -> Vec<Vec<[u64; 12]>> {
+    fn flock_trail(ticks: usize, frame_deltas: &[Duration]) -> Vec<Vec<glam::DAffine3>> {
         let mut simulation = Simulation::spawned(
             ReferenceScene::World,
             glam::DVec3::ZERO,
@@ -714,11 +713,21 @@ mod tests {
         let mixed_rates = [6_944_444, 16_666_667, 33_333_333, 11_111_111].map(Duration::from_nanos);
         let mixed = flock_trail(TICKS, &mixed_rates);
         let translations = |tick: usize| -> Vec<_> {
-            steady[tick].iter().map(|bits| bits[9..].to_vec()).collect()
+            steady[tick]
+                .iter()
+                .map(|centre| centre.translation)
+                .collect()
         };
         assert_ne!(translations(0), translations(TICKS - 1), "no flock jumped");
+        let bits = |centres: &[glam::DAffine3]| -> Vec<_> {
+            let centre_bits = |centre: &glam::DAffine3| centre.to_cols_array().map(f64::to_bits);
+            centres.iter().map(centre_bits).collect()
+        };
         for (tick, (steady, mixed)) in steady.iter().zip(&mixed).enumerate() {
-            assert!(steady == mixed, "flock centres differ after Tick {tick}");
+            assert!(
+                bits(steady) == bits(mixed),
+                "flock centres differ after Tick {tick}"
+            );
         }
     }
 

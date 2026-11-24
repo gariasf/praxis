@@ -924,9 +924,9 @@ pub(crate) fn wrap_around_camera(
     camera_path: Res<CameraPath>,
     mut wrapping: Query<(Entity, &WrapsAroundCamera, &mut Transform)>,
 ) {
-    let camera = camera_path.at(fixed_time.frame_fraction);
+    let camera_position = camera_path.at(fixed_time.frame_fraction);
     for (entity, wraps, mut transform) in &mut wrapping {
-        let spans = ((camera - transform.translation) / wraps.span_metres).round();
+        let spans = ((camera_position - transform.translation) / wraps.span_metres).round();
         let jump = glam::dvec3(spans.x, 0.0, spans.z) * wraps.span_metres;
         if jump != glam::DVec3::ZERO {
             transform.translation += jump;
@@ -1657,10 +1657,10 @@ mod tests {
                 .chain(),
         );
         let mut tick_with_camera_at = |x: f64, z: f64| {
-            let camera = glam::dvec3(x, 60.0, z);
+            let camera_position = glam::dvec3(x, 60.0, z);
             world.insert_resource(CameraPath {
-                start: camera,
-                end: camera,
+                start: camera_position,
+                end: camera_position,
             });
             schedule.run(&mut world);
             let drawn_at = |entity| world.get::<WorldTransform>(entity).unwrap().translation();

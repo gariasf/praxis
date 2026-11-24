@@ -86,9 +86,9 @@ impl Camera {
     }
 }
 
-/// The camera's move over the frame being simulated: the input each Tick
-/// samples the camera from, never the camera itself (ADR 0022).
-#[derive(Resource, Default)]
+/// The camera's move over the frame being simulated, which each Tick
+/// samples as an input (ADR 0022).
+#[derive(Resource)]
 pub struct CameraPath {
     pub start: glam::DVec3,
     pub end: glam::DVec3,
