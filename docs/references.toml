@@ -984,6 +984,12 @@ section = "wgpu-core 30.0.1, Queue::write_texture (L853): a new StagingBuffer on
 quote = '''let staging_buffer = if stage_bytes_per_row == bytes_per_row { [...] let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?; [...] } else { [...] let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;'''
 checked = 2026-11-21
 
+["wgpu-core-30-compressed-texture-whole-blocks"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/device/resource.rs#L1436-L1457"
+section = "wgpu-core 30.0.1, Device::create_texture_inner (L1377): a compressed format's mip 0 width and height must be multiples of its block's"
+quote = '''if desc.format.is_compressed() { let (block_width, block_height) = desc.format.block_dimensions(); if !desc.size.width.is_multiple_of(block_width) { return Err(CreateTextureError::InvalidDimension( TextureDimensionError::NotMultipleOfBlockWidth { [...] if !desc.size.height.is_multiple_of(block_height) { return Err(CreateTextureError::InvalidDimension( TextureDimensionError::NotMultipleOfBlockHeight {'''
+checked = 2026-11-24
+
 ["wgpu-30-staging-belt-chunk-size"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/util/belt.rs#L56-L57"
 section = "wgpu 30.0.1, StagingBelt::new and write_buffer (L132-L133)"
