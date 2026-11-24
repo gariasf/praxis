@@ -81,8 +81,9 @@ struct Need {
     drawn: u32,
 }
 
-/// The mips one Texture needs that are not Resident: the request that
-/// brings them.
+/// The mips one Texture needs that are not Resident, from the
+/// `TextureShape::whole_block_level` of the finest: the request that brings
+/// them.
 #[derive(Clone, Debug)]
 pub(crate) struct MipRequest {
     pub texture: AssetId,
@@ -203,7 +204,7 @@ impl MipPriority {
         let mut late_mips = 0;
         self.requests.clear();
         for (&texture, need) in &self.needed {
-            let Some((_, resident)) = materials.texture_residency(texture) else {
+            let Some((shape, resident)) = materials.texture_residency(texture) else {
                 continue;
             };
             late_mips += resident.saturating_sub(need.drawn);
@@ -216,7 +217,7 @@ impl MipPriority {
             {
                 self.requests.push(MipRequest {
                     texture,
-                    levels: need.ahead..resident,
+                    levels: shape.whole_block_level(need.ahead)..resident,
                 });
             }
         }
