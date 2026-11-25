@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/blas_refit.rs</code></div>
   <h1>The BLAS refit</h1>
   <p class="definition">In the <code>crowd</code> scene's refit form, the step that brings each bent figure's <span class="concept" data-term="BLAS" data-tip="Bottom-level acceleration structure: the GPU's search structure over one Mesh's triangles, which each Instance of a TLAS places. A ray walks the TLAS down to the BLASes it reaches and meets their triangles.">BLAS</span> to the shape the bend pass gave it, by refitting it in place through wgpu-hal on Metal, before the dynamic TLAS is built over it; its rebuild form does the same through wgpu as the oracle, and the shipping form, the shadow proxies, needs neither.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at 62052fe8 (2026-11-21). A change to the refit rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="bend-pass.html">Bend Pass</a> for the shapes the refit follows, <a href="blas.html">BLAS</a> for how a Mesh's BLAS is built at load, <a href="dynamic-tlas.html">Dynamic TLAS</a> for the build that reads the refitted BLASes, <a href="waiting-on-the-gpu.html">Waiting on the GPU</a> for why Metal needs an explicit order here.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 61426980 (2026-11-25). A change to the refit rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="bend-pass.html">Bend Pass</a> for the shapes the refit follows, <a href="blas.html">BLAS</a> for how a Mesh's BLAS is built at load, <a href="dynamic-tlas.html">Dynamic TLAS</a> for the build that reads the refitted BLASes, <a href="waiting-on-the-gpu.html">Waiting on the GPU</a> for why Metal needs an explicit order here.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -493,8 +493,8 @@ fn record_refits(
     // - Every handle is Metal's: `new` refuses the refit off Metal.
     // - Every wgpu-hal object outlives its use past its guard
     //   (`metal::unguarded`): the Mesh pool, this refit and `blases`
-    //   hold their handles throughout, nothing destroys them, and only
-    //   the main thread calls into wgpu meanwhile (ADR 0016).
+    //   hold their handles throughout, and no thread destroys them
+    //   meanwhile, the static TLAS's worker included.
     // - The encoder is used through wgpu-hal alone, never ended here,
     //   and finished by wgpu [ref:wgpu-30-as-hal-mut-safety]; wgpu-core
     //   panics on a mix of the two [ref:wgpu-30-mixed-encoding-panics].
@@ -573,7 +573,7 @@ fn record_refits(
 }</code></pre>
   <p class="code-source"><code>BlasRefit::record_refits</code>, <code>src/render/blas_refit.rs</code>, compiled on Apple targets alone. A refusal logs once, with its reason, and returns the encoder finished empty.</p>
   <p><b>Every handle is Metal's.</b> <code>BlasRefit::new</code> returns None for <code>Refit</code> off Metal, through <code>unavailable_on</code>, so the block never runs there; each <code>as_hal::&lt;Metal&gt;</code> would also return None for a foreign object, and the block refuses instead of recording.</p>
-  <p><b>Every object outlives its use past its guard.</b> This is what <code>unguarded</code> asks of its caller. The Mesh pool, <code>BlasRefit</code> and the cloned <code>handles</code> hold every resource through the block, and nothing else destroys one meanwhile, since only the main thread calls into wgpu (ADR 0016).</p>
+  <p><b>Every object outlives its use past its guard.</b> This is what <code>unguarded</code> asks of its caller. The Mesh pool, <code>BlasRefit</code> and the cloned <code>handles</code> hold every resource through the block, and no thread destroys one meanwhile, the static TLAS's worker included: the Mesh pool keeps the Arenas and every refitted BLAS, and <code>BlasRefit</code> the scratch, whatever another thread drops.</p>
   <p><b>The encoder is wgpu-hal's alone.</b> It takes nothing through wgpu, and <code>encoder.finish()</code> ends it, as <code>as_hal_mut</code>'s terms require.</p>
   <p><b>The GPU's use ends before any object is freed.</b> wgpu-core keeps a resource alive until the GPU has run every command buffer that uses it, but learns what a command buffer uses only from what wgpu recorded into it. Here Metal does it: wgpu-hal's Metal backend makes its command buffers with retained references by default (<code>wgpu-30-metal-retain-references</code>), and such a command buffer keeps every resource its commands name until it completes.</p>
   <p><b>Each refit repeats its BLAS's build.</b> <code>metal::triangles</code> rebuilds wgpu-hal's description of the triangles from the <code>MeshBlas</code> that <code>load_for</code> kept: the same two Arenas, first vertex, vertex count and format, the 28-byte <code>CookedVertex</code> stride, u32 indices from <code>first_index</code>, the geometry's flags, and <code>REFITTED_BLAS_FLAGS</code>, which allow updates.</p>
@@ -755,9 +755,9 @@ pub(super) fn record(
   <table class="facts compact">
     <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>blas_refit</code></th><th class="n"><code>dynamic_tlas_build</code></th><th class="n">Dynamic TLAS CPU</th><th class="n">GPU frame</th></tr></thead>
     <tbody>
-      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">0.0</td><td class="n">0.0</td><td class="n">255.6</td><td class="n">3,380.0</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">0.0</td><td class="n">159.9</td><td class="n">749.5</td><td class="n">2,235.6</td></tr>
-      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">0.0</td><td class="n">162.1</td><td class="n">755.0</td><td class="n">1,976.8</td></tr>
+      <tr><td><code>crowd</code></td><td>Apple M4 Pro, Metal</td><td class="n">0.0</td><td class="n">0.0</td><td class="n">248.1</td><td class="n">3,433.3</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, Vulkan</td><td class="n">0.0</td><td class="n">158.7</td><td class="n">671.4</td><td class="n">2,045.0</td></tr>
+      <tr><td><code>crowd</code></td><td>RTX 2070 SUPER, DX12</td><td class="n">0.0</td><td class="n">161.5</td><td class="n">679.8</td><td class="n">1,774.9</td></tr>
     </tbody>
   </table>
   </div>
@@ -825,7 +825,7 @@ pub(super) fn record(
   </dl>
   <h3>History</h3>
   <p class="note">The refit form arrived in the third milestone, in two steps after the crowd scene and its shadow proxies: first the switch, the refit through wgpu-hal, its order on Metal and the capture test against the rebuild; then the marker that times it and the bench flag for both forms. Benched on the M4 Pro, the proxies' update fit the crowd's Budget and the refits alone did not, and the owner chose the proxies as the form skinning builds on, keeping the refit behind its Render switch as the shapes' reference, as ADR 0020 records. The Metal ordering gap it closes was found at load, in BLAS builds and compaction, which <a href="waiting-on-the-gpu.html#order">Waiting on the GPU</a> and <a href="metal-quirks.html#hazards">Metal quirks</a> describe; the crowd scene itself is on <a href="reference-scenes.html#crowd">The Reference scenes</a>. This page describes the mechanism as it is.</p>
-  <footer class="sources">Written from <code>src/render/blas_refit.rs</code>, <code>src/render/shaders/blas_refit_marker.wgsl</code>, <code>src/render/renderer.rs</code>, <code>readback.rs</code>, <code>bind_groups.rs</code>, <code>acceleration_structures.rs</code>, <code>src/stats/gpu_memory.rs</code>, <code>src/assets/pools.rs</code>, <code>src/assets/loader.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/state.rs</code>, <code>src/bench/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0007, 0013, 0016 and 0020, <code>docs/research/world-design-pre-mortem.md</code>, <code>docs/performance.md</code>, the committed Baselines, the wgpu and wgpu-hal 30.0.2 sources and the vendored wgpu-core, and the sources above, all at <code>main</code> 62052fe8.</footer>
+  <footer class="sources">Written from <code>src/render/blas_refit.rs</code>, <code>src/render/shaders/blas_refit_marker.wgsl</code>, <code>src/render/renderer.rs</code>, <code>readback.rs</code>, <code>bind_groups.rs</code>, <code>acceleration_structures.rs</code>, <code>src/stats/gpu_memory.rs</code>, <code>src/assets/pools.rs</code>, <code>src/assets/loader.rs</code>, <code>src/scenes/mod.rs</code>, <code>src/state.rs</code>, <code>src/bench/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0007, 0013, 0016 and 0020, <code>docs/research/world-design-pre-mortem.md</code>, <code>docs/performance.md</code>, the committed Baselines, the wgpu and wgpu-hal 30.0.2 sources and the vendored wgpu-core, and the sources above, all at <code>main</code> 61426980.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="bend-pass.html">Previous: The bend pass</a><a href="index.html">All field guides</a><a href="culling-pass.html">Next: The culling pass</a></nav>
