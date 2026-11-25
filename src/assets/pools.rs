@@ -1388,6 +1388,7 @@ pub(crate) mod tests {
     use std::sync::{Arc, LazyLock, Mutex};
 
     use super::*;
+    use crate::bench::grouped;
     use crate::capture::submit_and_map;
     use crate::cooked::{CookedLod, CookedMeshlet};
     use crate::gpu::GpuContext;
@@ -1395,6 +1396,10 @@ pub(crate) mod tests {
 
     /// Room for four 28-byte vertices, or 28 indices.
     const CAPACITY: u64 = 4 * 28;
+
+    pub(crate) const ADR_0017: &str = include_str!(
+        "../../docs/adr/0017-textures-stream-by-mip-geometry-lives-in-fixed-arenas.md"
+    );
 
     /// The checked-in capacities with every Arena of `bytes`.
     fn arenas_of(bytes: u64) -> PoolCapacities {
@@ -1410,8 +1415,9 @@ pub(crate) mod tests {
 
     #[test]
     fn the_checked_in_budgets_give_these_pool_capacities() {
+        let capacities = PoolCapacities::checked_in();
         assert_eq!(
-            PoolCapacities::checked_in(),
+            capacities,
             PoolCapacities {
                 vertex_arena_bytes: 55_197_040,
                 index_arena_bytes: 10_905_188,
@@ -1424,6 +1430,16 @@ pub(crate) mod tests {
                 texture_classes_per_channel: 13_107,
             }
         );
+        let vertex_arena_bytes = grouped(capacities.vertex_arena_bytes as f64, 0);
+        let mesh_bytes = grouped(GEOMETRY_BYTES_PER_MESH as f64, 0);
+        let material_bytes = grouped(TEXTURE_POOL_BYTES_PER_MATERIAL as f64, 0);
+        for quote in [
+            format!("the vertex Arena at {vertex_arena_bytes} bytes"),
+            format!("an entry per {mesh_bytes} bytes"),
+            format!("an entry per {material_bytes} bytes"),
+        ] {
+            assert!(ADR_0017.contains(&quote), "ADR 0017 lacks `{quote}`");
+        }
     }
 
     /// Budgets for two Meshes make a Mesh table of two and Arenas in their

@@ -1051,8 +1051,9 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::assets::material::MaterialData;
-    use crate::assets::pools::tests::{logged, read_storage};
+    use crate::assets::pools::tests::{ADR_0017, logged, read_storage};
     use crate::assets::{MaterialHandle, MeshHandle};
+    use crate::bench::grouped;
     use crate::camera::{Camera, ev100_for_exposure, projection_matrix};
     use crate::capture::read_back;
     use crate::components::{MeshRef, Transform};
@@ -1095,14 +1096,29 @@ pub(crate) mod tests {
 
     #[test]
     fn the_checked_in_budgets_give_these_render_capacities() {
+        let capacities = RenderCapacities::checked_in();
         assert_eq!(
-            RenderCapacities::checked_in(),
+            capacities,
             RenderCapacities {
                 instances: 488_448,
                 lights: 4893,
                 static_tlas_instances: 264_720,
                 load_bytes_per_frame: 26_640_177,
             }
+        );
+        let slot_bytes = INSTANCE_SCAN_BLOCK_BYTES as f64 / f64::from(SCAN_BLOCK_SIZE);
+        let slot_quote = format!("at {} bytes a slot", grouped(slot_bytes, 1));
+        let slots_quote = format!(
+            " {} slots at the checked-in Budgets",
+            grouped(f64::from(capacities.instances), 0)
+        );
+        let adr_0003 = include_str!("../../docs/adr/0003-persistent-scene-transform-buffer.md");
+        for quote in [&slot_quote, &slots_quote] {
+            assert!(adr_0003.contains(quote), "ADR 0003 lacks `{quote}`");
+        }
+        assert!(
+            ADR_0017.contains(&slot_quote),
+            "ADR 0017 lacks `{slot_quote}`"
         );
     }
 

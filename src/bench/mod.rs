@@ -8,6 +8,8 @@ pub use history::{
     publish_experiment, publish_night, rerecord_baselines, suspects, unrecorded_scenes,
 };
 pub use provenance::{BenchStart, Checkout, Provenance};
+#[cfg(test)]
+pub(crate) use report::grouped;
 pub use report::report;
 
 use std::collections::BTreeMap;
