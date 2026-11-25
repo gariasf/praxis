@@ -1,6 +1,6 @@
 mod history;
 mod provenance;
-mod report;
+pub(crate) mod report;
 
 pub use history::{
     GitHubIssues, IssueTracker, NextRun, Publication, ReleaseBuild, Suspect, bisect,

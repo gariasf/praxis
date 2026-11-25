@@ -280,7 +280,7 @@ pub fn report(
 
 /// `value` to `decimals` places, its whole part in groups of three digits
 /// (`4,208.6`), and a minus sign only when a digit it shows is nonzero.
-fn grouped(value: f64, decimals: usize) -> String {
+pub(crate) fn grouped(value: f64, decimals: usize) -> String {
     let digits = format!("{:.decimals$}", value.abs());
     let (whole, fraction) = digits.split_at(digits.find('.').unwrap_or(digits.len()));
     let mut text = String::new();
