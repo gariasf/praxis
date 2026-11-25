@@ -36,6 +36,197 @@ its commit.
 | `WHOLE_VIEW_ARRAY_BYTES` (`src/assets/material.rs`) | wgpu's zero-fill of a new Texture class's array took 6.6 to 7.1 µs of `submit` and 18.0 to 21.5 µs of GPU a MiB (two 2,048² classes of 64 slices, 672 MiB: 4.4 and 12.1 ms; of 128 slices, 1,344 MiB: 9.6 and 28.9 ms); a view of the slices placed on every array instead cost 509 to 510 bind group builds a traversal against 173 to 175, and `world`'s `encode` median 4 to 30 µs | M4 Pro, Metal | f24809ca with the change (2026-11-22, #988) | "The traversal's fill frame" below |
 | `LoadStaging::keep_slots` (`src/render/staging.rs`, called by `State::new` for `world`) | Taking a `StagingBelt` buffer for each Texture write cost 90.6 to 108.9 µs a MiB written, 1.07 to 1.29 ms a frame of the Far field's fill on average and 12.8 ms in one frame, beside a copy of 70.3 to 83.8 µs a MiB; into a kept slot it reads 1.8 to 1.9 µs a frame, and `world`'s CPU p99 3,538.6 to 3,753.0 µs against `main`'s 5,062.5 to 5,524.6 over three interleaved quiet rounds | M4 Pro, Metal | e8922330 with the change (2026-11-23, #989) | "`world`'s CPU p99: a fill frame's Texture writes created and zeroed their staging" below |
 
+## M5.5 exit (2026-11-25, #1010)
+
+**Verdict.** M5.5's fixes left the Reference scenes' frames where M5's exit
+left them. In the Baseline round, every scene's GPU frame median reads within
+0.6% of its Baseline before and every gate median within 1.0%, every CPU
+median reads lower, and no Budget is newly breached. The traversal's slowest
+frame fell from 32.5 ms of GPU to 15.5 ms, so none of its frames passes
+16,667 µs (#988). `world`'s CPU p99 reads 3.43 to 3.99 ms in the last three
+rounds against 5.51 ms in its Baseline before (#989), and 4.55 to 5.45 ms in
+the six rounds before them, run while other applications were open. `town`'s GPU frame and gate still breach their Budgets, as at M5's
+exit. The top three offenders are `town`'s GPU frame and gate (#602), the
+traversal's slowest frame (#1059), and `world`'s GPU frame spikes, which also
+keep its runs from stamping quiet (#1060).
+
+Apple M4 Pro, macOS 27.2.1, wgpu 30.0.2 on Metal (wgpu-core vendored), a
+release build of `78f2291e` (source hash `bbc81ee5`, not dirty). `praxis
+bench <dir> --no-publish` ran at 2560×1440 with 4x MSAA, 248 warm-up and
+1,800 measured frames per scene (`world` 3,352), under `caffeinate -dims`, on
+AC power, with no other praxis process. Nine rounds of every scene ran, at
+11:47, 16:08, 16:16, 16:58, 17:07, 17:36, 17:59, 18:29 and 18:35 UTC, and
+`praxis traverse` at 16:28. Rounds 1 to 6 and the traversal each began once
+preflight had read no warning three times in a row, 20 s apart (six times
+from round 4); round 7 began at once, with preflight reading the GPU at 13%;
+rounds 8 and 9 began once preflight read no warning and a GPU load of at most
+1% and 2% twice in a row. The rounds' Provenance reads one-minute loads of
+0.97 to 1.70 and GPU loads of 0 to 14% at their start. Of the 108 runs, 59
+stamp quiet. Of the rest, 7 list a process busy at their start or end, round
+7's twelve read a GPU load of 14% at its start, over the 10% bound, and the other
+30 fail only on their GPU frames' spread about their neighbours, up to 1.217.
+In rounds 4, 8 and 9, every scene but `world` spreads 1.006 to 1.024, and
+`world` 1.027, 1.084 and 1.085.
+
+The M4 Pro's Baselines are round 8's, all twelve scenes from one run. No round
+stamps all twelve quiet; round 8 stamps eleven, `world` not quiet on its
+spread alone, and of the two rounds that stamp eleven it reads the lower load,
+1.12 against 1.46. Against the Baselines before, recorded at `f806b46c`, the
+counters over frames 8 to 72 are equal on every scene. Over the measured
+frames, `world`'s moved: `instances_drawn` 11,015 to 11,009, `triangles_drawn`
+187,358 to 187,206, `bytes_read` 160,874,780 to 160,939,893, `late_mips` 12 to
+8 and `frames_until_traced` 7 to 6. Those follow the streaming's timing
+(#989): round 5 read 11,010 and 187,112, and `frames_until_traced` reads 6 or
+7 round to round. The Aliasing counters moved on `town`, `aliasing_rmse`
+5,258 to 5,260 and `aliasing_p99` 18,006 to 18,068, and on `world`,
+`aliasing_rmse` 4,249 to 4,246, every round alike. lavapipe's eleven come
+whole from `main`'s CI run on `78f2291e` (its `bench-publish` artifact, run
+45586254870); none of their counters moved. The RTX 2070 SUPER's were
+re-recorded at `92927566` by #1050 and are reported, not gated.
+
+### Measurements
+
+Round 8, the Baseline now, with the range over the nine rounds in brackets,
+against the Baselines before:
+
+| Scene | CPU median µs | CPU p99 µs | GPU frame median µs | GPU frame p99 µs | Gate median µs | Shadow-ray time median µs | Culling per-slot median µs | CPU / GPU Baseline before, µs |
+|---|---|---|---|---|---|---|---|---|
+| crowd | 698.0 (689.0 to 831.0) | 802.5 (802.5 to 1,576.7) | 3,433.3 (3,430.1 to 3,464.4) | 3,755.3 (3,755.3 to 4,261.9) | 830.1 (828.1 to 843.8) | 2,204.6 (2,199.1 to 2,237.0) | 78.6 (77.8 to 79.1) | 725.8 / 3,429.3 |
+| far-coplanar | 220.2 (219.5 to 327.2) | 299.0 (293.0 to 835.4) | 2,651.9 (2,651.8 to 2,672.0) | 2,684.5 (2,681.8 to 3,677.9) | 726.7 (720.5 to 740.1) | 1,600.7 (1,600.0 to 1,610.6) | 54.5 (53.6 to 54.8) | 230.9 / 2,650.3 |
+| helmet | 200.4 (192.9 to 214.8) | 322.2 (322.2 to 594.7) | 6,911.4 (6,886.9 to 6,926.7) | 7,464.7 (6,959.5 to 8,214.9) | 1,210.4 (1,207.0 to 1,214.0) | 5,373.7 (5,354.0 to 5,388.3) | 91.4 (90.6 to 91.6) | 214.7 / 6,951.7 |
+| minification | 211.6 (208.0 to 314.6) | 309.6 (309.6 to 739.2) | 3,036.0 (3,029.6 to 3,047.5) | 3,075.6 (3,061.1 to 3,827.8) | 846.0 (842.3 to 848.4) | 1,865.2 (1,863.0 to 1,877.2) | 52.4 (51.4 to 53.0) | 223.4 / 3,032.5 |
+| normal-tangent | 206.3 (198.7 to 326.5) | 275.0 (275.0 to 571.0) | 3,793.6 (3,783.0 to 3,800.8) | 4,243.2 (3,810.7 to 4,376.2) | 825.7 (821.7 to 829.0) | 2,641.2 (2,638.0 to 2,650.1) | 64.3 (63.6 to 64.4) | 218.0 / 3,777.3 |
+| orrery | 394.0 (380.5 to 413.9) | 481.8 (475.0 to 848.9) | 3,006.2 (3,003.1 to 3,047.0) | 3,193.0 (3,161.5 to 3,582.8) | 644.8 (644.8 to 659.1) | 2,036.4 (2,024.3 to 2,055.8) | 53.5 (52.7 to 53.5) | 405.2 / 3,000.6 |
+| pbr-sweep | 207.0 (198.8 to 233.2) | 277.1 (277.1 to 603.7) | 4,006.0 (4,001.4 to 4,022.1) | 4,152.2 (4,127.9 to 4,894.5) | 785.0 (778.6 to 793.7) | 2,890.5 (2,883.0 to 2,897.6) | 56.8 (55.9 to 57.0) | 216.2 / 4,013.7 |
+| shadows | 216.8 (213.7 to 360.9) | 340.4 (340.4 to 661.8) | 4,234.5 (4,228.8 to 4,248.0) | 4,787.5 (4,264.2 to 5,198.6) | 853.8 (853.8 to 859.5) | 3,056.2 (3,052.0 to 3,066.4) | 57.6 (56.1 to 57.6) | 231.3 / 4,214.7 |
+| texture-wall | 207.0 (202.1 to 229.2) | 296.7 (254.7 to 535.9) | 2,327.0 (2,320.4 to 2,332.0) | 2,357.3 (2,343.2 to 3,281.4) | 624.4 (619.4 to 627.1) | 1,376.2 (1,369.9 to 1,380.0) | 53.2 (52.6 to 53.3) | 210.0 / 2,320.5 |
+| town | 1,427.8 (1,417.8 to 1,663.2) | 1,750.7 (1,750.7 to 3,690.0) | 18,851.4 (18,841.5 to 19,035.4) | 19,552.4 (19,129.2 to 20,129.6) | 6,732.5 (6,732.5 to 6,824.0) | 11,645.2 (11,620.0 to 11,718.9) | 395.8 (393.0 to 400.0) | 1,516.1 / 18,852.0 |
+| uv-grid | 204.8 (202.8 to 281.0) | 307.6 (280.6 to 649.8) | 2,969.3 (2,966.0 to 2,987.7) | 3,002.5 (2,995.0 to 3,617.8) | 766.5 (764.8 to 775.1) | 1,881.9 (1,878.3 to 1,884.6) | 53.6 (52.4 to 54.6) | 212.5 / 2,970.0 |
+| world | 1,580.3 (1,580.0 to 1,773.3) | 3,446.9 (3,428.8 to 5,446.8) | 6,080.5 (6,054.0 to 6,245.4) | 9,317.9 (9,177.6 to 9,669.9) | 1,571.0 (1,566.1 to 1,591.4) | 3,678.5 (3,664.4 to 3,777.2) | 398.4 (395.6 to 406.6) | 1,623.2 / 6,059.0 |
+
+`world`'s round 8 in full, its Baseline now, against the Baseline before:
+
+**world** on Apple M4 Pro, release, 2560x1440, 3352 measured frames; counters of frames 8..72
+
+| Time, µs | Median | p95 | p99 | Maximum | Baseline median | Baseline p95 | Δ median | Ratio | Budget |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CPU frame | 1,580.3 | 2,323.9 | 3,446.9 | 8,472.4 | 1,623.2 | 2,717.3 | -42.9 | 0.974 | 6,000.0 |
+| Dynamic TLAS, CPU | 672.7 | 802.2 | 898.2 | 1,458.0 | 673.9 | 812.9 | -1.3 | 0.998 | 1,100.0 |
+| GPU frame | 6,080.5 | 6,912.0 | 9,317.9 | 13,886.8 | 6,059.0 | 6,896.3 | +21.6 | 1.004 | 12,000.0 |
+| Gate, rays off | 1,571.0 | 1,805.0 | 3,146.0 | 7,040.2 | 1,571.0 | 1,794.6 | +0.1 | 1.000 | 6,000.0 |
+| Shadow-ray time | 3,678.5 | 4,630.5 | 6,753.7 | 11,207.0 | 3,719.7 | 4,646.7 | -41.2 | 0.989 | — |
+| Culling, per-slot stages | 398.4 | 442.7 | 474.5 | 1,015.7 | 396.2 | 443.0 | +2.3 | 1.006 | 1,000.0 |
+| `dynamic_tlas_build` | 65.2 | 544.7 | 1,208.6 | 3,413.6 | 75.0 | 543.1 | -9.8 | 0.869 | 1,000.0 |
+| `lit_pass` | 661.3 | 754.2 | 1,341.4 | 4,839.4 | 655.5 | 754.9 | +5.9 | 1.009 | — |
+| `shadow_mask_pass` | 3,886.6 | 4,500.5 | 5,461.8 | 8,592.3 | 3,881.8 | 4,488.8 | +4.8 | 1.001 | — |
+
+| Streamed, measured frames | Value |
+|---|---:|
+| Late Chunks | 0 |
+| Late Far proxies | 0 |
+| Late mips | 8 |
+| Chunks loaded | 42 |
+| Fast-travel hold, ms | 27.5 |
+| Fast-travel hold, frames | 4 |
+| Far-field fill, ms | 599.3 |
+| Far-field fill, frames | 79 |
+| Frames until traced, most | 6 |
+
+The traversal, `praxis traverse` at 16:28:
+
+| Traversal | Value |
+|---|---:|
+| CPU frame p99, µs | 2,716.6 |
+| CPU frame maximum, µs | 10,482.2 |
+| GPU frame p99, µs | 5,804.9 |
+| GPU frame maximum, µs | 15,463.5 |
+| Late Chunks | 0 |
+| Late Far proxies | 0 |
+| Late mips | 4 |
+| Peak GPU memory, bytes | 4,419,161,812 |
+| Meshes refused | 0 |
+| Materials refused | 0 |
+| Textures refused | 0 |
+| Renderables refused, most in a frame | 0 |
+| Lights refused, most in a frame | 0 |
+| Chunks not loaded | 0 |
+| Fast-travel hold, ms | 18.0 |
+| Fast-travel hold, frames | 4 |
+| Far-field fill, ms | 301.5 |
+| Far-field fill, frames | 26 |
+
+| GPU memory kind | Peak, bytes | Budget, bytes |
+|---|---:|---:|
+| geometry_arenas | 83,886,072 | 83,886,080 |
+| texture_pool | 3,215,458,304 | 4,294,967,296 |
+| resident_tails | 164,288,440 | 268,435,456 |
+| render_targets | 270,335,860 | 536,870,912 |
+| acceleration_structures | 188,666,342 | 268,435,456 |
+| staging | 268,435,452 | 268,435,456 |
+| scene_and_pass_buffers | 230,629,476 | 234,881,024 |
+
+### Against the Budgets
+
+- **`town`**: GPU frame median 18,851.4 µs (157% of 12 ms), p99 19,552.4 µs
+  (163%) and maximum 19,845.0 µs (119% of 16,667 µs); gate median 6,732.5 µs
+  (112% of 6 ms) and p99 7,250.0 µs (121%). Each line was over its Budget at
+  M5's exit too, and its median within 0.6 µs of this one. #602.
+- **`world`, the bench segment**: CPU p99 3,446.9 µs (57% of 6 ms) and maximum
+  8,472.4 µs (51% of 16,667 µs); GPU p99 9,317.9 µs (78% of 12 ms) and maximum
+  13,886.8 µs (83%); gate p99 3,146.0 µs (52%). The Fast travel's hold took
+  23.7 to 38.6 ms over 3 to 6 frames in the nine rounds, within 50 ms, and its
+  fill 599.3 to 609.3 ms over 79 frames, within 80 frames and 650 ms. Frames
+  until traced read 6 or 7, within N = 10.
+- **The traversal**: CPU frame p99 2,716.6 µs and maximum 10,482.2 µs (63% of
+  16,667 µs); GPU frame p99 5,804.9 µs and maximum 15,463.5 µs (93%); 0 Late
+  Chunks, 0 Late Far proxies, 4 late mips, nothing refused and no Chunk not
+  loaded. M5's exit read a 32,468.7 µs GPU maximum here. #1059.
+- **GPU memory, 8 GB**: the traversal peaks at 4,419,161,812 B (55%), each kind
+  within its Budget. `staging` holds 268,435,452 of its 268,435,456 B since
+  #989's kept slots, `geometry_arenas` peaks 8 bytes under its Budget as at
+  M5's exit, and `scene_and_pass_buffers` reads 98% of its own.
+- **Culling**: both phases' per-slot stages read 398.4 µs at the median on
+  `world`, for 307,263 Instance slots in use, and 395.8 µs on `town`, for
+  255,343, under 1 ms.
+
+### Top three offenders
+
+Ranked by their share of the bound each breaches or nears:
+
+1. **`town`'s GPU frame, 18.9 ms, and gate, 6.7 ms** (157% and 112%): shadow
+   rays, 11.65 ms of the frame. #602
+2. **The traversal's slowest frame, 15.5 ms of GPU** (93% of 16,667 µs), not
+   placed: the traversal records no per-frame data, and the run was not
+   probed. #1059
+3. **`world`'s GPU frame spikes on the bench segment**: p99 9.3 ms (78% of
+   12 ms) and maximum 13.9 ms (83% of 16,667 µs), in frames that spread 1.084
+   about their neighbours, so `world`'s runs stamp not quiet in rounds where
+   every other scene stamps quiet. #1060
+
+### Also seen
+
+- `culling_phase_two_slots` reads 24.0 to 25.7 µs at the median on the ten
+  scenes other than `town` and `world`, against 22.2 to 23.5 µs in their
+  Baselines before (+6 to 10%), every round alike, which `praxis compare`
+  warns on; `town`'s and `world`'s read within 0.3 µs of theirs. Three changes
+  since `f806b46c` touch culling, #1017, #1045 and #1048, and which one moved
+  it is not placed.
+- `town`'s round 4 run stamps quiet yet reads a CPU frame maximum of 17,850.8
+  µs, over 16,667 µs, with a p99 of 3,690.0 µs; no other round's `town` reads
+  more than 12.4 ms or a p99 over 2.0 ms. The quiet stamp looks for a busy
+  process at a scene's start and end only.
+- `world`'s `dynamic_tlas_build` p99 reads 1,208.6 µs against 1,000; its Budget
+  bounds the median alone, 65.2 µs.
+- The RTX 2070 SUPER's Baselines, at `92927566` (#1050): `world`'s CPU frame
+  p99 reads 7,243.9 µs on Vulkan and 9,084.8 µs on DX12, and `town`'s and
+  `world`'s dynamic TLAS CPU medians 1,343.2 to 1,696.2 µs, over the 6 ms and
+  1.1 ms Budgets, which gate the M4 Pro only. Vulkan `town`'s
+  `shadow_mask_pass` reads 3,703.1 µs against 3,341.3 µs in its Baseline before
+  (+10.8%) in all three rounds, where DX12's reads 2,783.3 against 2,795.5 µs
+  at the same driver; not placed. `scripts/verify.sh` is red on that machine
+  on one unit test (#1049). No ratio between the adapters is quoted: their
+  Baselines come from different engine sources.
+
 ## `world`'s CPU p99: a fill frame's Texture writes created and zeroed their staging (2026-11-23, #989)
 
 **Summary.** After the Fast travel, the Far field's fill loads 222 Far
