@@ -1388,7 +1388,7 @@ pub(crate) mod tests {
     use std::sync::{Arc, LazyLock, Mutex};
 
     use super::*;
-    use crate::bench::report::grouped;
+    use crate::bench::grouped;
     use crate::capture::submit_and_map;
     use crate::cooked::{CookedLod, CookedMeshlet};
     use crate::gpu::GpuContext;
@@ -1430,13 +1430,13 @@ pub(crate) mod tests {
                 texture_classes_per_channel: 13_107,
             }
         );
-        let vertex_arena = grouped(capacities.vertex_arena_bytes as f64, 0);
-        let mesh = grouped(GEOMETRY_BYTES_PER_MESH as f64, 0);
-        let material = grouped(TEXTURE_POOL_BYTES_PER_MATERIAL as f64, 0);
+        let vertex_arena_bytes = grouped(capacities.vertex_arena_bytes as f64, 0);
+        let mesh_bytes = grouped(GEOMETRY_BYTES_PER_MESH as f64, 0);
+        let material_bytes = grouped(TEXTURE_POOL_BYTES_PER_MATERIAL as f64, 0);
         for quote in [
-            format!("the vertex Arena at {vertex_arena} bytes"),
-            format!("an entry per {mesh} bytes"),
-            format!("an entry per {material} bytes"),
+            format!("the vertex Arena at {vertex_arena_bytes} bytes"),
+            format!("an entry per {mesh_bytes} bytes"),
+            format!("an entry per {material_bytes} bytes"),
         ] {
             assert!(ADR_0017.contains(&quote), "ADR 0017 lacks `{quote}`");
         }

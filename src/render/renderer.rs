@@ -1053,7 +1053,7 @@ pub(crate) mod tests {
     use crate::assets::material::MaterialData;
     use crate::assets::pools::tests::{ADR_0017, logged, read_storage};
     use crate::assets::{MaterialHandle, MeshHandle};
-    use crate::bench::report::grouped;
+    use crate::bench::grouped;
     use crate::camera::{Camera, ev100_for_exposure, projection_matrix};
     use crate::capture::read_back;
     use crate::components::{MeshRef, Transform};

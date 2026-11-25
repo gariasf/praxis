@@ -1389,8 +1389,10 @@ mod tests {
             .map(|level| level_bytes(format, 1000, 1000, level as usize))
             .sum();
         assert_eq!((tail_level, resident_bytes), (1, 335_360));
-        let resident = crate::bench::report::grouped(resident_bytes as f64, 0);
-        let quote = format!(", {resident} bytes");
+        let quote = format!(
+            ", {} bytes",
+            crate::bench::grouped(resident_bytes as f64, 0)
+        );
         assert!(
             crate::assets::pools::tests::ADR_0017.contains(&quote),
             "ADR 0017 lacks `{quote}`"
