@@ -39,16 +39,14 @@ its commit.
 ## M5.5 exit (2026-11-25, #1010)
 
 **Verdict.** M5.5's fixes left the Reference scenes' frames where M5's exit
-left them. In the Baseline round, every scene's GPU frame median reads within
-0.6% of its Baseline before and every gate median within 1.0%, every CPU
-median reads lower, and no Budget is newly breached. The traversal's slowest
-frame fell from 32.5 ms of GPU to 15.5 ms, so none of its frames passes
-16,667 µs (#988). `world`'s CPU p99 reads 3.43 to 3.99 ms in the last three
-rounds against 5.51 ms in its Baseline before (#989), and 4.55 to 5.45 ms in
-the six rounds before them, run while other applications were open. `town`'s GPU frame and gate still breach their Budgets, as at M5's
-exit. The top three offenders are `town`'s GPU frame and gate (#602), the
-traversal's slowest frame (#1059), and `world`'s GPU frame spikes, which also
-keep its runs from stamping quiet (#1060).
+left them: in the Baseline round, every scene's GPU frame median reads within
+0.6% of its Baseline before, every gate median within 1.1% and every CPU
+median lower, and no Budget is newly breached. No frame of the traversal
+passes 16,667 µs: its GPU frame maximum reads 15.5 ms, against 32.5 ms at M5's
+exit. The top three offenders are `town`'s GPU frame and gate, over their
+Budgets as at M5's exit (#602), the traversal's GPU frame maximum (#1059), and
+`world`'s GPU frame p99 and maximum, whose frames' spread also keeps its runs
+from stamping quiet (#1060).
 
 Apple M4 Pro, macOS 27.2.1, wgpu 30.0.2 on Metal (wgpu-core vendored), a
 release build of `78f2291e` (source hash `bbc81ee5`, not dirty). `praxis
@@ -60,20 +58,23 @@ AC power, with no other praxis process. Nine rounds of every scene ran, at
 preflight had read no warning three times in a row, 20 s apart (six times
 from round 4); round 7 began at once, with preflight reading the GPU at 13%;
 rounds 8 and 9 began once preflight read no warning and a GPU load of at most
-1% and 2% twice in a row. The rounds' Provenance reads one-minute loads of
+1% and 2% twice in a row. The rounds' provenance reads one-minute loads of
 0.97 to 1.70 and GPU loads of 0 to 14% at their start. Of the 108 runs, 59
 stamp quiet. Of the rest, 7 list a process busy at their start or end, round
-7's twelve read a GPU load of 14% at its start, over the 10% bound, and the other
-30 fail only on their GPU frames' spread about their neighbours, up to 1.217.
+7's twelve read a GPU load of 14% at its start, over the 10% bound, and the
+other 30 fail only on their GPU frames' spread about their neighbours, up to
+1.202.
 In rounds 4, 8 and 9, every scene but `world` spreads 1.006 to 1.024, and
 `world` 1.027, 1.084 and 1.085.
 
 The M4 Pro's Baselines are round 8's, all twelve scenes from one run. No round
 stamps all twelve quiet; round 8 stamps eleven, `world` not quiet on its
 spread alone, and of the two rounds that stamp eleven it reads the lower load,
-1.12 against 1.46. Against the Baselines before, recorded at `f806b46c`, the
-counters over frames 8 to 72 are equal on every scene. Over the measured
-frames, `world`'s moved: `instances_drawn` 11,015 to 11,009, `triangles_drawn`
+1.12 against 1.46. The owner accepted round 8 as the Baselines on 2026-11-25,
+`world` not stamped quiet (#1010). Against the Baselines before, recorded at
+`f806b46c`, the counters over frames 8 to 72 are equal on every scene. Over the
+measured frames, `world`'s moved: `instances_drawn` 11,015 to 11,009,
+`triangles_drawn`
 187,358 to 187,206, `bytes_read` 160,874,780 to 160,939,893, `late_mips` 12 to
 8 and `frames_until_traced` 7 to 6. Those follow the streaming's timing
 (#989): round 5 read 11,010 and 187,112, and `frames_until_traced` reads 6 or
@@ -173,14 +174,20 @@ The traversal, `praxis traverse` at 16:28:
   M5's exit too, and its median within 0.6 µs of this one. #602.
 - **`world`, the bench segment**: CPU p99 3,446.9 µs (57% of 6 ms) and maximum
   8,472.4 µs (51% of 16,667 µs); GPU p99 9,317.9 µs (78% of 12 ms) and maximum
-  13,886.8 µs (83%); gate p99 3,146.0 µs (52%). The Fast travel's hold took
+  13,886.8 µs (83%); gate p99 3,146.0 µs (52%). The CPU p99 reads 3.43 to
+  3.99 ms in rounds 7 to 9 and 4.55 to 5.45 ms in rounds 1 to 6, against 5.51
+  ms in its Baseline before (#989), with `stream_chunks`' p99 at 946 to 1,441
+  µs against 1,609 to 2,219 µs; what moved it between the two sets of rounds is
+  not placed, and the Baseline takes round 8's 3,446.9 µs, the second lowest of
+  the nine. The Fast travel's hold took
   23.7 to 38.6 ms over 3 to 6 frames in the nine rounds, within 50 ms, and its
   fill 599.3 to 609.3 ms over 79 frames, within 80 frames and 650 ms. Frames
   until traced read 6 or 7, within N = 10.
 - **The traversal**: CPU frame p99 2,716.6 µs and maximum 10,482.2 µs (63% of
   16,667 µs); GPU frame p99 5,804.9 µs and maximum 15,463.5 µs (93%); 0 Late
   Chunks, 0 Late Far proxies, 4 late mips, nothing refused and no Chunk not
-  loaded. M5's exit read a 32,468.7 µs GPU maximum here. #1059.
+  loaded. M5's exit read a 32,468.7 µs GPU maximum here, not placed either;
+  each figure is one unprobed run. #1059.
 - **GPU memory, 8 GB**: the traversal peaks at 4,419,161,812 B (55%), each kind
   within its Budget. `staging` holds 268,435,452 of its 268,435,456 B since
   #989's kept slots, `geometry_arenas` peaks 8 bytes under its Budget as at
@@ -191,15 +198,18 @@ The traversal, `praxis traverse` at 16:28:
 
 ### Top three offenders
 
-Ranked by their share of the bound each breaches or nears:
+Ranked by their share of the bound each breaches or nears. The GPU memory
+kinds are left out: `geometry_arenas`, `staging` and `scene_and_pass_buffers`
+take their capacities from their Budgets, so their peaks sit at 98 to 100% of
+them by design.
 
 1. **`town`'s GPU frame, 18.9 ms, and gate, 6.7 ms** (157% and 112%): shadow
    rays, 11.65 ms of the frame. #602
-2. **The traversal's slowest frame, 15.5 ms of GPU** (93% of 16,667 µs), not
+2. **The traversal's GPU frame maximum, 15.5 ms** (93% of 16,667 µs), not
    placed: the traversal records no per-frame data, and the run was not
    probed. #1059
-3. **`world`'s GPU frame spikes on the bench segment**: p99 9.3 ms (78% of
-   12 ms) and maximum 13.9 ms (83% of 16,667 µs), in frames that spread 1.084
+3. **`world`'s GPU frame p99, 9.3 ms, and maximum, 13.9 ms, on the bench
+   segment** (78% of 12 ms and 83% of 16,667 µs), in frames that spread 1.084
    about their neighbours, so `world`'s runs stamp not quiet in rounds where
    every other scene stamps quiet. #1060
 
@@ -208,7 +218,11 @@ Ranked by their share of the bound each breaches or nears:
 - `culling_phase_two_slots` reads 24.0 to 25.7 µs at the median on the ten
   scenes other than `town` and `world`, against 22.2 to 23.5 µs in their
   Baselines before (+6 to 10%), every round alike, which `praxis compare`
-  warns on; `town`'s and `world`'s read within 0.3 µs of theirs. Three changes
+  warns on, as it does on three triangle stages under 1 µs:
+  `culling_phase_one_triangles` on `minification` (+9.3%) and
+  `culling_phase_two_triangles` on `normal-tangent` and `pbr-sweep` (+5.6% and
+  +7.0%). `town`'s and `world`'s `culling_phase_two_slots` read within 0.3 µs
+  of theirs. Three changes
   since `f806b46c` touch culling, #1017, #1045 and #1048, and which one moved
   it is not placed.
 - `town`'s round 4 run stamps quiet yet reads a CPU frame maximum of 17,850.8
@@ -223,7 +237,9 @@ Ranked by their share of the bound each breaches or nears:
   1.1 ms Budgets, which gate the M4 Pro only. Vulkan `town`'s
   `shadow_mask_pass` reads 3,703.1 µs against 3,341.3 µs in its Baseline before
   (+10.8%) in all three rounds, where DX12's reads 2,783.3 against 2,795.5 µs
-  at the same driver; not placed. `scripts/verify.sh` is red on that machine
+  at the same driver; not placed. #1050's `praxis compare` failed on Vulkan
+  `town`'s and `orrery`'s CPU medians, +11.3% and +17.6%, which drift between
+  rounds on that machine. `scripts/verify.sh` is red on that machine
   on one unit test (#1049). No ratio between the adapters is quoted: their
   Baselines come from different engine sources.
 
