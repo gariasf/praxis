@@ -764,7 +764,7 @@ fn flocks(grid: &FlockGrid) -> Vec<Flock> {
 }
 
 /// Spawns the town's flocks.
-pub(crate) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
+pub(super) fn spawn_town(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let bird = loader.mesh(ReferenceScene::Town.mesh_id(TownMesh::Bird.name()))?;
     spawn_flocks(world, bird, &TOWN_FLOCKS);
     Ok(())

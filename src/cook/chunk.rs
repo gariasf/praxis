@@ -119,7 +119,7 @@ mod tests {
     use crate::cook::{CookSettings, cook_scene};
     use crate::cooked::CookedCache;
     use crate::render::CrowdForm;
-    use crate::state::Simulation;
+    use crate::scenes::simulation::Simulation;
     use crate::stats::FrameRecorder;
     use crate::streaming::LoadedChunks;
     use crate::transform::PreviousWorldTransform;

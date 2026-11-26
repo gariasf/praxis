@@ -24,7 +24,7 @@ use crate::cooked::{
 };
 use crate::environment::Environment;
 use crate::render::CrowdForm;
-use crate::state::Simulation;
+use crate::scenes::simulation::Simulation;
 use crate::stats::FrameRecorder;
 use crate::streaming::chunks::load_cooked_chunk;
 use crate::streaming::{FarGround, LoadedChunk, LoadedChunks, distance_metres};

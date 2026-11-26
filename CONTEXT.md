@@ -229,6 +229,9 @@ _Avoid_: Origin
 A serialisable set of entities and their hierarchy that loads into the ECS World. Not the whole Game world.
 _Avoid_: Level, prefab
 
+**Simulation**:
+A Scene's ECS World with the schedules that advance it: one run each frame, one each Tick. Prepare reads it; it holds nothing of the GPU.
+
 ### Verification
 
 **Reference scene**:

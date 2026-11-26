@@ -43,8 +43,7 @@ pub use capture::{
     capture_frames, compare_images, difference_image, golden_key, shadow_mask_differences,
 };
 pub use render::{CrowdForm, RenderSwitches, blas_bytes, compacted_blas_fraction, tlas_bytes};
-pub use scenes::ReferenceScene;
-pub use state::DEFAULT_MODEL;
+pub use scenes::{DEFAULT_MODEL, ReferenceScene};
 pub use stats::{FrameStats, GpuFrameStats, GpuMemoryKind};
 
 const LOGICAL_PIXELS_PER_SCROLLED_LINE: f32 = 20.0;
