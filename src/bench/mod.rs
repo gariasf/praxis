@@ -1898,7 +1898,7 @@ mod tests {
     }
 
     #[test]
-    fn every_committed_baseline_parses() {
+    fn every_committed_baseline_parses_and_writes_back_its_own_bytes() {
         for entry in std::fs::read_dir(BASELINE_DIRECTORY).expect("Baselines") {
             for baseline in std::fs::read_dir(entry.unwrap().path()).unwrap() {
                 let path = baseline.unwrap().path();
@@ -1906,8 +1906,11 @@ mod tests {
                     .extension()
                     .is_some_and(|extension| extension == "json")
                 {
-                    Measurements::from_baseline_json(&std::fs::read(&path).unwrap())
+                    let json = std::fs::read_to_string(&path).unwrap();
+                    let parsed = Measurements::from_baseline_json(json.as_bytes())
                         .unwrap_or_else(|error| panic!("{}: {error:#}", path.display()));
+                    let written = serde_json::to_string_pretty(&parsed).unwrap() + "\n";
+                    assert!(written == json, "{} writes back other bytes", path.display());
                 }
             }
         }
