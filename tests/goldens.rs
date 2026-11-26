@@ -1,22 +1,20 @@
-//! Goldens: each Reference scene CI can render, procedural or from a
-//! committed asset, matches its committed image in
-//! `tests/goldens/<key>/<scene>.png`. The key is the backend, plus `-cpu` on
-//! a software driver: `metal` is recorded on the M4 Pro, and
+//! Goldens: each Reference scene with a Golden frame
+//! (`ReferenceScene::golden_frames`) matches its committed images in
+//! `tests/goldens/<key>/`: `<scene>.png` at its first, and
+//! `<scene>-frame-<n>.png` at each later one. The key is the backend, plus
+//! `-cpu` on a software driver: `metal` is recorded on the M4 Pro, and
 //! `vulkan-cpu` on CI's lavapipe (the Mesa pinned in `.github/workflows/ci.yml`).
 //! Each scene shifted by 100 km must also match its origin Golden, and each
 //! with culling off must match its capture with culling on, so culling
 //! removes no visible Instance, as each lit with every light at every pixel
 //! must match it lit through Froxel lists, both with shadow rays off, so no
-//! list misses a light that reaches its Froxel. `town` takes both checks at
-//! eight frames along its camera path, the others at their Goldens' frames.
-//! `world` has Goldens at four frames along its flight into a settlement
-//! and out of it,
-//! `<scene>-frame-<n>.png` beside `<scene>.png`; the others one.
+//! list misses a light that reaches its Froxel. Every scene takes both checks
+//! at its checked frames (`ReferenceScene::checked_frames`).
 //! Each scene with LOD 0 forced must match its Golden too, or, where LOD
 //! selection changes the image, the LOD 0 Golden beside it,
 //! `<golden>-lod-0.png`: selection changes nothing an Instance at LOD 0 draws.
-//! The helmet scene has no Golden, since its source is fetched, and takes
-//! those two checks where it is fetched.
+//! The helmet scene has no Golden frame, since its source is fetched, and
+//! takes those two checks where it is fetched.
 //! A Golden is a reviewed capture from `praxis::capture`, so it catches
 //! regressions, not errors already present when it was recorded.
 //!
@@ -36,20 +34,6 @@ use std::path::Path;
 
 use praxis::gpu::GpuContext;
 use praxis::{ReferenceScene, RenderSwitches};
-
-const SCENES: [ReferenceScene; 11] = [
-    ReferenceScene::PbrSweep,
-    ReferenceScene::UvGrid,
-    ReferenceScene::NormalTangent,
-    ReferenceScene::FarCoplanar,
-    ReferenceScene::Orrery,
-    ReferenceScene::Minification,
-    ReferenceScene::TextureWall,
-    ReferenceScene::Shadows,
-    ReferenceScene::Town,
-    ReferenceScene::Crowd,
-    ReferenceScene::World,
-];
 
 /// The capture command's default size.
 const WIDTH: u32 = 640;
@@ -138,12 +122,12 @@ fn reference_scenes_match_their_goldens() {
     let helmet_is_fetched = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join(praxis::DEFAULT_MODEL)
         .exists();
-    if !helmet_is_fetched {
-        writeln!(std::io::stderr(), "skipped helmet: assets not fetched").ok();
-    }
-    let helmet = helmet_is_fetched.then_some(ReferenceScene::Helmet);
-    for scene in SCENES.into_iter().chain(helmet) {
-        let frames = equivalence_frames(scene);
+    for scene in ReferenceScene::ALL {
+        if scene == ReferenceScene::Helmet && !helmet_is_fetched {
+            writeln!(std::io::stderr(), "skipped helmet: assets not fetched").ok();
+            continue;
+        }
+        let frames = scene.checked_frames();
         let culled = capture_frames(scene, glam::DVec3::ZERO, frames, RenderSwitches::default());
         let unculled = capture_frames(
             scene,
@@ -190,10 +174,10 @@ fn reference_scenes_match_their_goldens() {
                 &difference_directory,
             ));
         }
-        if scene == ReferenceScene::Helmet {
+        let golden_frames = scene.golden_frames();
+        if golden_frames.is_empty() {
             continue;
         }
-        let golden_frames = golden_frames(scene);
         let shifted = golden_captures(scene, FAR_SHIFT);
         let lod_0 = capture_frames(scene, glam::DVec3::ZERO, golden_frames, lod_0_forced());
         for ((&frame, shifted), lod_0) in golden_frames.iter().zip(&shifted).zip(&lod_0) {
@@ -296,60 +280,25 @@ fn fresh_context() -> GpuContext {
         .unwrap_or_else(|error| panic!("headless GPU context failed: {error:#}"))
 }
 
-/// The last frame `praxis::capture` renders of `scene`, moved by `shift`, at
-/// the Goldens' size, as `switches` set, on a device of its own.
-fn capture(
-    scene: ReferenceScene,
-    shift: glam::DVec3,
-    switches: RenderSwitches,
-) -> image::RgbaImage {
-    let context = fresh_context();
-    let (pixels, _) =
-        praxis::capture(&context, scene, shift, WIDTH, HEIGHT, switches).expect("capture failed");
-    image::RgbaImage::from_raw(WIDTH, HEIGHT, pixels).expect("WIDTH × HEIGHT pixels")
-}
-
-/// The frame a Golden is: `praxis::capture`'s last.
-const GOLDEN_FRAME: u32 = 59;
-
-/// `world`'s Golden frames: over farmland with its settlement across the
-/// Load radius, at the settlement's edge, over its roofs, and over the
-/// farmland past it with the next settlement whole in the Far field. CI's
-/// shipping job cooks what these load (`.github/workflows/ci.yml`).
-const WORLD_FRAMES: [u32; 4] = [GOLDEN_FRAME, 300, 599, 1500];
-const _: () = assert!(WORLD_FRAMES[0] == GOLDEN_FRAME);
-
-/// The frames of `scene` its Goldens are.
-fn golden_frames(scene: ReferenceScene) -> &'static [u32] {
-    match scene {
-        ReferenceScene::World => &WORLD_FRAMES,
-        _ => &[GOLDEN_FRAME],
-    }
-}
-
-/// `scene`'s Golden frames, moved with its camera by `shift`: the first as
-/// `praxis::capture` renders it, drawing every frame, and any later ones as
-/// `praxis::capture_frames` does.
+/// `scene`'s Golden frames as `praxis::golden_captures` renders them, moved
+/// with its camera by `shift`, at the Goldens' size.
 fn golden_captures(scene: ReferenceScene, shift: glam::DVec3) -> Vec<image::RgbaImage> {
-    let mut captures = vec![capture(scene, shift, RenderSwitches::default())];
-    if let [_, later @ ..] = golden_frames(scene)
-        && !later.is_empty()
-    {
-        captures.extend(capture_frames(
-            scene,
-            shift,
-            later,
-            RenderSwitches::default(),
-        ));
-    }
-    captures
+    praxis::golden_captures(scene, shift, WIDTH, HEIGHT, RenderSwitches::default())
+        .expect("capture failed")
+        .into_iter()
+        .map(|pixels| {
+            image::RgbaImage::from_raw(WIDTH, HEIGHT, pixels).expect("WIDTH × HEIGHT pixels")
+        })
+        .collect()
 }
 
-/// The name of `scene`'s Golden at `frame`, without its extension.
+/// The name of `scene`'s Golden at `frame`, without its extension: its
+/// first Golden frame's is the scene's name.
 fn golden_label(scene: ReferenceScene, frame: u32) -> String {
-    match frame {
-        GOLDEN_FRAME => scene.name().to_owned(),
-        _ => format!("{}-frame-{frame}", scene.name()),
+    if scene.golden_frames().first() == Some(&frame) {
+        scene.name().to_owned()
+    } else {
+        format!("{}-frame-{frame}", scene.name())
     }
 }
 
@@ -365,20 +314,6 @@ fn lod_0_forced() -> RenderSwitches {
 /// scene has only where LOD selection changes its image.
 fn lod_0_label(label: &str) -> String {
     format!("{label}-lod-0")
-}
-
-/// `town`'s frames whose culling and Froxel lists the test checks, spread
-/// along its camera path: two on the street, two on the rise over the
-/// rooftops, four round the circle.
-const TOWN_FRAMES: [u32; 8] = [GOLDEN_FRAME, 300, 500, 700, 900, 1200, 1500, 1800];
-
-/// The frames of `scene` whose culling and Froxel lists the test checks,
-/// the Golden's among them.
-fn equivalence_frames(scene: ReferenceScene) -> &'static [u32] {
-    match scene {
-        ReferenceScene::Town => &TOWN_FRAMES,
-        _ => golden_frames(scene),
-    }
 }
 
 /// The pixels `praxis::capture_frames` renders of `scene`, moved with its
@@ -408,9 +343,16 @@ fn capture_frames(
 /// The README's link to a scene's Golden, relative to the repository root.
 const README_GOLDEN_PREFIX: &str = "tests/goldens/metal/";
 
-/// What disagrees between `readme` and the scenes this test checks: a scene
+/// The Reference scenes with a Golden frame.
+fn scenes_with_goldens() -> impl Iterator<Item = ReferenceScene> {
+    ReferenceScene::ALL
+        .into_iter()
+        .filter(|scene| !scene.golden_frames().is_empty())
+}
+
+/// What disagrees between `readme` and the scenes with a Golden: a scene
 /// the README does not show, or shows more than once, a Golden it shows of a
-/// scene not checked, and a linked Golden absent from `root`. A link counts
+/// scene with none, and a linked Golden absent from `root`. A link counts
 /// only as the prefix, a scene name and `.png`.
 fn readme_disagreements(readme: &str, root: &Path) -> Vec<String> {
     let linked: Vec<&str> = readme
@@ -424,9 +366,9 @@ fn readme_disagreements(readme: &str, root: &Path) -> Vec<String> {
             (!scene.is_empty() && rest.starts_with(".png")).then_some(scene)
         })
         .collect();
-    let checked: Vec<&str> = SCENES.iter().map(|scene| scene.name()).collect();
+    let with_goldens: Vec<&str> = scenes_with_goldens().map(ReferenceScene::name).collect();
     let mut disagreements = Vec::new();
-    for scene in &checked {
+    for scene in &with_goldens {
         match linked
             .iter()
             .filter(|linked_scene| *linked_scene == scene)
@@ -438,9 +380,9 @@ fn readme_disagreements(readme: &str, root: &Path) -> Vec<String> {
         }
     }
     for scene in &linked {
-        if !checked.contains(scene) {
+        if !with_goldens.contains(scene) {
             disagreements.push(format!(
-                "README.md shows {scene}, which the goldens test does not check"
+                "README.md shows {scene}, which has no Golden frame"
             ));
         }
         let path = root.join(format!("{README_GOLDEN_PREFIX}{scene}.png"));
@@ -486,7 +428,7 @@ fn readme_disagreements_name_missing_repeated_unchecked_and_absent_goldens() {
     assert_eq!(
         readme_disagreements(&with_helmet, root),
         [
-            "README.md shows helmet, which the goldens test does not check".to_owned(),
+            "README.md shows helmet, which has no Golden frame".to_owned(),
             format!(
                 "README.md links {}, which is absent",
                 root.join(format!("{README_GOLDEN_PREFIX}helmet.png"))
@@ -501,8 +443,8 @@ fn readme_disagreements_name_missing_repeated_unchecked_and_absent_goldens() {
 /// prints the Goldens whose pixels changed, or that were absent.
 fn update_goldens(directory: &Path) {
     std::fs::create_dir_all(directory).expect("Golden directory");
-    for scene in SCENES {
-        let frames = golden_frames(scene);
+    for scene in scenes_with_goldens() {
+        let frames = scene.golden_frames();
         let captures = golden_captures(scene, glam::DVec3::ZERO);
         let lod_0 = capture_frames(scene, glam::DVec3::ZERO, frames, lod_0_forced());
         for ((&frame, actual), lod_0) in frames.iter().zip(&captures).zip(&lod_0) {

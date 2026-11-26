@@ -205,6 +205,38 @@ pub fn capture_frames(
     )
 }
 
+/// The pixels of `scene`'s Golden frames, moved with its camera by `shift`,
+/// as `switches` set: the first as `capture` renders it, drawing every frame,
+/// then the later ones together as `capture_frames` does, since the Chunks a
+/// frame requests depend on the route to it. Each run takes a device of its
+/// own, as every capture the Goldens test compares does.
+pub fn golden_captures(
+    scene: ReferenceScene,
+    shift: glam::DVec3,
+    width: u32,
+    height: u32,
+    switches: RenderSwitches,
+) -> anyhow::Result<Vec<Vec<u8>>> {
+    let Some((_, later)) = scene.golden_frames().split_first() else {
+        anyhow::bail!("{} has no Golden frame", scene.name());
+    };
+    let context = || pollster::block_on(GpuContext::headless());
+    let (first, _) = capture(&context()?, scene, shift, width, height, switches)?;
+    let mut captures = vec![first];
+    if !later.is_empty() {
+        captures.extend(capture_frames(
+            &context()?,
+            scene,
+            shift,
+            width,
+            height,
+            later,
+            switches,
+        )?);
+    }
+    Ok(captures)
+}
+
 /// How the shadow mask of each of `frames` of `scene`, rendered as
 /// `capture_frames` renders them, differs from the same frame's with LOD 0
 /// forced.

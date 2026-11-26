@@ -36,6 +36,7 @@ enum Command {
     Window(ReferenceScene),
     Capabilities,
     Preflight,
+    Scenes,
     #[cfg(feature = "cook")]
     Cook {
         /// The one Reference scene to cook whole; every scene and source
@@ -51,6 +52,8 @@ enum Command {
         size: String,
         crowd_form: CrowdForm,
         frames: Vec<u32>,
+        /// The scene's Golden runs, in place of `frames`.
+        golden_frames: bool,
         /// The LOD every Instance draws, in place of the one selected.
         forced_lod: Option<u32>,
     },
@@ -120,6 +123,7 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
         Command::Window(scene) => praxis::run(scene),
         Command::Capabilities => print_capabilities(),
         Command::Preflight => preflight(),
+        Command::Scenes => print_scenes(),
         #[cfg(feature = "cook")]
         Command::Cook { scene } => cook(scene.as_deref()),
         #[cfg(feature = "cook")]
@@ -131,8 +135,17 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             size,
             crowd_form,
             frames,
+            golden_frames,
             forced_lod,
-        } => capture(&scene, &output, &size, crowd_form, &frames, forced_lod),
+        } => capture(
+            &scene,
+            &output,
+            &size,
+            crowd_form,
+            &frames,
+            golden_frames,
+            forced_lod,
+        ),
         #[cfg(feature = "cook")]
         Command::ShadowMaskDifference {
             scene,
@@ -229,7 +242,16 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
     }
     let skip_aliasing = take_flag(&mut arguments, "--skip-aliasing");
     let no_publish = take_flag(&mut arguments, "--no-publish");
+    let golden_frames = take_flag(&mut arguments, "--golden-frames");
     let command = arguments.first().map(String::as_str);
+    anyhow::ensure!(
+        !golden_frames || command == Some("capture"),
+        "only `capture` takes --golden-frames"
+    );
+    anyhow::ensure!(
+        !golden_frames || frames.is_empty(),
+        "`capture` takes --golden-frames or --frame, not both"
+    );
     anyhow::ensure!(
         !skip_aliasing || command == Some("bench"),
         "only `bench` takes --skip-aliasing"
@@ -295,6 +317,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         [] => Command::Window(ReferenceScene::Helmet),
         [command] if command == "capabilities" => Command::Capabilities,
         [command] if command == "preflight" => Command::Preflight,
+        [command] if command == "scenes" => Command::Scenes,
         #[cfg(feature = "cook")]
         [command] if command == "cook" => Command::Cook { scene: None },
         #[cfg(feature = "cook")]
@@ -310,6 +333,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             size: DEFAULT_CAPTURE_SIZE.into(),
             crowd_form,
             frames,
+            golden_frames,
             forced_lod,
         },
         #[cfg(feature = "cook")]
@@ -319,6 +343,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             size: size.clone(),
             crowd_form,
             frames,
+            golden_frames,
             forced_lod,
         },
         #[cfg(feature = "cook")]
@@ -416,7 +441,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             // Like the commands, their usage exists only in a `cook` build.
             let (cook_commands, crowd_form_clause) = if cfg!(feature = "cook") {
                 (
-                    "`cook [<scene>]`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>[,<n>...]] [--lod <n>]`, \
+                    "`cook [<scene>]`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>[,<n>...] | --golden-frames] [--lod <n>]`, \
                      `shadow-mask-difference <scene> <png path> [<width>x<height>] --frame <n>[,<n>...]`, \
                      `export-scene <scene> <directory> [--frame <n>]`, \
                      `difference <expected png> <actual png> <difference png>`, ",
@@ -427,7 +452,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             };
             anyhow::bail!(
                 "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
-             `preflight`, {cook_commands}`bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish [--lod <n>] | --experiment <name>] [<scene>...]`, \
+             `preflight`, `scenes`, {cook_commands}`bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish [--lod <n>] | --experiment <name>] [<scene>...]`, \
              `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history publish-night <night directory>`, `history regressions`, `history rerecord <bench directory>`, `compare <bench directory> [--ci | --recording]`, `report <bench directory>`, or `traverse`; {crowd_form_clause} \
              `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
                 ReferenceScene::ALL.map(ReferenceScene::name)
@@ -478,6 +503,16 @@ fn preflight() -> anyhow::Result<()> {
         blocking == 0,
         "{blocking} checks block scripts/verify.sh; run the fixes they name"
     );
+    Ok(())
+}
+
+/// Prints a line per Reference scene: its name, then its checked frames.
+fn print_scenes() -> anyhow::Result<()> {
+    let mut stdout = std::io::stdout();
+    for scene in ReferenceScene::ALL {
+        let frames: Vec<String> = scene.checked_frames().iter().map(u32::to_string).collect();
+        writeln!(stdout, "{} {}", scene.name(), frames.join(" "))?;
+    }
     Ok(())
 }
 
@@ -894,10 +929,12 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
 /// Renders the Reference scene named `scene` headless at `size`,
 /// `<width>x<height>`, its crowd in `crowd_form`, and writes `frames` of its
 /// camera path, rendered in one run, as PNGs: one frame to `output`, each of
-/// several beside it as `<output stem>-frame-<n>.png`. With no frame, it
+/// several beside it as `<output stem>-frame-<n>.png`. With `golden_frames`,
+/// it writes the scene's Golden frames, named the same way, rendered as the
+/// Goldens test renders them (`praxis::golden_captures`). With neither, it
 /// writes the last frame `praxis::capture` renders and prints that frame's
-/// stats, its point lights per lit pixel counted. With `forced_lod`, every
-/// Instance draws that LOD. The PNG encoder comes with `cook`.
+/// stats, its point lights per lit pixel counted. With `forced_lod`, every Instance draws that LOD.
+/// The PNG encoder comes with `cook`.
 #[cfg(feature = "cook")]
 fn capture(
     scene: &str,
@@ -905,24 +942,35 @@ fn capture(
     size: &str,
     crowd_form: CrowdForm,
     frames: &[u32],
+    golden_frames: bool,
     forced_lod: Option<u32>,
 ) -> anyhow::Result<()> {
     let scene = parse_scene(scene)?;
     let (width, height) = parse_size(size)?;
-    let context = pollster::block_on(GpuContext::headless())?;
     let switches = RenderSwitches {
-        count_point_lights: frames.is_empty(),
+        count_point_lights: frames.is_empty() && !golden_frames,
         crowd_form,
         forced_lod,
         ..RenderSwitches::default()
     };
-    let (captures, last_frame) = if frames.is_empty() {
-        let (pixels, mut frame_stats) =
-            praxis::capture(&context, scene, glam::DVec3::ZERO, width, height, switches)?;
+    let context = || pollster::block_on(GpuContext::headless());
+    let (captures, last_frame) = if golden_frames {
+        let pixels = praxis::golden_captures(scene, glam::DVec3::ZERO, width, height, switches)?;
+        let paths = frame_paths(output, scene.golden_frames());
+        (paths.zip(pixels).collect(), None)
+    } else if frames.is_empty() {
+        let (pixels, mut frame_stats) = praxis::capture(
+            &context()?,
+            scene,
+            glam::DVec3::ZERO,
+            width,
+            height,
+            switches,
+        )?;
         (vec![(output.to_owned(), pixels)], frame_stats.pop())
     } else {
         let pixels = praxis::capture_frames(
-            &context,
+            &context()?,
             scene,
             glam::DVec3::ZERO,
             width,
@@ -1323,6 +1371,55 @@ mod tests {
             };
             assert_eq!(scene, "town");
             assert_eq!(frames, [300]);
+        }
+    }
+
+    #[test]
+    fn scenes_parses_alone() {
+        assert!(matches!(parse(&["scenes"]).unwrap(), Command::Scenes));
+        assert!(parse(&["scenes", "town"]).is_err());
+    }
+
+    #[cfg(feature = "cook")]
+    #[test]
+    fn capture_takes_golden_frames_in_place_of_frames() {
+        let golden_frames = |arguments: &[&str]| match parse(arguments).unwrap() {
+            Command::Capture { golden_frames, .. } => golden_frames,
+            _ => panic!("capture parsed as another command"),
+        };
+        assert!(golden_frames(&[
+            "capture",
+            "world",
+            "out.png",
+            "--golden-frames"
+        ]));
+        assert!(golden_frames(&[
+            "capture",
+            "--golden-frames",
+            "world",
+            "out.png",
+            "64x36"
+        ]));
+        assert!(!golden_frames(&["capture", "world", "out.png"]));
+        for (arguments, expected) in [
+            (
+                &[
+                    "capture",
+                    "world",
+                    "out.png",
+                    "--golden-frames",
+                    "--frame",
+                    "300",
+                ][..],
+                "takes --golden-frames or --frame, not both",
+            ),
+            (
+                &["bench", "out", "--golden-frames"][..],
+                "only `capture` takes --golden-frames",
+            ),
+        ] {
+            let error = parse(arguments).unwrap_err().to_string();
+            assert!(error.contains(expected), "{arguments:?}: {error}");
         }
     }
 

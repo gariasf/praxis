@@ -31,6 +31,10 @@ pub(crate) mod simulation;
 mod town;
 pub(crate) mod world;
 
+/// The last frame `capture` renders: a Golden's, and every scene's first
+/// checked frame.
+const GOLDEN_FRAME: u32 = crate::capture::FRAME_COUNT - 1;
+
 /// The Reference scenes `capture` renders, each with a camera path in frames
 /// and a frame delta.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -550,6 +554,49 @@ impl ReferenceScene {
             | Self::Crowd
             | Self::Town
             | Self::World => SIXTY_HERTZ,
+        }
+    }
+
+    /// The frames of its camera path whose captures are its Goldens, the
+    /// first the last `capture` renders. `helmet`, whose source is fetched,
+    /// has none. `world`'s are over farmland with its settlement across the
+    /// Load radius, at the settlement's edge, over its roofs, and over the
+    /// farmland past it with the next settlement whole in the Far field.
+    pub fn golden_frames(self) -> &'static [u32] {
+        match self {
+            Self::Helmet => &[],
+            Self::World => &[GOLDEN_FRAME, 300, 599, 1500],
+            Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::FarCoplanar
+            | Self::Orrery
+            | Self::Minification
+            | Self::TextureWall
+            | Self::Shadows
+            | Self::Crowd
+            | Self::Town => &[GOLDEN_FRAME],
+        }
+    }
+
+    /// The frames of its camera path where the Goldens test compares its
+    /// culling and Froxel lists and the gallery draws it, its Golden frames
+    /// among them. `town`'s are two on the street, two on the rise over the
+    /// rooftops and four round the circle.
+    pub fn checked_frames(self) -> &'static [u32] {
+        match self {
+            Self::Helmet => &[GOLDEN_FRAME],
+            Self::Town => &[GOLDEN_FRAME, 300, 500, 700, 900, 1200, 1500, 1800],
+            Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::FarCoplanar
+            | Self::Orrery
+            | Self::Minification
+            | Self::TextureWall
+            | Self::Shadows
+            | Self::Crowd
+            | Self::World => self.golden_frames(),
         }
     }
 
@@ -1588,6 +1635,25 @@ mod tests {
             azimuth: 2.2,
             curvature,
             previous_curvature: curvature,
+        }
+    }
+
+    #[test]
+    fn each_scenes_checked_frames_rise_from_captures_last_and_hold_its_golden_frames() {
+        let captures_last = crate::capture::FRAME_COUNT - 1;
+        let rising = |frames: &[u32]| frames.is_sorted_by(|earlier, later| earlier < later);
+        for scene in ReferenceScene::ALL {
+            let (golden, checked) = (scene.golden_frames(), scene.checked_frames());
+            assert_eq!(checked.first(), Some(&captures_last), "{scene:?}");
+            assert!(rising(checked) && rising(golden), "{scene:?}");
+            assert!(
+                golden.first().is_none_or(|&first| first == captures_last),
+                "{scene:?}"
+            );
+            assert!(
+                golden.iter().all(|frame| checked.contains(frame)),
+                "{scene:?}"
+            );
         }
     }
 

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # The capture gallery for the visual audit: every Reference scene at
-# 2560x1440 at the Goldens' frame, `town` at the eight frames the Goldens
-# test checks, `world` at its four Goldens' frames and `crowd` in both its
-# shadow forms, written to
+# 2560x1440 at the checked frames `praxis scenes` prints, `crowd` in both
+# its shadow forms, written to
 # target/tmp/gallery/<scene>-frame-<n>.png. Given an earlier gallery's
 # directory, it also writes <scene>-frame-<n>-difference.png beside each
 # image that directory holds too: the capture dimmed, with every pixel past
@@ -38,10 +37,6 @@ gallery=target/tmp/gallery
 logs="$gallery/logs"
 size=2560x1440
 baseline_failures=0
-# The Goldens test's GOLDEN_FRAME and TOWN_FRAMES (tests/goldens.rs).
-golden_frame=59
-town_frames=(59 300 500 700 900 1200 1500 1800)
-world_frames=(59 300 599 1500)
 
 [[ -z "$against" || "$against/" != "$(pwd)/$gallery/"* ]] ||
   { echo "copy the earlier gallery out of $gallery first" >&2; exit 1; }
@@ -144,17 +139,18 @@ capture() {
   fi
 }
 
-for frame in "${town_frames[@]}"; do
-  capture town town "$frame"
-done
-for scene in helmet pbr-sweep uv-grid normal-tangent far-coplanar orrery \
-  minification texture-wall shadows; do
-  capture "$scene" "$scene" "$golden_frame"
-done
-for form in proxies refit; do
-  capture "crowd-$form" crowd "$golden_frame" --crowd-form "$form"
-done
-for frame in "${world_frames[@]}"; do
-  capture world world "$frame"
-done
+scenes="$(target/release/praxis scenes)"
+# Read on fd 3, so no capture or Blender run reads the list from stdin.
+while read -r scene frames <&3; do
+  golden_frame="${frames%% *}"
+  for frame in $frames; do
+    if [[ "$scene" == crowd ]]; then
+      for form in proxies refit; do
+        capture "crowd-$form" crowd "$frame" --crowd-form "$form"
+      done
+    else
+      capture "$scene" "$scene" "$frame"
+    fi
+  done
+done 3<<<"$scenes"
 [[ "$baseline_failures" -eq 0 ]] || exit 1
