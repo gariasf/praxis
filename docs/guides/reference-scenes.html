@@ -247,7 +247,7 @@ const fn coloured_light(color: glam::Vec3) -&gt; PointLight {
 </section>
 
 <section class="part prose" id="helmet">
-  <div class="part-mark">2 &middot; <code>helmet_placements</code> &middot; <code>State::spawn_helmet_scene</code>, <code>src/state.rs</code></div>
+  <div class="part-mark">2 &middot; <code>helmet_placements</code> &middot; <code>spawn_helmet_scene</code>, <code>src/state.rs</code></div>
   <h2>helmet: the fetched model and a white sweep</h2>
   <p class="key-idea">The only scene whose source is fetched rather than committed: Khronos's SciFiHelmet, drawn once with its own textured Material and ten times more with a white factor sweep, so a real glTF model with four 2048&sup2; Textures runs through the cook and the loader. It has no Golden, since CI never has the model.</p>
   <p><code>helmet_placements</code> places the Mesh named <code>SciFiHelmet</code>, from the manifest source <code>SCI_FI_HELMET</code> by <code>sci_fi_helmet_mesh_id</code>, once for each of the sweep's ten Materials, metallic 0 and 1 by <code>SWEEP_METALLIC</code> against roughness 0.1, 0.3, 0.5, 0.7 and 0.9 by <code>SWEEP_ROUGHNESS</code>, with the white base colour <code>HELMET_SWEEP_BASE_COLOR</code>, each scaled to 0.75, in two rows 2.6 m above and below the origin, columns 2 m apart from &minus;4 to 4 m, all 8 m along &minus;Z from the origin, 10 m ahead of the camera. The eleventh helmet, at (0, 0, &minus;8), draws with the Material its Primitive names, the textured one. The model is 2.9 units tall, which is why the copies shrink. The camera is <code>Camera::new</code>, at (0, 0, 2) looking along &minus;Z, and does not move; the lights are the four coloured ones. Each helmet draws 23,358 triangles, so the frame draws 11 Instances and 256,938 triangles.</p>
@@ -266,7 +266,7 @@ const fn coloured_light(color: glam::Vec3) -&gt; PointLight {
         }
     }
     placements.push(placed(mesh, None, glam::dvec3(0.0, 0.0, -8.0)));</code></pre>
-  <p>The helmets fall into two Chunks and the four lights into four, the same four. The spawn, <code>State::spawn_helmet_scene</code>, places nothing: it loads the helmet's Mesh, failing with a hint to run <code>praxis fetch</code> where the file is missing, and records it in the <code>HelmetAssets</code> resource.</p>
+  <p>The helmets fall into two Chunks and the four lights into four, the same four. The spawn, <code>spawn_helmet_scene</code>, places nothing: it loads the helmet's Mesh, failing with a hint to run <code>praxis fetch</code> where the file is missing, and records it in the <code>HelmetAssets</code> resource.</p>
 <div class="code-source"><code>src/state.rs</code></div>
 <pre class="code"><code>        let mesh = loader.mesh(sci_fi_helmet_mesh_id()).with_context(|| {
             format!("loading {DEFAULT_MODEL}; run `praxis fetch` if it is missing")

@@ -635,13 +635,14 @@ impl ReferenceScene {
         }
     }
 
-    /// Spawns into `world` what the scene holds outside its Chunks, its
-    /// crowd as `crowd_form` traces it, loading each Asset through `loader`.
+    /// The scene's own spawn: loads through `loader` the Assets it needs
+    /// before any Chunk and adds to `world` what neither a Chunk nor
+    /// `Simulation::spawned` places, its crowd as `crowd_form` traces it.
     pub(crate) fn spawn(
         self,
         world: &mut World,
-        crowd_form: CrowdForm,
         loader: &mut dyn AssetLoader,
+        crowd_form: CrowdForm,
     ) -> anyhow::Result<()> {
         match self {
             Self::Helmet => spawn_helmet_scene(world, loader),

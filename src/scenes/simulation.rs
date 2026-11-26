@@ -72,7 +72,7 @@ impl Simulation {
         let (schedule, mut fixed_schedule) = simulation_schedules(recorder);
 
         scene
-            .spawn(&mut world, crowd_form, loader)
+            .spawn(&mut world, loader, crowd_form)
             .with_context(|| format!("loading {}", scene.name()))?;
         world.insert_resource(LoadedChunks::default());
         world.insert_resource(ResidentFarProxies::default());
@@ -117,9 +117,8 @@ impl Simulation {
     }
 }
 
-/// The State's one schedule: its systems, timed by `recorder`, on the
-/// single-threaded executor.
-/// The schedule run once per frame and the fixed schedule run once per Tick.
+/// The schedule run once per frame and the fixed schedule run once per
+/// Tick: their systems, timed by `recorder`, on the single-threaded executor.
 pub(crate) fn simulation_schedules(recorder: &FrameRecorder) -> (Schedule, Schedule) {
     let mut schedule = single_threaded_schedule();
     let mut fixed_schedule = fixed_schedule();
