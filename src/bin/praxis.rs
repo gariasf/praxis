@@ -930,10 +930,10 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
 /// `<width>x<height>`, its crowd in `crowd_form`, and writes `frames` of its
 /// camera path, rendered in one run, as PNGs: one frame to `output`, each of
 /// several beside it as `<output stem>-frame-<n>.png`. With `golden_frames`,
-/// it writes the scene's Golden frames so, rendered in the Goldens test's
-/// runs (`praxis::golden_captures`). With neither, it writes the last frame
-/// `praxis::capture` renders and prints that frame's stats, its point lights
-/// per lit pixel counted. With `forced_lod`, every Instance draws that LOD.
+/// it writes the scene's Golden frames, named the same way, rendered as the
+/// Goldens test renders them (`praxis::golden_captures`). With neither, it
+/// writes the last frame `praxis::capture` renders and prints that frame's
+/// stats, its point lights per lit pixel counted. With `forced_lod`, every Instance draws that LOD.
 /// The PNG encoder comes with `cook`.
 #[cfg(feature = "cook")]
 fn capture(
