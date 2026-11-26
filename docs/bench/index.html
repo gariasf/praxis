@@ -628,12 +628,12 @@ function judgesBudgets(machine, row) {
 
 /** Each Budget `praxis compare` checks of what a row holds, at the statistic it checks; one the row does not hold is left out. */
 function budgetVerdicts(row) {
-  const elsewhere = {
+  const mediansHeldElsewhere = {
     dynamic_tlas_gpu_microseconds: row.gpu_pass_median_microseconds?.dynamic_tlas_build,
     gpu_memory_bytes: row.measured_counters?.gpu_memory_bytes ?? row.gpu_memory_bytes,
   };
   return BUDGET_RULES
-    .map(([metric, statistic]) => [metric, statistic, metric in elsewhere ? elsewhere[metric] : row[metric]?.[statistic], state.budgets[statistic === "maximum" ? "maximum_frame_microseconds" : metric]])
+    .map(([metric, statistic]) => [metric, statistic, statistic === "median" && metric in mediansHeldElsewhere ? mediansHeldElsewhere[metric] : row[metric]?.[statistic], state.budgets[statistic === "maximum" ? "maximum_frame_microseconds" : metric]])
     .filter(([, , value, budget]) => value !== null && value !== undefined && budget !== undefined)
     .map(([metric, statistic, value, budget]) => ({ metric, statistic, value, budget, over: value > budget }));
 }

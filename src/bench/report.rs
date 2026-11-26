@@ -123,7 +123,7 @@ pub fn report(
         .chain(culling_per_slot)
         .chain(blas_compaction)
         .chain(pass_times);
-    let mut bounded = Vec::new();
+    let mut clauses = Vec::new();
     for (name, time, baseline_time, metric) in times {
         let compared = match baseline_time {
             Some(Spread { median, p95, .. }) => [
@@ -160,10 +160,10 @@ pub fn report(
         if median_rule.is_guard() {
             clause.push_str(", as a guard");
         }
-        bounded.push(clause);
+        clauses.push(clause);
     }
 
-    writeln!(report, "\nThe Budget column bounds {}.", bounded.join("; "))?;
+    writeln!(report, "\nThe Budget column bounds {}.", clauses.join("; "))?;
 
     if let Some(wait) = current.lit_pass_wait_microseconds {
         report.push_str(

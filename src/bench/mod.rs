@@ -1139,7 +1139,7 @@ impl std::fmt::Display for Measurements {
 /// late mips, which depend on when the IO pool's reads land, and the TLAS
 /// build's allocations, which the heap allocations already hold, are
 /// reported only. Against the Budgets, each rule of `BudgetRule::all`
-/// counts; other p95s are reported only, as they move with one slow frame.
+/// counts; a p95 no rule names is reported only, as it moves with one slow frame.
 /// Runs that measured as many frames compare their
 /// measured frames' counters, unless the Baseline's measured frames streamed:
 /// then their counter frames', and the measured frames' refusals as well.
