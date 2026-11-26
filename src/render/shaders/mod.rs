@@ -18,8 +18,8 @@ use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
 use crate::render::bind_groups::BLAS_REFIT_MARKERS;
 use crate::render::bind_groups::{
     BENDS, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
-    FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, SCENE_GEOMETRY,
-    SHADOW_MASK_BUILD, SHADOW_RAY_SCENE, TONEMAPPING_INPUT,
+    FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, RAY_SCENE, SCENE_GEOMETRY,
+    SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::{MAX_WORKGROUPS_PER_DIMENSION, SCAN_BLOCK_SIZE, SLOT_LOD_SHIFT};
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
@@ -110,7 +110,7 @@ pub const SHADOW_MASK: ShaderModule = ShaderModule {
     name: "shadow_mask",
     // It traces rays against both TLAS.
     enables: &["wgpu_ray_query"],
-    bind_groups: &[&SHADOW_RAY_SCENE, &SHADOW_MASK_BUILD],
+    bind_groups: &[&RAY_SCENE, &SHADOW_MASK_BUILD],
     parts: &[COMMON, FROXEL_GRID, part!("shadow_mask.wgsl")],
 };
 

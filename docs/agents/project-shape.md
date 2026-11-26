@@ -138,7 +138,10 @@ src/
                                  acceleration_structures (the static
                                  and dynamic TLAS, the sizes of
                                  acceleration structures through
-                                 wgpu-hal), instance,
+                                 wgpu-hal), ray_scene (the Ray scene:
+                                 both TLAS, their steps in a frame and
+                                 the bind group a pass that traces
+                                 sets), instance,
                                  uniforms, staging,
                                  shaders/ (WGSL parts and the modules
                                  each pipeline assembles from them)

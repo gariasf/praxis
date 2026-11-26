@@ -125,7 +125,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Reads</dt><dd>The <span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>'s <code>instance_writes</code> and the <code>instances</code> they cover; of each static Instance's Mesh, its BLAS (<code>MeshPool::blas</code>), the radius of its widest Thin Primitive if every Primitive is one (<code>MeshPool::thin_radius_metres</code>) and whether it is a Far proxy's (<code>MeshPool::is_far_proxy</code>); the camera's Anchor, every frame; the <code>wait_for_static_tlas</code> Render switch, which a capture sets.</dd>
       <dt>Writes</dt><dd>The entry each static Instance's slot holds, with its mask, and each frame's entry changes, which both TLASes take; the Anchor of the bound TLAS's frame, which the camera uniform carries to the GPU as <code>tlas_anchor</code> and the dynamic TLAS shares; the static Instances it leaves out, by slot.</dd>
       <dt>Builds</dt><dd>Both TLASes, empty, at creation; then one <code>build_acceleration_structures</code> of the spare alone, recorded and finished on the worker into a command buffer of its own, which the main thread submits before the frame's, when the bound TLAS lacks a change that starts a build, has waited <code>FAR_PROXY_BUILD_WAIT_FRAMES</code> on a Far proxy's, or is to re-anchor.</dd>
-      <dt>Bind groups</dt><dd>Group 2 of the shadow mask pass, <code>SHADOW_RAY_SCENE</code>, as <code>static_tlas</code>: one group per TLAS, built once since each is rebuilt in place, and set by <code>StaticTlas::bound_index</code>.</dd>
+      <dt>Bind groups</dt><dd>Group 2 of the shadow mask pass, <code>RAY_SCENE</code>, as <code>static_tlas</code>: one group per TLAS, built once since each is rebuilt in place, and set by <code>StaticTlas::bound_index</code>.</dd>
       <dt>Shader</dt><dd>Queried in <code>first_intersection</code>, <code>src/render/shaders/shadow_mask.wgsl</code>.</dd>
       <dt>Counted</dt><dd><code>static_instances_left_out</code> in counters; <code>static_tlas_build_time</code>, the worker's time on the build a frame submits, and <code>frames_until_traced</code>, in a frame that binds a new build that brings a change that starts a build; each filled entry's backend record in <code>uploaded_bytes</code>, in the frame that submits a build; both TLASes at full capacity in the acceleration structures' ledger, and so in <code>gpu_memory_bytes</code>; the main thread's share, the entry changes and the submit, in the <code>static_tlas_update</code> stage. No GPU pass time is taken of its build.</dd>
       <dt>Files</dt><dd><code>src/render/acceleration_structures.rs</code></dd>
@@ -908,7 +908,7 @@ static_tlas_instances: entries(
 </section>
 
 <section class="part prose" id="rays">
-  <div class="part-mark">6 &middot; <code>SHADOW_RAY_SCENE</code> &middot; <code>first_intersection</code></div>
+  <div class="part-mark">6 &middot; <code>RAY_SCENE</code> &middot; <code>first_intersection</code></div>
   <h2>What the rays read</h2>
   <p class="key-idea">The shadow mask pass holds one group per static TLAS, each built once since a rebuild writes its TLAS in place, sets the bound one's, and queries it first for every ray, before the dynamic TLAS, with a cull mask that leaves out the width classes too narrow for the ray's receiver. Binding it costs each submit a walk of its distinct BLASes, not of its entries.</p>
 <pre class="code"><code>/// Group 2 of the shadow mask pass, built once per static TLAS since each
@@ -918,21 +918,21 @@ static_tlas_instances: entries(
 /// TLAS's dependencies, one per distinct BLAS it holds [ref:wgpu-pr-9835],
 /// for each flush of a group holding it, at least once per pass that binds
 /// one [ref:wgpu-30-use-tlas-per-flush] [ref:wgpu-30-submit-tlas-dependencies].
-pub const SHADOW_RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
+pub const RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
     index: 2,
-    label: "Shadow Ray Scene Bind Group",
+    label: "Ray Scene Bind Group",
     bindings: &amp;[
         acceleration_structure("static_tlas", wgpu::ShaderStages::COMPUTE),
         acceleration_structure("dynamic_tlas", wgpu::ShaderStages::COMPUTE),
     ],
 };</code></pre>
-  <p class="code-source"><code>SHADOW_RAY_SCENE</code>, <code>src/render/bind_groups.rs</code>.</p>
+  <p class="code-source"><code>RAY_SCENE</code>, <code>src/render/bind_groups.rs</code>.</p>
   <p>A TLAS build records the BLASes it depends on, and every submit that builds the static TLAS, or whose passes bind it, walks that list: wgpu-core checks each BLAS was built and hands it to the backend, which on Metal adds it to the submission's residency set. wgpu-core 30.0.1 recorded one dependency per entry, so each such walk covered every static Instance. The crate Praxis builds against is the vendored wgpu-core 30.0.2 under <code>vendor/</code>, which carries upstream's change that records one per distinct BLAS (<code>vendor/README.md</code>): on <code>world</code>'s bench segment each walk covers 18 or 19 BLASes where it covered about 139,000 to 149,000 Instances (<code>docs/performance.md</code>, its 2026-11-09 entry on <code>world</code>'s CPU p99). The static TLAS's submit thus costs the main thread in proportion to the Meshes it places, not to the entries it holds.</p>
-<pre class="code"><code>let shadow_ray_scene_layout = SHADOW_RAY_SCENE.layout(device);
-let shadow_ray_scenes = static_tlas.bindings().map(|static_binding| {
-    SHADOW_RAY_SCENE.bind_group(
+<pre class="code"><code>let layout = RAY_SCENE.layout(device);
+let bind_groups = static_tlas.bindings().map(|static_binding| {
+    RAY_SCENE.bind_group(
         device,
-        &amp;shadow_ray_scene_layout,
+        &amp;layout,
         [
             ("static_tlas", static_binding),
             ("dynamic_tlas", dynamic_tlas.binding()),
@@ -941,8 +941,8 @@ let shadow_ray_scenes = static_tlas.bindings().map(|static_binding| {
 });</code></pre>
   <p class="code-source"><code>ShadowMaskPass::new</code>, <code>src/render/shadow_mask_pass.rs</code>: the groups, built once from <code>StaticTlas::bindings</code>, in its TLASes' order.</p>
 <pre class="code"><code>pass.set_bind_group(
-    SHADOW_RAY_SCENE.index,
-    &amp;self.shadow_ray_scenes[static_tlas_index],
+    RAY_SCENE.index,
+    &amp;self.bind_groups[self.static_tlas.bound_index()],
     &amp;[],
 );</code></pre>
   <p class="code-source"><code>ShadowMaskPass::record</code>, <code>src/render/shadow_mask_pass.rs</code>, whose <code>static_tlas</code> argument the Renderer passes as <code>StaticTlas::bound_index</code>.</p>
@@ -1080,7 +1080,7 @@ pub fn bound_index(&amp;self) -&gt; usize {
   <p class="note">Primary sources the mechanism rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code and its ADR cite.</p>
   <dl class="reading">
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L336-L341">wgpu-core 30.0.1, TLAS descriptors in <code>build_acceleration_structures</code></a></dt><dd>a TLAS update is always passed down as a build: no refit; <code>wgpu-30-tlas-rebuild-only</code>, which ADR 0020 cites</dd>
-    <dt><a href="https://github.com/gfx-rs/wgpu/pull/9835">gfx-rs/wgpu pull request 9835, Deduplicate TLAS build dependencies by unique BLAS</a>, <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/pass.rs#L144-L174">each flush of a group that holds a TLAS</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L570-L577">their walk at submit</a></dt><dd>what binding the TLAS in a pass costs at submit: one dependency per distinct BLAS it holds, as the vendored wgpu-core 30.0.2 applies upstream's change, where 30.0.1 recorded one per entry; <code>wgpu-pr-9835</code>, <code>wgpu-30-use-tlas-per-flush</code>, <code>wgpu-30-submit-tlas-dependencies</code>, which <code>SHADOW_RAY_SCENE</code> cites; <code>vendor/README.md</code> names the commit applied</dd>
+    <dt><a href="https://github.com/gfx-rs/wgpu/pull/9835">gfx-rs/wgpu pull request 9835, Deduplicate TLAS build dependencies by unique BLAS</a>, <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/pass.rs#L144-L174">each flush of a group that holds a TLAS</a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-core/src/command/ray_tracing.rs#L570-L577">their walk at submit</a></dt><dd>what binding the TLAS in a pass costs at submit: one dependency per distinct BLAS it holds, as the vendored wgpu-core 30.0.2 applies upstream's change, where 30.0.1 recorded one per entry; <code>wgpu-pr-9835</code>, <code>wgpu-30-use-tlas-per-flush</code>, <code>wgpu-30-submit-tlas-dependencies</code>, which <code>RAY_SCENE</code> cites; <code>vendor/README.md</code> names the commit applied</dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/blas.rs#L56-L67">wgpu 30.0.1, <code>TlasInstance</code></a></dt><dd>the row-major 3&times;4 transform, custom data in its lower 24 bits, and the mask a ray meets an entry by only where it shares a bit with the ray's; <code>wgpu-30-tlas-instance-fields</code>, which <code>instance_mask</code> cites</dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/tlas.rs">wgpu 30.0.1, <code>Tlas</code></a> and <a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/device.rs">its creation</a></dt><dd>one optional entry per place of capacity from creation, each mapped when a build is recorded, and the filled ones built in order</dd>
     <dt><a href="https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu/src/api/command_encoder.rs#L27">wgpu 30.0.1, <code>CommandEncoder</code></a></dt><dd>an encoder and a TLAS can move to a worker on native; <code>wgpu-30-command-encoder-send-sync</code>, which the research cites</dd>

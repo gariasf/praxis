@@ -944,7 +944,8 @@ impl DynamicTlas {
     /// the encoder the GPU finished with last [ref:wgpu-30-command-encoder-pool],
     /// and a frame submits the dynamic TLAS's build before its passes, so the
     /// build's encoder is released first. `Renderer::upload` retires the
-    /// finished frames before it calls this, so both are back in the pool
+    /// finished frames before the Ray scene calls this, so both are back in
+    /// the pool
     /// even when the passes' submission retired the build before them.
     /// Created in this order, when no
     /// other submission takes an encoder, the two swap roles every frame, so
@@ -1090,7 +1091,7 @@ fn place(transform: &mut [f32; 12], position: InstancePosition, anchor: [i32; 3]
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::io::Write;
 
     use bevy_ecs::prelude::*;
@@ -1152,15 +1153,15 @@ mod tests {
 
     /// A Mesh pool holding `triangle_about_x`'s Mesh after another, its BLAS
     /// built and compacted.
-    struct Triangle {
-        context: GpuContext,
-        mesh_pool: MeshPool,
+    pub(crate) struct Triangle {
+        pub(crate) context: GpuContext,
+        pub(crate) mesh_pool: MeshPool,
         mesh: MeshHandle,
     }
 
     impl Triangle {
         /// None, after saying so, when there is no GPU.
-        fn new() -> Option<Self> {
+        pub(crate) fn new() -> Option<Self> {
             let context = match pollster::block_on(GpuContext::headless()) {
                 Ok(context) => context,
                 Err(error) if error.is::<wgpu::RequestAdapterError>() => {
@@ -1190,7 +1191,7 @@ mod tests {
 
         /// An Instance of the triangle with `rotation_scale`, its pivot at
         /// `offset` from the corner of `anchor`.
-        fn instance(
+        pub(crate) fn instance(
             &self,
             anchor: [i32; 3],
             offset: [f32; 3],
