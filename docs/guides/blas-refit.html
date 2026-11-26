@@ -295,7 +295,7 @@ impl CrowdForm {
   </table>
   </div>
   <p class="note">From <code>CrowdForm</code>'s docs, <code>spawn_crowd_as</code> in <code>src/scenes/mod.rs</code> and <code>MeshPool::load_for</code>.</p>
-  <p>The scene spawns by the switch: <code>spawn_crowd</code> for <code>Proxies</code>, <code>spawn_traced_crowd</code> for the other two. In those, each figure takes its own refitted Mesh and a <code>PreviousWorldTransform</code>, which makes its Instance a Moving Instance, so it joins the dynamic TLAS, rebuilt every frame over its BLAS's bent bounds; the static TLAS would keep the bounds of the figure's load.</p>
+  <p>The scene spawns by the switch, in <code>spawn_crowd_as</code>: with shadow proxies for <code>Proxies</code>, without them for the other two. In those, each figure takes its own refitted Mesh and a <code>PreviousWorldTransform</code>, which makes its Instance a Moving Instance, so it joins the dynamic TLAS, rebuilt every frame over its BLAS's bent bounds; the static TLAS would keep the bounds of the figure's load.</p>
 <pre class="code"><code>let Some(proxy) = proxy else {
     // A Moving Instance, so it joins the dynamic TLAS, rebuilt each
     // frame over its BLAS's bent bounds; the static TLAS would keep

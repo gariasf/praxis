@@ -31,7 +31,7 @@ use crate::cooked::{
     MaterialChannel, TEXTURE_FORMAT_VERSION, chunk_origin, hex,
 };
 use crate::render::CrowdForm;
-use crate::state::Simulation;
+use crate::scenes::simulation::Simulation;
 use crate::stats::FrameRecorder;
 
 /// The cook settings a Cook key covers besides sources, formats and

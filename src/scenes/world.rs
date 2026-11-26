@@ -242,7 +242,7 @@ pub(crate) fn traversal_camera_at(frame: u32) -> Camera {
 /// Places the ground past the View distance about the world's middle, and
 /// spawns 10,000 birds in flocks about the camera's first position, each flock
 /// kept within half the flocks' span of the camera as it flies.
-pub(crate) fn spawn_world(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
+pub(super) fn spawn_world(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let ground_id = ReferenceScene::World.mesh_id("ground");
     let ground = loader.untraced_mesh(ground_id)?;
     let tiles_across = (2.0 * FAR_GROUND_HALF_SIZE_METRES / GROUND_TILE_METRES) as f32;

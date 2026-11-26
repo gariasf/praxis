@@ -2,6 +2,8 @@
 use std::f32::consts::{PI, TAU};
 use std::time::Duration;
 
+// Shadows the prelude's `ContextExt`, whose `context` and `with_context` make anyhow's ambiguous.
+use anyhow::Context as ContextExt;
 use bevy_ecs::prelude::*;
 
 use crate::assets::{AssetLoader, MaterialChannel};
@@ -18,17 +20,16 @@ use crate::cooked::{AssetId, AssetKind, AssetName, AssetSource};
 #[cfg(feature = "cook")]
 use crate::cooked::{CookedLight, CookedMaterial, CookedPlacement, chunk_holding};
 use crate::environment::Environment;
+use crate::helmet::HelmetAssets;
 use crate::render::CrowdForm;
 #[cfg(feature = "cook")]
 use crate::streaming::{LoadedChunks, load_chunk};
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::{PreviousWorldTransform, Teleported};
 
+pub(crate) mod simulation;
 mod town;
 pub(crate) mod world;
-
-pub(crate) use town::spawn_town;
-pub(crate) use world::spawn_world;
 
 /// The Reference scenes `capture` renders, each with a camera path in frames
 /// and a frame delta.
@@ -633,6 +634,31 @@ impl ReferenceScene {
             },
         }
     }
+
+    /// The scene's own spawn: loads through `loader` the Assets it needs
+    /// before any Chunk and adds to `world` what neither a Chunk nor
+    /// `Simulation::spawned` places, its crowd as `crowd_form` traces it.
+    pub(crate) fn spawn(
+        self,
+        world: &mut World,
+        loader: &mut dyn AssetLoader,
+        crowd_form: CrowdForm,
+    ) -> anyhow::Result<()> {
+        match self {
+            Self::Helmet => spawn_helmet_scene(world, loader),
+            Self::PbrSweep
+            | Self::UvGrid
+            | Self::NormalTangent
+            | Self::FarCoplanar
+            | Self::Minification
+            | Self::Shadows => Ok(()),
+            Self::Orrery => spawn_orrery(world, loader),
+            Self::TextureWall => spawn_texture_wall(loader),
+            Self::Crowd => spawn_crowd_as(world, loader, crowd_form),
+            Self::Town => town::spawn_town(world, loader),
+            Self::World => world::spawn_world(world, loader),
+        }
+    }
 }
 
 /// The sun's illuminance in every scene, in lux: direct sunlight, as Bevy's
@@ -706,6 +732,12 @@ fn chunk_square(edges: std::ops::Range<i32>) -> Vec<[i32; 2]> {
         .collect()
 }
 
+/// The source file of the helmet scene's Mesh and Material, relative to the
+/// working directory (the crate root under `cargo run` and `cargo test`),
+/// which a dev launch cooks. It is fetched, not committed: `praxis fetch`
+/// downloads it, as a dev launch of the helmet does when it is absent.
+pub const DEFAULT_MODEL: &str = "assets/SciFiHelmet/SciFiHelmet.gltf";
+
 /// SciFiHelmet's glTF file, by its manifest GUID.
 const SCI_FI_HELMET: u128 = 0x3b67bb0196a34daa9d4389cb09aa9a27;
 /// NormalTangentTest's glTF file, by its manifest GUID.
@@ -714,9 +746,19 @@ const NORMAL_TANGENT_TEST: u128 = 0xc750a32dc879478eaca4748dbc82645a;
 
 /// SciFiHelmet's Mesh, which the helmet scene places and its spawn system
 /// spawns.
-pub(crate) fn sci_fi_helmet_mesh_id() -> AssetId {
+fn sci_fi_helmet_mesh_id() -> AssetId {
     let source = AssetSource::File(SCI_FI_HELMET);
     AssetId::new(source, AssetKind::Mesh, AssetName::Name("SciFiHelmet"))
+}
+
+/// Records `DEFAULT_MODEL`'s helmet Mesh for the spawn systems; the
+/// scene's Chunks hold its helmets.
+fn spawn_helmet_scene(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
+    let mesh = loader
+        .mesh(sci_fi_helmet_mesh_id())
+        .with_context(|| format!("loading {DEFAULT_MODEL}; run `praxis fetch` if it is missing"))?;
+    world.insert_resource(HelmetAssets { mesh });
+    Ok(())
 }
 
 /// The helmet scene's Placements: a factor sweep of helmets over the
@@ -903,7 +945,7 @@ pub(crate) struct Spin {
 
 /// Sets each spinning entity's rotation for the end of the running Tick, from
 /// the Tick count, so no rounding accumulates over Ticks.
-pub(crate) fn spin(fixed_time: Res<FixedTime>, mut spinning: Query<(&Spin, &mut Transform)>) {
+fn spin(fixed_time: Res<FixedTime>, mut spinning: Query<(&Spin, &mut Transform)>) {
     let seconds = (fixed_time.tick + 1) as f64 * TICK_SECONDS;
     for (spin, mut transform) in &mut spinning {
         let angle = (spin.radians_per_second * seconds).rem_euclid(std::f64::consts::TAU);
@@ -914,13 +956,13 @@ pub(crate) fn spin(fixed_time: Res<FixedTime>, mut spinning: Query<(&Spin, &mut 
 /// Keeps an entity within half `span_metres` of the camera on X and Z by
 /// moving it whole spans: what falls behind the camera jumps ahead of it.
 #[derive(Component)]
-pub(crate) struct WrapsAroundCamera {
-    pub(crate) span_metres: f64,
+struct WrapsAroundCamera {
+    span_metres: f64,
 }
 
 /// Moves each wrapping entity the whole spans that bring it within half a
 /// span, on X and Z, of where the camera is as the Tick ends, as a jump.
-pub(crate) fn wrap_around_camera(
+fn wrap_around_camera(
     mut commands: Commands,
     fixed_time: Res<FixedTime>,
     camera_path: Res<CameraPath>,
@@ -1073,10 +1115,7 @@ fn wall_material_name(quad: u32) -> String {
 /// Loads every Texture in index order, into the albedo Channel's Texture
 /// classes after its neutral default, so the quads its Chunks load sample
 /// Layers across the whole range.
-pub(crate) fn spawn_texture_wall(
-    _world: &mut World,
-    loader: &mut dyn AssetLoader,
-) -> anyhow::Result<()> {
+fn spawn_texture_wall(loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let (scene, channel) = (ReferenceScene::TextureWall, MaterialChannel::Albedo);
     for index in 0..TEXTURE_WALL_TEXTURES {
         loader.texture(
@@ -1230,25 +1269,11 @@ fn crowd_figure_bounds() -> [[f32; 3]; 2] {
     [[-reach, 0.0, -reach], [reach, CROWD_FIGURE_HEIGHT, reach]]
 }
 
-/// Spawns the figures in rows of `CROWD_COLUMNS` centred
-/// on the origin, each drawing its own Mesh, bent from one rest Mesh, with
-/// its bones' shadow proxies as children (`CrowdForm::Proxies`).
-pub(crate) fn spawn_crowd(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
-    spawn_crowd_as(world, loader, CrowdForm::Proxies)
-}
-
-/// Spawns the crowd as `spawn_crowd` does, each figure traced through its
-/// own Mesh's BLAS, updated each frame, and no shadow proxies
-/// (`CrowdForm::Refit`, `CrowdForm::Rebuild`).
-pub(crate) fn spawn_traced_crowd(
-    world: &mut World,
-    loader: &mut dyn AssetLoader,
-) -> anyhow::Result<()> {
-    spawn_crowd_as(world, loader, CrowdForm::Refit)
-}
-
-/// Spawns the crowd as `form` traces it: through shadow proxies, or through
-/// the figures' own BLASes.
+/// Spawns the figures in rows of `CROWD_COLUMNS` centred on the origin,
+/// each drawing its own Mesh, bent from one rest Mesh, as `form` traces
+/// it: with its bones' shadow proxies as children (`CrowdForm::Proxies`),
+/// or through its own Mesh's BLAS, updated each frame, with no shadow
+/// proxies (`CrowdForm::Refit`, `CrowdForm::Rebuild`).
 fn spawn_crowd_as(
     world: &mut World,
     loader: &mut dyn AssetLoader,
@@ -1332,7 +1357,7 @@ pub(crate) struct Bone(u32);
 /// Sets each swaying figure's curvature for the end of the running Tick,
 /// from the Tick count, so no rounding accumulates over Ticks, and places
 /// its bones' shadow proxies on its bent middle.
-pub(crate) fn sway(
+fn sway(
     fixed_time: Res<FixedTime>,
     mut figures: Query<(&Sway, &mut Bend, Option<&Children>)>,
     mut bones: Query<(&Bone, &mut Transform)>,

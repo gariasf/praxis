@@ -24,7 +24,7 @@ use crate::cooked::{
 };
 use crate::environment::Environment;
 use crate::render::CrowdForm;
-use crate::state::Simulation;
+use crate::scenes::simulation::Simulation;
 use crate::stats::FrameRecorder;
 use crate::streaming::chunks::load_cooked_chunk;
 use crate::streaming::{FarGround, LoadedChunk, LoadedChunks, distance_metres};
@@ -886,7 +886,7 @@ mod tests {
     /// helmet, when SciFiHelmet is fetched: the textured helmet drawn with
     /// its glTF Materials, named from its source file, and the ten sweep
     /// copies with their transforms and factors, under the four coloured
-    /// point lights, as `src/scenes/mod.rs` and `src/state.rs` place them.
+    /// point lights, as `src/scenes/mod.rs` places them.
     #[test]
     fn helmet_exports_the_textured_helmet_its_sweep_and_lights() {
         if !Path::new(env!("CARGO_MANIFEST_DIR"))

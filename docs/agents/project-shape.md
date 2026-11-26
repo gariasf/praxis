@@ -66,6 +66,9 @@ src/
                                  world's flocks), the wrap that keeps
                                  world's flocks about its camera and the
                                  crowd's Sway system;
+                                 simulation.rs, the Simulation: a
+                                 scene's ECS World as its spawn leaves
+                                 it, and the schedules that advance it;
                                  town.rs, the dense scene's generator;
                                  world.rs, the streamed Game world's
                                  generator
