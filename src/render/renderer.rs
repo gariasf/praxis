@@ -7,7 +7,7 @@ use crate::gpu::GpuContext;
 use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::bend_pass::{BEND_CAPACITY, BEND_PASS, BendData, BendPass};
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
-use crate::render::blas_refit::{BLAS_REFIT_PASS, BlasRefit};
+use crate::render::blas_refit::BLAS_REFIT_PASS;
 use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity, SCAN_BLOCK_SIZE};
 use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
@@ -52,11 +52,6 @@ pub(crate) const TIMED_PASSES: [&str; 14] = [
     LIT_PASS,
     TONEMAPPING_PASS,
 ];
-
-/// The CPU stage that records the frame's BLAS updates, with the crowd's
-/// refit or rebuild form, and submits them with the frame's commands before
-/// them.
-pub(crate) const BLAS_REFIT: &str = "blas_refit";
 
 /// The CPU stage that waits for newly loaded Meshes' BLASes to build and
 /// compact, recorded only on frames that wait.
@@ -286,7 +281,8 @@ impl RenderCapacities {
 /// Draws Frame data into a target view, the window's surface or an offscreen
 /// texture, from GPU resources and Pools it owns; it reads no ECS World. It
 /// holds the bind groups passes share, the render targets and the Ray scene,
-/// and calls the passes in ADR 0019's order.
+/// which orders the BLAS refit and the dynamic TLAS's build after the bend
+/// pass, and calls the passes in ADR 0019's order.
 pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
@@ -304,8 +300,6 @@ pub struct Renderer {
     /// Whether the frame traces shadow rays, which the shadow mask pass and
     /// phase two's depth pass run for.
     shadow_rays: bool,
-    /// With the crowd's refit or rebuild form.
-    blas_refit: Option<BlasRefit>,
     depth_pyramid_pass: DepthPyramidPass,
     tonemapping_pass: TonemappingPass,
     /// With the `count_point_lights` Render switch on.
@@ -519,14 +513,6 @@ impl Renderer {
             switches,
             &capacities,
         );
-        let blas_refit = BlasRefit::new(
-            &device,
-            &memory,
-            &queue,
-            context.backend(),
-            switches.crowd_form,
-            &capacities,
-        );
         let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
             &scene_geometry_bind_group_layout,
@@ -588,7 +574,6 @@ impl Renderer {
             main_pass,
             shadow_mask_pass,
             shadow_rays: switches.shadow_rays,
-            blas_refit,
             depth_pyramid_pass,
             tonemapping_pass,
             light_count_pass,
@@ -764,10 +749,10 @@ impl Renderer {
     /// Draws `frame`, uploaded by `upload`, into `target`, a view in the
     /// format and size this Renderer renders to, timing its passes for
     /// `gpu_frame_stats`, which reads them back a few frames later, and
-    /// submits it after the dynamic TLAS's build, if it has one, which it
-    /// records into a command buffer of its own; with BLAS updates, the
-    /// frame's commands up to its bend pass and the updates are submitted
-    /// before the build. Returns the frame's submission.
+    /// submits it after the dynamic TLAS's build, if it has one, which the
+    /// Ray scene records into a command buffer of its own; with BLAS
+    /// updates, the Ray scene submits the frame's commands up to its bend
+    /// pass and the updates before the build. Returns the frame's submission.
     pub fn render(
         &mut self,
         frame: &FrameData,
@@ -790,30 +775,18 @@ impl Renderer {
             .bend_pass
             .record(&mut encoder, &frame.bends, bend_queries);
         let encoding = started.elapsed();
-        // Their BLASes take them too, in a submission of their own, which
-        // the dynamic TLAS's build, recorded after it, follows.
-        if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
-            let started = Instant::now();
-            let head = std::mem::replace(&mut encoder, create_frame_encoder(&self.device));
-            let refit_queries = timestamps
-                .as_mut()
-                .map(|timestamps| timestamps.pass(BLAS_REFIT_PASS));
-            blas_refit.submit(
-                &self.device,
-                &self.queue,
-                head,
-                &self.mesh_pool,
-                refit_queries,
-            );
-            if let Some(timestamps) = &mut timestamps {
-                timestamps.split_submission();
-            }
-            recorder.stage(BLAS_REFIT, started);
-        }
-        // The dynamic TLAS's build, its recording timed apart from the
-        // frame's: `encode` resumes after it.
-        self.ray_scene
-            .record_build(&self.device, &mut timestamps, recorder);
+        // Their BLASes take them too, then the dynamic TLAS's build is
+        // recorded, both timed apart from the frame's: `encode` resumes
+        // after them.
+        self.ray_scene.record_builds(
+            &mut encoder,
+            bent,
+            &self.mesh_pool,
+            &self.device,
+            &self.queue,
+            &mut timestamps,
+            recorder,
+        );
         let started = Instant::now() - encoding;
         let culling_bind_groups = [
             (&FRAME, &self.frame_bind_group),
