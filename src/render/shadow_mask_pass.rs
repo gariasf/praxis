@@ -11,10 +11,7 @@
 //! sample's verdict, so the edge resolves as MSAA resolves geometry's. It
 //! runs once both culling phases' Instances are in the depth target.
 
-use crate::render::acceleration_structures::{DynamicTlas, StaticTlas};
-use crate::render::bind_groups::{
-    SHADOW_MASK_BUILD, SHADOW_RAY_SCENE, compute_pipeline, pipeline_layout,
-};
+use crate::render::bind_groups::{RAY_SCENE, SHADOW_MASK_BUILD, compute_pipeline, pipeline_layout};
 use crate::render::froxel_pass::FROXEL_SLICES;
 use crate::render::renderer::{RenderCapacities, RenderSwitches};
 use crate::render::shaders;
@@ -69,8 +66,7 @@ const _: () = assert!(FROXEL_SLICES.is_power_of_two());
 const _: () = assert!(SHADOW_MASK_LIGHTS > u32::BITS);
 const _: () = assert!(SHADOW_MASK_LIGHTS + FROXEL_SLICES.ilog2() == 2 * u32::BITS);
 
-/// The pass's pipelines, its group 2 with the TLAS it traces, and its group
-/// 3 with the buffers it reads.
+/// The pass's pipelines and its group 3 with the buffers it reads.
 pub struct ShadowMaskPass {
     /// Traces each pixel's nearest surface and lists its second, if any.
     nearest_surfaces_pipeline: wgpu::ComputePipeline,
@@ -80,8 +76,6 @@ pub struct ShadowMaskPass {
     list_shadow_edges_pipeline: wgpu::ComputePipeline,
     /// Traces the listed shadow edges again from each sample.
     trace_shadow_edges_pipeline: wgpu::ComputePipeline,
-    /// One per static TLAS, as `StaticTlas::bindings` orders them.
-    shadow_ray_scenes: [wgpu::BindGroup; 2],
     layout: wgpu::BindGroupLayout,
     /// The camera, the lights' counts, the lights, the Froxel lists and the
     /// culling pass's per-slot offsets.
@@ -114,40 +108,28 @@ pub struct ShadowMaskPass {
 }
 
 impl ShadowMaskPass {
-    /// The pass, tracing against `static_tlas` and `dynamic_tlas`, reading the Renderer's `camera`, `light` and `lights`
+    /// The pass, tracing the Ray scene, whose group is of
+    /// `ray_scene_layout`, reading the Renderer's `camera`, `light` and `lights`
     /// buffers, the Froxel pass's `froxel_lists` and the culling pass's
     /// `instance_offsets`, and writing the shadow
     /// mask of `render_targets`, with its Froxel lookups as `switches` set,
     /// its shader module assembled with `capacities`.
-    #[expect(clippy::too_many_arguments)]
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
-        static_tlas: &StaticTlas,
-        dynamic_tlas: &DynamicTlas,
+        ray_scene_layout: &wgpu::BindGroupLayout,
         buffers: [(&'static str, &wgpu::Buffer); 5],
         render_targets: &RenderTargets,
         switches: RenderSwitches,
         capacities: &RenderCapacities,
     ) -> ShadowMaskPass {
-        let shadow_ray_scene_layout = SHADOW_RAY_SCENE.layout(device);
-        let shadow_ray_scenes = static_tlas.bindings().map(|static_binding| {
-            SHADOW_RAY_SCENE.bind_group(
-                device,
-                &shadow_ray_scene_layout,
-                [
-                    ("static_tlas", static_binding),
-                    ("dynamic_tlas", dynamic_tlas.binding()),
-                ],
-            )
-        });
         let layout = SHADOW_MASK_BUILD.layout(device);
         let shader = device.create_shader_module(shaders::SHADOW_MASK.descriptor(capacities));
         let pipeline_layout = pipeline_layout(
             device,
             "Shadow Mask Pipeline Layout",
             &[
-                (&SHADOW_RAY_SCENE, &shadow_ray_scene_layout),
+                (&RAY_SCENE, ray_scene_layout),
                 (&SHADOW_MASK_BUILD, &layout),
             ],
         );
@@ -211,7 +193,6 @@ impl ShadowMaskPass {
             second_surfaces_pipeline: pipeline("trace_second_surfaces"),
             list_shadow_edges_pipeline: pipeline("list_shadow_edges"),
             trace_shadow_edges_pipeline: pipeline("trace_shadow_edges"),
-            shadow_ray_scenes,
             layout,
             buffers,
             shadow_mask_lights_overflowed,
@@ -340,12 +321,12 @@ impl ShadowMaskPass {
         )
     }
 
-    /// Records the pass into `encoder`, tracing the static TLAS of index
-    /// `static_tlas_index`, timed into `timestamp_writes`.
+    /// Records the pass into `encoder`, tracing `ray_scene`, the Ray scene's
+    /// group, timed into `timestamp_writes`.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        static_tlas_index: usize,
+        ray_scene: &wgpu::BindGroup,
         timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
         encoder.clear_buffer(&self.shadow_mask_lights_overflowed, 0, None);
@@ -358,11 +339,7 @@ impl ShadowMaskPass {
             timestamp_writes,
         });
         pass.set_pipeline(&self.nearest_surfaces_pipeline);
-        pass.set_bind_group(
-            SHADOW_RAY_SCENE.index,
-            &self.shadow_ray_scenes[static_tlas_index],
-            &[],
-        );
+        pass.set_bind_group(RAY_SCENE.index, ray_scene, &[]);
         pass.set_bind_group(
             SHADOW_MASK_BUILD.index,
             &self.nearest_surfaces_bind_group,

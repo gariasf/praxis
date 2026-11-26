@@ -101,16 +101,17 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
-/// Group 2 of the shadow mask pass, built once per static TLAS since each
-/// TLAS is rebuilt in place: a static TLAS and the dynamic TLAS it traces
-/// shadow rays against (ADR 0020). No other pass binds them, but the
-/// dynamic TLAS's markers bind the dynamic one: at submit, wgpu-core walks a
-/// TLAS's dependencies, one per distinct BLAS it holds [ref:wgpu-pr-9835],
-/// for each flush of a group holding it, at least once per pass that binds
-/// one [ref:wgpu-30-use-tlas-per-flush] [ref:wgpu-30-submit-tlas-dependencies].
-pub const SHADOW_RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
+/// Group 2 of a pass that traces, the Ray scene, built once per static TLAS
+/// since each TLAS is rebuilt in place: a static TLAS and the dynamic TLAS,
+/// which its rays are traced against (ADR 0020). The shadow mask pass alone
+/// sets it, and the dynamic TLAS's markers bind the dynamic one: at submit,
+/// wgpu-core walks a TLAS's dependencies, one per distinct BLAS it holds
+/// [ref:wgpu-pr-9835], for each flush of a group holding it, at least once
+/// per pass that binds one [ref:wgpu-30-use-tlas-per-flush]
+/// [ref:wgpu-30-submit-tlas-dependencies].
+pub const RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
     index: 2,
-    label: "Shadow Ray Scene Bind Group",
+    label: "Ray Scene Bind Group",
     bindings: &[
         acceleration_structure("static_tlas", wgpu::ShaderStages::COMPUTE),
         acceleration_structure("dynamic_tlas", wgpu::ShaderStages::COMPUTE),
@@ -604,7 +605,7 @@ pub(crate) const fn read_only_storage(
 
 /// A storage buffer the compute stage reads and writes, which only the GPU
 /// writes.
-const fn storage(name: &'static str, wgsl_type: &'static str) -> Binding {
+pub(crate) const fn storage(name: &'static str, wgsl_type: &'static str) -> Binding {
     let buffer_type = wgpu::BufferBindingType::Storage { read_only: false };
     Binding {
         writer: Writer::Gpu,

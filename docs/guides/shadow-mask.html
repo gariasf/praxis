@@ -159,8 +159,8 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <p>The pass records into the frame's encoder as one compute pass of four dispatches, binding the shadow ray scene of the static TLAS the frame traces, after five buffer clears: the overflow count, both indirect dispatch sizes, and the counts at the head of both pixel lists.</p>
 <pre class="code"><code>pass.set_pipeline(&amp;self.nearest_surfaces_pipeline);
 pass.set_bind_group(
-    SHADOW_RAY_SCENE.index,
-    &amp;self.shadow_ray_scenes[static_tlas_index],
+    RAY_SCENE.index,
+    &amp;self.bind_groups[self.static_tlas.bound_index()],
     &amp;[],
 );
 pass.set_bind_group(

@@ -9,6 +9,7 @@ pub mod instance;
 pub mod light_count_pass;
 pub mod main_pass;
 pub mod prepare;
+pub mod ray_scene;
 pub mod readback;
 pub mod renderer;
 pub mod shaders;
@@ -26,13 +27,12 @@ mod shader_function_tests;
 mod shader_tests;
 
 pub use acceleration_structures::{
-    DYNAMIC_TLAS_CAPACITY, DynamicTlas, StaticTlas, blas_bytes, compacted_blas_fraction, tlas_bytes,
+    DYNAMIC_TLAS_CAPACITY, blas_bytes, compacted_blas_fraction, tlas_bytes,
 };
 pub use instance::{InstanceData, NO_MATERIAL, NO_MESH};
 pub use prepare::{FrameData, FramePreparer};
-pub(crate) use renderer::{
-    BLAS_COMPACTION, BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT, TIMED_PASSES,
-};
+pub(crate) use ray_scene::{DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT};
+pub(crate) use renderer::{BLAS_COMPACTION, BLAS_REFIT, TIMED_PASSES};
 pub use renderer::{CrowdForm, RenderCapacities, RenderSwitches, Renderer};
 pub use staging::{FrameStaging, LoadStaging, mips_written_bytes, texture_written_bytes};
 pub use targets::{HDR_FORMAT, MULTISAMPLED_FORMATS};

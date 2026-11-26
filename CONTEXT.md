@@ -119,6 +119,10 @@ _Avoid_: Object
 An Instance whose entity the fixed schedule moves, so the entity carries its previous World transform. It is rewritten each frame and rebuilt into the dynamic TLAS; every other Instance is static.
 _Avoid_: Dynamic Instance, movable
 
+**Ray scene**:
+What a ray is traced against: the static TLAS and the dynamic TLAS in one frame whose origin is the corner of the static TLAS's Anchor, so a ray composed once is traced against both.
+_Avoid_: Shadow ray scene, TLAS pair
+
 **Bend**:
 The GPU's stand-in for skinning until M8: each frame a compute pass rewrites a Renderable's own Mesh, the bent Mesh, from a rest Mesh of the same vertices, its middle curved into an arc by a curvature the fixed schedule sets each Tick.
 _Avoid_: Deformation, skinning

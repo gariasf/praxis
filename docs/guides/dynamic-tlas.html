@@ -125,7 +125,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Reads</dt><dd><span class="concept" data-term="Frame data" data-tip="The per-frame collection of changed Instances, lights, camera and the Meshes the GPU bends that the renderer consumes in place of reading the ECS World. It lists no draws: the GPU culls Instances and builds its own.">Frame data</span>'s <code>moving_instances</code> and the <code>instances</code> they index; each Mesh's Handle, BLAS, bounds and thin radius from the Mesh pool; the bound static TLAS's Anchor.</dd>
       <dt>Writes</dt><dd>Its entries, up to <code>DYNAMIC_TLAS_CAPACITY</code>, each with its slot and its mask bits; the box that holds their triangles, which <code>Renderer::upload</code> writes into the camera uniform beside <code>dynamic_tlas_entries</code>.</dd>
       <dt>Builds</dt><dd>One TLAS of 10,000 entries, created once with <code>PREFER_FAST_TRACE</code> and <code>AccelerationStructureUpdateMode::Build</code> and rebuilt in place, between two marker dispatches when the frame is timed.</dd>
-      <dt>Bind groups</dt><dd>The shadow mask pass's group 2, <code>SHADOW_RAY_SCENE</code>, beside a static TLAS, in both of that group's bind groups, one per static TLAS; the markers' group 3, <code>DYNAMIC_TLAS_MARKERS</code>, with the buffer their query writes. No other pass binds it.</dd>
+      <dt>Bind groups</dt><dd>The shadow mask pass's group 2, <code>RAY_SCENE</code>, beside a static TLAS, in both of that group's bind groups, one per static TLAS; the markers' group 3, <code>DYNAMIC_TLAS_MARKERS</code>, with the buffer their query writes. No other pass binds it.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/dynamic_tlas_marker.wgsl</code>, the markers' <code>mark_dynamic_tlas</code>; the shadow mask pass's <code>first_intersection</code> queries it.</dd>
       <dt>Counted</dt><dd>In <span class="concept" data-term="Frame stats" data-tip="What one frame cost, measured by the engine itself: CPU time per system and stage, GPU time per pass, of the dynamic TLAS's build and of the BLAS refit, the GPU frame total (that build, counted from the end of the frame before's last pass, which hides the rest of it, plus, for each submission of the frame's passes, the span from the earliest start of its passes to their latest end), ADR 0019's gate (from the start of culling phase one to the latest end of the passes up to the lit pass), the lit pass's wait (from the latest end of the passes before it, culling phase one's onward, to its start), draw calls, Instances and triangles drawn, Instances the draw had no room for, the Instance slots in use, Instances written, Renderables and Placements refused, lights the light buffer had no room for, lights the Froxel lists had no room for and lights the shadow mask had no bit for, the lit pixels and the point lights their Froxels list and whose range reaches them (where counted), static Instances left out of the static TLAS and Moving Instances left out of the dynamic TLAS, the static TLAS worker's time on a build the frame submitted and, in a frame that binds one, the frames its earliest change waited to be traced, bends the bend pass had no room for, bytes uploaded, heap allocations and of them the dynamic TLAS build's, GPU memory, Arena bytes in use, dropped time and the readbacks of GPU stats it skipped.">Frame stats</span>: <code>dynamic_tlas_build</code> in GPU time, counted from the end of the frame before's last pass; the CPU stages <code>dynamic_tlas</code> and <code>dynamic_tlas_submit</code>, which the bench sums with <code>blas_refit</code> into <code>dynamic_tlas_cpu_microseconds</code>; <code>moving_instances_left_out</code>; each built entry's backend record in <code>uploaded_bytes</code>; the allocations its encoder's finish makes in <code>tlas_build_allocations</code> as well as in <code>heap_allocations</code>; its size by wgpu-hal's query and the markers' buffer in GPU memory.</dd>
       <dt>Files</dt><dd><code>src/render/acceleration_structures.rs</code>, <code>src/render/shaders/dynamic_tlas_marker.wgsl</code></dd>
@@ -160,7 +160,7 @@ let build_queries = timestamps
     .as_mut()
     .filter(|_| self.marks_dynamic_tlas_build)
     .map(|timestamps| timestamps.pass(DYNAMIC_TLAS_BUILD));
-let dynamic_tlas_commands = self.dynamic_tlas.record(&amp;self.device, build_queries).map(
+self.build = self.dynamic_tlas.record(&amp;self.device, build_queries).map(
     |(commands, uploaded_bytes)| {
         recorder.counters.uploaded_bytes += uploaded_bytes;
         commands
@@ -169,7 +169,7 @@ let dynamic_tlas_commands = self.dynamic_tlas.record(&amp;self.device, build_que
 recorder.stage(DYNAMIC_TLAS_RECORDING, started);</code></pre>
   <p class="code-source"><code>Renderer::render</code>, <code>src/render/renderer.rs</code>: the recording, after the bend pass and any BLAS update.</p>
 <pre class="code"><code>let started = Instant::now();
-if let Some(commands) = dynamic_tlas_commands {
+if let Some(commands) = self.build.take() {
     self.queue.submit(std::iter::once(commands));
 }
 recorder.stage(DYNAMIC_TLAS_SUBMIT, started);
