@@ -98,6 +98,7 @@ The first run downloads the helmet model and cooks assets into `cooked/`.
 | Mouse | Look |
 | W A S D | Move |
 | Space / Left Shift | Up / down |
+| Mouse wheel | Fly faster / slower |
 | G / H | Add / remove a helmet (helmet scene) |
 | Esc | Quit |
 
