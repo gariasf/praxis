@@ -47,7 +47,7 @@ pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
 pub use stats::{FrameStats, GpuFrameStats, GpuMemoryKind};
 
-const PIXELS_PER_SCROLLED_LINE: f32 = 40.0;
+const LOGICAL_PIXELS_PER_SCROLLED_LINE: f32 = 20.0;
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -113,11 +113,12 @@ impl ApplicationHandler for App {
                 let scrolled_lines = match delta {
                     MouseScrollDelta::LineDelta(_, lines) => lines,
                     MouseScrollDelta::PixelDelta(position) => {
-                        position.y as f32 / PIXELS_PER_SCROLLED_LINE
+                        let logical = position.to_logical::<f32>(shell.window.scale_factor());
+                        logical.y / LOGICAL_PIXELS_PER_SCROLLED_LINE
                     }
                 };
                 let mut camera = shell.state.simulation.world.resource_mut::<Camera>();
-                camera.scroll_speed(scrolled_lines);
+                camera.scale_speed_by_scrolled_lines(scrolled_lines);
             }
             _ => {}
         }

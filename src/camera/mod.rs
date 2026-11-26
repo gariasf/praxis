@@ -57,10 +57,10 @@ impl Camera {
         1.0 / (SATURATING_LUMINANCE_AT_EV100_ZERO * self.ev100.exp2())
     }
 
-    /// Flies faster for lines the mouse wheel scrolls up, slower for lines down.
-    pub fn scroll_speed(&mut self, scrolled_lines: f32) {
-        let factor = (scrolled_lines / SCROLLED_LINES_PER_SPEED_DOUBLING).exp2();
-        self.speed = (self.speed * factor).clamp(
+    /// `scrolled_lines` is positive when the wheel scrolls up.
+    pub fn scale_speed_by_scrolled_lines(&mut self, scrolled_lines: f32) {
+        let speed_factor = (scrolled_lines / SCROLLED_LINES_PER_SPEED_DOUBLING).exp2();
+        self.speed = (self.speed * speed_factor).clamp(
             SLOWEST_FLY_SPEED_METRES_PER_SECOND,
             FASTEST_FLY_SPEED_METRES_PER_SECOND,
         );
@@ -192,7 +192,7 @@ mod tests {
                 speed,
                 ..Camera::new()
             };
-            camera.scroll_speed(scrolled_lines);
+            camera.scale_speed_by_scrolled_lines(scrolled_lines);
             camera.speed
         };
         for (speed, scrolled_lines, expected) in [
