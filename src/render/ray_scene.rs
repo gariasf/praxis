@@ -1,7 +1,8 @@
 //! The Ray scene: what a ray is traced against, the static TLAS and the
 //! dynamic TLAS in one frame whose origin is the corner of the static TLAS's
-//! Anchor (ADR 0020), with the order of their steps in a frame and the bind
-//! group a pass that traces sets.
+//! Anchor (ADR 0020), with the order of their steps in a frame, the BLAS
+//! refit ahead of the dynamic TLAS's build among them, and the bind group a
+//! pass that traces sets.
 
 use std::time::{Duration, Instant};
 
@@ -9,9 +10,15 @@ use crate::assets::MeshPool;
 use crate::render::FrameData;
 use crate::render::acceleration_structures::{DYNAMIC_TLAS_BUILD, DynamicTlas, StaticTlas};
 use crate::render::bind_groups::RAY_SCENE;
+use crate::render::blas_refit::{BLAS_REFIT_PASS, BlasRefit};
 use crate::render::readback::FrameTimestamps;
 use crate::render::renderer::{CrowdForm, RenderCapacities, RenderSwitches};
 use crate::stats::{FrameRecorder, GpuMemory};
+
+/// The CPU stage that records the frame's BLAS updates, with the crowd's
+/// refit or rebuild form, and submits them with the frame's commands before
+/// them.
+pub(crate) const BLAS_REFIT: &str = "blas_refit";
 
 /// The CPU stage that records the dynamic TLAS's build; with
 /// `DYNAMIC_TLAS_SUBMIT`, its submit, the CPU cost ADR 0020 caps.
@@ -34,12 +41,14 @@ pub struct RaySceneFrame {
     pub dynamic_bounds: [[f32; 3]; 2],
 }
 
-/// Both TLAS and their steps in a frame: `begin_frame` once the frame's
-/// loads have landed, `record_build` after the bend pass and any BLAS
-/// update, `submit_build` before the frame's own submit.
+/// Both TLAS, the BLAS refit and their steps in a frame: `begin_frame` once
+/// the frame's loads have landed, `record_builds` once the bend pass is
+/// recorded, `submit_build` before the frame's own submit.
 pub struct RayScene {
     static_tlas: StaticTlas,
     dynamic_tlas: DynamicTlas,
+    /// With the crowd's refit or rebuild form.
+    blas_refit: Option<BlasRefit>,
     wait_for_static_tlas: bool,
     /// Not with the crowd's rebuild form, whose rebuilds through wgpu would
     /// fail the first marker's query, as `DynamicTlas::mark` says.
@@ -47,7 +56,7 @@ pub struct RayScene {
     layout: wgpu::BindGroupLayout,
     /// One per static TLAS, as `StaticTlas::bindings` orders them.
     bind_groups: [wgpu::BindGroup; 2],
-    /// The dynamic TLAS's build `record_build` recorded, until
+    /// The dynamic TLAS's build `record_builds` recorded, until
     /// `submit_build` submits it.
     build: Option<wgpu::CommandBuffer>,
 }
@@ -74,9 +83,18 @@ impl RayScene {
                 ],
             )
         });
+        let blas_refit = BlasRefit::new(
+            device,
+            memory,
+            queue,
+            backend,
+            switches.crowd_form,
+            capacities,
+        );
         Self {
             static_tlas,
             dynamic_tlas,
+            blas_refit,
             wait_for_static_tlas: switches.wait_for_static_tlas,
             marks_dynamic_tlas_build: switches.crowd_form != CrowdForm::Rebuild,
             layout,
@@ -134,14 +152,36 @@ impl RayScene {
         )
     }
 
-    /// Records the dynamic TLAS's build into a command buffer of its own,
-    /// which it keeps for `submit_build`, timed into `timestamps`.
-    pub fn record_build(
+    /// Called once the bend pass is recorded into `encoder`, with whether it
+    /// `bent` a Mesh. With BLAS updates and a bent Mesh, submits `encoder`,
+    /// the frame's commands so far, with the updates, in a submission of
+    /// their own which the dynamic TLAS's build follows, and leaves a new
+    /// frame's encoder in its place. Then records that build into a command
+    /// buffer of its own, which it keeps for `submit_build`. Both are timed
+    /// into `timestamps`.
+    #[expect(clippy::too_many_arguments)]
+    pub fn record_builds(
         &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        bent: bool,
+        mesh_pool: &MeshPool,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         timestamps: &mut Option<FrameTimestamps<'_>>,
         recorder: &mut FrameRecorder,
     ) {
+        if let Some(blas_refit) = self.blas_refit.as_mut().filter(|_| bent) {
+            let started = Instant::now();
+            let head = std::mem::replace(encoder, create_frame_encoder(device));
+            let refit_queries = timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(BLAS_REFIT_PASS));
+            blas_refit.submit(device, queue, head, mesh_pool, refit_queries);
+            if let Some(timestamps) = timestamps.as_mut() {
+                timestamps.split_submission();
+            }
+            recorder.stage(BLAS_REFIT, started);
+        }
         let started = Instant::now();
         let build_queries = timestamps
             .as_mut()
@@ -157,7 +197,7 @@ impl RayScene {
         recorder.stage(DYNAMIC_TLAS_RECORDING, started);
     }
 
-    /// Submits the build `record_build` recorded, if any.
+    /// Submits the build `record_builds` recorded, if any.
     pub fn submit_build(&mut self, queue: &wgpu::Queue, recorder: &mut FrameRecorder) {
         let started = Instant::now();
         if let Some(commands) = self.build.take() {
@@ -353,14 +393,22 @@ mod tests {
             let mut anchor = [0; 3];
             for _ in 0..2 {
                 let mut recorder = FrameRecorder::new();
-                let (_, ray_scene_frame, _) = ray_scene.begin_frame(
+                let (mut encoder, ray_scene_frame, _) = ray_scene.begin_frame(
                     &frame,
                     &triangle.mesh_pool,
                     &context.device,
                     &context.queue,
                     &mut recorder,
                 );
-                ray_scene.record_build(&context.device, &mut None, &mut recorder);
+                ray_scene.record_builds(
+                    &mut encoder,
+                    false,
+                    &triangle.mesh_pool,
+                    &context.device,
+                    &context.queue,
+                    &mut None,
+                    &mut recorder,
+                );
                 ray_scene.submit_build(&context.queue, &mut recorder);
                 anchor = ray_scene_frame.anchor;
                 frame.instance_writes.clear();

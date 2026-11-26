@@ -139,9 +139,9 @@ src/
                                  and dynamic TLAS, the sizes of
                                  acceleration structures through
                                  wgpu-hal), ray_scene (the Ray scene:
-                                 both TLAS, their steps in a frame and
-                                 the bind group a pass that traces
-                                 sets), instance,
+                                 both TLAS, the BLAS refit, the order
+                                 of their steps in a frame and the bind
+                                 group a pass that traces sets), instance,
                                  uniforms, staging,
                                  shaders/ (WGSL parts and the modules
                                  each pipeline assembles from them)
