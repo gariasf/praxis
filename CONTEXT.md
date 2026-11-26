@@ -268,7 +268,7 @@ One bench run's measurements of one Reference scene, with where and when it ran:
 _Avoid_: Benchmark result, sample, data point
 
 **Counter**:
-A count a bench run takes from Frame stats over the frames it counts, held to its Baseline rather than to a Budget, by its rule: the median frame's, as most repeat exactly on every run; the most of any frame, for a refusal, since one in any frame is a defect; or the total, for a streaming event. A comparison judges it, or only reports it, as it does the late mips, whose count moves with when the IO pool's reads land.
+A count a bench run takes from Frame stats over the frames it counts, held to its Baseline rather than to a Budget, by its rule: the median frame's, as most repeat exactly on every run; the most of any frame, for a refusal, since one in any frame is a defect; or the total, for a streaming event. A comparison judges it, or only reports it, as it does the late mips, whose count moves with when the IO pool's reads land, and the TLAS build's allocations, which the heap allocations already hold.
 _Avoid_: Metric (unqualified), statistic
 
 **Hitch**:

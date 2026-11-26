@@ -339,7 +339,7 @@ impl Counters {
     pub(crate) fn of(frames: &[FrameStats]) -> Self {
         let mut counters = Self::default();
         for (counter, value) in counters.named_mut() {
-            *value = counter.over(frames);
+            *value = counter.value_over(frames);
         }
         counters
     }

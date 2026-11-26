@@ -230,7 +230,7 @@ impl Counter {
     }
 
     /// Its value over `frames`, by its rule.
-    pub fn over(self, frames: &[FrameStats]) -> u64 {
+    pub fn value_over(self, frames: &[FrameStats]) -> u64 {
         let values = frames.iter().map(|stats| self.value_of(stats));
         match self.rule() {
             CounterRule::Median => {
