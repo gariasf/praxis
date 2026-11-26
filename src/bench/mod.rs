@@ -561,6 +561,148 @@ impl Budgets {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+enum Statistic {
+    Median,
+    P95,
+    P99,
+    Maximum,
+}
+
+impl Statistic {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Median => "median",
+            Self::P95 => "p95",
+            Self::P99 => "p99",
+            Self::Maximum => "maximum",
+        }
+    }
+
+    fn of(self, spread: Spread) -> Option<f64> {
+        match self {
+            Self::Median => Some(spread.median),
+            Self::P95 => Some(spread.p95),
+            Self::P99 => spread.p99,
+            Self::Maximum => spread.maximum,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum BudgetMetric {
+    CpuFrame,
+    GpuFrame,
+    Gate,
+    DynamicTlasCpu,
+    DynamicTlasGpu,
+    CullingPerSlot,
+    GpuMemory,
+    GpuMemoryOf(GpuMemoryKind),
+}
+
+impl BudgetMetric {
+    fn name(self) -> &'static str {
+        match self {
+            Self::CpuFrame => "cpu_frame_microseconds",
+            Self::GpuFrame => "gpu_frame_microseconds",
+            Self::Gate => "gate_microseconds",
+            Self::DynamicTlasCpu => "dynamic_tlas_cpu_microseconds",
+            Self::DynamicTlasGpu => "dynamic_tlas_gpu_microseconds",
+            Self::CullingPerSlot => "culling_per_slot_microseconds",
+            Self::GpuMemory => Counter::GpuMemoryBytes.name(),
+            Self::GpuMemoryOf(kind) => kind.name(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct BudgetRule {
+    metric: BudgetMetric,
+    statistic: Statistic,
+}
+
+impl BudgetRule {
+    fn all() -> impl Iterator<Item = Self> {
+        use BudgetMetric::{
+            CpuFrame, CullingPerSlot, DynamicTlasCpu, DynamicTlasGpu, Gate, GpuFrame, GpuMemory,
+            GpuMemoryOf,
+        };
+        use Statistic::{Maximum, Median, P95, P99};
+        let rules = [
+            (CpuFrame, Median),
+            (CpuFrame, P95),
+            (CpuFrame, P99),
+            (CpuFrame, Maximum),
+            (GpuFrame, Median),
+            (GpuFrame, P99),
+            (GpuFrame, Maximum),
+            (Gate, Median),
+            (Gate, P99),
+            (DynamicTlasCpu, Median),
+            (DynamicTlasGpu, Median),
+            (CullingPerSlot, Median),
+            (GpuMemory, Median),
+        ];
+        let kinds = GpuMemoryKind::ALL.map(|kind| (GpuMemoryOf(kind), Median));
+        (rules.into_iter().chain(kinds)).map(|(metric, statistic)| Self { metric, statistic })
+    }
+
+    fn value(self, measurements: &Measurements) -> Option<f64> {
+        let time = match self.metric {
+            BudgetMetric::CpuFrame => Some(measurements.cpu_frame_microseconds),
+            BudgetMetric::GpuFrame => Some(measurements.gpu_frame_microseconds),
+            BudgetMetric::Gate => Some(measurements.gate_microseconds),
+            BudgetMetric::DynamicTlasCpu => Some(measurements.dynamic_tlas_cpu_microseconds),
+            BudgetMetric::DynamicTlasGpu => {
+                let passes = &measurements.gpu_pass_microseconds;
+                passes.get(DYNAMIC_TLAS_BUILD).copied()
+            }
+            BudgetMetric::CullingPerSlot => measurements.culling_per_slot_microseconds,
+            BudgetMetric::GpuMemory => {
+                return Some(measurements.counters[Counter::GpuMemoryBytes] as f64);
+            }
+            BudgetMetric::GpuMemoryOf(kind) => {
+                let bytes = measurements.gpu_memory_bytes_by_kind.get(kind.name())?;
+                return Some(*bytes as f64);
+            }
+        };
+        self.statistic.of(time?)
+    }
+
+    fn bound(self, budgets: &Budgets) -> f64 {
+        if self.statistic == Statistic::Maximum {
+            return budgets.maximum_frame_microseconds;
+        }
+        match self.metric {
+            BudgetMetric::CpuFrame => budgets.cpu_frame_microseconds,
+            BudgetMetric::GpuFrame => budgets.gpu_frame_microseconds,
+            BudgetMetric::Gate => budgets.gate_microseconds,
+            BudgetMetric::DynamicTlasCpu => budgets.dynamic_tlas_cpu_microseconds,
+            BudgetMetric::DynamicTlasGpu => budgets.dynamic_tlas_gpu_microseconds,
+            BudgetMetric::CullingPerSlot => budgets.culling_per_slot_microseconds,
+            BudgetMetric::GpuMemory => budgets.gpu_memory_bytes as f64,
+            BudgetMetric::GpuMemoryOf(kind) => budgets.gpu_memory_bytes_by_kind.of(kind) as f64,
+        }
+    }
+
+    fn is_time(self) -> bool {
+        match self.metric {
+            BudgetMetric::GpuMemory | BudgetMetric::GpuMemoryOf(_) => false,
+            BudgetMetric::CpuFrame
+            | BudgetMetric::GpuFrame
+            | BudgetMetric::Gate
+            | BudgetMetric::DynamicTlasCpu
+            | BudgetMetric::DynamicTlasGpu
+            | BudgetMetric::CullingPerSlot => true,
+        }
+    }
+
+    fn is_guard(self) -> bool {
+        self.metric == BudgetMetric::CullingPerSlot
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CompareMode {
     /// Every metric, against a Baseline from this adapter.
     Local,
@@ -996,12 +1138,9 @@ impl std::fmt::Display for Measurements {
 /// count against Baselines; counters count too, aliasing's included, but the
 /// late mips, which depend on when the IO pool's reads land, and the TLAS
 /// build's allocations, which the heap allocations already hold, are
-/// reported only. Against the Budgets, the CPU frame, the GPU
-/// frame and the gate count at the median and p99, the CPU frame at the p95
-/// too, and the CPU and GPU frames' maximums against one 60 Hz period, and
-/// GPU memory in total and by kind; other p95s are reported only, as they
-/// move with one slow frame. Both culling phases' per-slot stages count at
-/// the median against their guard. Runs that measured as many frames compare their
+/// reported only. Against the Budgets, each rule of `BudgetRule::all`
+/// counts; a p95 no rule names is reported only, as it moves with one slow frame.
+/// Runs that measured as many frames compare their
 /// measured frames' counters, unless the Baseline's measured frames streamed:
 /// then their counter frames', and the measured frames' refusals as well.
 /// Runs of other lengths compare their counter frames', and only with
@@ -1048,17 +1187,8 @@ pub fn compare(
             }
         }
     }
-    check_budget(
-        &mut findings,
-        "gpu_memory_bytes",
-        current.counters[Counter::GpuMemoryBytes] as f64,
-        budgets.gpu_memory_bytes as f64,
-    );
-    for kind in GpuMemoryKind::ALL {
-        if let Some(&bytes) = current.gpu_memory_bytes_by_kind.get(kind.name()) {
-            let budget = budgets.gpu_memory_bytes_by_kind.of(kind);
-            check_budget(&mut findings, kind.name(), bytes as f64, budget as f64);
-        }
+    for rule in BudgetRule::all().filter(|rule| !rule.is_time()) {
+        check_budget(&mut findings, rule, current, budgets);
     }
     check_aliasing(&mut findings, current.aliasing, baseline.aliasing);
     if matches!(mode, CompareMode::Ci | CompareMode::Recording) {
@@ -1091,18 +1221,6 @@ pub fn compare(
         baseline.cpu_frame_microseconds.median,
         CPU_NOISE_FLOOR_MICROSECONDS,
     );
-    let (metric, budget) = ("cpu_frame_microseconds", budgets.cpu_frame_microseconds);
-    check_budget(&mut findings, metric, cpu.median, budget);
-    check_tail_budget(&mut findings, metric, "p95", Some(cpu.p95), budget);
-    check_tail_budget(&mut findings, metric, "p99", cpu.p99, budget);
-    let maximum_budget = budgets.maximum_frame_microseconds;
-    check_tail_budget(
-        &mut findings,
-        metric,
-        "maximum",
-        cpu.maximum,
-        maximum_budget,
-    );
     let passes = &current.gpu_pass_microseconds;
     let baseline_passes = &baseline.gpu_pass_microseconds;
     anyhow::ensure!(
@@ -1122,28 +1240,18 @@ pub fn compare(
             finding.detail = format!("{pass} {}", finding.detail);
         }
     }
-    let (metric, budget) = ("gpu_frame_microseconds", budgets.gpu_frame_microseconds);
-    let gpu = current.gpu_frame_microseconds;
-    check_regression(
-        &mut findings,
-        metric,
-        gpu.median,
-        baseline.gpu_frame_microseconds.median,
-        GPU_PASS_NOISE_FLOOR_MICROSECONDS,
-    );
-    check_budget(&mut findings, metric, gpu.median, budget);
-    check_tail_budget(&mut findings, metric, "p99", gpu.p99, budget);
-    check_tail_budget(
-        &mut findings,
-        metric,
-        "maximum",
-        gpu.maximum,
-        maximum_budget,
-    );
-    let gate = current.gate_microseconds.median;
     let noise_floor = GPU_PASS_NOISE_FLOOR_MICROSECONDS;
     for (metric, current, baseline) in [
-        ("gate_microseconds", gate, baseline.gate_microseconds.median),
+        (
+            "gpu_frame_microseconds",
+            current.gpu_frame_microseconds.median,
+            baseline.gpu_frame_microseconds.median,
+        ),
+        (
+            "gate_microseconds",
+            current.gate_microseconds.median,
+            baseline.gate_microseconds.median,
+        ),
         (
             "shadow_ray_microseconds",
             current.shadow_ray_microseconds.median,
@@ -1152,36 +1260,8 @@ pub fn compare(
     ] {
         check_regression(&mut findings, metric, current, baseline, noise_floor);
     }
-    let (metric, budget) = ("gate_microseconds", budgets.gate_microseconds);
-    check_budget(&mut findings, metric, gate, budget);
-    let gate_p99 = current.gate_microseconds.p99;
-    check_tail_budget(&mut findings, metric, "p99", gate_p99, budget);
-    check_budget(
-        &mut findings,
-        "dynamic_tlas_cpu_microseconds",
-        current.dynamic_tlas_cpu_microseconds.median,
-        budgets.dynamic_tlas_cpu_microseconds,
-    );
-    if let Some(build) = passes.get(DYNAMIC_TLAS_BUILD) {
-        check_budget(
-            &mut findings,
-            "dynamic_tlas_gpu_microseconds",
-            build.median,
-            budgets.dynamic_tlas_gpu_microseconds,
-        );
-    }
-    let guard = budgets.culling_per_slot_microseconds;
-    if let Some(per_slot) = current.culling_per_slot_microseconds
-        && per_slot.median > guard
-    {
-        findings.push(Finding {
-            metric: "culling_per_slot_microseconds",
-            verdict: Verdict::Fail,
-            detail: format!(
-                "{:.1} over its guard of {guard:.1}: the culling decision reopens (ADR 0013)",
-                per_slot.median
-            ),
-        });
+    for rule in BudgetRule::all().filter(|rule| rule.is_time()) {
+        check_budget(&mut findings, rule, current, budgets);
     }
     // CPU times move with the machine's load where GPU times hold, so a
     // failed CPU line says what load each run started under.
@@ -1351,34 +1431,31 @@ fn check_regression(
     });
 }
 
-/// Fails when `current`, `metric`'s `statistic`, exceeds `budget`, naming
-/// the statistic; passes when it was not measured.
-fn check_tail_budget(
+fn check_budget(
     findings: &mut Vec<Finding>,
-    metric: &'static str,
-    statistic: &str,
-    current: Option<f64>,
-    budget: f64,
+    rule: BudgetRule,
+    current: &Measurements,
+    budgets: &Budgets,
 ) {
-    let Some(current) = current else {
+    let bound = rule.bound(budgets);
+    let Some(value) = rule.value(current).filter(|&value| value > bound) else {
         return;
     };
-    let earlier = findings.len();
-    check_budget(findings, metric, current, budget);
-    for finding in &mut findings[earlier..] {
-        finding.detail = format!("{statistic} {}", finding.detail);
-    }
-}
-
-/// Fails when `current` exceeds `budget`.
-fn check_budget(findings: &mut Vec<Finding>, metric: &'static str, current: f64, budget: f64) {
-    if current > budget {
-        findings.push(Finding {
-            metric,
-            verdict: Verdict::Fail,
-            detail: format!("{current:.1} over Budget {budget:.1}"),
-        });
-    }
+    let detail = if rule.is_guard() {
+        format!("{value:.1} over its guard of {bound:.1}: the culling decision reopens (ADR 0013)")
+    } else if rule.statistic == Statistic::Median {
+        format!("{value:.1} over Budget {bound:.1}")
+    } else {
+        format!(
+            "{} {value:.1} over Budget {bound:.1}",
+            rule.statistic.name()
+        )
+    };
+    findings.push(Finding {
+        metric: rule.metric.name(),
+        verdict: Verdict::Fail,
+        detail,
+    });
 }
 
 fn spread(values: Vec<f64>) -> Spread {
@@ -1469,6 +1546,28 @@ mod tests {
         assert_eq!(listed, Counter::ALL.map(Counter::name));
         let counter_frame_count = format!("const COUNTER_FRAME_COUNT = {};", COUNTER_FRAMES.len());
         assert!(page.contains(&counter_frame_count), "{counter_frame_count}");
+    }
+
+    #[test]
+    fn the_bench_page_judges_every_budget_rule_a_series_row_holds() {
+        let page = include_str!("../../docs/bench/index.html");
+        let listed = page
+            .lines()
+            .find_map(|line| line.strip_prefix("const BUDGET_RULES = "))
+            .expect("the page declares BUDGET_RULES on one line");
+        let listed: Vec<(&str, &str)> = serde_json::from_str(listed.trim_end_matches(';'))
+            .expect("BUDGET_RULES is an array of metric and statistic pairs");
+        let held_by_no_series_row = |metric| {
+            matches!(
+                metric,
+                BudgetMetric::GpuMemoryOf(_) | BudgetMetric::CullingPerSlot
+            )
+        };
+        let held: Vec<_> = BudgetRule::all()
+            .filter(|rule| !held_by_no_series_row(rule.metric))
+            .map(|rule| (rule.metric.name(), rule.statistic.name()))
+            .collect();
+        assert_eq!(listed, held);
     }
 
     fn baseline_counters() -> Counters {
@@ -1939,6 +2038,31 @@ mod tests {
         assert_eq!(
             verdicts(&current, &over_budget, CompareMode::Local),
             [("cpu_frame_microseconds", Verdict::Fail)]
+        );
+    }
+
+    #[test]
+    fn budgets_on_bytes_follow_the_counters_and_budgets_on_times_every_regression() {
+        let mut current = baseline();
+        current.counters[Counter::DrawCalls] = 11;
+        let staging = ("staging".to_owned(), (1 << 30) + 1);
+        current.gpu_memory_bytes_by_kind = [staging].into_iter().collect();
+        current.cpu_frame_microseconds.median = 6100.0;
+        current.gate_microseconds.median = 1700.0;
+        let findings = compare(&current, &baseline(), &BUDGETS, CompareMode::Local).unwrap();
+        let over_budget: Vec<_> = findings
+            .iter()
+            .map(|finding| (finding.metric, finding.detail.contains("over Budget")))
+            .collect();
+        assert_eq!(
+            over_budget,
+            [
+                ("draw_calls", false),
+                ("staging", true),
+                ("cpu_frame_microseconds", false),
+                ("gate_microseconds", false),
+                ("cpu_frame_microseconds", true),
+            ]
         );
     }
 

@@ -275,12 +275,8 @@ const SHOWN_COUNTER_CHANGES = 6;
 const COUNTERS = ["draw_calls", "instances_drawn", "triangles_drawn", "instances_overflowed", "uploaded_bytes", "gpu_memory_bytes", "arena_bytes_in_use", "heap_allocations", "renderables_refused", "lights_overflowed", "static_instances_left_out", "moving_instances_left_out", "bends_left_out", "froxel_lights_overflowed", "shadow_mask_lights_overflowed", "late_chunks", "late_far_proxies", "chunks_loaded", "chunks_unloaded", "bytes_read", "pool_entries_freed", "late_mips", "tlas_build_allocations", "instance_slots_in_use"];
 // `COUNTER_FRAMES`' length (src/bench/mod.rs): a row that measured no more frames than these holds the same counters twice.
 const COUNTER_FRAME_COUNT = 64;
-const BUDGET_STATISTICS = {
-  cpu_frame_microseconds: ["median", "p95", "p99", "maximum"],
-  gpu_frame_microseconds: ["median", "p99", "maximum"],
-  gate_microseconds: ["median", "p99"],
-  dynamic_tlas_cpu_microseconds: ["median"],
-};
+// `BudgetRule::all` (src/bench/mod.rs), each rule's metric and statistic, less the rules whose value no Series row holds: GPU memory by kind and the culling guard.
+const BUDGET_RULES = [["cpu_frame_microseconds", "median"], ["cpu_frame_microseconds", "p95"], ["cpu_frame_microseconds", "p99"], ["cpu_frame_microseconds", "maximum"], ["gpu_frame_microseconds", "median"], ["gpu_frame_microseconds", "p99"], ["gpu_frame_microseconds", "maximum"], ["gate_microseconds", "median"], ["gate_microseconds", "p99"], ["dynamic_tlas_cpu_microseconds", "median"], ["dynamic_tlas_gpu_microseconds", "median"], ["gpu_memory_bytes", "median"]];
 const METRIC_LABELS = {
   cpu_frame_microseconds: "CPU frame",
   gpu_frame_microseconds: "GPU frame",
@@ -632,15 +628,12 @@ function judgesBudgets(machine, row) {
 
 /** Each Budget `praxis compare` checks of what a row holds, at the statistic it checks; one the row does not hold is left out. */
 function budgetVerdicts(row) {
-  const judged = [];
-  for (const [metric, statistics] of Object.entries(BUDGET_STATISTICS)) {
-    for (const statistic of statistics) {
-      judged.push([metric, statistic, row[metric]?.[statistic], state.budgets[statistic === "maximum" ? "maximum_frame_microseconds" : metric]]);
-    }
-  }
-  judged.push(["dynamic_tlas_gpu_microseconds", "median", row.gpu_pass_median_microseconds?.dynamic_tlas_build, state.budgets.dynamic_tlas_gpu_microseconds]);
-  judged.push(["gpu_memory_bytes", "median", row.measured_counters?.gpu_memory_bytes ?? row.gpu_memory_bytes, state.budgets.gpu_memory_bytes]);
-  return judged
+  const mediansHeldElsewhere = {
+    dynamic_tlas_gpu_microseconds: row.gpu_pass_median_microseconds?.dynamic_tlas_build,
+    gpu_memory_bytes: row.measured_counters?.gpu_memory_bytes ?? row.gpu_memory_bytes,
+  };
+  return BUDGET_RULES
+    .map(([metric, statistic]) => [metric, statistic, statistic === "median" && metric in mediansHeldElsewhere ? mediansHeldElsewhere[metric] : row[metric]?.[statistic], state.budgets[statistic === "maximum" ? "maximum_frame_microseconds" : metric]])
     .filter(([, , value, budget]) => value !== null && value !== undefined && budget !== undefined)
     .map(([metric, statistic, value, budget]) => ({ metric, statistic, value, budget, over: value > budget }));
 }

@@ -794,7 +794,7 @@ const GPU_PASS_NOISE_FLOOR_MICROSECONDS: f64 = 20.0;</code></pre>
   <p>A time that did not grow passes whatever its sign. From a Baseline at or below zero any growth is past every ratio, so it is the floor alone that judges it: this is the rule for shadow-ray time, whose median can read below zero where the rays cost little, so that a frame's worth of noise in either direction neither fails a scene nor hides a real rise. A growth past 10% that stays within the floor only warns.</p>
   <h3>The tail Budgets</h3>
   <p>The CPU frame's p95 and p99, and the GPU frame's and the gate's p99, answer to the same Budget as the line's median; the two frames' maximums answer to <code>maximum_frame_microseconds</code>, 16,667, one 60 Hz period. A tail statistic fails with its name before the detail, and a result that lacks it passes: one written before the p99 and maximum were kept answers to its Budgets at the median alone, the CPU frame at its p95 too. Only the run's tails are read, never the Baseline's.</p>
-  <div class="code-source"><code>check_tail_budget</code>, <code>src/bench/mod.rs</code></div>
+  <div class="code-source"><code>check_budget</code>, <code>src/bench/mod.rs</code></div>
 <pre class="code"><code>    let Some(current) = current else {
         return;
     };
