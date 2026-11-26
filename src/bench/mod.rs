@@ -1,3 +1,4 @@
+mod counters;
 mod history;
 mod provenance;
 mod report;
@@ -17,6 +18,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Context;
+
+use counters::{Counter, CounterRule};
 
 use crate::capture::{FrameWait, ReadBack, capture, render_frames};
 use crate::gpu::GpuContext;
@@ -283,17 +286,10 @@ impl Measurements {
     }
 }
 
-const COUNTER_COUNT: usize = 24;
-
-/// Medians of counters, which repeat exactly on every run, but for the
-/// Instances overflowed and the refusals, from the Renderables refused to
-/// the shadow mask's light overflows: the most of any frame, so one overflow
-/// counts; and for the streaming counters, from the Late Chunks to the late
-/// mips: the sum over the frames, as each counts events. The refusals, the
-/// streaming counters, the TLAS build's allocations and the Instance slots in
-/// use are absent from Baselines recorded before results carried them, which
-/// read as none.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+/// Each `Counter`'s value over a run's frames, by its rule. A field under
+/// `#[serde(default)]` is a counter that `Counter::absent_reads_as_none`
+/// holds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Counters {
     pub draw_calls: u64,
     pub instances_drawn: u64,
@@ -341,50 +337,11 @@ pub struct Counters {
 impl Counters {
     /// The counters of `frames`, each with its GPU stats.
     pub(crate) fn of(frames: &[FrameStats]) -> Self {
-        let median = |value: fn(&FrameStats) -> u64| {
-            percentile(
-                frames.iter().map(|stats| value(stats) as f64).collect(),
-                0.5,
-            ) as u64
-        };
-        let most = |value: fn(&FrameStats) -> u64| frames.iter().map(value).max().unwrap_or(0);
-        let total = |value: fn(&FrameStats) -> u64| frames.iter().map(value).sum();
-        Self {
-            draw_calls: median(|stats| u64::from(stats.draw_calls)),
-            instances_drawn: median(|stats| stats.gpu.map_or(0, |gpu| gpu.instances_drawn.into())),
-            triangles_drawn: median(|stats| stats.gpu.map_or(0, |gpu| gpu.triangles_drawn.into())),
-            instances_overflowed: most(|stats| {
-                stats.gpu.map_or(0, |gpu| gpu.instances_overflowed.into())
-            }),
-            uploaded_bytes: median(|stats| stats.uploaded_bytes),
-            gpu_memory_bytes: median(|stats| stats.gpu_memory_bytes),
-            arena_bytes_in_use: median(|stats| stats.arena_bytes_in_use),
-            heap_allocations: median(|stats| stats.heap_allocations),
-            renderables_refused: most(|stats| stats.renderables_refused.into()),
-            lights_overflowed: most(|stats| stats.lights_overflowed.into()),
-            static_instances_left_out: most(|stats| stats.static_instances_left_out.into()),
-            moving_instances_left_out: most(|stats| stats.moving_instances_left_out.into()),
-            bends_left_out: most(|stats| stats.bends_left_out.into()),
-            froxel_lights_overflowed: most(|stats| {
-                stats
-                    .gpu
-                    .map_or(0, |gpu| gpu.froxel_lights_overflowed.into())
-            }),
-            shadow_mask_lights_overflowed: most(|stats| {
-                stats
-                    .gpu
-                    .map_or(0, |gpu| gpu.shadow_mask_lights_overflowed.into())
-            }),
-            late_chunks: total(|stats| stats.late_chunks.into()),
-            late_far_proxies: total(|stats| stats.late_far_proxies.into()),
-            chunks_loaded: total(|stats| stats.chunks_loaded.into()),
-            chunks_unloaded: total(|stats| stats.chunks_unloaded.into()),
-            bytes_read: total(|stats| stats.bytes_read),
-            pool_entries_freed: total(|stats| stats.pool_entries_freed.into()),
-            late_mips: total(|stats| stats.late_mips.into()),
-            tlas_build_allocations: median(|stats| stats.tlas_build_allocations),
-            instance_slots_in_use: median(|stats| stats.instance_slots_in_use.into()),
+        let mut counters = Self::default();
+        for (counter, value) in counters.named_mut() {
+            *value = counter.value_over(frames);
         }
+        counters
     }
 
     /// Whether the frames these count loaded or unloaded a Chunk or read a
@@ -393,78 +350,70 @@ impl Counters {
         self.chunks_loaded + self.chunks_unloaded + self.bytes_read > 0
     }
 
-    /// The counters a comparison reports but does not judge.
-    const UNJUDGED: [&'static str; 2] = ["late_mips", "tlas_build_allocations"];
+    fn named(&self) -> [(Counter, u64); Counter::COUNT] {
+        let mut counters = *self;
+        counters
+            .named_mut()
+            .map(|(counter, value)| (counter, *value))
+    }
 
-    /// The counters of refusals, each the most of any frame: one refusal on
-    /// any frame is a defect, whatever the IO pool's timing.
-    const REFUSALS: [&'static str; 8] = [
-        "instances_overflowed",
-        "renderables_refused",
-        "lights_overflowed",
-        "static_instances_left_out",
-        "moving_instances_left_out",
-        "bends_left_out",
-        "froxel_lights_overflowed",
-        "shadow_mask_lights_overflowed",
-    ];
-
-    /// Each counter's name, as results and Bench records spell it.
-    pub(super) const NAMES: [&'static str; COUNTER_COUNT] = [
-        "draw_calls",
-        "instances_drawn",
-        "triangles_drawn",
-        "instances_overflowed",
-        "uploaded_bytes",
-        "gpu_memory_bytes",
-        "arena_bytes_in_use",
-        "heap_allocations",
-        "renderables_refused",
-        "lights_overflowed",
-        "static_instances_left_out",
-        "moving_instances_left_out",
-        "bends_left_out",
-        "froxel_lights_overflowed",
-        "shadow_mask_lights_overflowed",
-        "late_chunks",
-        "late_far_proxies",
-        "chunks_loaded",
-        "chunks_unloaded",
-        "bytes_read",
-        "pool_entries_freed",
-        "late_mips",
-        "tlas_build_allocations",
-        "instance_slots_in_use",
-    ];
-
-    fn named(&self) -> [(&'static str, u64); COUNTER_COUNT] {
-        let values = [
-            self.draw_calls,
-            self.instances_drawn,
-            self.triangles_drawn,
-            self.instances_overflowed,
-            self.uploaded_bytes,
-            self.gpu_memory_bytes,
-            self.arena_bytes_in_use,
-            self.heap_allocations,
-            self.renderables_refused,
-            self.lights_overflowed,
-            self.static_instances_left_out,
-            self.moving_instances_left_out,
-            self.bends_left_out,
-            self.froxel_lights_overflowed,
-            self.shadow_mask_lights_overflowed,
-            self.late_chunks,
-            self.late_far_proxies,
-            self.chunks_loaded,
-            self.chunks_unloaded,
-            self.bytes_read,
-            self.pool_entries_freed,
-            self.late_mips,
-            self.tlas_build_allocations,
-            self.instance_slots_in_use,
-        ];
-        std::array::from_fn(|index| (Self::NAMES[index], values[index]))
+    /// Each field beside its `Counter`, in `Counter::ALL`'s order.
+    fn named_mut(&mut self) -> [(Counter, &mut u64); Counter::COUNT] {
+        let Self {
+            draw_calls,
+            instances_drawn,
+            triangles_drawn,
+            instances_overflowed,
+            uploaded_bytes,
+            gpu_memory_bytes,
+            arena_bytes_in_use,
+            heap_allocations,
+            renderables_refused,
+            lights_overflowed,
+            static_instances_left_out,
+            moving_instances_left_out,
+            bends_left_out,
+            froxel_lights_overflowed,
+            shadow_mask_lights_overflowed,
+            late_chunks,
+            late_far_proxies,
+            chunks_loaded,
+            chunks_unloaded,
+            bytes_read,
+            pool_entries_freed,
+            late_mips,
+            tlas_build_allocations,
+            instance_slots_in_use,
+        } = self;
+        [
+            (Counter::DrawCalls, draw_calls),
+            (Counter::InstancesDrawn, instances_drawn),
+            (Counter::TrianglesDrawn, triangles_drawn),
+            (Counter::InstancesOverflowed, instances_overflowed),
+            (Counter::UploadedBytes, uploaded_bytes),
+            (Counter::GpuMemoryBytes, gpu_memory_bytes),
+            (Counter::ArenaBytesInUse, arena_bytes_in_use),
+            (Counter::HeapAllocations, heap_allocations),
+            (Counter::RenderablesRefused, renderables_refused),
+            (Counter::LightsOverflowed, lights_overflowed),
+            (Counter::StaticInstancesLeftOut, static_instances_left_out),
+            (Counter::MovingInstancesLeftOut, moving_instances_left_out),
+            (Counter::BendsLeftOut, bends_left_out),
+            (Counter::FroxelLightsOverflowed, froxel_lights_overflowed),
+            (
+                Counter::ShadowMaskLightsOverflowed,
+                shadow_mask_lights_overflowed,
+            ),
+            (Counter::LateChunks, late_chunks),
+            (Counter::LateFarProxies, late_far_proxies),
+            (Counter::ChunksLoaded, chunks_loaded),
+            (Counter::ChunksUnloaded, chunks_unloaded),
+            (Counter::BytesRead, bytes_read),
+            (Counter::PoolEntriesFreed, pool_entries_freed),
+            (Counter::LateMips, late_mips),
+            (Counter::TlasBuildAllocations, tlas_build_allocations),
+            (Counter::InstanceSlotsInUse, instance_slots_in_use),
+        ]
     }
 }
 
@@ -1141,8 +1090,10 @@ impl std::fmt::Display for Measurements {
         for (pass, time) in &self.gpu_pass_microseconds {
             write!(formatter, " {pass}={:.1}", time.median)?;
         }
+        let counters =
+            (self.counters.named().into_iter()).map(|(counter, value)| (counter.name(), value));
         let aliasing = self.aliasing.iter().flat_map(Aliasing::named);
-        for (counter, value) in self.counters.named().into_iter().chain(aliasing) {
+        for (counter, value) in counters.chain(aliasing) {
             write!(formatter, " {counter}={value}")?;
         }
         if let Some(hold) = self.fast_travel_hold {
@@ -1199,12 +1150,12 @@ pub fn compare(
         CompareMode::Recording => current != baseline,
         CompareMode::Local | CompareMode::Ci => current > baseline,
     };
-    for ((metric, current), (_, baseline)) in
+    for ((counter, current), (_, baseline)) in
         counters.named().into_iter().zip(baseline_counters.named())
     {
-        if counter_fails(current, baseline) && !Counters::UNJUDGED.contains(&metric) {
+        if counter_fails(current, baseline) && counter.judged() {
             findings.push(Finding {
-                metric,
+                metric: counter.name(),
                 verdict: Verdict::Fail,
                 detail: format!("{current} against Baseline {baseline}"),
             });
@@ -1216,11 +1167,11 @@ pub fn compare(
         let measured = current.counters.named().into_iter();
         let refusals = measured
             .zip(baseline.counters.named())
-            .filter(|((metric, _), _)| Counters::REFUSALS.contains(metric));
-        for ((metric, value), (_, baseline_value)) in refusals {
+            .filter(|((counter, _), _)| counter.rule() == CounterRule::Most);
+        for ((counter, value), (_, baseline_value)) in refusals {
             if counter_fails(value, baseline_value) {
                 findings.push(Finding {
-                    metric,
+                    metric: counter.name(),
                     verdict: Verdict::Fail,
                     detail: format!(
                         "{value} in the measured frames against Baseline {baseline_value}"
@@ -1647,7 +1598,7 @@ mod tests {
             .expect("the page declares COUNTERS on one line");
         let listed: Vec<&str> = serde_json::from_str(listed.trim_end_matches(';'))
             .expect("COUNTERS is an array of names");
-        assert_eq!(listed, Counters::NAMES);
+        assert_eq!(listed, Counter::ALL.map(Counter::name));
         let counter_frame_count = format!("const COUNTER_FRAME_COUNT = {};", COUNTER_FRAMES.len());
         assert!(page.contains(&counter_frame_count), "{counter_frame_count}");
     }
@@ -1709,9 +1660,33 @@ mod tests {
         };
         let serialized = serde_json::to_value(counters).unwrap();
         let serialized = serialized.as_object().unwrap();
-        assert_eq!(serialized.len(), Counters::NAMES.len());
-        for (name, value) in counters.named() {
-            assert_eq!(serialized[name], value, "{name}");
+        assert_eq!(serialized.len(), Counter::COUNT);
+        let named = counters.named();
+        assert_eq!(named.map(|(counter, _)| counter), Counter::ALL);
+        for (counter, value) in named {
+            assert_eq!(serialized[counter.name()], value, "{counter:?}");
+        }
+    }
+
+    #[test]
+    fn a_record_without_a_counter_reads_it_as_none_or_is_refused_as_the_counter_says() {
+        let mut counters = Counters::default();
+        for (index, (_, value)) in counters.named_mut().into_iter().enumerate() {
+            *value = index as u64 + 1;
+        }
+        let serde_json::Value::Object(json) = serde_json::to_value(counters).unwrap() else {
+            panic!("counters are a JSON object");
+        };
+        for (index, counter) in Counter::ALL.into_iter().enumerate() {
+            let mut without = json.clone();
+            without.remove(counter.name());
+            let read = serde_json::from_value::<Counters>(without.into());
+            if counter.absent_reads_as_none() {
+                let read = read.unwrap_or_else(|error| panic!("{counter:?}: {error}"));
+                assert_eq!(read.named()[index], (counter, 0));
+            } else {
+                assert!(read.is_err(), "{counter:?} read without its field");
+            }
         }
     }
 
@@ -1898,7 +1873,7 @@ mod tests {
     }
 
     #[test]
-    fn every_committed_baseline_parses() {
+    fn every_committed_baseline_parses_and_writes_back_its_own_bytes() {
         for entry in std::fs::read_dir(BASELINE_DIRECTORY).expect("Baselines") {
             for baseline in std::fs::read_dir(entry.unwrap().path()).unwrap() {
                 let path = baseline.unwrap().path();
@@ -1906,8 +1881,15 @@ mod tests {
                     .extension()
                     .is_some_and(|extension| extension == "json")
                 {
-                    Measurements::from_baseline_json(&std::fs::read(&path).unwrap())
+                    let json = std::fs::read_to_string(&path).unwrap();
+                    let parsed = Measurements::from_baseline_json(json.as_bytes())
                         .unwrap_or_else(|error| panic!("{}: {error:#}", path.display()));
+                    let written = serde_json::to_string_pretty(&parsed).unwrap() + "\n";
+                    assert!(
+                        written == json,
+                        "{} writes back other bytes",
+                        path.display()
+                    );
                 }
             }
         }

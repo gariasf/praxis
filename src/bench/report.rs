@@ -7,8 +7,8 @@ use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::stats::GpuMemoryKind;
 
 use super::{
-    Budgets, COUNTER_COUNT, Measurements, Spread, Traversal, compared_counters,
-    compares_counter_frames, ensure_comparable,
+    Budgets, Counter, Measurements, Spread, Traversal, compared_counters, compares_counter_frames,
+    ensure_comparable,
 };
 
 /// `current`'s times and counters, its aliasing among them when it was
@@ -193,7 +193,7 @@ pub fn report(
         }
         None => (current.counters, None),
     };
-    let baseline_values = baseline_counters.map_or([None; COUNTER_COUNT], |baseline_counters| {
+    let baseline_values = baseline_counters.map_or([None; Counter::COUNT], |baseline_counters| {
         baseline_counters.named().map(|(_, value)| Some(value))
     });
     let baseline_aliasing = baseline.and_then(|baseline| baseline.aliasing);
@@ -203,7 +203,9 @@ pub fn report(
         });
         aliasing.named().into_iter().zip(baseline_values)
     });
-    let rows = counters.named().into_iter().zip(baseline_values);
+    let rows = (counters.named().into_iter())
+        .map(|(counter, value)| (counter.name(), value))
+        .zip(baseline_values);
     for ((counter, value), baseline_value) in rows.chain(aliasing) {
         let value = value as f64;
         let [baseline_value, delta, ratio_text] = match baseline_value {
