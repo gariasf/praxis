@@ -321,12 +321,12 @@ impl ShadowMaskPass {
         )
     }
 
-    /// Records the pass into `encoder`, tracing `ray_scene`, the Ray scene's
-    /// group, timed into `timestamp_writes`.
+    /// Records the pass into `encoder`, tracing the Ray scene of
+    /// `ray_scene_bind_group`, timed into `timestamp_writes`.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        ray_scene: &wgpu::BindGroup,
+        ray_scene_bind_group: &wgpu::BindGroup,
         timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
         encoder.clear_buffer(&self.shadow_mask_lights_overflowed, 0, None);
@@ -339,7 +339,7 @@ impl ShadowMaskPass {
             timestamp_writes,
         });
         pass.set_pipeline(&self.nearest_surfaces_pipeline);
-        pass.set_bind_group(RAY_SCENE.index, ray_scene, &[]);
+        pass.set_bind_group(RAY_SCENE.index, ray_scene_bind_group, &[]);
         pass.set_bind_group(
             SHADOW_MASK_BUILD.index,
             &self.nearest_surfaces_bind_group,

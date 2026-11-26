@@ -35,8 +35,8 @@ pub struct RaySceneFrame {
 }
 
 /// Both TLAS and their steps in a frame: `begin_frame` once the frame's
-/// loads have landed, `record_build` straight after the bend pass,
-/// `submit_build` before the frame's own submit.
+/// loads have landed, `record_build` after the bend pass and any BLAS
+/// update, `submit_build` before the frame's own submit.
 pub struct RayScene {
     static_tlas: StaticTlas,
     dynamic_tlas: DynamicTlas,
@@ -252,12 +252,12 @@ mod tests {
         let groups = [(&RAY_SCENE, ray_scene.layout()), (&TRACE_DOWN, &layout)];
         let pipeline_layout = pipeline_layout(device, "Trace Down Pipeline Layout", &groups);
         let pipeline = compute_pipeline(device, &pipeline_layout, &module, "trace_down", &[]);
-        let padded: Vec<[f32; 4]> = points.iter().map(|&[x, y, z]| [x, y, z, 0.0]).collect();
+        let padded_points: Vec<[f32; 4]> = points.iter().map(|&[x, y, z]| [x, y, z, 0.0]).collect();
         let point_buffer = wgpu::util::DeviceExt::create_buffer_init(
             device,
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Trace Down Points"),
-                contents: bytemuck::cast_slice(&padded),
+                contents: bytemuck::cast_slice(&padded_points),
                 usage: wgpu::BufferUsages::STORAGE,
             },
         );
@@ -293,8 +293,10 @@ mod tests {
     /// A static Instance and a Moving Instance, each in another Anchor cell
     /// than the camera's, are hit by rays composed from the corner of the
     /// Anchor `begin_frame` returns and traced through `bind_group()`. A
-    /// further static Instance starts a build: once it is bound,
-    /// `bind_group()` is the other group and rays through it hit all three.
+    /// further static Instance starts a build, seen from a camera a cell
+    /// away, within a Chunk's edge, so the static TLAS keeps its Anchor:
+    /// once the build is bound, `bind_group()` is the other group and rays
+    /// through it hit all three.
     #[test]
     fn rays_through_its_bind_group_hit_both_tlas_before_and_after_the_bound_one_swaps() {
         let Some(triangle) = Triangle::new() else {
@@ -318,13 +320,13 @@ mod tests {
             &capacities,
         );
         let [x, y, z] = CAMERA_ANCHOR;
-        let at = |anchor, offset_x| {
+        let instance_at = |anchor, offset_x| {
             triangle.instance(anchor, [offset_x, 0.0, 0.0], glam::Mat3::IDENTITY)
         };
         let instances = vec![
-            at([x + 1, y, z], 5.0),
-            at([x - 1, y, z], 0.0),
-            at(CAMERA_ANCHOR, -4.0),
+            instance_at([x + 1, y, z], 5.0),
+            instance_at([x - 1, y, z], 0.0),
+            instance_at(CAMERA_ANCHOR, -4.0),
         ];
         let write = |slot: usize, moving| InstanceWrite {
             first_slot: slot as u32,
@@ -345,7 +347,8 @@ mod tests {
         };
         // The frame, then the frame again without its Instance writes, which
         // binds the build its changes started.
-        let mut trace_after = |ray_scene: &mut RayScene, writes: Vec<InstanceWrite>| {
+        let mut trace_after = |ray_scene: &mut RayScene, camera_anchor, writes| {
+            frame.camera.anchor = camera_anchor;
             frame.instance_writes = writes;
             let mut anchor = [0; 3];
             for _ in 0..2 {
@@ -374,11 +377,12 @@ mod tests {
             trace_down(context, ray_scene, &points)
         };
 
-        let traced = trace_after(&mut ray_scene, vec![write(0, false), write(1, true)]);
+        let writes = vec![write(0, false), write(1, true)];
+        let traced = trace_after(&mut ray_scene, CAMERA_ANCHOR, writes);
         assert_eq!(traced, [Some(0), Some(1), None]);
         let bound_first = ray_scene.bind_group().clone();
 
-        let traced = trace_after(&mut ray_scene, vec![write(2, false)]);
+        let traced = trace_after(&mut ray_scene, [x, y, z + 1], vec![write(2, false)]);
         assert!(ray_scene.bind_group() != &bound_first);
         assert_eq!(traced, [Some(0), Some(1), Some(2)]);
     }

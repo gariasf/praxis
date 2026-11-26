@@ -695,16 +695,16 @@ impl Renderer {
             std::time::Duration::ZERO
         };
         // Its stages are not the upload's.
-        let (mut encoder, ray_scene, ray_scene_time) =
+        let (mut encoder, ray_scene_frame, ray_scene_time) =
             self.ray_scene
                 .begin_frame(frame, &self.mesh_pool, &self.device, &self.queue, recorder);
         let started = started + compaction_time + ray_scene_time;
-        let [dynamic_tlas_bounds_min, dynamic_tlas_bounds_max] = ray_scene.dynamic_bounds;
+        let [dynamic_tlas_bounds_min, dynamic_tlas_bounds_max] = ray_scene_frame.dynamic_bounds;
         let camera = CameraUniform {
             lod_error_per_metre: self.lod_error_per_metre,
             pixel_size_per_metre: self.pixel_size_per_metre,
-            tlas_anchor: ray_scene.anchor,
-            dynamic_tlas_entries: ray_scene.dynamic_entries,
+            tlas_anchor: ray_scene_frame.anchor,
+            dynamic_tlas_entries: ray_scene_frame.dynamic_entries,
             dynamic_tlas_bounds_min,
             dynamic_tlas_bounds_max,
             ..frame.camera
