@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use winit::{
     application::ApplicationHandler,
-    event::{KeyEvent, WindowEvent},
+    event::{KeyEvent, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
@@ -46,6 +46,8 @@ pub use render::{CrowdForm, RenderSwitches, blas_bytes, compacted_blas_fraction,
 pub use scenes::ReferenceScene;
 pub use state::DEFAULT_MODEL;
 pub use stats::{FrameStats, GpuFrameStats, GpuMemoryKind};
+
+const PIXELS_PER_SCROLLED_LINE: f32 = 40.0;
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -106,6 +108,16 @@ impl ApplicationHandler for App {
                 if code == KeyCode::Escape && key_state.is_pressed() {
                     event_loop.exit();
                 }
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let scrolled_lines = match delta {
+                    MouseScrollDelta::LineDelta(_, lines) => lines,
+                    MouseScrollDelta::PixelDelta(position) => {
+                        position.y as f32 / PIXELS_PER_SCROLLED_LINE
+                    }
+                };
+                let mut camera = shell.state.simulation.world.resource_mut::<Camera>();
+                camera.scroll_speed(scrolled_lines);
             }
             _ => {}
         }

@@ -10,6 +10,10 @@ use crate::time::Time;
 /// 2014, p. 85 [ref:frostbite-2014-exposure]).
 const SATURATING_LUMINANCE_AT_EV100_ZERO: f32 = 1.2;
 
+const SCROLLED_LINES_PER_SPEED_DOUBLING: f32 = 3.0;
+const SLOWEST_FLY_SPEED_METRES_PER_SECOND: f32 = 0.1;
+const FASTEST_FLY_SPEED_METRES_PER_SECOND: f32 = 10_000.0;
+
 /// The EV100 whose `Camera::exposure` is `exposure`.
 pub fn ev100_for_exposure(exposure: f32) -> f32 {
     (1.0 / (SATURATING_LUMINANCE_AT_EV100_ZERO * exposure)).log2()
@@ -51,6 +55,15 @@ impl Camera {
     /// [ref:frostbite-2014-exposure]).
     pub fn exposure(&self) -> f32 {
         1.0 / (SATURATING_LUMINANCE_AT_EV100_ZERO * self.ev100.exp2())
+    }
+
+    /// Flies faster for lines the mouse wheel scrolls up, slower for lines down.
+    pub fn scroll_speed(&mut self, scrolled_lines: f32) {
+        let factor = (scrolled_lines / SCROLLED_LINES_PER_SPEED_DOUBLING).exp2();
+        self.speed = (self.speed * factor).clamp(
+            SLOWEST_FLY_SPEED_METRES_PER_SECOND,
+            FASTEST_FLY_SPEED_METRES_PER_SECOND,
+        );
     }
 
     /// A camera at `position` facing `target`, which must not be straight
@@ -168,6 +181,32 @@ mod tests {
             assert!(
                 (inverse - ev100).abs() <= 4.0 * f32::EPSILON * ev100.abs().max(1.0),
                 "exposure {expected}: EV100 {inverse}, expected {ev100}"
+            );
+        }
+    }
+
+    #[test]
+    fn three_scrolled_lines_double_the_fly_speed_within_its_bounds() {
+        let flying_at = |speed: f32, scrolled_lines: f32| {
+            let mut camera = Camera {
+                speed,
+                ..Camera::new()
+            };
+            camera.scroll_speed(scrolled_lines);
+            camera.speed
+        };
+        for (speed, scrolled_lines, expected) in [
+            (2.0, 3.0, 4.0),
+            (2.0, -3.0, 1.0),
+            (2.0, 1.5, 2.0 * std::f32::consts::SQRT_2),
+            (2.0, 0.0, 2.0),
+            (0.15, -3.0, 0.1),
+            (8_000.0, 3.0, 10_000.0),
+        ] {
+            let flown = flying_at(speed, scrolled_lines);
+            assert!(
+                (flown - expected).abs() <= 2.0 * f32::EPSILON * expected,
+                "{speed} m/s scrolled {scrolled_lines} lines: {flown}, expected {expected}"
             );
         }
     }
