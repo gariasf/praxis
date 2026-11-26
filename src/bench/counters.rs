@@ -1,3 +1,5 @@
+use std::ops::{Index, IndexMut};
+
 use crate::stats::{FrameStats, GpuFrameStats};
 
 use super::percentile;
@@ -165,7 +167,6 @@ impl Counter {
 
     /// Whether a record without it reads it as none, as Baselines recorded
     /// before results carried it do, rather than being refused.
-    #[cfg(test)]
     pub fn absent_reads_as_none(self) -> bool {
         match self {
             Self::DrawCalls
@@ -239,5 +240,168 @@ impl Counter {
             CounterRule::Most => values.max().unwrap_or(0),
             CounterRule::Total => values.sum(),
         }
+    }
+}
+
+// A counter's value sits at its discriminant, and `ALL` lists the counters in that order.
+const _: () = {
+    let mut index = 0;
+    while index < Counter::COUNT {
+        assert!(Counter::ALL[index] as usize == index);
+        index += 1;
+    }
+};
+
+/// Each `Counter`'s value over a run's frames, by its rule. Results and
+/// Bench records hold them flat, by name, in `Counter::ALL`'s order.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Counters([u64; Counter::COUNT]);
+
+impl Counters {
+    /// The counters of `frames`, each with its GPU stats.
+    pub(crate) fn of(frames: &[FrameStats]) -> Self {
+        Self(Counter::ALL.map(|counter| counter.value_over(frames)))
+    }
+
+    /// Whether the frames these count loaded or unloaded a Chunk or read a
+    /// byte.
+    pub(super) fn streamed(&self) -> bool {
+        self[Counter::ChunksLoaded] + self[Counter::ChunksUnloaded] + self[Counter::BytesRead] > 0
+    }
+}
+
+impl Index<Counter> for Counters {
+    type Output = u64;
+
+    fn index(&self, counter: Counter) -> &u64 {
+        &self.0[counter as usize]
+    }
+}
+
+impl IndexMut<Counter> for Counters {
+    fn index_mut(&mut self, counter: Counter) -> &mut u64 {
+        &mut self.0[counter as usize]
+    }
+}
+
+#[cfg(test)]
+impl FromIterator<(Counter, u64)> for Counters {
+    fn from_iter<Values: IntoIterator<Item = (Counter, u64)>>(values: Values) -> Self {
+        let mut counters = Self::default();
+        for (counter, value) in values {
+            counters[counter] = value;
+        }
+        counters
+    }
+}
+
+impl serde::Serialize for Counters {
+    fn serialize<Serializer: serde::Serializer>(
+        &self,
+        serializer: Serializer,
+    ) -> Result<Serializer::Ok, Serializer::Error> {
+        use serde::ser::SerializeStruct as _;
+        let mut fields = serializer.serialize_struct("Counters", Counter::COUNT)?;
+        for counter in Counter::ALL {
+            fields.serialize_field(counter.name(), &self[counter])?;
+        }
+        fields.end()
+    }
+}
+
+/// Skips a field naming no counter: a record holding them flattened hands
+/// it its other fields too.
+impl<'de> serde::Deserialize<'de> for Counters {
+    fn deserialize<Deserializer: serde::Deserializer<'de>>(
+        deserializer: Deserializer,
+    ) -> Result<Self, Deserializer::Error> {
+        deserializer.deserialize_map(CountersVisitor)
+    }
+}
+
+struct CountersVisitor;
+
+impl<'de> serde::de::Visitor<'de> for CountersVisitor {
+    type Value = Counters;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("counters by name")
+    }
+
+    fn visit_map<Fields: serde::de::MapAccess<'de>>(
+        self,
+        mut fields: Fields,
+    ) -> Result<Counters, Fields::Error> {
+        use serde::de::Error as _;
+        let mut values_read = [None; Counter::COUNT];
+        while let Some(name) = fields.next_key::<String>()? {
+            let named_counter = Counter::ALL
+                .into_iter()
+                .find(|counter| counter.name() == name);
+            match named_counter {
+                Some(counter) if values_read[counter as usize].is_some() => {
+                    return Err(Fields::Error::duplicate_field(counter.name()));
+                }
+                Some(counter) => values_read[counter as usize] = Some(fields.next_value()?),
+                None => {
+                    fields.next_value::<serde::de::IgnoredAny>()?;
+                }
+            }
+        }
+        let mut counters = Counters::default();
+        for counter in Counter::ALL {
+            counters[counter] = match values_read[counter as usize] {
+                Some(value) => value,
+                None if counter.absent_reads_as_none() => 0,
+                None => return Err(Fields::Error::missing_field(counter.name())),
+            };
+        }
+        Ok(counters)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bench::Measurements;
+    use crate::bench::tests::baseline;
+
+    #[test]
+    fn each_counter_is_named_as_results_spell_it() {
+        let counters: Counters = Counter::ALL.into_iter().zip(1..).collect();
+        let json = serde_json::to_value(counters).unwrap();
+        assert_eq!(json.as_object().unwrap().len(), Counter::COUNT);
+        for (counter, value) in Counter::ALL.into_iter().zip(1..) {
+            assert_eq!(json[counter.name()], value, "{counter:?}");
+        }
+        assert_eq!(serde_json::from_value::<Counters>(json).unwrap(), counters);
+    }
+
+    /// `measurements` read back from its JSON without `counter` at the top
+    /// level, where the measured frames' counters sit.
+    fn read_without(counter: Counter, measurements: &Measurements) -> anyhow::Result<Measurements> {
+        let serde_json::Value::Object(mut json) = serde_json::to_value(measurements).unwrap()
+        else {
+            panic!("a result is a JSON object");
+        };
+        json.remove(counter.name()).expect("the result holds it");
+        Measurements::from_baseline_json(serde_json::Value::Object(json).to_string().as_bytes())
+    }
+
+    #[test]
+    fn a_result_without_draw_calls_is_refused() {
+        let error = read_without(Counter::DrawCalls, &baseline()).expect_err("refused");
+        assert!(
+            format!("{error:#}").contains("missing field `draw_calls`"),
+            "{error:#}"
+        );
+    }
+
+    #[test]
+    fn a_result_without_late_mips_reads_them_as_none() {
+        let mut late = baseline();
+        late.counters[Counter::LateMips] = 12;
+        let read = read_without(Counter::LateMips, &late).expect("read");
+        assert_eq!(read, baseline());
     }
 }

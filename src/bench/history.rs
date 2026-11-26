@@ -1399,7 +1399,7 @@ mod tests {
     fn a_publish_rebuilds_every_series_so_rows_take_the_current_form() {
         let fixture = Fixture::new("rebuild");
         let mut results = [result(&fixture.checkout, "Apple M4 Pro", 1.02)];
-        results[0].counters.triangles_drawn *= 27;
+        results[0].counters[Counter::TrianglesDrawn] *= 27;
         let prepare_frame = Spread {
             median: 50.0,
             p95: 80.0,
