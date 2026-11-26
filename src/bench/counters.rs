@@ -296,10 +296,10 @@ impl FromIterator<(Counter, u64)> for Counters {
 }
 
 impl serde::Serialize for Counters {
-    fn serialize<Writer: serde::Serializer>(
+    fn serialize<Serializer: serde::Serializer>(
         &self,
-        serializer: Writer,
-    ) -> Result<Writer::Ok, Writer::Error> {
+        serializer: Serializer,
+    ) -> Result<Serializer::Ok, Serializer::Error> {
         use serde::ser::SerializeStruct as _;
         let mut fields = serializer.serialize_struct("Counters", Counter::COUNT)?;
         for counter in Counter::ALL {
@@ -312,9 +312,9 @@ impl serde::Serialize for Counters {
 /// Skips a field naming no counter: a record holding them flattened hands
 /// it its other fields too.
 impl<'de> serde::Deserialize<'de> for Counters {
-    fn deserialize<Reader: serde::Deserializer<'de>>(
-        deserializer: Reader,
-    ) -> Result<Self, Reader::Error> {
+    fn deserialize<Deserializer: serde::Deserializer<'de>>(
+        deserializer: Deserializer,
+    ) -> Result<Self, Deserializer::Error> {
         deserializer.deserialize_map(CountersVisitor)
     }
 }
@@ -333,16 +333,16 @@ impl<'de> serde::de::Visitor<'de> for CountersVisitor {
         mut fields: Fields,
     ) -> Result<Counters, Fields::Error> {
         use serde::de::Error as _;
-        let mut read = [None; Counter::COUNT];
+        let mut values_read = [None; Counter::COUNT];
         while let Some(name) = fields.next_key::<String>()? {
-            let named = Counter::ALL
+            let named_counter = Counter::ALL
                 .into_iter()
                 .find(|counter| counter.name() == name);
-            match named {
-                Some(counter) if read[counter as usize].is_some() => {
+            match named_counter {
+                Some(counter) if values_read[counter as usize].is_some() => {
                     return Err(Fields::Error::duplicate_field(counter.name()));
                 }
-                Some(counter) => read[counter as usize] = Some(fields.next_value()?),
+                Some(counter) => values_read[counter as usize] = Some(fields.next_value()?),
                 None => {
                     fields.next_value::<serde::de::IgnoredAny>()?;
                 }
@@ -350,7 +350,7 @@ impl<'de> serde::de::Visitor<'de> for CountersVisitor {
         }
         let mut counters = Counters::default();
         for counter in Counter::ALL {
-            counters[counter] = match read[counter as usize] {
+            counters[counter] = match values_read[counter as usize] {
                 Some(value) => value,
                 None if counter.absent_reads_as_none() => 0,
                 None => return Err(Fields::Error::missing_field(counter.name())),

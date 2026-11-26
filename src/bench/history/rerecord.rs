@@ -143,15 +143,15 @@ impl SeriesCounters {
     /// no comparison judges aside. A counter the row did not count reads as
     /// the same.
     fn counted(&self, baseline: &Measurements) -> bool {
-        let mut judged = Counter::ALL.into_iter().filter(|counter| counter.judged());
-        let counter_frames_match = judged.clone().all(|counter| {
+        let judged = || Counter::ALL.into_iter().filter(|counter| counter.judged());
+        let counter_frames_match = judged().all(|counter| {
             let value = baseline.counter_frames.counters[counter];
             (self.fields.get(counter.name())).is_none_or(|counted| counted.as_u64() == Some(value))
         });
         let measured_compared =
             self.measured_frames == baseline.measured_frames && !baseline.counters.streamed();
         let measured_match = !measured_compared
-            || judged.all(|counter| {
+            || judged().all(|counter| {
                 (self.measured_counters.get(counter.name()))
                     .is_none_or(|&counted| counted == baseline.counters[counter])
             });
