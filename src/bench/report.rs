@@ -7,8 +7,8 @@ use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::stats::GpuMemoryKind;
 
 use super::{
-    Budgets, Counter, Measurements, Spread, Traversal, compared_counters, compares_counter_frames,
-    ensure_comparable,
+    BudgetMetric, BudgetRule, Budgets, Counter, Measurements, Spread, Statistic, Traversal,
+    compared_counters, compares_counter_frames, ensure_comparable,
 };
 
 /// `current`'s times and counters, its aliasing among them when it was
@@ -68,25 +68,25 @@ pub fn report(
             "CPU frame",
             current.cpu_frame_microseconds,
             times_baseline.map(|baseline| baseline.cpu_frame_microseconds),
-            Some(budgets.cpu_frame_microseconds),
+            Some(BudgetMetric::CpuFrame),
         ),
         (
             "Dynamic TLAS, CPU",
             current.dynamic_tlas_cpu_microseconds,
             times_baseline.map(|baseline| baseline.dynamic_tlas_cpu_microseconds),
-            Some(budgets.dynamic_tlas_cpu_microseconds),
+            Some(BudgetMetric::DynamicTlasCpu),
         ),
         (
             "GPU frame",
             current.gpu_frame_microseconds,
             times_baseline.map(|baseline| baseline.gpu_frame_microseconds),
-            Some(budgets.gpu_frame_microseconds),
+            Some(BudgetMetric::GpuFrame),
         ),
         (
             "Gate, rays off",
             current.gate_microseconds,
             times_baseline.map(|baseline| baseline.gate_microseconds),
-            Some(budgets.gate_microseconds),
+            Some(BudgetMetric::Gate),
         ),
         (
             "Shadow-ray time",
@@ -98,20 +98,19 @@ pub fn report(
     let culling_per_slot = current.culling_per_slot_microseconds.map(|time| {
         let baseline_time =
             times_baseline.and_then(|baseline| baseline.culling_per_slot_microseconds);
-        let guard = Some(budgets.culling_per_slot_microseconds);
         (
             "Culling, per-slot stages".to_owned(),
             time,
             baseline_time,
-            guard,
+            Some(BudgetMetric::CullingPerSlot),
         )
     });
     let pass_times = current.gpu_pass_microseconds.iter().map(|(pass, &time)| {
         let baseline_time = times_baseline
             .and_then(|baseline| baseline.gpu_pass_microseconds.get(pass))
             .copied();
-        let budget = (pass == DYNAMIC_TLAS_BUILD).then_some(budgets.dynamic_tlas_gpu_microseconds);
-        (format!("`{pass}`"), time, baseline_time, budget)
+        let metric = (pass == DYNAMIC_TLAS_BUILD).then_some(BudgetMetric::DynamicTlasGpu);
+        (format!("`{pass}`"), time, baseline_time, metric)
     });
     let blas_compaction = current.blas_compaction_microseconds.map(|time| {
         let baseline_time =
@@ -119,12 +118,13 @@ pub fn report(
         ("BLAS compaction".to_owned(), time, baseline_time, None)
     });
     let times = frame_times
-        .map(|(name, time, baseline_time, budget)| (name.to_owned(), time, baseline_time, budget))
+        .map(|(name, time, baseline_time, metric)| (name.to_owned(), time, baseline_time, metric))
         .into_iter()
         .chain(culling_per_slot)
         .chain(blas_compaction)
         .chain(pass_times);
-    for (name, time, baseline_time, budget) in times {
+    let mut bounded = Vec::new();
+    for (name, time, baseline_time, metric) in times {
         let compared = match baseline_time {
             Some(Spread { median, p95, .. }) => [
                 grouped(median, 1),
@@ -137,20 +137,33 @@ pub fn report(
         let [baseline_median, baseline_p95, delta, ratio_text] = compared;
         let [p99, maximum] = [time.p99, time.maximum]
             .map(|value| value.map_or("—".to_owned(), |value| grouped(value, 1)));
+        let rules = || BudgetRule::all().filter(|rule| Some(rule.metric) == metric);
+        let median_rule = rules().find(|rule| rule.statistic == Statistic::Median);
         writeln!(
             report,
             "| {name} | {} | {} | {p99} | {maximum} | {baseline_median} | {baseline_p95} | {delta} | {ratio_text} | {} |",
             grouped(time.median, 1),
             grouped(time.p95, 1),
-            budget.map_or("—".to_owned(), |budget| grouped(budget, 1))
+            median_rule.map_or("—".to_owned(), |rule| grouped(rule.bound(budgets), 1))
         )?;
+        let Some(median_rule) = median_rule else {
+            continue;
+        };
+        let (maximums, others): (Vec<_>, Vec<_>) =
+            rules().partition(|rule| rule.statistic == Statistic::Maximum);
+        let statistics: Vec<_> = others.iter().map(|rule| rule.statistic.name()).collect();
+        let mut clause = format!("{name} at its {}", listed(&statistics));
+        for rule in maximums {
+            let bound = grouped(rule.bound(budgets), 1);
+            write!(clause, " (its maximum answers to {bound} µs)")?;
+        }
+        if median_rule.is_guard() {
+            clause.push_str(", as a guard");
+        }
+        bounded.push(clause);
     }
 
-    writeln!(
-        report,
-        "\nThe Budget column bounds the median, and the p99 of the CPU frame, GPU frame and gate (the CPU frame's p95 too), the dynamic TLAS's rows at the median alone; the CPU and GPU frames' maximum answers to {} µs. The culling phases' per-slot stages answer to a guard, at the median alone.",
-        grouped(budgets.maximum_frame_microseconds, 1)
-    )?;
+    writeln!(report, "\nThe Budget column bounds {}.", bounded.join("; "))?;
 
     if let Some(wait) = current.lit_pass_wait_microseconds {
         report.push_str(
@@ -219,10 +232,9 @@ pub fn report(
             }
             None => std::array::from_fn(|_| "—".to_owned()),
         };
-        let budget = match counter {
-            "gpu_memory_bytes" => grouped(budgets.gpu_memory_bytes as f64, 0),
-            _ => "—".to_owned(),
-        };
+        let budget = BudgetRule::all()
+            .find(|rule| rule.metric.name() == counter)
+            .map_or("—".to_owned(), |rule| grouped(rule.bound(budgets), 0));
         writeln!(
             report,
             "| `{counter}` | {} | {baseline_value} | {delta} | {ratio_text} | {budget} |",
@@ -300,6 +312,13 @@ pub(crate) fn grouped(value: f64, decimals: usize) -> String {
         text.push(digit);
     }
     text + fraction
+}
+
+fn listed(words: &[&str]) -> String {
+    match words.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
+        _ => words.concat(),
+    }
 }
 
 /// `grouped`, with a plus sign unless it shows a minus.
@@ -566,7 +585,7 @@ mod tests {
 | `dynamic_tlas_build` | 48.7 | 462.9 | — | — | 50.0 | 400.0 | -1.3 | 0.974 | 1,000.0 |
 | `lit_pass` | 755.8 | 768.1 | — | — | 800.0 | 810.0 | -44.2 | 0.945 | — |
 
-The Budget column bounds the median, and the p99 of the CPU frame, GPU frame and gate (the CPU frame's p95 too), the dynamic TLAS's rows at the median alone; the CPU and GPU frames' maximum answers to 16,667.0 µs. The culling phases' per-slot stages answer to a guard, at the median alone.
+The Budget column bounds CPU frame at its median, p95 and p99 (its maximum answers to 16,667.0 µs); Dynamic TLAS, CPU at its median; GPU frame at its median and p99 (its maximum answers to 16,667.0 µs); Gate, rays off at its median and p99; Culling, per-slot stages at its median, as a guard; `dynamic_tlas_build` at its median.
 
 | Gate, rays off, µs | Median | p95 |
 |---|---:|---:|
