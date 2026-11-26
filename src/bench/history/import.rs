@@ -637,9 +637,9 @@ mod tests {
         assert_eq!(measured_row["instances_drawn"], measured.instances_drawn);
         assert_eq!(measured_row["triangles_drawn"], measured.triangles_drawn);
         let baseline_json: serde_json::Value = serde_json::from_str(TOWN_BASELINE).unwrap();
-        let carried = crate::bench::Counters::NAMES
+        let carried = crate::bench::Counter::ALL
             .iter()
-            .filter(|counter| baseline_json.get(**counter).is_some())
+            .filter(|counter| baseline_json.get(counter.name()).is_some())
             .count();
         assert_eq!(measured_row.as_object().unwrap().len(), carried, "{row}");
     }

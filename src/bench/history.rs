@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use anyhow::Context;
 
 use super::provenance::{Checkout, git, source_hash};
-use super::{Configuration, Counters, Measurements, Spread, adapter_key};
+use super::{Configuration, Counter, Measurements, Spread, adapter_key};
 use crate::scenes::ReferenceScene;
 
 pub use import::import_baselines;
@@ -272,7 +272,7 @@ struct StoredRecord {
     #[serde(default)]
     rerecorded_baseline: bool,
     /// Every field not named above, the measured frames' counters among
-    /// them under their names in `Counters::NAMES`: a map, as a record
+    /// them under their names in `Counter::name`: a map, as a record
     /// holds only the counters its bench counted.
     #[serde(flatten)]
     remaining_fields: serde_json::Map<String, serde_json::Value>,
@@ -1223,11 +1223,11 @@ impl<'record> SeriesRow<'record> {
                 .map(|(counter, value)| (counter.as_str(), *value))
                 .collect(),
             measured_frames: record.measured_frames,
-            measured_counters: Counters::NAMES
+            measured_counters: Counter::ALL
                 .into_iter()
                 .filter_map(|counter| {
-                    let value = record.remaining_fields.get(counter)?.as_u64()?;
-                    Some((counter, value))
+                    let value = record.remaining_fields.get(counter.name())?.as_u64()?;
+                    Some((counter.name(), value))
                 })
                 .collect(),
             aliasing_rmse: record.aliasing_rmse,

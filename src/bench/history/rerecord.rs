@@ -14,7 +14,7 @@ use anyhow::Context;
 use super::remote_tip;
 use crate::bench::provenance::git;
 use crate::bench::{
-    Counters, Finding, Measurements, adapter_key, baseline_directory, counters_moved,
+    Counter, Finding, Measurements, adapter_key, baseline_directory, counters_moved,
 };
 
 /// The Series files' directory on the `bench-history` branch.
@@ -143,17 +143,18 @@ impl SeriesCounters {
     /// no comparison judges aside. A counter the row did not count reads as
     /// the same.
     fn counted(&self, baseline: &Measurements) -> bool {
-        let judged = |(counter, _): &(&str, u64)| !Counters::UNJUDGED.contains(counter);
+        let judged = |(counter, _): &(Counter, u64)| counter.judged();
         let counter_frames = baseline.counter_frames.counters.named();
         let counter_frames_match =
             (counter_frames.into_iter().filter(judged)).all(|(counter, value)| {
-                (self.fields.get(counter)).is_none_or(|counted| counted.as_u64() == Some(value))
+                (self.fields.get(counter.name()))
+                    .is_none_or(|counted| counted.as_u64() == Some(value))
             });
         let measured_compared =
             self.measured_frames == baseline.measured_frames && !baseline.counters.streamed();
         let measured_match = !measured_compared
             || (baseline.counters.named().into_iter().filter(judged)).all(|(counter, value)| {
-                (self.measured_counters.get(counter)).is_none_or(|&counted| counted == value)
+                (self.measured_counters.get(counter.name())).is_none_or(|&counted| counted == value)
             });
         counter_frames_match && measured_match
     }
@@ -515,9 +516,11 @@ mod tests {
     fn a_row_differing_only_where_comparisons_do_not_judge_counted_the_baseline() {
         let baseline = with_draw_calls(baseline(), 4);
         let mut unjudged = row("a", 4);
-        for counter in Counters::UNJUDGED {
-            unjudged.fields.insert(counter.to_owned(), 9.into());
-            unjudged.measured_counters.insert(counter.to_owned(), 9);
+        for counter in Counter::ALL.into_iter().filter(|counter| !counter.judged()) {
+            unjudged.fields.insert(counter.name().to_owned(), 9.into());
+            unjudged
+                .measured_counters
+                .insert(counter.name().to_owned(), 9);
         }
         assert!(unjudged.counted(&baseline));
     }

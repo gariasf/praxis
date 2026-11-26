@@ -465,7 +465,7 @@ const SETTLED_FRAMES: std::ops::RangeTo&lt;u32&gt; = ..COUNTER_FRAMES.end;</code
         },</code></pre>
   <p>The culling phases' per-slot stages are timed whole, from the run with rays on: each culling phase is split into a pass over the Instance slots in use and a pass over the Meshlet records the first appends, and only the first grows with the slots. Summing the two phases' first passes in each frame, before the median is taken, gives the cost the slots set, which ADR 0013's guard caps (<a href="#compare">section 5</a>); the medians of the two passes, summed, would be a different figure. <code>instance_slots_in_use</code>, among the counters, holds how many slots they scanned.</p>
   <h3>Counters</h3>
-  <p>The 24 counters are named in the order <code>Counters::NAMES</code> gives and a test holds the JSON to, and fall into three groups by how a run reduces them. <a href="frame-stats.html">Frame stats</a> says what most of them count; the culling pass, Froxel pass and shadow mask pages say which overflows their passes count, and <a href="chunk-streamer.html">The Chunk streamer</a> and <a href="mip-streaming.html">Mip streaming</a> the streaming counters.</p>
+  <p>The 24 counters are named in the order <code>Counter::ALL</code> gives and a test holds the JSON to, and fall into three groups by how a run reduces them. <a href="frame-stats.html">Frame stats</a> says what most of them count; the culling pass, Froxel pass and shadow mask pages say which overflows their passes count, and <a href="chunk-streamer.html">The Chunk streamer</a> and <a href="mip-streaming.html">Mip streaming</a> the streaming counters.</p>
   <div class="table-wrap">
   <table class="facts compact">
     <thead><tr><th>Counters</th><th>Reduced as</th><th>Why</th></tr></thead>
@@ -696,12 +696,12 @@ pub(super) const NEIGHBOUR_FRAMES: usize = 31;</code></pre>
         CompareMode::Recording =&gt; current != baseline,
         CompareMode::Local | CompareMode::Ci =&gt; current &gt; baseline,
     };
-    for ((metric, current), (_, baseline)) in
+    for ((counter, current), (_, baseline)) in
         counters.named().into_iter().zip(baseline_counters.named())
     {
-        if counter_fails(current, baseline) &amp;&amp; !Counters::UNJUDGED.contains(&amp;metric) {
+        if counter_fails(current, baseline) &amp;&amp; counter.judged() {
             findings.push(Finding {
-                metric,
+                metric: counter.name(),
                 verdict: Verdict::Fail,
                 detail: format!("{current} against Baseline {baseline}"),
             });
@@ -724,7 +724,7 @@ pub(super) const NEIGHBOUR_FRAMES: usize = 31;</code></pre>
     if matches!(mode, CompareMode::Ci | CompareMode::Recording) {
         return Ok(findings);
     }</code></pre>
-  <p>Which counters compare depends on the lengths and on the Baseline: runs that measured as many frames compare their measured frames' counters, unless the Baseline loaded or unloaded a Chunk or read a byte in its measured frames (<code>Counters::streamed</code>); runs of other lengths, and runs against such a Baseline, compare their counter frames', the Settled window of <a href="#run">section 1</a>, since counters repeat only where no load's timing moves them. That is how the verify command's 72-frame run judges its counters against Baselines of 2,048 frames, or the world's of 3,600, and how a run of the world, whose Baseline's measured frames stream, is judged against it; CI's run and its lavapipe Baselines are both the 72 frames of the counters-only configuration. Only the Baseline's streaming counts: a run that streams in measured frames where its Baseline streamed nothing compares those frames still, and fails on the Chunks it loaded. The late mips and the TLAS build's allocations, <code>Counters::UNJUDGED</code>, are reported and not judged in any mode: how many mips arrive late depends on when the IO pool's reads land, which no Settled frame fixes past the frames it covers, and <code>heap_allocations</code> already holds the build's allocations.</p>
+  <p>Which counters compare depends on the lengths and on the Baseline: runs that measured as many frames compare their measured frames' counters, unless the Baseline loaded or unloaded a Chunk or read a byte in its measured frames (<code>Counters::streamed</code>); runs of other lengths, and runs against such a Baseline, compare their counter frames', the Settled window of <a href="#run">section 1</a>, since counters repeat only where no load's timing moves them. That is how the verify command's 72-frame run judges its counters against Baselines of 2,048 frames, or the world's of 3,600, and how a run of the world, whose Baseline's measured frames stream, is judged against it; CI's run and its lavapipe Baselines are both the 72 frames of the counters-only configuration. Only the Baseline's streaming counts: a run that streams in measured frames where its Baseline streamed nothing compares those frames still, and fails on the Chunks it loaded. The late mips and the TLAS build's allocations, the counters <code>Counter::judged</code> leaves out, are reported and not judged in any mode: how many mips arrive late depends on when the IO pool's reads land, which no Settled frame fixes past the frames it covers, and <code>heap_allocations</code> already holds the build's allocations.</p>
   <div class="code-source"><code>compares_counter_frames</code> and <code>Counters::streamed</code>, <code>src/bench/mod.rs</code></div>
 <pre class="code"><code>/// Whether `current` and `baseline` compare their counter frames' counters
 /// rather than their measured frames': when they measured other lengths, or
@@ -739,7 +739,7 @@ fn compares_counter_frames(current: &amp;Measurements, baseline: &amp;Measuremen
     pub(super) fn streamed(&amp;self) -&gt; bool {
         self.chunks_loaded + self.chunks_unloaded + self.bytes_read &gt; 0
     }</code></pre>
-  <p>Counter frames that compare in place of measured frames of the same length leave the measured frames' refusals judged still: each counter of <code>Counters::REFUSALS</code>, the overflow and the seven refusals, fails when the most of any measured frame exceeds the Baseline's, or in <code>Recording</code> differs from it, in every mode, since a single frame that had no room for something is a defect whatever the IO pool's timing. The measured frames' Late Chunks and late mips are left to the report, not judged.</p>
+  <p>Counter frames that compare in place of measured frames of the same length leave the measured frames' refusals judged still: each counter of rule <code>CounterRule::Most</code>, the overflow and the seven refusals, fails when the most of any measured frame exceeds the Baseline's, or in <code>Recording</code> differs from it, in every mode, since a single frame that had no room for something is a defect whatever the IO pool's timing. The measured frames' Late Chunks and late mips are left to the report, not judged.</p>
   <div class="code-source"><code>compare</code>, <code>src/bench/mod.rs</code></div>
 <pre class="code"><code>    if current.measured_frames == baseline.measured_frames
         &amp;&amp; compares_counter_frames(current, baseline)
@@ -747,11 +747,11 @@ fn compares_counter_frames(current: &amp;Measurements, baseline: &amp;Measuremen
         let measured = current.counters.named().into_iter();
         let refusals = measured
             .zip(baseline.counters.named())
-            .filter(|((metric, _), _)| Counters::REFUSALS.contains(metric));
-        for ((metric, value), (_, baseline_value)) in refusals {
+            .filter(|((counter, _), _)| counter.rule() == CounterRule::Most);
+        for ((counter, value), (_, baseline_value)) in refusals {
             if counter_fails(value, baseline_value) {
                 findings.push(Finding {
-                    metric,
+                    metric: counter.name(),
                     verdict: Verdict::Fail,
                     detail: format!(
                         "{value} in the measured frames against Baseline {baseline_value}"
@@ -961,7 +961,7 @@ fn adapter_key(adapter: &amp;str, backend: Option&lt;&amp;str&gt;) -&gt; String 
       <tr><td><code>shadow_ray_time_pairs_the_runs_frames_by_their_path_frame</code></td><td><code>src/bench/mod.rs</code></td><td>over fixture frames, the run with rays holds two frames after a Fast travel and the run without them one; the path frame after the hold, slower in both runs, still pairs with its twin, so no shadow-ray time exceeds the runs' constant difference</td></tr>
       <tr><td><code>a_fast_travel_pauses_the_camera_path_until_its_hold_ends</code>, <code>a_fast_travel_on_an_undrawn_frame_arrives_on_the_next_drawn_frame</code></td><td><code>src/capture/mod.rs</code></td><td>on the GPU, <code>uv-grid</code>'s camera jumps 4 km from its one Chunk, then back: the render asks for the path's frames once each and in order, the jump away holds no frame, the jump back holds at least one, drawn again until the hold ends, and each jump reports its hold on the frame the hold ends; a jump back on a frame run undrawn still arrives on the next drawn frame, which holds and counts no Late Chunk</td></tr>
       <tr><td><code>shadow_masks_differ_where_the_lights_hidden_do_whatever_their_slice</code></td><td><code>src/capture/mod.rs</code></td><td>of four pixels' words, the one whose Froxel slice alone differs and the ones that hide the same lights do not differ; the two whose last or first light bit differs do, drawn red, with the others dark or light by their first light</td></tr>
-      <tr><td><code>each_counter_is_named_as_results_spell_it</code></td><td><code>src/bench/mod.rs</code></td><td><code>Counters::NAMES</code> matches the JSON keys serde writes, in number and value</td></tr>
+      <tr><td><code>each_counter_is_named_as_results_spell_it</code></td><td><code>src/bench/mod.rs</code></td><td><code>Counter::name</code> matches the JSON keys serde writes, in number and value</td></tr>
       <tr><td><code>nearest_rank_percentiles</code>, <code>a_spread_holds_the_nearest_rank_median_p95_p99_and_maximum</code></td><td><code>src/bench/mod.rs</code></td><td>the median of 1 to 20 is 10 and the p95 is 19; a single value is its own p95 and its own maximum; over 200 values the median, p95, p99 and maximum are the 100th, 190th, 198th and 200th</td></tr>
       <tr><td><code>a_time_warns_above_5_percent_and_fails_above_10</code>, <code>exactly_5_percent_and_improvements_pass</code>, <code>cpu_time_within_the_noise_floor_only_warns</code>, <code>a_pass_time_within_the_noise_floor_only_warns</code></td><td><code>src/bench/mod.rs</code></td><td>the two ratios, exactly 5% passing, improvements passing, and a CPU or pass time past 10% that only warns inside its floor and fails just past it</td></tr>
       <tr><td><code>a_recording_fails_a_counter_that_fell_where_the_gate_passes_it</code>, <code>a_recording_passes_slower_times_and_a_fall_of_the_counters_reported_only</code></td><td><code>src/bench/mod.rs</code></td><td>a counter one lower passes <code>Local</code> and <code>Ci</code> and fails <code>Recording</code>, as a rise does; a refusal that fell in the measured frames, against a Baseline whose measured frames streamed, fails <code>Recording</code> and passes <code>Ci</code>; times that fail <code>Local</code> pass <code>Recording</code>, as do late mips and TLAS build allocations that fell</td></tr>
