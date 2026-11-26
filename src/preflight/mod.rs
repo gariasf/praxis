@@ -9,6 +9,7 @@ use std::process::Command;
 
 use crate::bench::BASELINE_DIRECTORY;
 use crate::capture::{GOLDEN_DIRECTORY, golden_key};
+use crate::scenes::ReferenceScene;
 
 /// GPU utilisation, in percent, above which a bench's times would be
 /// someone else's.
@@ -169,23 +170,31 @@ fn stems_by_directory(root: &Path, extension: &str) -> BTreeMap<String, BTreeSet
     stems
 }
 
-/// What `key`'s directory lacks of what any directory holds: a scene with a
-/// Golden or Baseline on one adapter is checked on every adapter.
-fn missing(stems_by_directory: &BTreeMap<String, BTreeSet<String>>, key: &str) -> Vec<String> {
+/// What `key`'s directory lacks of `expected` and of what any directory
+/// holds: a scene with a Golden or Baseline on one adapter is checked on
+/// every adapter.
+fn missing(
+    stems_by_directory: &BTreeMap<String, BTreeSet<String>>,
+    key: &str,
+    expected: &[&str],
+) -> Vec<String> {
     let empty = BTreeSet::new();
     let present = stems_by_directory.get(key).unwrap_or(&empty);
-    let expected: BTreeSet<_> = stems_by_directory.values().flatten().collect();
+    let expected: BTreeSet<&str> = (stems_by_directory.values().flatten())
+        .map(String::as_str)
+        .chain(expected.iter().copied())
+        .collect();
     expected
         .into_iter()
         .filter(|stem| !present.contains(*stem))
-        .cloned()
+        .map(str::to_owned)
         .collect()
 }
 
 fn goldens(key: &str, machine: Machine) -> Check {
     let directory = format!("{GOLDEN_DIRECTORY}/{key}");
     let stems = stems_by_directory(Path::new(GOLDEN_DIRECTORY), "png");
-    let absent = missing(&stems, key);
+    let absent = missing(&stems, key, &[]);
     if absent.is_empty() {
         return Check::new(
             "goldens",
@@ -213,7 +222,7 @@ fn baselines(adapter: &str, backend: wgpu::Backend, machine: Machine) -> Check {
         .unwrap_or_default();
     let directory = format!("{BASELINE_DIRECTORY}/{key}");
     let stems = stems_by_directory(Path::new(BASELINE_DIRECTORY), "json");
-    let absent = missing(&stems, &key);
+    let absent = missing(&stems, &key, &ReferenceScene::ALL.map(ReferenceScene::name));
     if absent.is_empty() {
         return Check::new(
             "baselines",
@@ -845,19 +854,27 @@ mod tests {
             ("metal", &["helmet", "town"]),
             ("vulkan-cpu", &["town", "crowd"]),
         ]);
-        assert_eq!(missing(&stems, "metal"), ["crowd"]);
-        assert_eq!(missing(&stems, "vulkan-cpu"), ["helmet"]);
-        assert_eq!(missing(&stems, "vulkan"), ["crowd", "helmet", "town"]);
-        assert!(missing(&directories(&[("metal", &["town"])]), "metal").is_empty());
+        assert_eq!(missing(&stems, "metal", &[]), ["crowd"]);
+        assert_eq!(missing(&stems, "vulkan-cpu", &[]), ["helmet"]);
+        assert_eq!(missing(&stems, "vulkan", &[]), ["crowd", "helmet", "town"]);
+        assert!(missing(&directories(&[("metal", &["town"])]), "metal", &[]).is_empty());
+    }
+
+    #[test]
+    fn missing_lists_an_expected_stem_no_directory_holds() {
+        let stems = directories(&[("metal", &["town"]), ("vulkan-cpu", &["town"])]);
+        assert_eq!(missing(&stems, "metal", &["town", "world"]), ["world"]);
+        assert_eq!(missing(&BTreeMap::new(), "metal", &["town"]), ["town"]);
     }
 
     #[test]
     fn the_repositorys_goldens_and_baselines_are_complete_for_their_adapters() {
         let goldens = stems_by_directory(Path::new(GOLDEN_DIRECTORY), "png");
-        assert!(missing(&goldens, "metal").is_empty());
-        assert!(!missing(&goldens, "no-such-backend").is_empty());
+        assert!(missing(&goldens, "metal", &[]).is_empty());
+        assert!(!missing(&goldens, "no-such-backend", &[]).is_empty());
         let baselines = stems_by_directory(Path::new(BASELINE_DIRECTORY), "json");
-        assert!(missing(&baselines, "apple-m4-pro").is_empty());
+        let scenes = ReferenceScene::ALL.map(ReferenceScene::name);
+        assert!(missing(&baselines, "apple-m4-pro", &scenes).is_empty());
     }
 
     #[test]
