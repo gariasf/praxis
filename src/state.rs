@@ -664,11 +664,11 @@ mod tests {
         );
 
         let counters = crate::bench::Counters::of(&frame_stats);
-        assert_eq!(counters.chunks_loaded, 16);
-        assert_eq!(counters.chunks_unloaded, 7);
-        assert_eq!(counters.late_chunks, 2);
+        assert_eq!(counters[crate::bench::Counter::ChunksLoaded], 16);
+        assert_eq!(counters[crate::bench::Counter::ChunksUnloaded], 7);
+        assert_eq!(counters[crate::bench::Counter::LateChunks], 2);
         let bytes_read: u64 = frame_stats.iter().map(|stats| stats.bytes_read).sum();
-        assert_eq!(counters.bytes_read, bytes_read);
+        assert_eq!(counters[crate::bench::Counter::BytesRead], bytes_read);
     }
 
     #[cfg(feature = "cook")]

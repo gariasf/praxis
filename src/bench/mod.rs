@@ -19,7 +19,9 @@ use std::time::Duration;
 
 use anyhow::Context;
 
-use counters::{Counter, CounterRule};
+pub use counters::{Counter, Counters};
+
+use counters::CounterRule;
 
 use crate::capture::{FrameWait, ReadBack, capture, render_frames};
 use crate::gpu::GpuContext;
@@ -283,137 +285,6 @@ impl Measurements {
     /// recorded is refused with a message to re-record it.
     pub fn from_baseline_json(json: &[u8]) -> anyhow::Result<Self> {
         serde_json::from_slice(json).context("not in this bench's form: re-record it")
-    }
-}
-
-/// Each `Counter`'s value over a run's frames, by its rule. A field under
-/// `#[serde(default)]` is a counter that `Counter::absent_reads_as_none`
-/// holds.
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct Counters {
-    pub draw_calls: u64,
-    pub instances_drawn: u64,
-    pub triangles_drawn: u64,
-    pub instances_overflowed: u64,
-    pub uploaded_bytes: u64,
-    pub gpu_memory_bytes: u64,
-    pub arena_bytes_in_use: u64,
-    pub heap_allocations: u64,
-    #[serde(default)]
-    pub renderables_refused: u64,
-    #[serde(default)]
-    pub lights_overflowed: u64,
-    #[serde(default)]
-    pub static_instances_left_out: u64,
-    #[serde(default)]
-    pub moving_instances_left_out: u64,
-    #[serde(default)]
-    pub bends_left_out: u64,
-    #[serde(default)]
-    pub froxel_lights_overflowed: u64,
-    #[serde(default)]
-    pub shadow_mask_lights_overflowed: u64,
-    #[serde(default)]
-    pub late_chunks: u64,
-    #[serde(default)]
-    pub late_far_proxies: u64,
-    #[serde(default)]
-    pub chunks_loaded: u64,
-    #[serde(default)]
-    pub chunks_unloaded: u64,
-    #[serde(default)]
-    pub bytes_read: u64,
-    #[serde(default)]
-    pub pool_entries_freed: u64,
-    #[serde(default)]
-    pub late_mips: u64,
-    #[serde(default)]
-    pub tlas_build_allocations: u64,
-    /// The slots both culling phases' per-slot stages scan.
-    #[serde(default)]
-    pub instance_slots_in_use: u64,
-}
-
-impl Counters {
-    /// The counters of `frames`, each with its GPU stats.
-    pub(crate) fn of(frames: &[FrameStats]) -> Self {
-        let mut counters = Self::default();
-        for (counter, value) in counters.named_mut() {
-            *value = counter.value_over(frames);
-        }
-        counters
-    }
-
-    /// Whether the frames these count loaded or unloaded a Chunk or read a
-    /// byte.
-    pub(super) fn streamed(&self) -> bool {
-        self.chunks_loaded + self.chunks_unloaded + self.bytes_read > 0
-    }
-
-    fn named(&self) -> [(Counter, u64); Counter::COUNT] {
-        let mut counters = *self;
-        counters
-            .named_mut()
-            .map(|(counter, value)| (counter, *value))
-    }
-
-    /// Each field beside its `Counter`, in `Counter::ALL`'s order.
-    fn named_mut(&mut self) -> [(Counter, &mut u64); Counter::COUNT] {
-        let Self {
-            draw_calls,
-            instances_drawn,
-            triangles_drawn,
-            instances_overflowed,
-            uploaded_bytes,
-            gpu_memory_bytes,
-            arena_bytes_in_use,
-            heap_allocations,
-            renderables_refused,
-            lights_overflowed,
-            static_instances_left_out,
-            moving_instances_left_out,
-            bends_left_out,
-            froxel_lights_overflowed,
-            shadow_mask_lights_overflowed,
-            late_chunks,
-            late_far_proxies,
-            chunks_loaded,
-            chunks_unloaded,
-            bytes_read,
-            pool_entries_freed,
-            late_mips,
-            tlas_build_allocations,
-            instance_slots_in_use,
-        } = self;
-        [
-            (Counter::DrawCalls, draw_calls),
-            (Counter::InstancesDrawn, instances_drawn),
-            (Counter::TrianglesDrawn, triangles_drawn),
-            (Counter::InstancesOverflowed, instances_overflowed),
-            (Counter::UploadedBytes, uploaded_bytes),
-            (Counter::GpuMemoryBytes, gpu_memory_bytes),
-            (Counter::ArenaBytesInUse, arena_bytes_in_use),
-            (Counter::HeapAllocations, heap_allocations),
-            (Counter::RenderablesRefused, renderables_refused),
-            (Counter::LightsOverflowed, lights_overflowed),
-            (Counter::StaticInstancesLeftOut, static_instances_left_out),
-            (Counter::MovingInstancesLeftOut, moving_instances_left_out),
-            (Counter::BendsLeftOut, bends_left_out),
-            (Counter::FroxelLightsOverflowed, froxel_lights_overflowed),
-            (
-                Counter::ShadowMaskLightsOverflowed,
-                shadow_mask_lights_overflowed,
-            ),
-            (Counter::LateChunks, late_chunks),
-            (Counter::LateFarProxies, late_far_proxies),
-            (Counter::ChunksLoaded, chunks_loaded),
-            (Counter::ChunksUnloaded, chunks_unloaded),
-            (Counter::BytesRead, bytes_read),
-            (Counter::PoolEntriesFreed, pool_entries_freed),
-            (Counter::LateMips, late_mips),
-            (Counter::TlasBuildAllocations, tlas_build_allocations),
-            (Counter::InstanceSlotsInUse, instance_slots_in_use),
-        ]
     }
 }
 
@@ -1090,10 +961,9 @@ impl std::fmt::Display for Measurements {
         for (pass, time) in &self.gpu_pass_microseconds {
             write!(formatter, " {pass}={:.1}", time.median)?;
         }
-        let counters =
-            (self.counters.named().into_iter()).map(|(counter, value)| (counter.name(), value));
+        let counters = Counter::ALL.map(|counter| (counter.name(), self.counters[counter]));
         let aliasing = self.aliasing.iter().flat_map(Aliasing::named);
-        for (counter, value) in counters.chain(aliasing) {
+        for (counter, value) in counters.into_iter().chain(aliasing) {
             write!(formatter, " {counter}={value}")?;
         }
         if let Some(hold) = self.fast_travel_hold {
@@ -1150,10 +1020,9 @@ pub fn compare(
         CompareMode::Recording => current != baseline,
         CompareMode::Local | CompareMode::Ci => current > baseline,
     };
-    for ((counter, current), (_, baseline)) in
-        counters.named().into_iter().zip(baseline_counters.named())
-    {
-        if counter_fails(current, baseline) && counter.judged() {
+    for counter in Counter::ALL.into_iter().filter(|counter| counter.judged()) {
+        let (current, baseline) = (counters[counter], baseline_counters[counter]);
+        if counter_fails(current, baseline) {
             findings.push(Finding {
                 metric: counter.name(),
                 verdict: Verdict::Fail,
@@ -1164,11 +1033,10 @@ pub fn compare(
     if current.measured_frames == baseline.measured_frames
         && compares_counter_frames(current, baseline)
     {
-        let measured = current.counters.named().into_iter();
-        let refusals = measured
-            .zip(baseline.counters.named())
-            .filter(|((counter, _), _)| counter.rule() == CounterRule::Most);
-        for ((counter, value), (_, baseline_value)) in refusals {
+        let refusals =
+            (Counter::ALL.into_iter()).filter(|counter| counter.rule() == CounterRule::Most);
+        for counter in refusals {
+            let (value, baseline_value) = (current.counters[counter], baseline.counters[counter]);
             if counter_fails(value, baseline_value) {
                 findings.push(Finding {
                     metric: counter.name(),
@@ -1183,7 +1051,7 @@ pub fn compare(
     check_budget(
         &mut findings,
         "gpu_memory_bytes",
-        current.counters.gpu_memory_bytes as f64,
+        current.counters[Counter::GpuMemoryBytes] as f64,
         budgets.gpu_memory_bytes as f64,
     );
     for kind in GpuMemoryKind::ALL {
@@ -1603,91 +1471,17 @@ mod tests {
         assert!(page.contains(&counter_frame_count), "{counter_frame_count}");
     }
 
-    const COUNTERS: Counters = Counters {
-        draw_calls: 10,
-        instances_drawn: 10,
-        triangles_drawn: 22_080,
-        instances_overflowed: 0,
-        uploaded_bytes: 1712,
-        gpu_memory_bytes: 1 << 30,
-        arena_bytes_in_use: 85_296,
-        heap_allocations: 100,
-        renderables_refused: 0,
-        lights_overflowed: 0,
-        static_instances_left_out: 0,
-        moving_instances_left_out: 0,
-        bends_left_out: 0,
-        froxel_lights_overflowed: 0,
-        shadow_mask_lights_overflowed: 0,
-        late_chunks: 0,
-        late_far_proxies: 0,
-        chunks_loaded: 0,
-        chunks_unloaded: 0,
-        bytes_read: 0,
-        pool_entries_freed: 0,
-        late_mips: 0,
-        tlas_build_allocations: 0,
-        instance_slots_in_use: 10,
-    };
-
-    #[test]
-    fn each_counter_is_named_as_results_spell_it() {
-        let counters = Counters {
-            draw_calls: 1,
-            instances_drawn: 2,
-            triangles_drawn: 3,
-            instances_overflowed: 4,
-            uploaded_bytes: 5,
-            gpu_memory_bytes: 6,
-            arena_bytes_in_use: 7,
-            heap_allocations: 8,
-            renderables_refused: 9,
-            lights_overflowed: 10,
-            static_instances_left_out: 11,
-            moving_instances_left_out: 12,
-            bends_left_out: 13,
-            froxel_lights_overflowed: 14,
-            shadow_mask_lights_overflowed: 15,
-            late_chunks: 16,
-            late_far_proxies: 24,
-            chunks_loaded: 17,
-            chunks_unloaded: 18,
-            bytes_read: 19,
-            pool_entries_freed: 20,
-            late_mips: 21,
-            tlas_build_allocations: 22,
-            instance_slots_in_use: 23,
-        };
-        let serialized = serde_json::to_value(counters).unwrap();
-        let serialized = serialized.as_object().unwrap();
-        assert_eq!(serialized.len(), Counter::COUNT);
-        let named = counters.named();
-        assert_eq!(named.map(|(counter, _)| counter), Counter::ALL);
-        for (counter, value) in named {
-            assert_eq!(serialized[counter.name()], value, "{counter:?}");
-        }
-    }
-
-    #[test]
-    fn a_record_without_a_counter_reads_it_as_none_or_is_refused_as_the_counter_says() {
-        let mut counters = Counters::default();
-        for (index, (_, value)) in counters.named_mut().into_iter().enumerate() {
-            *value = index as u64 + 1;
-        }
-        let serde_json::Value::Object(json) = serde_json::to_value(counters).unwrap() else {
-            panic!("counters are a JSON object");
-        };
-        for (index, counter) in Counter::ALL.into_iter().enumerate() {
-            let mut without = json.clone();
-            without.remove(counter.name());
-            let read = serde_json::from_value::<Counters>(without.into());
-            if counter.absent_reads_as_none() {
-                let read = read.unwrap_or_else(|error| panic!("{counter:?}: {error}"));
-                assert_eq!(read.named()[index], (counter, 0));
-            } else {
-                assert!(read.is_err(), "{counter:?} read without its field");
-            }
-        }
+    fn baseline_counters() -> Counters {
+        Counters::from_iter([
+            (Counter::DrawCalls, 10),
+            (Counter::InstancesDrawn, 10),
+            (Counter::TrianglesDrawn, 22_080),
+            (Counter::UploadedBytes, 1712),
+            (Counter::GpuMemoryBytes, 1 << 30),
+            (Counter::ArenaBytesInUse, 85_296),
+            (Counter::HeapAllocations, 100),
+            (Counter::InstanceSlotsInUse, 10),
+        ])
     }
 
     pub(super) fn baseline() -> Measurements {
@@ -1756,10 +1550,10 @@ mod tests {
                     )
                 })
                 .collect(),
-            counters: COUNTERS,
+            counters: baseline_counters(),
             counter_frames: CounterFrames {
                 frames: COUNTER_FRAMES,
-                counters: COUNTERS,
+                counters: baseline_counters(),
             },
             fast_travel_hold: None,
             far_field_fill: None,
@@ -1930,14 +1724,14 @@ mod tests {
                 maximum: None,
             },
         );
-        current.counters.heap_allocations = 90;
+        current.counters[Counter::HeapAllocations] = 90;
         assert_eq!(verdicts(&current, &baseline(), CompareMode::Local), []);
     }
 
     #[test]
     fn a_counter_fails_on_any_increase() {
         let mut current = baseline();
-        current.counters.heap_allocations = 101;
+        current.counters[Counter::HeapAllocations] = 101;
         assert_eq!(
             verdicts(&current, &baseline(), CompareMode::Local),
             [("heap_allocations", Verdict::Fail)]
@@ -1947,22 +1741,22 @@ mod tests {
     #[test]
     fn late_mips_are_reported_not_judged() {
         let mut current = baseline();
-        current.counters.late_mips = 12;
+        current.counters[Counter::LateMips] = 12;
         assert_eq!(verdicts(&current, &baseline(), CompareMode::Ci), []);
     }
 
     #[test]
     fn tlas_build_allocations_are_reported_not_judged() {
         let mut current = baseline();
-        current.counters.tlas_build_allocations = 12;
+        current.counters[Counter::TlasBuildAllocations] = 12;
         assert_eq!(verdicts(&current, &baseline(), CompareMode::Ci), []);
     }
 
     #[test]
     fn a_refusal_fails_on_any_increase_in_ci_too() {
         let mut current = baseline();
-        current.counters.lights_overflowed = 1;
-        current.counters.shadow_mask_lights_overflowed = 1;
+        current.counters[Counter::LightsOverflowed] = 1;
+        current.counters[Counter::ShadowMaskLightsOverflowed] = 1;
         assert_eq!(
             verdicts(&current, &baseline(), CompareMode::Ci),
             [
@@ -1975,7 +1769,7 @@ mod tests {
     #[test]
     fn a_recording_fails_a_counter_that_fell_where_the_gate_passes_it() {
         let mut current = baseline();
-        current.counters.heap_allocations -= 1;
+        current.counters[Counter::HeapAllocations] -= 1;
         for gate in [CompareMode::Local, CompareMode::Ci] {
             assert_eq!(verdicts(&current, &baseline(), gate), []);
         }
@@ -1983,17 +1777,17 @@ mod tests {
             verdicts(&current, &baseline(), CompareMode::Recording),
             [("heap_allocations", Verdict::Fail)]
         );
-        current.counters.heap_allocations += 2;
+        current.counters[Counter::HeapAllocations] += 2;
         assert_eq!(
             verdicts(&current, &baseline(), CompareMode::Recording),
             [("heap_allocations", Verdict::Fail)]
         );
 
         let mut baseline_refused = baseline();
-        baseline_refused.counters.chunks_loaded = 39;
-        baseline_refused.counters.lights_overflowed = 1;
+        baseline_refused.counters[Counter::ChunksLoaded] = 39;
+        baseline_refused.counters[Counter::LightsOverflowed] = 1;
         let mut streamed = baseline();
-        streamed.counters.chunks_loaded = 40;
+        streamed.counters[Counter::ChunksLoaded] = 40;
         assert_eq!(verdicts(&streamed, &baseline_refused, CompareMode::Ci), []);
         assert_eq!(
             verdicts(&streamed, &baseline_refused, CompareMode::Recording),
@@ -2009,8 +1803,8 @@ mod tests {
         assert_ne!(verdicts(&slower, &baseline(), CompareMode::Local), []);
         assert_eq!(verdicts(&slower, &baseline(), CompareMode::Recording), []);
         let mut baseline_late = baseline();
-        baseline_late.counters.late_mips = 12;
-        baseline_late.counters.tlas_build_allocations = 12;
+        baseline_late.counters[Counter::LateMips] = 12;
+        baseline_late.counters[Counter::TlasBuildAllocations] = 12;
         assert_eq!(
             verdicts(&baseline(), &baseline_late, CompareMode::Recording),
             []
@@ -2115,13 +1909,13 @@ mod tests {
         current.adapter = "llvmpipe".to_owned();
         current.cpu_frame_microseconds.median = 5000.0;
         current.gpu_frame_microseconds.median = 50_000.0;
-        current.counters.draw_calls = 11;
-        current.counters.instances_drawn += 1;
-        current.counters.triangles_drawn += 1;
-        current.counters.instances_overflowed += 1;
-        current.counters.uploaded_bytes = 1712 * 2;
-        current.counters.gpu_memory_bytes = (1 << 30) + 1;
-        current.counters.arena_bytes_in_use += 1;
+        current.counters[Counter::DrawCalls] = 11;
+        current.counters[Counter::InstancesDrawn] += 1;
+        current.counters[Counter::TrianglesDrawn] += 1;
+        current.counters[Counter::InstancesOverflowed] += 1;
+        current.counters[Counter::UploadedBytes] = 1712 * 2;
+        current.counters[Counter::GpuMemoryBytes] = (1 << 30) + 1;
+        current.counters[Counter::ArenaBytesInUse] += 1;
         assert_eq!(
             verdicts(&current, &baseline(), CompareMode::Ci),
             [
@@ -2611,11 +2405,11 @@ mod tests {
         let reference = measurements(Configuration::REFERENCE);
         let counted = |counters: Counters| {
             (
-                counters.draw_calls,
-                counters.instances_drawn,
-                counters.triangles_drawn,
-                counters.instances_overflowed,
-                counters.heap_allocations,
+                counters[Counter::DrawCalls],
+                counters[Counter::InstancesDrawn],
+                counters[Counter::TrianglesDrawn],
+                counters[Counter::InstancesOverflowed],
+                counters[Counter::HeapAllocations],
             )
         };
         assert_eq!(counted(reference.counters), (99, 77, 231, 3, 999));
@@ -2625,27 +2419,30 @@ mod tests {
         );
         let refusals = |counters: Counters| {
             [
-                counters.renderables_refused,
-                counters.lights_overflowed,
-                counters.static_instances_left_out,
-                counters.moving_instances_left_out,
-                counters.bends_left_out,
-                counters.froxel_lights_overflowed,
-                counters.shadow_mask_lights_overflowed,
+                counters[Counter::RenderablesRefused],
+                counters[Counter::LightsOverflowed],
+                counters[Counter::StaticInstancesLeftOut],
+                counters[Counter::MovingInstancesLeftOut],
+                counters[Counter::BendsLeftOut],
+                counters[Counter::FroxelLightsOverflowed],
+                counters[Counter::ShadowMaskLightsOverflowed],
             ]
         };
-        assert_eq!(reference.counters.instance_slots_in_use, 4096);
-        assert_eq!(reference.counter_frames.counters.instance_slots_in_use, 12);
+        assert_eq!(reference.counters[Counter::InstanceSlotsInUse], 4096);
+        assert_eq!(
+            reference.counter_frames.counters[Counter::InstanceSlotsInUse],
+            12
+        );
         assert_eq!(refusals(reference.counters), [1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(refusals(reference.counter_frames.counters), [0; 7]);
         let streamed = |counters: Counters| {
             [
-                counters.late_chunks,
-                counters.chunks_loaded,
-                counters.chunks_unloaded,
-                counters.bytes_read,
-                counters.pool_entries_freed,
-                counters.late_mips,
+                counters[Counter::LateChunks],
+                counters[Counter::ChunksLoaded],
+                counters[Counter::ChunksUnloaded],
+                counters[Counter::BytesRead],
+                counters[Counter::PoolEntriesFreed],
+                counters[Counter::LateMips],
             ]
         };
         assert_eq!(streamed(reference.counters), [2, 2, 3, 1000, 4, 5]);
@@ -3030,9 +2827,9 @@ mod tests {
         let mut shorter = baseline();
         shorter.measured_frames = Configuration::COUNTERS.measured_frames;
         // Its measured frames are other frames than the Baseline's.
-        shorter.counters.draw_calls += 1;
+        shorter.counters[Counter::DrawCalls] += 1;
         assert_eq!(verdicts(&shorter, &baseline(), CompareMode::Ci), []);
-        shorter.counter_frames.counters.uploaded_bytes += 1;
+        shorter.counter_frames.counters[Counter::UploadedBytes] += 1;
         assert_eq!(
             verdicts(&shorter, &baseline(), CompareMode::Ci),
             [("uploaded_bytes", Verdict::Fail)]
@@ -3051,21 +2848,21 @@ mod tests {
     #[test]
     fn a_run_whose_measured_frames_streamed_compares_its_counter_frames() {
         let mut streamed = baseline();
-        streamed.counters.chunks_loaded = 40;
-        streamed.counters.heap_allocations += 1;
+        streamed.counters[Counter::ChunksLoaded] = 40;
+        streamed.counters[Counter::HeapAllocations] += 1;
         let mut baseline_streamed = baseline();
-        baseline_streamed.counters.chunks_loaded = 39;
+        baseline_streamed.counters[Counter::ChunksLoaded] = 39;
         assert_eq!(
             verdicts(&streamed, &baseline_streamed, CompareMode::Local),
             []
         );
-        streamed.counter_frames.counters.heap_allocations += 1;
+        streamed.counter_frames.counters[Counter::HeapAllocations] += 1;
         assert_eq!(
             verdicts(&streamed, &baseline_streamed, CompareMode::Local),
             [("heap_allocations", Verdict::Fail)]
         );
         let mut still = baseline();
-        still.counters.heap_allocations += 1;
+        still.counters[Counter::HeapAllocations] += 1;
         assert_eq!(
             verdicts(&still, &baseline(), CompareMode::Local),
             [("heap_allocations", Verdict::Fail)]
@@ -3073,7 +2870,7 @@ mod tests {
         // A still scene's Baseline judges its measured frames, so a run that
         // starts streaming in them fails.
         let mut started_streaming = baseline();
-        started_streaming.counters.chunks_loaded = 1;
+        started_streaming.counters[Counter::ChunksLoaded] = 1;
         assert_eq!(
             verdicts(&started_streaming, &baseline(), CompareMode::Local),
             [("chunks_loaded", Verdict::Fail)]
@@ -3083,11 +2880,11 @@ mod tests {
     #[test]
     fn a_streamed_run_still_fails_on_a_refusal_in_its_measured_frames() {
         let mut baseline_streamed = baseline();
-        baseline_streamed.counters.chunks_loaded = 39;
+        baseline_streamed.counters[Counter::ChunksLoaded] = 39;
         let mut streamed = baseline_streamed.clone();
-        streamed.counters.late_chunks += 1;
-        streamed.counters.renderables_refused += 1;
-        streamed.counters.instances_overflowed += 1;
+        streamed.counters[Counter::LateChunks] += 1;
+        streamed.counters[Counter::RenderablesRefused] += 1;
+        streamed.counters[Counter::InstancesOverflowed] += 1;
         assert_eq!(
             verdicts(&streamed, &baseline_streamed, CompareMode::Local),
             [

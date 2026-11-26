@@ -143,18 +143,17 @@ impl SeriesCounters {
     /// no comparison judges aside. A counter the row did not count reads as
     /// the same.
     fn counted(&self, baseline: &Measurements) -> bool {
-        let judged = |(counter, _): &(Counter, u64)| counter.judged();
-        let counter_frames = baseline.counter_frames.counters.named();
-        let counter_frames_match =
-            (counter_frames.into_iter().filter(judged)).all(|(counter, value)| {
-                (self.fields.get(counter.name()))
-                    .is_none_or(|counted| counted.as_u64() == Some(value))
-            });
+        let mut judged = Counter::ALL.into_iter().filter(|counter| counter.judged());
+        let counter_frames_match = judged.clone().all(|counter| {
+            let value = baseline.counter_frames.counters[counter];
+            (self.fields.get(counter.name())).is_none_or(|counted| counted.as_u64() == Some(value))
+        });
         let measured_compared =
             self.measured_frames == baseline.measured_frames && !baseline.counters.streamed();
         let measured_match = !measured_compared
-            || (baseline.counters.named().into_iter().filter(judged)).all(|(counter, value)| {
-                (self.measured_counters.get(counter.name())).is_none_or(|&counted| counted == value)
+            || judged.all(|counter| {
+                (self.measured_counters.get(counter.name()))
+                    .is_none_or(|&counted| counted == baseline.counters[counter])
             });
         counter_frames_match && measured_match
     }
@@ -373,8 +372,8 @@ mod tests {
     }
 
     fn with_draw_calls(mut measurements: Measurements, draw_calls: u64) -> Measurements {
-        measurements.counters.draw_calls = draw_calls;
-        measurements.counter_frames.counters.draw_calls = draw_calls;
+        measurements.counters[Counter::DrawCalls] = draw_calls;
+        measurements.counter_frames.counters[Counter::DrawCalls] = draw_calls;
         measurements
     }
 
@@ -392,7 +391,7 @@ mod tests {
     #[test]
     fn a_moved_counter_is_re_recorded_and_the_baselines_timings_and_provenance_stay() {
         let baseline = run("a", 12);
-        let mut current = with_draw_calls(run("b", 12), baseline.counters.draw_calls + 4);
+        let mut current = with_draw_calls(run("b", 12), baseline.counters[Counter::DrawCalls] + 4);
         current.cpu_frame_microseconds.median *= 2.0;
         current.gpu_memory_bytes_by_kind = [("staging".to_owned(), 7)].into();
         let CounterRerecord::Rerecorded {
@@ -528,7 +527,7 @@ mod tests {
     #[test]
     fn a_streamed_baselines_measured_counters_judge_no_row() {
         let mut streamed = with_draw_calls(baseline(), 4);
-        streamed.counters.chunks_loaded = 3;
+        streamed.counters[Counter::ChunksLoaded] = 3;
         let mut measured_moved = row("a", 4);
         measured_moved
             .measured_counters

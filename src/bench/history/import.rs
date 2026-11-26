@@ -487,6 +487,7 @@ impl Worktree<'_> {
 mod tests {
     use super::super::{SeriesRow, StoredRecord};
     use super::*;
+    use crate::bench::Counter;
     use crate::bench::provenance::HARNESS_VERSION;
 
     /// pbr-sweep's first Baseline, as `591433d7` committed it.
@@ -628,16 +629,30 @@ mod tests {
         .unwrap();
         let baseline: crate::bench::Measurements = serde_json::from_str(TOWN_BASELINE).unwrap();
         let (measured, counted) = (baseline.counters, baseline.counter_frames.counters);
-        assert!(measured.instances_drawn > counted.instances_drawn * 10);
+        assert!(measured[Counter::InstancesDrawn] > counted[Counter::InstancesDrawn] * 10);
         let row = serde_json::to_value(SeriesRow::of(&stored(&record))).unwrap();
-        assert_eq!(row["instances_drawn"], counted.instances_drawn, "{row}");
-        assert_eq!(row["triangles_drawn"], counted.triangles_drawn, "{row}");
+        assert_eq!(
+            row["instances_drawn"],
+            counted[Counter::InstancesDrawn],
+            "{row}"
+        );
+        assert_eq!(
+            row["triangles_drawn"],
+            counted[Counter::TrianglesDrawn],
+            "{row}"
+        );
         assert_eq!(row["measured_frames"], 1800, "{row}");
         let measured_row = &row["measured_counters"];
-        assert_eq!(measured_row["instances_drawn"], measured.instances_drawn);
-        assert_eq!(measured_row["triangles_drawn"], measured.triangles_drawn);
+        assert_eq!(
+            measured_row["instances_drawn"],
+            measured[Counter::InstancesDrawn]
+        );
+        assert_eq!(
+            measured_row["triangles_drawn"],
+            measured[Counter::TrianglesDrawn]
+        );
         let baseline_json: serde_json::Value = serde_json::from_str(TOWN_BASELINE).unwrap();
-        let carried = crate::bench::Counter::ALL
+        let carried = Counter::ALL
             .iter()
             .filter(|counter| baseline_json.get(counter.name()).is_some())
             .count();

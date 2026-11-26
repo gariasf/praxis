@@ -194,7 +194,7 @@ pub fn report(
         None => (current.counters, None),
     };
     let baseline_values = baseline_counters.map_or([None; Counter::COUNT], |baseline_counters| {
-        baseline_counters.named().map(|(_, value)| Some(value))
+        Counter::ALL.map(|counter| Some(baseline_counters[counter]))
     });
     let baseline_aliasing = baseline.and_then(|baseline| baseline.aliasing);
     let aliasing = current.aliasing.iter().flat_map(|aliasing| {
@@ -203,8 +203,8 @@ pub fn report(
         });
         aliasing.named().into_iter().zip(baseline_values)
     });
-    let rows = (counters.named().into_iter())
-        .map(|(counter, value)| (counter.name(), value))
+    let rows = (Counter::ALL.into_iter())
+        .map(|counter| (counter.name(), counters[counter]))
         .zip(baseline_values);
     for ((counter, value), baseline_value) in rows.chain(aliasing) {
         let value = value as f64;
@@ -238,14 +238,18 @@ pub fn report(
         );
         let (hold, fill) = (current.fast_travel_hold, current.far_field_fill);
         let rows = [
-            ("Late Chunks", Some(streamed.late_chunks as f64), 0),
+            ("Late Chunks", Some(streamed[Counter::LateChunks] as f64), 0),
             (
                 "Late Far proxies",
-                Some(streamed.late_far_proxies as f64),
+                Some(streamed[Counter::LateFarProxies] as f64),
                 0,
             ),
-            ("Late mips", Some(streamed.late_mips as f64), 0),
-            ("Chunks loaded", Some(streamed.chunks_loaded as f64), 0),
+            ("Late mips", Some(streamed[Counter::LateMips] as f64), 0),
+            (
+                "Chunks loaded",
+                Some(streamed[Counter::ChunksLoaded] as f64),
+                0,
+            ),
             (
                 "Fast-travel hold, ms",
                 hold.map(|hold| hold.milliseconds),
@@ -408,32 +412,19 @@ mod tests {
     use crate::bench::{Aliasing, CounterFrames, Counters, FastTravelSpan, Spread};
     use crate::stats::GpuMemoryBudgets;
 
-    const COUNTERS: Counters = Counters {
-        draw_calls: 4,
-        instances_drawn: 11,
-        triangles_drawn: 256_938,
-        instances_overflowed: 0,
-        uploaded_bytes: 384,
-        gpu_memory_bytes: 536_471_449,
-        arena_bytes_in_use: 844_804,
-        heap_allocations: 326,
-        renderables_refused: 0,
-        lights_overflowed: 0,
-        static_instances_left_out: 0,
-        moving_instances_left_out: 0,
-        bends_left_out: 0,
-        froxel_lights_overflowed: 0,
-        shadow_mask_lights_overflowed: 3,
-        late_chunks: 0,
-        late_far_proxies: 0,
-        chunks_loaded: 0,
-        chunks_unloaded: 0,
-        bytes_read: 0,
-        pool_entries_freed: 0,
-        late_mips: 0,
-        tlas_build_allocations: 0,
-        instance_slots_in_use: 11,
-    };
+    fn current_counters() -> Counters {
+        Counters::from_iter([
+            (Counter::DrawCalls, 4),
+            (Counter::InstancesDrawn, 11),
+            (Counter::TrianglesDrawn, 256_938),
+            (Counter::UploadedBytes, 384),
+            (Counter::GpuMemoryBytes, 536_471_449),
+            (Counter::ArenaBytesInUse, 844_804),
+            (Counter::HeapAllocations, 326),
+            (Counter::ShadowMaskLightsOverflowed, 3),
+            (Counter::InstanceSlotsInUse, 11),
+        ])
+    }
 
     const BUDGETS: Budgets = Budgets {
         cpu_frame_microseconds: 6000.0,
@@ -531,7 +522,7 @@ mod tests {
                     ("dynamic_tlas_build", spread(48.7, 462.9)),
                     ("lit_pass", spread(755.8, 768.1)),
                 ],
-                COUNTERS,
+                current_counters(),
             )
         }
     }
@@ -546,10 +537,11 @@ mod tests {
                 ("dynamic_tlas_build", spread(50.0, 400.0)),
                 ("lit_pass", spread(800.0, 810.0)),
             ],
-            Counters {
-                gpu_memory_bytes: 536_000_000,
-                heap_allocations: 300,
-                ..COUNTERS
+            {
+                let mut counters = current_counters();
+                counters[Counter::GpuMemoryBytes] = 536_000_000;
+                counters[Counter::HeapAllocations] = 300;
+                counters
             },
         )
     }
@@ -628,8 +620,8 @@ The Budget column bounds the median, and the p99 of the CPU frame, GPU frame and
     fn a_shorter_run_compares_its_counter_frames_and_no_times() {
         let mut shorter = current();
         shorter.measured_frames = 64;
-        shorter.counters.heap_allocations = 999;
-        shorter.counter_frames.counters.heap_allocations = 310;
+        shorter.counters[Counter::HeapAllocations] = 999;
+        shorter.counter_frames.counters[Counter::HeapAllocations] = 310;
         let report = report(&shorter, Some(&baseline()), &BUDGETS).expect("comparable");
         assert_eq!(
             lines(&report, &["CPU frame", "`lit_pass`", "`heap_allocations`"]),
@@ -648,10 +640,10 @@ The Budget column bounds the median, and the p99 of the CPU frame, GPU frame and
     #[test]
     fn a_streamed_run_shows_what_it_streamed_and_compares_its_counter_frames() {
         let mut streamed = current();
-        streamed.counters.chunks_loaded = 120;
-        streamed.counters.late_mips = 1234;
-        streamed.counters.late_far_proxies = 2;
-        streamed.counter_frames.counters.heap_allocations = 310;
+        streamed.counters[Counter::ChunksLoaded] = 120;
+        streamed.counters[Counter::LateMips] = 1234;
+        streamed.counters[Counter::LateFarProxies] = 2;
+        streamed.counter_frames.counters[Counter::HeapAllocations] = 310;
         streamed.fast_travel_hold = Some(FastTravelSpan {
             milliseconds: 412.34,
             frames: 25,
@@ -663,7 +655,7 @@ The Budget column bounds the median, and the p99 of the CPU frame, GPU frame and
         streamed.frames_until_traced = Some(3);
         streamed.blas_compaction_microseconds = Some(tailed(850.0, 1900.0, 2400.0, 3100.0));
         let mut baseline_streamed = baseline();
-        baseline_streamed.counters.chunks_loaded = 118;
+        baseline_streamed.counters[Counter::ChunksLoaded] = 118;
         let report = report(&streamed, Some(&baseline_streamed), &BUDGETS).expect("comparable");
         let names = [
             "BLAS compaction",
