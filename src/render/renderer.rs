@@ -337,9 +337,9 @@ pub struct Renderer {
     pub(crate) pause_before_frame_submit: std::time::Duration,
 }
 
-/// What a target size fixes: the render targets, what the camera uniform
-/// takes from their size, and the bind groups of each pass that reads a
-/// target, so a pass without a field here has none to record with.
+/// What a target size fixes: the render targets, the scalars derived from
+/// their size, and the bind groups of every pass that reads a target, which
+/// that pass records with.
 struct BoundTargets {
     render_targets: RenderTargets,
     aspect_ratio: f32,
@@ -1292,7 +1292,8 @@ pub(crate) mod tests {
                 render_frame(&context, &mut created, &frame, width, height);
 
             let covered = u32::from(switches.count_point_lights) * width / 2 * height;
-            assert_eq!(resized_gpu.lit_pixels, covered, "{switches:?}");
+            let counted = [resized_gpu.lit_pixels, resized_gpu.listed_point_lights];
+            assert_eq!(counted, [covered, 3 * covered], "{switches:?}");
             assert_eq!(counts(resized_gpu), counts(created_gpu), "{switches:?}");
             assert!(
                 resized_image == created_image,

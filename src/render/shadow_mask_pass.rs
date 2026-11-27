@@ -95,7 +95,8 @@ pub struct ShadowMaskPass {
     stand_in_dispatch: Counted<wgpu::Buffer>,
 }
 
-/// What the pass holds of the render targets `target_groups` built it from.
+/// The pass's bind groups that read and write the render targets
+/// `target_groups` built them from, with those targets' two lists and size.
 pub struct ShadowMaskTargetGroups {
     /// The render targets' lists of second surfaces and of shadow edges,
     /// whose counts are cleared before the pass.
