@@ -62,7 +62,7 @@ impl FroxelPass {
     /// The pass, listing the point lights of `shared`'s lights, as its light
     /// uniform counts them, seen by its camera.
     pub fn new(device: &wgpu::Device, memory: &GpuMemory, shared: &SharedBuffers) -> FroxelPass {
-        // Each created at its fixed size; neither grows.
+        // Created at their fixed sizes; they never grow.
         let froxel_lists = memory.create_buffer(
             device,
             GpuMemoryKind::SceneAndPassBuffers,

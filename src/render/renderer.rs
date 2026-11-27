@@ -285,8 +285,9 @@ impl RenderCapacities {
     }
 }
 
-/// The buffers the Renderer creates and writes each frame, which passes bind
-/// into groups of their own beside `FRAME` and `SCENE_GEOMETRY`.
+/// The buffers the Renderer creates, writes in `upload` and binds into
+/// `FRAME` and `SCENE_GEOMETRY`; a pass binds the camera, the light uniform
+/// or the lights into a group of its own.
 pub struct SharedBuffers {
     /// The frame's `CameraUniform`.
     pub camera: Counted<wgpu::Buffer>,

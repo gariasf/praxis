@@ -232,6 +232,12 @@ When reviewing changes, check for:
       `set_bind_group`; no WGSL part declares one. A group a pass uses
       is listed in its shader module, its pipeline layout and its render
       pass. Rust-only padding fields start with `_`
+- [ ] A pass constructor that binds a shared buffer into a group of its
+      own takes `&SharedBuffers`, and one that binds a buffer another
+      pass owns takes that pass and calls its getter, so a binding's name
+      is spelled only in the file of the pass whose group it is. A shader
+      module is assembled with a Render capacity only if one of its parts
+      reads it
 - [ ] No World position reaches the GPU in f32: only an anchor plus an
       f32 offset, composed camera-relative (ADR 0014)
 - [ ] Depth has no far plane, and WGSL that compares or reduces depth

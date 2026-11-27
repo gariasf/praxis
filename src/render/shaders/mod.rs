@@ -1,7 +1,7 @@
 //! The WGSL shader modules, each assembled from ordered parts in this
 //! directory, so passes share structs and functions without copying them,
 //! after the constants Rust shares with WGSL, the Instance capacity among
-//! them where a part reads it, the Render switches' overrides and its
+//! them in a module given one, the Render switches' overrides and its
 //! bindings' declarations, all generated from Rust (`assemble`,
 //! `render::bind_groups`). A function under an oracle lives in a shared part,
 //! which the oracle harness assembles with its kernel alone.
@@ -29,7 +29,9 @@ use crate::render::froxel_pass::{
 };
 use crate::render::instance::{ANCHOR_CELL_SIZE, NO_MATERIAL, NO_MESH};
 use crate::render::light_count_pass::LIGHT_COUNT_TILE_SIZE;
-use crate::render::renderer::{RenderCapacities, RenderSwitches};
+#[cfg(test)]
+use crate::render::renderer::RenderCapacities;
+use crate::render::renderer::RenderSwitches;
 use crate::render::shadow_mask_pass::{
     SAMPLE_OFFSETS, SHADOW_EDGE_LIGHTS, SHADOW_MASK_LIGHTS, SHADOW_MASK_TILE_SIZE,
 };
@@ -95,8 +97,8 @@ pub struct ShaderModule {
     pub bind_groups: &'static [&'static BindGroupDefinition],
     pub parts: &'static [Part],
     /// The Instance slots its parts read as `INSTANCE_CAPACITY`, which
-    /// `with_capacities` sets: a module whose parts read it compiles only
-    /// with it.
+    /// `with_instance_capacity` sets: a module whose parts read it compiles
+    /// only with it.
     pub instance_capacity: Option<u32>,
 }
 
@@ -215,7 +217,7 @@ pub fn modules() -> [ShaderModule; 11] {
         SHARED,
         MAIN,
         SHADOW_MASK,
-        CULLING.with_capacities(&RenderCapacities::checked_in()),
+        CULLING.with_instance_capacity(RenderCapacities::checked_in().instances),
         FROXEL,
         LIGHT_COUNT,
         DEPTH_PYRAMID,
@@ -227,11 +229,11 @@ pub fn modules() -> [ShaderModule; 11] {
 }
 
 impl ShaderModule {
-    /// The module with the Instance slots of `capacities` for its parts to
-    /// read.
-    pub fn with_capacities(self, capacities: &RenderCapacities) -> ShaderModule {
+    /// The module with `instance_capacity`, the Instance buffer's slots, for
+    /// its parts to read.
+    pub fn with_instance_capacity(self, instance_capacity: u32) -> ShaderModule {
         ShaderModule {
-            instance_capacity: Some(capacities.instances),
+            instance_capacity: Some(instance_capacity),
             ..self
         }
     }

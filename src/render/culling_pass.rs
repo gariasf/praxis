@@ -293,7 +293,7 @@ impl CullingPass {
         let frame_draw_layout = FRAME_DRAW.layout(device);
 
         let shader = shaders::CULLING
-            .with_capacities(capacities)
+            .with_instance_capacity(capacities.instances)
             .create_with_unbounded_loops(device);
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&FRAME_DRAW, &frame_draw_layout));
