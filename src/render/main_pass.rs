@@ -16,6 +16,7 @@ use crate::render::bind_groups::{BindGroupDefinition, MAIN_PASS_INPUTS, pipeline
 use crate::render::culling_pass::{
     CullingPhase, PHASE_ONE_THIN_DRAW_OFFSET, PHASE_TWO_DRAW_OFFSET, PHASE_TWO_THIN_DRAW_OFFSET,
 };
+use crate::render::readback::FrameTimestamps;
 use crate::render::renderer::{RenderCapacities, RenderSwitches};
 use crate::render::shaders;
 use crate::render::targets::{self, RenderTargets};
@@ -259,7 +260,7 @@ impl MainPass {
 
     /// Records `phase`'s depth pass into `encoder`, with `target_groups` and
     /// the groups of `bind_groups` its vertex stage reads set, timed into
-    /// `timestamp_writes`: it draws the phase's draw into the depth target,
+    /// `timestamps`: it draws the phase's draw into the depth target,
     /// and with shadow rays on into the surface normals. Phase one's, the
     /// depth pre-pass, clears them; phase two's, recorded only with shadow
     /// rays on, loads them and stores them for the shadow mask pass. It
@@ -271,7 +272,7 @@ impl MainPass {
         target_groups: &MainTargetGroups,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         phase: CullingPhase,
-        timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
+        timestamps: &mut Option<FrameTimestamps<'_>>,
     ) {
         let (label, depth_attachment, clears_surface_normals, draw_offset) = match phase {
             CullingPhase::One => (DEPTH_PREPASS, render_targets.depth_attachment(), true, 0),
@@ -294,7 +295,9 @@ impl MainPass {
             },
             depth_stencil_attachment: Some(depth_attachment),
             occlusion_query_set: None,
-            timestamp_writes,
+            timestamp_writes: timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(label).render()),
             multiview_mask: None,
         });
         depth_pass.set_pipeline(&self.depth_prepass_pipeline);
@@ -320,7 +323,7 @@ impl MainPass {
     /// target unless its own pass did, then the frame's draw of both phases
     /// at depth equal, with `target_groups` and `bind_groups` set, and
     /// resolves the colour into
-    /// the HDR target, timed into `timestamp_writes`. Each draw is followed
+    /// the HDR target, timed into `timestamps`. Each draw is followed
     /// by the Thin Primitives' and small Instances' of its phases.
     pub fn record_lit_pass(
         &self,
@@ -329,7 +332,7 @@ impl MainPass {
         target_groups: &MainTargetGroups,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         background: wgpu::Color,
-        timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
+        timestamps: &mut Option<FrameTimestamps<'_>>,
     ) {
         let mut lit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(LIT_PASS),
@@ -339,7 +342,9 @@ impl MainPass {
             ],
             depth_stencil_attachment: Some(render_targets.final_depth_attachment(self.keeps_depth)),
             occlusion_query_set: None,
-            timestamp_writes,
+            timestamp_writes: timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(LIT_PASS).render()),
             multiview_mask: None,
         });
         self.bind(&mut lit_pass, target_groups, bind_groups.iter().copied());

@@ -555,8 +555,8 @@ pub(crate) fn level_bytes(texture: &amp;wgpu::Texture) -&gt; impl Iterator&lt;It
         }
     }</code></pre>
   <p>A culling phase takes its two pairs at once, the slots pass's first, and hands them to the culling pass, which records its two compute passes with them.</p>
-  <div class="code-source"><code>culling_timestamp_writes</code>, <code>src/render/renderer.rs</code></div>
-<pre class="code"><code>fn culling_timestamp_writes&lt;'queries&gt;(
+  <div class="code-source"><code>CullingPass::record</code>, <code>src/render/renderer.rs</code></div>
+<pre class="code"><code>fn record&lt;'queries&gt;(
     timestamps: &amp;mut Option&lt;FrameTimestamps&lt;'queries&gt;&gt;,
     phase: CullingPhase,
 ) -&gt; [Option&lt;wgpu::ComputePassTimestampWrites&lt;'queries&gt;&gt;; 2] {

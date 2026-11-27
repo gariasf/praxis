@@ -5,6 +5,7 @@
 
 use crate::render::RenderCapacities;
 use crate::render::bind_groups::{DEPTH_PYRAMID_LEVEL, compute_pipeline, pipeline_layout};
+use crate::render::readback::FrameTimestamps;
 use crate::render::shaders;
 use crate::render::targets::{RenderTargets, SAMPLE_COUNT};
 
@@ -94,16 +95,18 @@ impl DepthPyramidPass {
     }
 
     /// Records the pass into `encoder`, building the pyramid `target_groups`
-    /// bind, timed into `timestamp_writes`.
+    /// bind, timed into `timestamps`.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         target_groups: &DepthPyramidTargetGroups,
-        timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
+        timestamps: &mut Option<FrameTimestamps<'_>>,
     ) {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some(DEPTH_PYRAMID_PASS),
-            timestamp_writes,
+            timestamp_writes: timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(DEPTH_PYRAMID_PASS).compute()),
         });
         // Level 0 reduces the depth target, each later level the one below,
         // a workgroup per tile of texels: level 0's with an invocation per
@@ -177,7 +180,7 @@ pub(crate) mod tests {
         });
         draw_depth(context, &render_targets, &triangles);
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        pass.record(&mut encoder, &target_groups, None);
+        pass.record(&mut encoder, &target_groups, &mut None);
         context.queue.submit([encoder.finish()]);
 
         let samples = read_depth_samples(context, render_targets.depth());

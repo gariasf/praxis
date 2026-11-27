@@ -318,12 +318,12 @@ impl CrowdForm {
   <div class="part-mark">3 &middot; <code>Renderer::render</code> &middot; <code>BlasRefit::submit</code></div>
   <h2>The frame, cut after the bend pass</h2>
   <p class="key-idea">The refit must sit between the bend pass, which writes the vertices it reads, and the dynamic TLAS's build, which reads the BLASes it writes. So in a frame that bent anything the frame's encoder is cut after the bend pass, and its head goes to the GPU with the updates, in a submission of its own, ahead of the build.</p>
-<pre class="code"><code>let bend_queries = timestamps
+<pre class="code"><code>let timestamps = timestamps
     .as_mut()
     .map(|timestamps| timestamps.pass(BEND_PASS));
 let bent = self
     .bend_pass
-    .record(&amp;mut encoder, &amp;frame.bends, bend_queries);
+    .record(&amp;mut encoder, &amp;frame.bends, timestamps);
 let encoding = started.elapsed();
 // Their BLASes take them too, in a submission of their own, which
 // the dynamic TLAS's build, recorded after it, follows.
