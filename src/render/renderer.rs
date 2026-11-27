@@ -20,7 +20,7 @@ use crate::render::main_pass::{
     DEPTH_PREPASS, LIT_PASS, MainPass, MainTargetGroups, PHASE_TWO_DEPTH_PASS,
 };
 use crate::render::ray_scene::{RayScene, create_frame_encoder};
-use crate::render::readback::{FrameTimestamps, GpuStatsReadback};
+use crate::render::readback::GpuStatsReadback;
 use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass, ShadowMaskTargetGroups};
 use crate::render::targets::RenderTargets;
 use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass, TonemappingTargetGroups};
@@ -816,12 +816,9 @@ impl Renderer {
 
         let mut timestamps = self.gpu_stats.begin_frame(&mut encoder, recorder);
         // Bent Meshes take their shapes before any pass reads their vertices.
-        let bend_queries = timestamps
-            .as_mut()
-            .map(|timestamps| timestamps.pass(BEND_PASS));
         let bent = self
             .bend_pass
-            .record(&mut encoder, &frame.bends, bend_queries);
+            .record(&mut encoder, &frame.bends, &mut timestamps);
         let encoding = started.elapsed();
         // Their BLASes take them too, then the dynamic TLAS's build is
         // recorded, both timed apart from the frame's: `encode` resumes
@@ -846,16 +843,11 @@ impl Renderer {
             &culling_bind_groups,
             frame,
             CullingPhase::One,
-            culling_timestamp_writes(&mut timestamps, CullingPhase::One),
+            &mut timestamps,
         );
         // After the first culling dispatch, so ADR 0019's gate, which spans
         // from it to the end of the lit pass, counts the lights' culling.
-        self.froxel_pass.record(
-            &mut encoder,
-            timestamps
-                .as_mut()
-                .map(|timestamps| timestamps.pass(FROXEL_PASS).compute()),
-        );
+        self.froxel_pass.record(&mut encoder, &mut timestamps);
         let bind_groups = [
             (&FRAME, &self.frame_bind_group),
             (&MATERIALS, &self.material_pool.bind_group),
@@ -867,16 +859,12 @@ impl Renderer {
             &self.bound_targets.main,
             &bind_groups,
             CullingPhase::One,
-            timestamps
-                .as_mut()
-                .map(|timestamps| timestamps.pass(DEPTH_PREPASS).render()),
+            &mut timestamps,
         );
         self.depth_pyramid_pass.record(
             &mut encoder,
             &self.bound_targets.depth_pyramid,
-            timestamps
-                .as_mut()
-                .map(|timestamps| timestamps.pass(DEPTH_PYRAMID_PASS).compute()),
+            &mut timestamps,
         );
         self.culling_pass.record(
             &mut encoder,
@@ -884,7 +872,7 @@ impl Renderer {
             &culling_bind_groups,
             frame,
             CullingPhase::Two,
-            culling_timestamp_writes(&mut timestamps, CullingPhase::Two),
+            &mut timestamps,
         );
         if self.shadow_rays {
             self.main_pass.record_depth_pass(
@@ -893,17 +881,13 @@ impl Renderer {
                 &self.bound_targets.main,
                 &bind_groups,
                 CullingPhase::Two,
-                timestamps
-                    .as_mut()
-                    .map(|timestamps| timestamps.pass(PHASE_TWO_DEPTH_PASS).render()),
+                &mut timestamps,
             );
             self.shadow_mask_pass.record(
                 &mut encoder,
                 &self.bound_targets.shadow_mask,
                 self.ray_scene.bind_group(),
-                timestamps
-                    .as_mut()
-                    .map(|timestamps| timestamps.pass(SHADOW_MASK_PASS).compute()),
+                &mut timestamps,
             );
         }
         self.main_pass.record_lit_pass(
@@ -912,17 +896,13 @@ impl Renderer {
             &self.bound_targets.main,
             &bind_groups,
             frame.background,
-            timestamps
-                .as_mut()
-                .map(|timestamps| timestamps.pass(LIT_PASS).render()),
+            &mut timestamps,
         );
         self.tonemapping_pass.record(
             &mut encoder,
             &self.bound_targets.tonemapping,
             target,
-            timestamps
-                .as_mut()
-                .map(|timestamps| timestamps.pass(TONEMAPPING_PASS).render()),
+            &mut timestamps,
         );
         // Untimed, after the passes the frame's GPU time spans.
         if let Some(light_count_pass) = &self.light_count_pass
@@ -998,19 +978,6 @@ impl Renderer {
     pub fn gpu_memory_bytes_by_kind(&self) -> [u64; GpuMemoryKind::COUNT] {
         self.memory.bytes_by_kind()
     }
-}
-
-/// The timestamp writes of `phase`'s two compute passes, the one over the
-/// Instance slots first, each marked run in `timestamps`' log.
-fn culling_timestamp_writes<'queries>(
-    timestamps: &mut Option<FrameTimestamps<'queries>>,
-    phase: CullingPhase,
-) -> [Option<wgpu::ComputePassTimestampWrites<'queries>>; 2] {
-    [phase.slots_label(), phase.triangles_label()].map(|pass| {
-        timestamps
-            .as_mut()
-            .map(|timestamps| timestamps.pass(pass).compute())
-    })
 }
 
 #[cfg(test)]

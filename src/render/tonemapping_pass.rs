@@ -3,6 +3,7 @@
 //! dithered.
 
 use crate::render::bind_groups::{TONEMAPPING_INPUT, pipeline_layout};
+use crate::render::readback::FrameTimestamps;
 use crate::render::shaders;
 use crate::render::targets::RenderTargets;
 use crate::render::{LoadStaging, RenderCapacities};
@@ -141,13 +142,13 @@ impl TonemappingPass {
     /// Records the pass into `encoder`: every pixel of `target`, a view in
     /// this pass's format and the render targets' size, takes its display
     /// colour from the HDR target `target_groups` bind, timed into
-    /// `timestamp_writes`.
+    /// `timestamps`.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         target_groups: &TonemappingTargetGroups,
         target: &wgpu::TextureView,
-        timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
+        timestamps: &mut Option<FrameTimestamps<'_>>,
     ) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(TONEMAPPING_PASS),
@@ -163,7 +164,9 @@ impl TonemappingPass {
             })],
             depth_stencil_attachment: None,
             occlusion_query_set: None,
-            timestamp_writes,
+            timestamp_writes: timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(TONEMAPPING_PASS).render()),
             multiview_mask: None,
         });
         pass.set_pipeline(&self.pipeline);
@@ -271,7 +274,7 @@ mod tests {
                 timestamp_writes: None,
                 multiview_mask: None,
             });
-            pass.record(&mut encoder, &target_groups, &view, None);
+            pass.record(&mut encoder, &target_groups, &view, &mut None);
             context.queue.submit(std::iter::once(encoder.finish()));
             let pixels = read_back(&context, &target).expect("read back failed");
 
@@ -346,7 +349,7 @@ mod tests {
             &mut encoder,
             &pass.target_groups(device, &render_targets),
             &target.create_view(&wgpu::TextureViewDescriptor::default()),
-            None,
+            &mut None,
         );
         context.queue.submit(std::iter::once(encoder.finish()));
         let pixels = read_back(&context, &target).expect("read back failed");

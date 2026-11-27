@@ -8,7 +8,7 @@
 
 use crate::render::RenderCapacities;
 use crate::render::bind_groups::{BENDS, compute_pipeline, pipeline_layout};
-use crate::render::readback::PassQueries;
+use crate::render::readback::FrameTimestamps;
 use crate::render::shaders;
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
@@ -89,7 +89,7 @@ impl BendPass {
         }
     }
 
-    /// Records the pass into `encoder`, timed through `queries`, for `bends`, as
+    /// Records the pass into `encoder`, timed into `timestamps`, for `bends`, as
     /// uploaded into its buffer: a row of workgroups per bend, an invocation
     /// per vertex of the longest. Returns whether it did: with no bends
     /// there is nothing to record, and nothing timed.
@@ -97,14 +97,16 @@ impl BendPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         bends: &[BendData],
-        queries: Option<PassQueries<'_, '_>>,
+        timestamps: &mut Option<FrameTimestamps<'_>>,
     ) -> bool {
         let Some(longest) = bends.iter().map(|bend| bend.vertex_count).max() else {
             return false;
         };
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some(BEND_PASS),
-            timestamp_writes: queries.map(PassQueries::compute),
+            timestamp_writes: timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(BEND_PASS).compute()),
         });
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(BENDS.index, &self.bind_group, &[]);

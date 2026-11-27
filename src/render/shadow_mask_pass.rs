@@ -13,6 +13,7 @@
 
 use crate::render::bind_groups::{RAY_SCENE, SHADOW_MASK_BUILD, compute_pipeline, pipeline_layout};
 use crate::render::froxel_pass::FROXEL_SLICES;
+use crate::render::readback::FrameTimestamps;
 use crate::render::renderer::{RenderCapacities, RenderSwitches};
 use crate::render::shaders;
 use crate::render::targets::{RenderTargets, SAMPLE_COUNT};
@@ -280,13 +281,13 @@ impl ShadowMaskPass {
 
     /// Records the pass into `encoder`, tracing the Ray scene of
     /// `ray_scene_bind_group` into the shadow mask `target_groups` bind,
-    /// timed into `timestamp_writes`.
+    /// timed into `timestamps`.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         target_groups: &ShadowMaskTargetGroups,
         ray_scene_bind_group: &wgpu::BindGroup,
-        timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
+        timestamps: &mut Option<FrameTimestamps<'_>>,
     ) {
         encoder.clear_buffer(&self.shadow_mask_lights_overflowed, 0, None);
         encoder.clear_buffer(&self.second_surface_dispatch, 0, None);
@@ -303,7 +304,9 @@ impl ShadowMaskPass {
         );
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some(SHADOW_MASK_PASS),
-            timestamp_writes,
+            timestamp_writes: timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(SHADOW_MASK_PASS).compute()),
         });
         pass.set_pipeline(&self.nearest_surfaces_pipeline);
         pass.set_bind_group(RAY_SCENE.index, ray_scene_bind_group, &[]);

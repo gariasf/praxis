@@ -24,6 +24,7 @@ use crate::render::bind_groups::{
     BindGroupDefinition, FRAME_DRAW, compute_pipeline, pipeline_layout,
 };
 use crate::render::prepare::FrameData;
+use crate::render::readback::FrameTimestamps;
 use crate::render::renderer::{RenderCapacities, RenderSwitches};
 use crate::render::shaders;
 use crate::render::targets::RenderTargets;
@@ -330,7 +331,7 @@ impl CullingPass {
     /// frame's draw first. It appends the Meshlets of the LOD each Instance
     /// draws, of those the phase draws among `frame`'s slots in use, with
     /// `bind_groups` and its own `target_groups` set, in two
-    /// compute passes, each timed into its `timestamp_writes`: the pass over
+    /// compute passes, each timed into `timestamps`: the pass over
     /// the slots, then the one over the Meshlet records. Where they need
     /// more Meshlet records or packed indices than the draw holds, it draws
     /// the Instances that fit and counts the others as overflowed, which the
@@ -342,9 +343,8 @@ impl CullingPass {
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         frame: &FrameData,
         phase: CullingPhase,
-        timestamp_writes: [Option<wgpu::ComputePassTimestampWrites<'_>>; 2],
+        timestamps: &mut Option<FrameTimestamps<'_>>,
     ) {
-        let [slots_timestamp_writes, triangles_timestamp_writes] = timestamp_writes;
         let pipelines = match phase {
             CullingPhase::One => {
                 encoder.clear_buffer(&self.buffers.frame_draw, 0, None);
@@ -356,7 +356,7 @@ impl CullingPass {
         let mut pass = begin_pass(
             encoder,
             phase.slots_label(),
-            slots_timestamp_writes,
+            timestamps,
             bind_groups,
             &target_groups.bind_group,
         );
@@ -375,7 +375,7 @@ impl CullingPass {
         let mut pass = begin_pass(
             encoder,
             phase.triangles_label(),
-            triangles_timestamp_writes,
+            timestamps,
             bind_groups,
             &target_groups.append_bind_group,
         );
@@ -432,19 +432,21 @@ impl CullingPass {
     }
 }
 
-/// A compute pass of `encoder` labelled `label`, timed into
-/// `timestamp_writes`, with `bind_groups` and `frame_draw`, the pass's group
+/// A compute pass of `encoder` labelled `label`, timed into `timestamps`
+/// under that name, with `bind_groups` and `frame_draw`, the pass's group
 /// 3, set.
 fn begin_pass<'encoder>(
     encoder: &'encoder mut wgpu::CommandEncoder,
     label: &str,
-    timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
+    timestamps: &mut Option<FrameTimestamps<'_>>,
     bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
     frame_draw: &wgpu::BindGroup,
 ) -> wgpu::ComputePass<'encoder> {
     let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: Some(label),
-        timestamp_writes,
+        timestamp_writes: timestamps
+            .as_mut()
+            .map(|timestamps| timestamps.pass(label).compute()),
     });
     for &(definition, bind_group) in bind_groups {
         pass.set_bind_group(definition.index, bind_group, &[]);

@@ -5,6 +5,7 @@
 
 use crate::render::RenderCapacities;
 use crate::render::bind_groups::{FROXEL_LISTS, compute_pipeline, pipeline_layout};
+use crate::render::readback::FrameTimestamps;
 use crate::render::shaders;
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
@@ -118,18 +119,20 @@ impl FroxelPass {
         }
     }
 
-    /// Records the pass into `encoder`, timed into `timestamp_writes`: a
+    /// Records the pass into `encoder`, timed into `timestamps`: a
     /// workgroup per screen rectangle and an invocation per Froxel builds
     /// every list.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
+        timestamps: &mut Option<FrameTimestamps<'_>>,
     ) {
         encoder.clear_buffer(&self.light_counts, 0, None);
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some(FROXEL_PASS),
-            timestamp_writes,
+            timestamp_writes: timestamps
+                .as_mut()
+                .map(|timestamps| timestamps.pass(FROXEL_PASS).compute()),
         });
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(FROXEL_LISTS.index, &self.bind_group, &[]);
