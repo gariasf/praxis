@@ -7,7 +7,7 @@ use crate::cooked::CHUNK_EDGE_METRES;
 use crate::render::bind_groups::{DYNAMIC_TLAS_MARKERS, compute_pipeline, pipeline_layout};
 use crate::render::instance::ANCHOR_CELL_SIZE;
 use crate::render::readback::PassQueries;
-use crate::render::{FrameData, InstanceData, RenderCapacities, shaders};
+use crate::render::{FrameData, InstanceData, shaders};
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// Moving Instances the dynamic TLAS holds: those in the lowest slots, so
@@ -798,13 +798,12 @@ pub struct DynamicTlas {
 impl DynamicTlas {
     /// An empty dynamic TLAS of `DYNAMIC_TLAS_CAPACITY` entries on
     /// `backend`, built through `queue` at once, so a marker never queries it
-    /// unbuilt, its markers' shader module assembled with `capacities`.
+    /// unbuilt.
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
         queue: &wgpu::Queue,
         backend: wgpu::Backend,
-        capacities: &RenderCapacities,
     ) -> Self {
         let tlas = memory.create_tlas(
             device,
@@ -839,8 +838,7 @@ impl DynamicTlas {
                 ("marker_result", marker_result.as_entire_binding()),
             ],
         );
-        let shader =
-            device.create_shader_module(shaders::DYNAMIC_TLAS_MARKER.descriptor(capacities));
+        let shader = device.create_shader_module(shaders::DYNAMIC_TLAS_MARKER.descriptor());
         let groups = [(&DYNAMIC_TLAS_MARKERS, &layout)];
         let label = "Dynamic TLAS Marker Pipeline Layout";
         let pipeline_layout = pipeline_layout(device, label, &groups);
@@ -1107,7 +1105,7 @@ pub(crate) mod tests {
     use crate::gpu::GpuContext;
     use crate::render::instance::padded_columns;
     use crate::render::prepare::{FramePreparer, InstanceWrite, MovingInstance};
-    use crate::render::{CameraUniform, LoadStaging, NO_MATERIAL, NO_MESH};
+    use crate::render::{CameraUniform, LoadStaging, NO_MATERIAL, NO_MESH, RenderCapacities};
     use crate::stats::gpu_memory::tests::gpu_memory;
     use crate::streaming::chunks::ChunkPlacement;
     use crate::streaming::{LoadedChunk, LoadedChunks};
@@ -1509,7 +1507,6 @@ pub(crate) mod tests {
             &gpu_memory(context),
             &context.queue,
             context.backend(),
-            &RenderCapacities::checked_in(),
         );
         // A quarter turn about +Z, then a scale by 2: +X goes to +2Y.
         let turned_and_doubled = glam::Mat3::from_cols(

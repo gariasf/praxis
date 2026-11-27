@@ -770,7 +770,7 @@ pub struct MovingInstance {
 <pre class="code"><code>let instance_size = std::mem::size_of::&lt;InstanceData&gt;() as wgpu::BufferAddress;
 let instance_uploads = frame.instance_writes.iter().map(|write| {
     (
-        &amp;*self.instance_buffer,
+        &amp;*self.shared_buffers.instances,
         u64::from(write.first_slot) * instance_size,
         bytemuck::cast_slice(&amp;frame.instances[write.instances.clone()]),
     )

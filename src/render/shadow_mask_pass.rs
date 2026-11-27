@@ -12,9 +12,10 @@
 //! runs once both culling phases' Instances are in the depth target.
 
 use crate::render::bind_groups::{RAY_SCENE, SHADOW_MASK_BUILD, compute_pipeline, pipeline_layout};
-use crate::render::froxel_pass::FROXEL_SLICES;
+use crate::render::culling_pass::CullingPass;
+use crate::render::froxel_pass::{FROXEL_SLICES, FroxelPass};
 use crate::render::readback::FrameTimestamps;
-use crate::render::renderer::{RenderCapacities, RenderSwitches};
+use crate::render::renderer::{RenderSwitches, SharedBuffers};
 use crate::render::shaders;
 use crate::render::targets::{RenderTargets, SAMPLE_COUNT};
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
@@ -78,9 +79,7 @@ pub struct ShadowMaskPass {
     /// Traces the listed shadow edges again from each sample.
     trace_shadow_edges_pipeline: wgpu::ComputePipeline,
     layout: wgpu::BindGroupLayout,
-    /// The camera, the lights' counts, the lights, the Froxel lists and the
-    /// culling pass's per-slot offsets.
-    buffers: [(&'static str, wgpu::Buffer); 5],
+    buffers: ShadowMaskBuffers,
     /// The lights that reach a surface of a pixel past its bits, summed over
     /// the surfaces of every pixel:
     /// cleared before the pass, copied to the GPU stats readback after it.
@@ -94,6 +93,17 @@ pub struct ShadowMaskPass {
     /// Bound in place of either while a dispatch reads it, as no group
     /// bound then may write it.
     stand_in_dispatch: Counted<wgpu::Buffer>,
+}
+
+/// The buffers of others the pass reads, kept to build its bind groups: the
+/// shared camera, light uniform and lights, the Froxel pass's lists and the
+/// culling pass's per-slot offsets.
+struct ShadowMaskBuffers {
+    camera: wgpu::Buffer,
+    light: wgpu::Buffer,
+    lights: wgpu::Buffer,
+    froxel_lists: wgpu::Buffer,
+    instance_offsets: wgpu::Buffer,
 }
 
 /// The pass's bind groups that read and write the render targets
@@ -115,20 +125,20 @@ pub struct ShadowMaskTargetGroups {
 
 impl ShadowMaskPass {
     /// The pass, tracing the Ray scene, whose group is of
-    /// `ray_scene_layout`, reading the Renderer's `camera`, `light` and `lights`
-    /// buffers, the Froxel pass's `froxel_lists` and the culling pass's
-    /// `instance_offsets`, with its Froxel lookups as `switches` set,
-    /// its shader module assembled with `capacities`.
+    /// `ray_scene_layout`, reading `shared`'s camera, light uniform and
+    /// lights, `froxel_pass`'s lists and `culling_pass`'s per-slot offsets,
+    /// with its Froxel lookups as `switches` set.
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
         ray_scene_layout: &wgpu::BindGroupLayout,
-        buffers: [(&'static str, &wgpu::Buffer); 5],
+        shared: &SharedBuffers,
+        froxel_pass: &FroxelPass,
+        culling_pass: &CullingPass,
         switches: RenderSwitches,
-        capacities: &RenderCapacities,
     ) -> ShadowMaskPass {
         let layout = SHADOW_MASK_BUILD.layout(device);
-        let shader = device.create_shader_module(shaders::SHADOW_MASK.descriptor(capacities));
+        let shader = device.create_shader_module(shaders::SHADOW_MASK.descriptor());
         let pipeline_layout = pipeline_layout(
             device,
             "Shadow Mask Pipeline Layout",
@@ -141,7 +151,13 @@ impl ShadowMaskPass {
         let pipeline = |entry_point| {
             compute_pipeline(device, &pipeline_layout, &shader, entry_point, &constants)
         };
-        let buffers = buffers.map(|(name, buffer)| (name, buffer.clone()));
+        let buffers = ShadowMaskBuffers {
+            camera: wgpu::Buffer::clone(&shared.camera),
+            light: wgpu::Buffer::clone(&shared.light),
+            lights: wgpu::Buffer::clone(&shared.lights),
+            froxel_lists: froxel_pass.froxel_lists().clone(),
+            instance_offsets: culling_pass.instance_offsets().clone(),
+        };
         let shadow_mask_lights_overflowed = memory.create_buffer(
             device,
             GpuMemoryKind::SceneAndPassBuffers,
@@ -227,7 +243,16 @@ impl ShadowMaskPass {
         [second_surface_dispatch, shadow_edge_dispatch]: [&wgpu::Buffer; 2],
         render_targets: &RenderTargets,
     ) -> wgpu::BindGroup {
-        let own = [
+        let buffers = &self.buffers;
+        let resources = [
+            ("camera", buffers.camera.as_entire_binding()),
+            ("light", buffers.light.as_entire_binding()),
+            ("lights", buffers.lights.as_entire_binding()),
+            ("froxel_lists", buffers.froxel_lists.as_entire_binding()),
+            (
+                "instance_offsets",
+                buffers.instance_offsets.as_entire_binding(),
+            ),
             (
                 "shadow_mask_lights_overflowed",
                 self.shadow_mask_lights_overflowed.as_entire_binding(),
@@ -269,14 +294,7 @@ impl ShadowMaskPass {
                 wgpu::BindingResource::TextureView(render_targets.shadow_mask_samples()),
             ),
         ];
-        SHADOW_MASK_BUILD.bind_group(
-            device,
-            &self.layout,
-            self.buffers
-                .iter()
-                .map(|(name, buffer)| (*name, buffer.as_entire_binding()))
-                .chain(own),
-        )
+        SHADOW_MASK_BUILD.bind_group(device, &self.layout, resources)
     }
 
     /// Records the pass into `encoder`, tracing the Ray scene of

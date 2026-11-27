@@ -1,10 +1,10 @@
 //! The WGSL shader modules, each assembled from ordered parts in this
 //! directory, so passes share structs and functions without copying them,
-//! after the constants Rust shares with WGSL, the Render capacities among
-//! them, the Render switches' overrides and its bindings' declarations, all
-//! generated from Rust (`assemble`, `render::bind_groups`). A function under
-//! an oracle lives in a shared part, which the oracle harness assembles with
-//! its kernel alone.
+//! after the constants Rust shares with WGSL, the Instance capacity among
+//! them in a module given one, the Render switches' overrides and its
+//! bindings' declarations, all generated from Rust (`assemble`,
+//! `render::bind_groups`). A function under an oracle lives in a shared part,
+//! which the oracle harness assembles with its kernel alone.
 
 use crate::assets::material::SLICES_PER_CLASS;
 use crate::cooked::{
@@ -29,7 +29,9 @@ use crate::render::froxel_pass::{
 };
 use crate::render::instance::{ANCHOR_CELL_SIZE, NO_MATERIAL, NO_MESH};
 use crate::render::light_count_pass::LIGHT_COUNT_TILE_SIZE;
-use crate::render::renderer::{RenderCapacities, RenderSwitches};
+#[cfg(test)]
+use crate::render::renderer::RenderCapacities;
+use crate::render::renderer::RenderSwitches;
 use crate::render::shadow_mask_pass::{
     SAMPLE_OFFSETS, SHADOW_EDGE_LIGHTS, SHADOW_MASK_LIGHTS, SHADOW_MASK_TILE_SIZE,
 };
@@ -94,6 +96,10 @@ pub struct ShaderModule {
     pub enables: &'static [&'static str],
     pub bind_groups: &'static [&'static BindGroupDefinition],
     pub parts: &'static [Part],
+    /// The Instance slots its parts read as `INSTANCE_CAPACITY`, which
+    /// `with_instance_capacity` sets: a module whose parts read it compiles
+    /// only with it.
+    pub instance_capacity: Option<u32>,
 }
 
 /// The main pass.
@@ -103,6 +109,7 @@ pub const MAIN: ShaderModule = ShaderModule {
     enables: &["wgpu_binding_array"],
     bind_groups: &[&FRAME, &MATERIALS, &SCENE_GEOMETRY, &MAIN_PASS_INPUTS],
     parts: &[COMMON, SHADING, HDR, FROXEL_GRID, part!("main.wgsl")],
+    instance_capacity: None,
 };
 
 /// The shadow mask pass.
@@ -112,14 +119,16 @@ pub const SHADOW_MASK: ShaderModule = ShaderModule {
     enables: &["wgpu_ray_query"],
     bind_groups: &[&RAY_SCENE, &SHADOW_MASK_BUILD],
     parts: &[COMMON, FROXEL_GRID, part!("shadow_mask.wgsl")],
+    instance_capacity: None,
 };
 
-/// The culling pass.
+/// The culling pass, whose parts read the Instance capacity.
 pub const CULLING: ShaderModule = ShaderModule {
     name: "culling",
     enables: &[],
     bind_groups: &[&FRAME, &SCENE_GEOMETRY, &FRAME_DRAW],
     parts: &[COMMON, part!("culling.wgsl")],
+    instance_capacity: None,
 };
 
 /// The Froxel pass.
@@ -128,6 +137,7 @@ pub const FROXEL: ShaderModule = ShaderModule {
     enables: &[],
     bind_groups: &[&FROXEL_LISTS],
     parts: &[COMMON, FROXEL_GRID, part!("froxel.wgsl")],
+    instance_capacity: None,
 };
 
 /// The light count pass, with the `count_point_lights` Render switch on.
@@ -136,6 +146,7 @@ pub const LIGHT_COUNT: ShaderModule = ShaderModule {
     enables: &[],
     bind_groups: &[&LIGHT_COUNT_INPUT],
     parts: &[COMMON, FROXEL_GRID, part!("light_count.wgsl")],
+    instance_capacity: None,
 };
 
 /// The depth pyramid pass.
@@ -144,6 +155,7 @@ pub const DEPTH_PYRAMID: ShaderModule = ShaderModule {
     enables: &[],
     bind_groups: &[&DEPTH_PYRAMID_LEVEL],
     parts: &[part!("depth_pyramid.wgsl")],
+    instance_capacity: None,
 };
 
 /// The tonemapping pass.
@@ -152,6 +164,7 @@ pub const TONEMAPPING: ShaderModule = ShaderModule {
     enables: &[],
     bind_groups: &[&TONEMAPPING_INPUT],
     parts: &[HDR, GT7, DISPLAY, part!("tonemapping.wgsl")],
+    instance_capacity: None,
 };
 
 /// The dynamic TLAS's markers, which time its build.
@@ -160,6 +173,7 @@ pub const DYNAMIC_TLAS_MARKER: ShaderModule = ShaderModule {
     enables: &["wgpu_ray_query"],
     bind_groups: &[&DYNAMIC_TLAS_MARKERS],
     parts: &[part!("dynamic_tlas_marker.wgsl")],
+    instance_capacity: None,
 };
 
 /// The BLAS refit's marker, which ends its time, on Metal.
@@ -169,6 +183,7 @@ pub const BLAS_REFIT_MARKER: ShaderModule = ShaderModule {
     enables: &[],
     bind_groups: &[&BLAS_REFIT_MARKERS],
     parts: &[part!("blas_refit_marker.wgsl")],
+    instance_capacity: None,
 };
 
 /// The bend pass.
@@ -177,6 +192,7 @@ pub const BEND: ShaderModule = ShaderModule {
     enables: &[],
     bind_groups: &[&BENDS],
     parts: &[COMMON, part!("bend.wgsl")],
+    instance_capacity: None,
 };
 
 /// The shared parts alone, which the oracle harness appends its kernel to.
@@ -186,48 +202,53 @@ pub const SHARED: ShaderModule = ShaderModule {
     enables: &[],
     bind_groups: &[],
     parts: &[COMMON, SHADING, HDR, GT7, DISPLAY],
+    instance_capacity: None,
 };
 
 /// The modules wgpu compiles without bounding their loops: every loop of
 /// their parts ends whatever its buffers hold, which `shader_tests` checks.
 pub const LOOPS_UNBOUNDED: [ShaderModule; 2] = [MAIN, CULLING];
 
-/// Every module, which `shader_tests` validates.
+/// Every module, the culling pass's with the checked-in Instance capacity,
+/// which `shader_tests` validates.
 #[cfg(test)]
-pub const MODULES: [ShaderModule; 11] = [
-    SHARED,
-    MAIN,
-    SHADOW_MASK,
-    CULLING,
-    FROXEL,
-    LIGHT_COUNT,
-    DEPTH_PYRAMID,
-    TONEMAPPING,
-    DYNAMIC_TLAS_MARKER,
-    BLAS_REFIT_MARKER,
-    BEND,
-];
+pub fn modules() -> [ShaderModule; 11] {
+    [
+        SHARED,
+        MAIN,
+        SHADOW_MASK,
+        CULLING.with_instance_capacity(RenderCapacities::checked_in().instances),
+        FROXEL,
+        LIGHT_COUNT,
+        DEPTH_PYRAMID,
+        TONEMAPPING,
+        DYNAMIC_TLAS_MARKER,
+        BLAS_REFIT_MARKER,
+        BEND,
+    ]
+}
 
 impl ShaderModule {
-    /// The descriptor that compiles the module with `capacities`, labelled
-    /// with its name.
-    pub fn descriptor(
-        &self,
-        capacities: &RenderCapacities,
-    ) -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: Some(self.name),
-            source: wgpu::ShaderSource::Wgsl(self.source(capacities).into()),
+    /// The module with `instance_capacity`, the Instance buffer's slots, for
+    /// its parts to read.
+    pub fn with_instance_capacity(self, instance_capacity: u32) -> ShaderModule {
+        ShaderModule {
+            instance_capacity: Some(instance_capacity),
+            ..self
         }
     }
 
-    /// The module compiled with `capacities` under every runtime check of
-    /// wgpu's but loop bounding. Only a module of `LOOPS_UNBOUNDED` is.
-    pub fn create_with_unbounded_loops(
-        &self,
-        device: &wgpu::Device,
-        capacities: &RenderCapacities,
-    ) -> wgpu::ShaderModule {
+    /// The descriptor that compiles the module, labelled with its name.
+    pub fn descriptor(&self) -> wgpu::ShaderModuleDescriptor<'static> {
+        wgpu::ShaderModuleDescriptor {
+            label: Some(self.name),
+            source: wgpu::ShaderSource::Wgsl(self.source().into()),
+        }
+    }
+
+    /// The module compiled under every runtime check of wgpu's but loop
+    /// bounding. Only a module of `LOOPS_UNBOUNDED` is.
+    pub fn create_with_unbounded_loops(&self, device: &wgpu::Device) -> wgpu::ShaderModule {
         assert!(
             LOOPS_UNBOUNDED
                 .iter()
@@ -243,24 +264,20 @@ impl ShaderModule {
         // infinite loop for unreachable code [ref:wgpu-types-30-loop-bounding],
         // so the module holds none: each loop of its parts ends whatever its
         // buffers hold, which `shader_tests` checks.
-        unsafe { device.create_shader_module_trusted(self.descriptor(capacities), runtime_checks) }
+        unsafe { device.create_shader_module_trusted(self.descriptor(), runtime_checks) }
     }
 
-    /// The module's WGSL with `capacities`.
-    pub fn source(&self, capacities: &RenderCapacities) -> String {
-        self.assemble(capacities).0
+    /// The module's WGSL.
+    pub fn source(&self) -> String {
+        self.assemble().0
     }
 
-    /// The part that byte `offset` of the module's WGSL with `capacities`
-    /// falls in, and the 1-based line and column of `offset` within that
-    /// part; `None` before the first part, in what `assemble` generates.
+    /// The part that byte `offset` of the module's WGSL falls in, and the
+    /// 1-based line and column of `offset` within that part; `None` before
+    /// the first part, in what `assemble` generates.
     #[cfg(test)]
-    pub fn locate(
-        &self,
-        capacities: &RenderCapacities,
-        offset: usize,
-    ) -> Option<(&'static str, usize, usize)> {
-        let (_, starts) = self.assemble(capacities);
+    pub fn locate(&self, offset: usize) -> Option<(&'static str, usize, usize)> {
+        let (_, starts) = self.assemble();
         let index = starts.iter().rposition(|&start| start <= offset)?;
         let part = self.parts[index];
         let before = &part.source[..(offset - starts[index]).min(part.source.len())];
@@ -274,16 +291,19 @@ impl ShaderModule {
 
     /// The module's WGSL, an `enable` directive per extension first, since
     /// directives precede every declaration, then the constants Rust shares,
-    /// `capacities` among them, an `override` per Render switch, which has no
-    /// default so a pipeline that uses it must set it, and the declarations
-    /// of its bind groups' bindings, then each part on lines of its own; and
-    /// the byte offset where each part starts.
-    fn assemble(&self, capacities: &RenderCapacities) -> (String, Vec<usize>) {
+    /// its Instance capacity among them if it has one, an `override` per
+    /// Render switch, which has no default so a pipeline that uses it must
+    /// set it, and the declarations of its bind groups' bindings, then each
+    /// part on lines of its own; and the byte offset where each part starts.
+    fn assemble(&self) -> (String, Vec<usize>) {
         let mut source: String = self
             .enables
             .iter()
             .map(|extension| format!("enable {extension};\n"))
             .collect();
+        let instance_capacity = self.instance_capacity.map_or_else(String::new, |slots| {
+            format!("const INSTANCE_CAPACITY: u32 = {slots}u;\n")
+        });
         source.push_str(&format!(
             "const ANCHOR_CELL_SIZE: f32 = {:?};\n\
              const MESHLET_VERTEX_BITS: u32 = {}u;\n\
@@ -294,7 +314,7 @@ impl ShaderModule {
              const SCAN_BLOCK_SIZE: u32 = {SCAN_BLOCK_SIZE}u;\n\
              const SLOT_LOD_SHIFT: u32 = {SLOT_LOD_SHIFT}u;\n\
              const MAX_WORKGROUPS_PER_DIMENSION: u32 = {MAX_WORKGROUPS_PER_DIMENSION}u;\n\
-             const INSTANCE_CAPACITY: u32 = {instance_capacity}u;\n\
+             {instance_capacity}\
              const DEPTH_PYRAMID_TILE_SIZE: u32 = {DEPTH_PYRAMID_TILE_SIZE}u;\n\
              const LIGHT_COUNT_TILE_SIZE: u32 = {LIGHT_COUNT_TILE_SIZE}u;\n\
              const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>({:?}, {:?}, {:?});\n\
@@ -320,7 +340,6 @@ impl ShaderModule {
             LUMINANCE_COEFFICIENTS[0],
             LUMINANCE_COEFFICIENTS[1],
             LUMINANCE_COEFFICIENTS[2],
-            instance_capacity = capacities.instances,
         ));
         let sample_offsets: Vec<String> = SAMPLE_OFFSETS
             .iter()

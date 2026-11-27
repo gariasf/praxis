@@ -14,10 +14,11 @@
 
 use crate::render::bind_groups::{BindGroupDefinition, MAIN_PASS_INPUTS, pipeline_layout};
 use crate::render::culling_pass::{
-    CullingPhase, PHASE_ONE_THIN_DRAW_OFFSET, PHASE_TWO_DRAW_OFFSET, PHASE_TWO_THIN_DRAW_OFFSET,
+    CullingPass, CullingPhase, PHASE_ONE_THIN_DRAW_OFFSET, PHASE_TWO_DRAW_OFFSET,
+    PHASE_TWO_THIN_DRAW_OFFSET,
 };
 use crate::render::readback::FrameTimestamps;
-use crate::render::renderer::{RenderCapacities, RenderSwitches};
+use crate::render::renderer::RenderSwitches;
 use crate::render::shaders;
 use crate::render::targets::{self, RenderTargets};
 
@@ -63,21 +64,17 @@ pub struct MainTargetGroups {
 
 impl MainPass {
     /// The pass, given the layouts of the shared bind groups its shader
-    /// module declares, which draws the culling pass's frame's draw, its
-    /// Meshlet records `meshlet_records`, packed indices `packed_indices`
-    /// and indirect arguments `frame_draw`, its lit pipeline as `switches`
-    /// set, its shader module assembled with `capacities`.
+    /// module declares, which draws `culling_pass`'s frame's draw from its
+    /// Meshlet records, packed indices and indirect arguments, its lit
+    /// pipeline as `switches` set.
     pub fn new(
         device: &wgpu::Device,
         bind_group_layouts: &[(&BindGroupDefinition, &wgpu::BindGroupLayout)],
-        meshlet_records: &wgpu::Buffer,
-        packed_indices: &wgpu::Buffer,
-        frame_draw: &wgpu::Buffer,
+        culling_pass: &CullingPass,
         switches: RenderSwitches,
-        capacities: &RenderCapacities,
     ) -> MainPass {
         let inputs_layout = MAIN_PASS_INPUTS.layout(device);
-        let shader = shaders::MAIN.create_with_unbounded_loops(device, capacities);
+        let shader = shaders::MAIN.create_with_unbounded_loops(device);
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&MAIN_PASS_INPUTS, &inputs_layout));
         let lit_layout = pipeline_layout(device, "Lit Pass Pipeline Layout", &layouts);
@@ -222,9 +219,9 @@ impl MainPass {
             thin_lit_pass_depth_pipeline,
             thin_lit_pipeline,
             inputs_layout,
-            meshlet_records_buffer: meshlet_records.clone(),
-            packed_indices_buffer: packed_indices.clone(),
-            frame_draw_buffer: frame_draw.clone(),
+            meshlet_records_buffer: culling_pass.meshlet_records().clone(),
+            packed_indices_buffer: culling_pass.packed_indices().clone(),
+            frame_draw_buffer: culling_pass.frame_draw().clone(),
             shadow_rays: switches.shadow_rays,
             keeps_depth: switches.count_point_lights,
         }

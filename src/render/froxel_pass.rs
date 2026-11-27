@@ -3,9 +3,9 @@
 //! for the lit pass to shade a pixel with its Froxel's lights alone
 //! (ADR 0019).
 
-use crate::render::RenderCapacities;
 use crate::render::bind_groups::{FROXEL_LISTS, compute_pipeline, pipeline_layout};
 use crate::render::readback::FrameTimestamps;
+use crate::render::renderer::SharedBuffers;
 use crate::render::shaders;
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
@@ -59,18 +59,10 @@ pub struct FroxelPass {
 }
 
 impl FroxelPass {
-    /// The pass, listing the point lights of `lights`, as `light` counts
-    /// them, seen by `camera`: the Renderer's buffers. Its shader module is
-    /// assembled with `capacities`.
-    pub fn new(
-        device: &wgpu::Device,
-        memory: &GpuMemory,
-        camera: &wgpu::Buffer,
-        light: &wgpu::Buffer,
-        lights: &wgpu::Buffer,
-        capacities: &RenderCapacities,
-    ) -> FroxelPass {
-        // Created at their fixed capacities; they never grow.
+    /// The pass, listing the point lights of `shared`'s lights, as its light
+    /// uniform counts them, seen by its camera.
+    pub fn new(device: &wgpu::Device, memory: &GpuMemory, shared: &SharedBuffers) -> FroxelPass {
+        // Created at their fixed sizes; they never grow.
         let froxel_lists = memory.create_buffer(
             device,
             GpuMemoryKind::SceneAndPassBuffers,
@@ -99,14 +91,14 @@ impl FroxelPass {
             device,
             &layout,
             [
-                ("camera", camera.as_entire_binding()),
-                ("light", light.as_entire_binding()),
-                ("lights", lights.as_entire_binding()),
+                ("camera", shared.camera.as_entire_binding()),
+                ("light", shared.light.as_entire_binding()),
+                ("lights", shared.lights.as_entire_binding()),
                 ("froxel_lists", froxel_lists.as_entire_binding()),
                 ("light_counts", light_counts.as_entire_binding()),
             ],
         );
-        let shader = device.create_shader_module(shaders::FROXEL.descriptor(capacities));
+        let shader = device.create_shader_module(shaders::FROXEL.descriptor());
         let groups = [(&FROXEL_LISTS, &layout)];
         let pipeline_layout = pipeline_layout(device, "Froxel Pass Pipeline Layout", &groups);
         let pipeline =

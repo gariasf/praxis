@@ -6,9 +6,9 @@
 //! main pass keeps then, rather than counting in the lit pass, whose side
 //! effects would make the GPU run it for fragments its depth test rejects.
 
-use crate::render::RenderCapacities;
 use crate::render::bind_groups::{LIGHT_COUNT_INPUT, compute_pipeline, pipeline_layout};
 use crate::render::froxel_pass::FroxelPass;
+use crate::render::renderer::SharedBuffers;
 use crate::render::shaders;
 use crate::render::targets::RenderTargets;
 
@@ -30,8 +30,8 @@ pub struct LightCountTargetGroups {
 }
 
 /// The buffers the pass reads and writes, kept to build its bind group:
-/// the Renderer's camera and light buffer, and the Froxel pass's lists and
-/// light counts.
+/// the shared camera and lights, and the Froxel pass's lists and light
+/// counts.
 struct LightCountBuffers {
     camera: wgpu::Buffer,
     lights: wgpu::Buffer,
@@ -40,25 +40,22 @@ struct LightCountBuffers {
 }
 
 impl LightCountPass {
-    /// The pass, counting the lights of `lights`, seen by `camera`, the
-    /// Renderer's buffers, through `froxel_pass`'s lists into its light
-    /// counts, its shader module assembled with `capacities`.
+    /// The pass, counting `shared`'s lights, seen by its camera, through
+    /// `froxel_pass`'s lists into its light counts.
     pub fn new(
         device: &wgpu::Device,
-        camera: &wgpu::Buffer,
-        lights: &wgpu::Buffer,
+        shared: &SharedBuffers,
         froxel_pass: &FroxelPass,
-        capacities: &RenderCapacities,
     ) -> LightCountPass {
         let layout = LIGHT_COUNT_INPUT.layout(device);
-        let shader = device.create_shader_module(shaders::LIGHT_COUNT.descriptor(capacities));
+        let shader = device.create_shader_module(shaders::LIGHT_COUNT.descriptor());
         let groups = [(&LIGHT_COUNT_INPUT, &layout)];
         let pipeline_layout = pipeline_layout(device, "Light Count Pass Pipeline Layout", &groups);
         let pipeline =
             compute_pipeline(device, &pipeline_layout, &shader, "count_point_lights", &[]);
         let buffers = LightCountBuffers {
-            camera: camera.clone(),
-            lights: lights.clone(),
+            camera: wgpu::Buffer::clone(&shared.camera),
+            lights: wgpu::Buffer::clone(&shared.lights),
             froxel_lists: froxel_pass.froxel_lists().clone(),
             light_counts: froxel_pass.light_counts().clone(),
         };

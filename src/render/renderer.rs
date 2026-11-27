@@ -215,8 +215,9 @@ pub(crate) const TLAS_BYTES_PER_INSTANCE: u64 = 289;
 
 /// What the Instance buffer, the light buffer and the static TLAS hold,
 /// derived from the GPU memory Budgets at device creation, which assembles
-/// the shader modules with them: each its share of its kind's Budget at its
-/// real bytes per entry, the Instance slots in whole scan blocks (ADR 0013).
+/// the culling pass's shader module with the Instance slots: each its share
+/// of its kind's Budget at its real bytes per entry, the Instance slots in
+/// whole scan blocks (ADR 0013).
 /// The rest of the scene and pass buffers' Budget holds the Mesh and Material
 /// tables and the passes' buffers of fixed size, and the rest of the
 /// acceleration structures' the dynamic TLAS and the BLASes. Beside them,
@@ -284,6 +285,65 @@ impl RenderCapacities {
     }
 }
 
+/// The buffers the Renderer creates, writes in `upload` and binds into
+/// `FRAME` and `SCENE_GEOMETRY`; a pass binds the camera, the light uniform
+/// or the lights into a group of its own.
+pub struct SharedBuffers {
+    /// The frame's `CameraUniform`.
+    pub camera: Counted<wgpu::Buffer>,
+    /// The frame's `LightUniform`.
+    pub light: Counted<wgpu::Buffer>,
+    /// A `LightData` per light.
+    pub lights: Counted<wgpu::Buffer>,
+    /// An `InstanceData` per Instance slot.
+    pub instances: Counted<wgpu::Buffer>,
+}
+
+impl SharedBuffers {
+    /// The buffers, the lights and the Instances at the fixed sizes
+    /// `capacities` give, which never grow.
+    fn new(
+        device: &wgpu::Device,
+        memory: &GpuMemory,
+        capacities: &RenderCapacities,
+    ) -> SharedBuffers {
+        let buffer = |label, size, usage| {
+            memory.create_buffer(
+                device,
+                GpuMemoryKind::SceneAndPassBuffers,
+                &wgpu::BufferDescriptor {
+                    label: Some(label),
+                    size,
+                    usage: usage | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                },
+            )
+        };
+        SharedBuffers {
+            camera: buffer(
+                "Camera Buffer",
+                size_of::<CameraUniform>() as u64,
+                wgpu::BufferUsages::UNIFORM,
+            ),
+            light: buffer(
+                "Light Uniform Buffer",
+                size_of::<LightUniform>() as u64,
+                wgpu::BufferUsages::UNIFORM,
+            ),
+            lights: buffer(
+                "Light Buffer",
+                u64::from(capacities.lights) * size_of::<LightData>() as u64,
+                wgpu::BufferUsages::STORAGE,
+            ),
+            instances: buffer(
+                "Instance Buffer",
+                u64::from(capacities.instances) * size_of::<InstanceData>() as u64,
+                wgpu::BufferUsages::STORAGE,
+            ),
+        }
+    }
+}
+
 /// Draws Frame data into a target view, the window's surface or an offscreen
 /// texture, from GPU resources and Pools it owns; it reads no ECS World. It
 /// holds the bind groups passes share, the render targets and the Ray scene,
@@ -305,16 +365,12 @@ pub struct Renderer {
     tonemapping_pass: TonemappingPass,
     /// With the `count_point_lights` Render switch on.
     light_count_pass: Option<LightCountPass>,
-    camera_buffer: Counted<wgpu::Buffer>,
-    light_uniform_buffer: Counted<wgpu::Buffer>,
-    /// Created at its fixed capacity; it never grows.
-    light_buffer: Counted<wgpu::Buffer>,
+    shared_buffers: SharedBuffers,
     /// The camera, the lights and the Froxel lists (`FRAME`).
     frame_bind_group: wgpu::BindGroup,
     pub(crate) mesh_pool: MeshPool,
     pub(crate) material_pool: MaterialPool,
     pub(crate) load_staging: LoadStaging,
-    instance_buffer: Counted<wgpu::Buffer>,
     /// The Instances, the vertex Arena and the Mesh pool's tables
     /// (`SCENE_GEOMETRY`).
     scene_geometry_bind_group: wgpu::BindGroup,
@@ -458,67 +514,22 @@ impl Renderer {
                 (&MATERIALS, &material_pool.bind_group_layout),
                 (&SCENE_GEOMETRY, &scene_geometry_bind_group_layout),
             ],
-            culling_pass.meshlet_records(),
-            culling_pass.packed_indices(),
-            culling_pass.frame_draw(),
+            &culling_pass,
             switches,
-            &capacities,
         );
 
-        let camera_buffer = memory.create_buffer(
-            &device,
-            GpuMemoryKind::SceneAndPassBuffers,
-            &wgpu::BufferDescriptor {
-                label: Some("Camera Buffer"),
-                size: std::mem::size_of::<CameraUniform>() as wgpu::BufferAddress,
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            },
-        );
-        let light_uniform_buffer = memory.create_buffer(
-            &device,
-            GpuMemoryKind::SceneAndPassBuffers,
-            &wgpu::BufferDescriptor {
-                label: Some("Light Uniform Buffer"),
-                size: std::mem::size_of::<LightUniform>() as wgpu::BufferAddress,
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            },
-        );
-        let light_buffer = memory.create_buffer(
-            &device,
-            GpuMemoryKind::SceneAndPassBuffers,
-            &wgpu::BufferDescriptor {
-                label: Some("Light Buffer"),
-                size: u64::from(capacities.lights) * std::mem::size_of::<LightData>() as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            },
-        );
-        let froxel_pass = FroxelPass::new(
-            &device,
-            &memory,
-            &camera_buffer,
-            &light_uniform_buffer,
-            &light_buffer,
-            &capacities,
-        );
-        let light_count_pass = switches.count_point_lights.then(|| {
-            LightCountPass::new(
-                &device,
-                &camera_buffer,
-                &light_buffer,
-                &froxel_pass,
-                &capacities,
-            )
-        });
+        let shared_buffers = SharedBuffers::new(&device, &memory, &capacities);
+        let froxel_pass = FroxelPass::new(&device, &memory, &shared_buffers);
+        let light_count_pass = switches
+            .count_point_lights
+            .then(|| LightCountPass::new(&device, &shared_buffers, &froxel_pass));
         let frame_bind_group = FRAME.bind_group(
             &device,
             &frame_bind_group_layout,
             [
-                ("camera", camera_buffer.as_entire_binding()),
-                ("light", light_uniform_buffer.as_entire_binding()),
-                ("lights", light_buffer.as_entire_binding()),
+                ("camera", shared_buffers.camera.as_entire_binding()),
+                ("light", shared_buffers.light.as_entire_binding()),
+                ("lights", shared_buffers.lights.as_entire_binding()),
                 (
                     "froxel_lists",
                     froxel_pass.froxel_lists().as_entire_binding(),
@@ -526,25 +537,14 @@ impl Renderer {
             ],
         );
 
-        // Created at its fixed capacity; it never grows.
-        let instance_buffer = memory.create_buffer(
-            &device,
-            GpuMemoryKind::SceneAndPassBuffers,
-            &wgpu::BufferDescriptor {
-                label: Some("Instance Buffer"),
-                size: u64::from(capacities.instances) * std::mem::size_of::<InstanceData>() as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            },
-        );
         let mesh_pool = MeshPool::new(&device, &memory, &pool_capacities);
-        let bend_pass = BendPass::new(&device, &memory, mesh_pool.vertex_arena(), &capacities);
+        let bend_pass = BendPass::new(&device, &memory, mesh_pool.vertex_arena());
         // The most a frame uploads: every buffer `upload` writes, in full.
         let uploaded_buffers: [&wgpu::Buffer; 6] = [
-            &camera_buffer,
-            &light_uniform_buffer,
-            &light_buffer,
-            &instance_buffer,
+            &shared_buffers.camera,
+            &shared_buffers.light,
+            &shared_buffers.lights,
+            &shared_buffers.instances,
             culling_pass.instance_slot_count(),
             bend_pass.bends(),
         ];
@@ -565,7 +565,7 @@ impl Renderer {
             &device,
             &scene_geometry_bind_group_layout,
             [
-                ("instances", instance_buffer.as_entire_binding()),
+                ("instances", shared_buffers.instances.as_entire_binding()),
                 ("vertices", mesh_pool.vertex_arena().as_entire_binding()),
                 ("meshes", mesh_pool.mesh_table().as_entire_binding()),
                 ("meshlets", mesh_pool.meshlet_arena().as_entire_binding()),
@@ -584,24 +584,14 @@ impl Renderer {
             &device,
             &memory,
             ray_scene.layout(),
-            [
-                ("camera", &camera_buffer),
-                ("light", &light_uniform_buffer),
-                ("lights", &light_buffer),
-                ("froxel_lists", froxel_pass.froxel_lists()),
-                ("instance_offsets", culling_pass.instance_offsets()),
-            ],
+            &shared_buffers,
+            &froxel_pass,
+            &culling_pass,
             switches,
-            &capacities,
         );
-        let depth_pyramid_pass = DepthPyramidPass::new(&device, &capacities);
-        let tonemapping_pass = TonemappingPass::new(
-            &device,
-            &memory,
-            target_format,
-            &mut load_staging,
-            &capacities,
-        );
+        let depth_pyramid_pass = DepthPyramidPass::new(&device);
+        let tonemapping_pass =
+            TonemappingPass::new(&device, &memory, target_format, &mut load_staging);
         let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
         let bound_targets = BoundTargets::new(
             &device,
@@ -632,11 +622,8 @@ impl Renderer {
             depth_pyramid_pass,
             tonemapping_pass,
             light_count_pass,
-            camera_buffer,
-            light_uniform_buffer,
-            light_buffer,
+            shared_buffers,
             frame_bind_group,
-            instance_buffer,
             scene_geometry_bind_group,
             ray_scene,
             capacities,
@@ -745,7 +732,7 @@ impl Renderer {
         let instance_size = std::mem::size_of::<InstanceData>() as wgpu::BufferAddress;
         let instance_uploads = frame.instance_writes.iter().map(|write| {
             (
-                &*self.instance_buffer,
+                &*self.shared_buffers.instances,
                 u64::from(write.first_slot) * instance_size,
                 bytemuck::cast_slice(&frame.instances[write.instances.clone()]),
             )
@@ -755,8 +742,13 @@ impl Renderer {
                 let buffer = self.culling_pass.instance_slot_count();
                 (buffer, 0, bytemuck::bytes_of(&frame.instance_slot_count))
             });
-        let light_upload = (!frame.lights.is_empty())
-            .then(|| (&*self.light_buffer, 0, bytemuck::cast_slice(&frame.lights)));
+        let light_upload = (!frame.lights.is_empty()).then(|| {
+            (
+                &*self.shared_buffers.lights,
+                0,
+                bytemuck::cast_slice(&frame.lights),
+            )
+        });
         let bend_upload = (!frame.bends.is_empty()).then(|| {
             (
                 self.bend_pass.bends(),
@@ -765,9 +757,9 @@ impl Renderer {
             )
         });
         let uploads = [
-            (&*self.camera_buffer, 0, bytemuck::bytes_of(&camera)),
+            (&*self.shared_buffers.camera, 0, bytemuck::bytes_of(&camera)),
             (
-                &*self.light_uniform_buffer,
+                &*self.shared_buffers.light,
                 0,
                 bytemuck::bytes_of(&frame.light),
             ),

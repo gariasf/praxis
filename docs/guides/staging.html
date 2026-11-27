@@ -168,9 +168,9 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
 <span class="comment">// … the Instance writes, a copy per run of slots; the slot count, if it
 // changed; the lights and the bends, each where the frame has some …</span>
 let uploads = [
-    (&amp;*self.camera_buffer, 0, bytemuck::bytes_of(&amp;camera)),
+    (&amp;*self.shared_buffers.camera, 0, bytemuck::bytes_of(&amp;camera)),
     (
-        &amp;*self.light_uniform_buffer,
+        &amp;*self.shared_buffers.light,
         0,
         bytemuck::bytes_of(&amp;frame.light),
     ),
@@ -272,10 +272,10 @@ pub struct CameraUniform {
   <p class="key-idea">A slot grows on demand to the next power of two of what a frame needs, and never past the most one frame can upload, which is the six target buffers' sizes summed: 62,838,308 bytes. A frame that asks for more is a bug, and the write asserts. The streamed Game world's slots start at that bound, so none of its frames creates staging.</p>
 <pre class="code"><code>// The most a frame uploads: every buffer `upload` writes, in full.
 let uploaded_buffers: [&amp;wgpu::Buffer; 6] = [
-    &amp;camera_buffer,
-    &amp;light_uniform_buffer,
-    &amp;light_buffer,
-    &amp;instance_buffer,
+    &amp;shared_buffers.camera,
+    &amp;shared_buffers.light,
+    &amp;shared_buffers.lights,
+    &amp;shared_buffers.instances,
     culling_pass.instance_slot_count(),
     bend_pass.bends(),
 ];
