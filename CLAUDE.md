@@ -221,7 +221,10 @@ When reviewing changes, check for:
       target and runs again on resize. Bind groups are snapshots, not
       pointers: whatever recreates a resource rebuilds the groups holding
       it, so a pass builds the bind groups that read targets in one
-      function, called at creation and after every resize
+      function, `target_groups`, and holds none of them: the Renderer's
+      `BoundTargets` holds what it returns beside the targets, both built
+      by one function at creation and on every resize, and hands it to
+      the pass's `record`. No pass constructor takes the targets
 - [ ] A binding is written once, in its bind group's definition
       (`src/render/bind_groups.rs`), which declares it in WGSL and gives
       its layout and its group's index in pipeline layouts and

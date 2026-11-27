@@ -66,7 +66,7 @@ const _: () = assert!(FROXEL_SLICES.is_power_of_two());
 const _: () = assert!(SHADOW_MASK_LIGHTS > u32::BITS);
 const _: () = assert!(SHADOW_MASK_LIGHTS + FROXEL_SLICES.ilog2() == 2 * u32::BITS);
 
-/// The pass's pipelines and its group 3 with the buffers it reads.
+/// The pass's pipelines and the buffers its group 3 binds.
 pub struct ShadowMaskPass {
     /// Traces each pixel's nearest surface and lists its second, if any.
     nearest_surfaces_pipeline: wgpu::ComputePipeline,
@@ -93,13 +93,17 @@ pub struct ShadowMaskPass {
     /// Bound in place of either while a dispatch reads it, as no group
     /// bound then may write it.
     stand_in_dispatch: Counted<wgpu::Buffer>,
+}
+
+/// What the pass holds of the render targets `target_groups` built it from.
+pub struct ShadowMaskTargetGroups {
     /// The render targets' lists of second surfaces and of shadow edges,
     /// whose counts are cleared before the pass.
     second_surfaces: wgpu::Buffer,
     shadow_edges: wgpu::Buffer,
-    /// Built from the render targets by `bind_groups`: the first and third
-    /// dispatches', the second's, with the stand-in for its dispatch, and
-    /// the last's, with the stand-in for its own.
+    /// The first and third dispatches' group, the second's, with the
+    /// stand-in for its dispatch, and the last's, with the stand-in for its
+    /// own.
     nearest_surfaces_bind_group: wgpu::BindGroup,
     second_surfaces_bind_group: wgpu::BindGroup,
     sample_verdicts_bind_group: wgpu::BindGroup,
@@ -111,15 +115,13 @@ impl ShadowMaskPass {
     /// The pass, tracing the Ray scene, whose group is of
     /// `ray_scene_layout`, reading the Renderer's `camera`, `light` and `lights`
     /// buffers, the Froxel pass's `froxel_lists` and the culling pass's
-    /// `instance_offsets`, and writing the shadow
-    /// mask of `render_targets`, with its Froxel lookups as `switches` set,
+    /// `instance_offsets`, with its Froxel lookups as `switches` set,
     /// its shader module assembled with `capacities`.
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
         ray_scene_layout: &wgpu::BindGroupLayout,
         buffers: [(&'static str, &wgpu::Buffer); 5],
-        render_targets: &RenderTargets,
         switches: RenderSwitches,
         capacities: &RenderCapacities,
     ) -> ShadowMaskPass {
@@ -171,23 +173,6 @@ impl ShadowMaskPass {
             wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
         );
         let stand_in_dispatch = dispatch("Stand-in Dispatch Buffer", wgpu::BufferUsages::empty());
-        let [
-            nearest_surfaces_bind_group,
-            second_surfaces_bind_group,
-            sample_verdicts_bind_group,
-        ] = Self::bind_groups(
-            device,
-            &layout,
-            &buffers,
-            &shadow_mask_lights_overflowed,
-            [
-                &second_surface_dispatch,
-                &shadow_edge_dispatch,
-                &stand_in_dispatch,
-            ],
-            render_targets,
-        );
-        let size = render_targets.shadow_mask().texture().size();
         ShadowMaskPass {
             nearest_surfaces_pipeline: pipeline("build_shadow_mask"),
             second_surfaces_pipeline: pipeline("trace_second_surfaces"),
@@ -199,6 +184,32 @@ impl ShadowMaskPass {
             second_surface_dispatch,
             shadow_edge_dispatch,
             stand_in_dispatch,
+        }
+    }
+
+    /// The bind groups that read and write `render_targets`, one per
+    /// dispatch, which differ in the stand-in each binds for the dispatch
+    /// buffer it reads, with the targets' lists and size.
+    pub fn target_groups(
+        &self,
+        device: &wgpu::Device,
+        render_targets: &RenderTargets,
+    ) -> ShadowMaskTargetGroups {
+        let second_surface_dispatch = &*self.second_surface_dispatch;
+        let shadow_edge_dispatch = &*self.shadow_edge_dispatch;
+        let stand_in = &*self.stand_in_dispatch;
+        let [
+            nearest_surfaces_bind_group,
+            second_surfaces_bind_group,
+            sample_verdicts_bind_group,
+        ] = [
+            [second_surface_dispatch, shadow_edge_dispatch],
+            [stand_in, shadow_edge_dispatch],
+            [second_surface_dispatch, stand_in],
+        ]
+        .map(|dispatches| self.bind_group(device, dispatches, render_targets));
+        let size = render_targets.shadow_mask().texture().size();
+        ShadowMaskTargetGroups {
             second_surfaces: render_targets.second_surfaces().clone(),
             shadow_edges: render_targets.shadow_edges().clone(),
             nearest_surfaces_bind_group,
@@ -208,71 +219,16 @@ impl ShadowMaskPass {
         }
     }
 
-    /// Builds the bind groups that read and write `render_targets` again, as
-    /// `new` builds them: after every resize, which creates them again.
-    pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
-        [
-            self.nearest_surfaces_bind_group,
-            self.second_surfaces_bind_group,
-            self.sample_verdicts_bind_group,
-        ] = Self::bind_groups(
-            device,
-            &self.layout,
-            &self.buffers,
-            &self.shadow_mask_lights_overflowed,
-            [
-                &self.second_surface_dispatch,
-                &self.shadow_edge_dispatch,
-                &self.stand_in_dispatch,
-            ],
-            render_targets,
-        );
-        self.second_surfaces = render_targets.second_surfaces().clone();
-        self.shadow_edges = render_targets.shadow_edges().clone();
-        let size = render_targets.shadow_mask().texture().size();
-        self.size = (size.width, size.height);
-    }
-
-    /// The dispatches' groups, which differ in the `stand_in` each binds for
-    /// the dispatch buffer it reads, `second_surface_dispatch` or
-    /// `shadow_edge_dispatch`.
-    fn bind_groups(
-        device: &wgpu::Device,
-        layout: &wgpu::BindGroupLayout,
-        buffers: &[(&'static str, wgpu::Buffer); 5],
-        shadow_mask_lights_overflowed: &wgpu::Buffer,
-        [second_surface_dispatch, shadow_edge_dispatch, stand_in]: [&wgpu::Buffer; 3],
-        render_targets: &RenderTargets,
-    ) -> [wgpu::BindGroup; 3] {
-        [
-            [second_surface_dispatch, shadow_edge_dispatch],
-            [stand_in, shadow_edge_dispatch],
-            [second_surface_dispatch, stand_in],
-        ]
-        .map(|dispatches| {
-            Self::bind_group(
-                device,
-                layout,
-                buffers,
-                shadow_mask_lights_overflowed,
-                dispatches,
-                render_targets,
-            )
-        })
-    }
-
     fn bind_group(
+        &self,
         device: &wgpu::Device,
-        layout: &wgpu::BindGroupLayout,
-        buffers: &[(&'static str, wgpu::Buffer); 5],
-        shadow_mask_lights_overflowed: &wgpu::Buffer,
         [second_surface_dispatch, shadow_edge_dispatch]: [&wgpu::Buffer; 2],
         render_targets: &RenderTargets,
     ) -> wgpu::BindGroup {
         let own = [
             (
                 "shadow_mask_lights_overflowed",
-                shadow_mask_lights_overflowed.as_entire_binding(),
+                self.shadow_mask_lights_overflowed.as_entire_binding(),
             ),
             (
                 "second_surfaces",
@@ -313,8 +269,8 @@ impl ShadowMaskPass {
         ];
         SHADOW_MASK_BUILD.bind_group(
             device,
-            layout,
-            buffers
+            &self.layout,
+            self.buffers
                 .iter()
                 .map(|(name, buffer)| (*name, buffer.as_entire_binding()))
                 .chain(own),
@@ -322,18 +278,28 @@ impl ShadowMaskPass {
     }
 
     /// Records the pass into `encoder`, tracing the Ray scene of
-    /// `ray_scene_bind_group`, timed into `timestamp_writes`.
+    /// `ray_scene_bind_group` into the shadow mask `target_groups` bind,
+    /// timed into `timestamp_writes`.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
+        target_groups: &ShadowMaskTargetGroups,
         ray_scene_bind_group: &wgpu::BindGroup,
         timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
         encoder.clear_buffer(&self.shadow_mask_lights_overflowed, 0, None);
         encoder.clear_buffer(&self.second_surface_dispatch, 0, None);
-        encoder.clear_buffer(&self.second_surfaces, 0, Some(size_of::<u32>() as u64));
+        encoder.clear_buffer(
+            &target_groups.second_surfaces,
+            0,
+            Some(size_of::<u32>() as u64),
+        );
         encoder.clear_buffer(&self.shadow_edge_dispatch, 0, None);
-        encoder.clear_buffer(&self.shadow_edges, 0, Some(size_of::<u32>() as u64));
+        encoder.clear_buffer(
+            &target_groups.shadow_edges,
+            0,
+            Some(size_of::<u32>() as u64),
+        );
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some(SHADOW_MASK_PASS),
             timestamp_writes,
@@ -342,10 +308,10 @@ impl ShadowMaskPass {
         pass.set_bind_group(RAY_SCENE.index, ray_scene_bind_group, &[]);
         pass.set_bind_group(
             SHADOW_MASK_BUILD.index,
-            &self.nearest_surfaces_bind_group,
+            &target_groups.nearest_surfaces_bind_group,
             &[],
         );
-        let (width, height) = self.size;
+        let (width, height) = target_groups.size;
         pass.dispatch_workgroups(
             width.div_ceil(SHADOW_MASK_TILE_SIZE),
             height.div_ceil(SHADOW_MASK_TILE_SIZE),
@@ -354,14 +320,14 @@ impl ShadowMaskPass {
         pass.set_pipeline(&self.second_surfaces_pipeline);
         pass.set_bind_group(
             SHADOW_MASK_BUILD.index,
-            &self.second_surfaces_bind_group,
+            &target_groups.second_surfaces_bind_group,
             &[],
         );
         pass.dispatch_workgroups_indirect(&self.second_surface_dispatch, 0);
         pass.set_pipeline(&self.list_shadow_edges_pipeline);
         pass.set_bind_group(
             SHADOW_MASK_BUILD.index,
-            &self.nearest_surfaces_bind_group,
+            &target_groups.nearest_surfaces_bind_group,
             &[],
         );
         pass.dispatch_workgroups(
@@ -372,7 +338,7 @@ impl ShadowMaskPass {
         pass.set_pipeline(&self.trace_shadow_edges_pipeline);
         pass.set_bind_group(
             SHADOW_MASK_BUILD.index,
-            &self.sample_verdicts_bind_group,
+            &target_groups.sample_verdicts_bind_group,
             &[],
         );
         pass.dispatch_workgroups_indirect(&self.shadow_edge_dispatch, 0);

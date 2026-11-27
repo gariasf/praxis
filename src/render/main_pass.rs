@@ -46,9 +46,6 @@ pub struct MainPass {
     packed_indices_buffer: wgpu::Buffer,
     /// The frame's draw's indirect arguments, a draw per phase.
     frame_draw_buffer: wgpu::Buffer,
-    /// Its group 3 (`MAIN_PASS_INPUTS`), built from the render targets by
-    /// `new`, and again by `bind_render_targets`.
-    inputs: wgpu::BindGroup,
     /// Whether shadow rays are on, so phase two's depth is drawn in its own
     /// pass rather than by the lit pass.
     shadow_rays: bool,
@@ -57,32 +54,28 @@ pub struct MainPass {
     keeps_depth: bool,
 }
 
+/// The pass's group 3 (`MAIN_PASS_INPUTS`), which reads the render targets
+/// `target_groups` built it from.
+pub struct MainTargetGroups {
+    inputs: wgpu::BindGroup,
+}
+
 impl MainPass {
     /// The pass, given the layouts of the shared bind groups its shader
     /// module declares, which draws the culling pass's frame's draw, its
     /// Meshlet records `meshlet_records`, packed indices `packed_indices`
-    /// and indirect arguments `frame_draw`, lit through the shadow mask of
-    /// `render_targets`, its lit pipeline as `switches` set, its shader
-    /// module assembled with `capacities`.
-    #[expect(clippy::too_many_arguments)]
+    /// and indirect arguments `frame_draw`, its lit pipeline as `switches`
+    /// set, its shader module assembled with `capacities`.
     pub fn new(
         device: &wgpu::Device,
         bind_group_layouts: &[(&BindGroupDefinition, &wgpu::BindGroupLayout)],
         meshlet_records: &wgpu::Buffer,
         packed_indices: &wgpu::Buffer,
         frame_draw: &wgpu::Buffer,
-        render_targets: &RenderTargets,
         switches: RenderSwitches,
         capacities: &RenderCapacities,
     ) -> MainPass {
         let inputs_layout = MAIN_PASS_INPUTS.layout(device);
-        let meshlet_records_buffer = meshlet_records.clone();
-        let inputs = Self::inputs_bind_group(
-            device,
-            &inputs_layout,
-            &meshlet_records_buffer,
-            render_targets,
-        );
         let shader = shaders::MAIN.create_with_unbounded_loops(device, capacities);
         let mut layouts = bind_group_layouts.to_vec();
         layouts.push((&MAIN_PASS_INPUTS, &inputs_layout));
@@ -228,39 +221,29 @@ impl MainPass {
             thin_lit_pass_depth_pipeline,
             thin_lit_pipeline,
             inputs_layout,
-            meshlet_records_buffer,
+            meshlet_records_buffer: meshlet_records.clone(),
             packed_indices_buffer: packed_indices.clone(),
             frame_draw_buffer: frame_draw.clone(),
-            inputs,
             shadow_rays: switches.shadow_rays,
             keeps_depth: switches.count_point_lights,
         }
     }
 
-    /// Builds the bind group that reads `render_targets` again, as `new`
-    /// builds it: after every resize, which creates them again.
-    pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
-        self.inputs = Self::inputs_bind_group(
+    /// Its group 3: the Meshlet records, and the shadow mask of
+    /// `render_targets` and which samples show its second surface.
+    pub fn target_groups(
+        &self,
+        device: &wgpu::Device,
+        render_targets: &RenderTargets,
+    ) -> MainTargetGroups {
+        let inputs = MAIN_PASS_INPUTS.bind_group(
             device,
             &self.inputs_layout,
-            &self.meshlet_records_buffer,
-            render_targets,
-        );
-    }
-
-    /// Group 3 of `layout`: `meshlet_records`, and the shadow mask of
-    /// `render_targets` and which samples show its second surface.
-    fn inputs_bind_group(
-        device: &wgpu::Device,
-        layout: &wgpu::BindGroupLayout,
-        meshlet_records: &wgpu::Buffer,
-        render_targets: &RenderTargets,
-    ) -> wgpu::BindGroup {
-        MAIN_PASS_INPUTS.bind_group(
-            device,
-            layout,
             [
-                ("meshlet_records", meshlet_records.as_entire_binding()),
+                (
+                    "meshlet_records",
+                    self.meshlet_records_buffer.as_entire_binding(),
+                ),
                 (
                     "shadow_mask",
                     wgpu::BindingResource::TextureView(render_targets.shadow_mask()),
@@ -270,11 +253,12 @@ impl MainPass {
                     wgpu::BindingResource::TextureView(render_targets.shadow_mask_samples()),
                 ),
             ],
-        )
+        );
+        MainTargetGroups { inputs }
     }
 
-    /// Records `phase`'s depth pass into `encoder`, with the groups of
-    /// `bind_groups` its vertex stage reads set, timed into
+    /// Records `phase`'s depth pass into `encoder`, with `target_groups` and
+    /// the groups of `bind_groups` its vertex stage reads set, timed into
     /// `timestamp_writes`: it draws the phase's draw into the depth target,
     /// and with shadow rays on into the surface normals. Phase one's, the
     /// depth pre-pass, clears them; phase two's, recorded only with shadow
@@ -284,6 +268,7 @@ impl MainPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         render_targets: &RenderTargets,
+        target_groups: &MainTargetGroups,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         phase: CullingPhase,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
@@ -315,6 +300,7 @@ impl MainPass {
         depth_pass.set_pipeline(&self.depth_prepass_pipeline);
         self.bind(
             &mut depth_pass,
+            target_groups,
             bind_groups
                 .iter()
                 .copied()
@@ -332,13 +318,15 @@ impl MainPass {
     /// Records the lit pass into `encoder`: clears the multisampled colour
     /// to `background`, exposed, draws phase two's draw into the depth
     /// target unless its own pass did, then the frame's draw of both phases
-    /// at depth equal, with `bind_groups` set, and resolves the colour into
+    /// at depth equal, with `target_groups` and `bind_groups` set, and
+    /// resolves the colour into
     /// the HDR target, timed into `timestamp_writes`. Each draw is followed
     /// by the Thin Primitives' and small Instances' of its phases.
     pub fn record_lit_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         render_targets: &RenderTargets,
+        target_groups: &MainTargetGroups,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         background: wgpu::Color,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
@@ -354,7 +342,7 @@ impl MainPass {
             timestamp_writes,
             multiview_mask: None,
         });
-        self.bind(&mut lit_pass, bind_groups.iter().copied());
+        self.bind(&mut lit_pass, target_groups, bind_groups.iter().copied());
         if !self.shadow_rays {
             lit_pass.set_pipeline(&self.lit_pass_depth_pipeline);
             lit_pass.draw_indexed_indirect(&self.frame_draw_buffer, PHASE_TWO_DRAW_OFFSET);
@@ -373,12 +361,13 @@ impl MainPass {
     fn bind<'a>(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
+        target_groups: &MainTargetGroups,
         bind_groups: impl IntoIterator<Item = (&'a BindGroupDefinition, &'a wgpu::BindGroup)>,
     ) {
         for (definition, bind_group) in bind_groups {
             render_pass.set_bind_group(definition.index, bind_group, &[]);
         }
-        render_pass.set_bind_group(MAIN_PASS_INPUTS.index, &self.inputs, &[]);
+        render_pass.set_bind_group(MAIN_PASS_INPUTS.index, &target_groups.inputs, &[]);
         render_pass.set_index_buffer(
             self.packed_indices_buffer.slice(..),
             wgpu::IndexFormat::Uint32,

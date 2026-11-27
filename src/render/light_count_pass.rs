@@ -15,20 +15,21 @@ use crate::render::targets::RenderTargets;
 /// Pixels along each side of the tile each workgroup counts.
 pub(crate) const LIGHT_COUNT_TILE_SIZE: u32 = 8;
 
-/// The pass's pipeline, and its bind group of the buffers it reads and
-/// writes with the depth target.
+/// The pass's pipeline, and the buffers it reads and writes.
 pub struct LightCountPass {
     pipeline: wgpu::ComputePipeline,
     layout: wgpu::BindGroupLayout,
     buffers: LightCountBuffers,
-    /// Built from the render targets by `new`, and again by
-    /// `bind_render_targets`.
+}
+
+/// The pass's group 3 (`LIGHT_COUNT_INPUT`), which reads the depth target of
+/// the render targets `target_groups` built it from, and that target's size.
+pub struct LightCountTargetGroups {
     bind_group: wgpu::BindGroup,
-    /// The depth target's size.
     size: wgpu::Extent3d,
 }
 
-/// The buffers the pass reads and writes, kept to rebuild its bind group:
+/// The buffers the pass reads and writes, kept to build its bind group:
 /// the Renderer's camera and light buffer, and the Froxel pass's lists and
 /// light counts.
 struct LightCountBuffers {
@@ -41,14 +42,12 @@ struct LightCountBuffers {
 impl LightCountPass {
     /// The pass, counting the lights of `lights`, seen by `camera`, the
     /// Renderer's buffers, through `froxel_pass`'s lists into its light
-    /// counts, at the depth of `render_targets`, its shader module assembled
-    /// with `capacities`.
+    /// counts, its shader module assembled with `capacities`.
     pub fn new(
         device: &wgpu::Device,
         camera: &wgpu::Buffer,
         lights: &wgpu::Buffer,
         froxel_pass: &FroxelPass,
-        render_targets: &RenderTargets,
         capacities: &RenderCapacities,
     ) -> LightCountPass {
         let layout = LIGHT_COUNT_INPUT.layout(device);
@@ -63,35 +62,42 @@ impl LightCountPass {
             froxel_lists: froxel_pass.froxel_lists().clone(),
             light_counts: froxel_pass.light_counts().clone(),
         };
-        let bind_group = bind_group(device, &layout, &buffers, render_targets);
         LightCountPass {
             pipeline,
             layout,
             buffers,
-            bind_group,
+        }
+    }
+
+    /// The bind group that reads the depth target of `render_targets`, with
+    /// that target's size.
+    pub fn target_groups(
+        &self,
+        device: &wgpu::Device,
+        render_targets: &RenderTargets,
+    ) -> LightCountTargetGroups {
+        LightCountTargetGroups {
+            bind_group: bind_group(device, &self.layout, &self.buffers, render_targets),
             size: render_targets.depth().texture().size(),
         }
     }
 
-    /// Builds the bind group that reads `render_targets` again, as `new`
-    /// builds it: after every resize, which creates them again.
-    pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
-        self.bind_group = bind_group(device, &self.layout, &self.buffers, render_targets);
-        self.size = render_targets.depth().texture().size();
-    }
-
     /// Records the pass into `encoder`: a workgroup per tile of the depth
-    /// target.
-    pub fn record(&self, encoder: &mut wgpu::CommandEncoder) {
+    /// target `target_groups` bind.
+    pub fn record(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        target_groups: &LightCountTargetGroups,
+    ) {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("light_count_pass"),
             timestamp_writes: None,
         });
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(LIGHT_COUNT_INPUT.index, &self.bind_group, &[]);
+        pass.set_bind_group(LIGHT_COUNT_INPUT.index, &target_groups.bind_group, &[]);
         pass.dispatch_workgroups(
-            self.size.width.div_ceil(LIGHT_COUNT_TILE_SIZE),
-            self.size.height.div_ceil(LIGHT_COUNT_TILE_SIZE),
+            target_groups.size.width.div_ceil(LIGHT_COUNT_TILE_SIZE),
+            target_groups.size.height.div_ceil(LIGHT_COUNT_TILE_SIZE),
             1,
         );
     }

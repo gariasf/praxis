@@ -60,8 +60,8 @@ pub const LUMINANCE_COEFFICIENTS: [f32; 3] = [0.2126, 0.7152, 0.0722];
 
 /// Every size-dependent target, created together by `new`, which a resize
 /// calls again. Bind groups are snapshots, not pointers: a pass builds the
-/// bind groups that read targets in one function, which it calls at
-/// creation and after every resize.
+/// bind groups that read targets in one function, `target_groups`, and the
+/// Renderer holds what it returns beside the targets it read.
 pub struct RenderTargets {
     depth: Counted<wgpu::TextureView>,
     /// A transient attachment, memoryless where the adapter allows: the pass
