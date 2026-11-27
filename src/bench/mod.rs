@@ -2079,6 +2079,11 @@ mod tests {
             verdicts(&current, &baseline(), CompareMode::Ci),
             [("staging", Verdict::Fail)]
         );
+        current.gpu_memory_bytes_by_kind = [("probes".to_owned(), (1 << 30) + 1)].into();
+        assert_eq!(
+            verdicts(&current, &baseline(), CompareMode::Ci),
+            [("probes", Verdict::Fail)]
+        );
     }
 
     /// The pools size themselves from the checked-in Budgets, whose kinds
@@ -2489,7 +2494,7 @@ mod tests {
                     gpu_memory_bytes_by_kind: if warming_up {
                         [9; GpuMemoryKind::COUNT]
                     } else {
-                        [1, 2, 3, 4, 5, 6, 7]
+                        [1, 2, 3, 4, 5, 6, 7, 8]
                     },
                     ..FrameStats::default()
                 }
@@ -2600,6 +2605,7 @@ mod tests {
                 ("acceleration_structures", 5),
                 ("staging", 6),
                 ("scene_and_pass_buffers", 7),
+                ("probes", 8),
             ]
             .map(|(kind, bytes)| (kind.to_owned(), bytes))
             .into()
@@ -2880,7 +2886,7 @@ mod tests {
         assert_eq!(traversal.peak_gpu_memory_bytes, 7_000_000_000);
         assert_eq!(
             traversal.peak_gpu_memory_bytes_by_kind,
-            [9, 40, 9, 9, 9, 60, 9]
+            [9, 40, 9, 9, 9, 60, 9, 9]
         );
         assert_eq!(
             (traversal.materials_refused, traversal.meshes_refused),

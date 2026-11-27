@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use crate::camera::Camera;
 use crate::gpu::GpuContext;
+use crate::render::probes::irradiance_by_probe;
 use crate::render::shadow_mask_pass::SHADOW_MASK_LIGHTS;
 use crate::render::{FRAMES_IN_FLIGHT, RenderSwitches};
 use crate::scenes::ReferenceScene;
@@ -270,6 +271,35 @@ pub fn shadow_mask_differences(
         .collect())
 }
 
+/// The light each Probe holds after each of `frames` of `scene`, rendered as
+/// `capture_frames` renders them with the Probes on: a Probe's linear RGB at
+/// each texel of its octahedral map, row by row, as stored.
+pub fn capture_probe_light(
+    context: &GpuContext,
+    scene: ReferenceScene,
+    width: u32,
+    height: u32,
+    frames: &[u32],
+) -> anyhow::Result<Vec<Vec<Vec<[f32; 3]>>>> {
+    let irradiance = read_frames(
+        context,
+        scene,
+        glam::DVec3::ZERO,
+        width,
+        height,
+        frames,
+        RenderSwitches {
+            probes: true,
+            ..RenderSwitches::default()
+        },
+        ReadBack::ProbeLight,
+    )?;
+    Ok(irradiance
+        .iter()
+        .map(|texels| irradiance_by_probe(texels))
+        .collect())
+}
+
 /// What `source` names of each of `frames`, as `capture_frames` renders
 /// them.
 #[expect(clippy::too_many_arguments)]
@@ -428,6 +458,9 @@ pub(crate) fn render_frames(
             let texture = match source {
                 ReadBack::Target => &target,
                 ReadBack::ShadowMask => state.shadow_mask(),
+                ReadBack::ProbeLight => state
+                    .probe_irradiance()
+                    .ok_or_else(|| anyhow::anyhow!("the Probes are off"))?,
             };
             pixels.push(self::read_back(context, texture)?);
         }
@@ -458,6 +491,8 @@ pub(crate) enum ReadBack {
     Target,
     /// The shadow mask's first layer, each pixel's nearest surface's word.
     ShadowMask,
+    /// The irradiance the Probes hold, with the `probes` Render switch on.
+    ProbeLight,
 }
 
 /// How `render_frames` waits for the oldest frame in flight.

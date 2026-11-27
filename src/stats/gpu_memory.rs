@@ -22,10 +22,12 @@ pub enum GpuMemoryKind {
     /// The Instance and light buffers, the Mesh and Material tables, and the
     /// passes' own buffers and textures that no target size sets.
     SceneAndPassBuffers,
+    /// A Cascade's Probes: their irradiance, depth moments and state.
+    Probes,
 }
 
 impl GpuMemoryKind {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::GeometryArenas,
         Self::TexturePool,
         Self::ResidentTails,
@@ -33,6 +35,7 @@ impl GpuMemoryKind {
         Self::AccelerationStructures,
         Self::Staging,
         Self::SceneAndPassBuffers,
+        Self::Probes,
     ];
 
     pub const COUNT: usize = Self::ALL.len();
@@ -47,6 +50,7 @@ impl GpuMemoryKind {
             Self::AccelerationStructures => "acceleration_structures",
             Self::Staging => "staging",
             Self::SceneAndPassBuffers => "scene_and_pass_buffers",
+            Self::Probes => "probes",
         }
     }
 }
@@ -63,6 +67,7 @@ pub struct GpuMemoryBudgets {
     pub acceleration_structures: u64,
     pub staging: u64,
     pub scene_and_pass_buffers: u64,
+    pub probes: u64,
 }
 
 impl GpuMemoryBudgets {
@@ -76,6 +81,7 @@ impl GpuMemoryBudgets {
             acceleration_structures: bytes,
             staging: bytes,
             scene_and_pass_buffers: bytes,
+            probes: bytes,
         }
     }
 
@@ -88,6 +94,7 @@ impl GpuMemoryBudgets {
             GpuMemoryKind::AccelerationStructures => self.acceleration_structures,
             GpuMemoryKind::Staging => self.staging,
             GpuMemoryKind::SceneAndPassBuffers => self.scene_and_pass_buffers,
+            GpuMemoryKind::Probes => self.probes,
         }
     }
 }
