@@ -250,10 +250,10 @@ textureStore(level, texel.xy, vec4&lt;f32&gt;(minimum));</code></pre>
 </section>
 
 <section class="part prose" id="resize">
-  <div class="part-mark">5 &middot; <code>DepthPyramidPass::bind_render_targets</code></div>
+  <div class="part-mark">5 &middot; <code>DepthPyramidPass::target_groups</code></div>
   <h2>Recreated on resize</h2>
   <p class="key-idea">The pyramid's size follows the targets', so it lives with them and is created again on every resize; the passes whose bind groups hold it rebuild those groups, since a bind group keeps the textures it was built with.</p>
-  <p><code>Renderer::resize</code> creates every render target again, then calls <code>bind_render_targets</code> on each pass whose groups read one: the pyramid pass, which rebuilds a group per level with that level's size, and the culling pass, whose group 3 holds the whole pyramid for phase two, among others. Left bound to the old targets, the pyramid pass would go on reducing the old depth into the old pyramid, and phase two would read texels the frame never wrote.</p>
+  <p><code>Renderer::resize</code> creates every render target again, then calls <code>target_groups</code> on each pass whose groups read one: the pyramid pass, which rebuilds a group per level with that level's size, and the culling pass, whose group 3 holds the whole pyramid for phase two, among others. Left bound to the old targets, the pyramid pass would go on reducing the old depth into the old pyramid, and phase two would read texels the frame never wrote.</p>
 </section>
 
 <section class="part prose" id="reader">

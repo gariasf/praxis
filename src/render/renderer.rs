@@ -8,16 +8,22 @@ use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::bend_pass::{BEND_CAPACITY, BEND_PASS, BendData, BendPass};
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::blas_refit::BLAS_REFIT_PASS;
-use crate::render::culling_pass::{CullingPass, CullingPhase, DrawCapacity, SCAN_BLOCK_SIZE};
-use crate::render::depth_pyramid_pass::{DEPTH_PYRAMID_PASS, DepthPyramidPass};
+use crate::render::culling_pass::{
+    CullingPass, CullingPhase, CullingTargetGroups, DrawCapacity, SCAN_BLOCK_SIZE,
+};
+use crate::render::depth_pyramid_pass::{
+    DEPTH_PYRAMID_PASS, DepthPyramidPass, DepthPyramidTargetGroups,
+};
 use crate::render::froxel_pass::{FROXEL_PASS, FroxelPass};
-use crate::render::light_count_pass::LightCountPass;
-use crate::render::main_pass::{DEPTH_PREPASS, LIT_PASS, MainPass, PHASE_TWO_DEPTH_PASS};
+use crate::render::light_count_pass::{LightCountPass, LightCountTargetGroups};
+use crate::render::main_pass::{
+    DEPTH_PREPASS, LIT_PASS, MainPass, MainTargetGroups, PHASE_TWO_DEPTH_PASS,
+};
 use crate::render::ray_scene::{RayScene, create_frame_encoder};
 use crate::render::readback::{FrameTimestamps, GpuStatsReadback};
-use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass};
+use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass, ShadowMaskTargetGroups};
 use crate::render::targets::RenderTargets;
-use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass};
+use crate::render::tonemapping_pass::{TONEMAPPING_PASS, TonemappingPass, TonemappingTargetGroups};
 use crate::render::{
     CameraUniform, FRAMES_IN_FLIGHT, FrameData, FrameStaging, InstanceData, LightData,
     LightUniform, LoadStaging,
@@ -286,12 +292,7 @@ impl RenderCapacities {
 pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
-    aspect_ratio: f32,
-    /// `lod_error_per_metre` of the targets' height.
-    lod_error_per_metre: f32,
-    /// `pixel_size_per_metre` of the targets' height.
-    pixel_size_per_metre: f32,
-    render_targets: RenderTargets,
+    bound_targets: BoundTargets,
     bend_pass: BendPass,
     froxel_pass: FroxelPass,
     culling_pass: CullingPass,
@@ -334,6 +335,57 @@ pub struct Renderer {
     /// the GPU can finish the frame's earlier submissions first.
     #[cfg(test)]
     pub(crate) pause_before_frame_submit: std::time::Duration,
+}
+
+/// What a target size fixes: the render targets, the scalars derived from
+/// their size, and the bind groups of every pass that reads a target, which
+/// that pass records with.
+struct BoundTargets {
+    render_targets: RenderTargets,
+    aspect_ratio: f32,
+    /// `lod_error_per_metre` of the targets' height.
+    lod_error_per_metre: f32,
+    /// `pixel_size_per_metre` of the targets' height.
+    pixel_size_per_metre: f32,
+    culling: CullingTargetGroups,
+    depth_pyramid: DepthPyramidTargetGroups,
+    main: MainTargetGroups,
+    shadow_mask: ShadowMaskTargetGroups,
+    tonemapping: TonemappingTargetGroups,
+    /// With the `count_point_lights` Render switch on.
+    light_count: Option<LightCountTargetGroups>,
+}
+
+impl BoundTargets {
+    /// Render targets of `width` × `height`, both non-zero, and what each
+    /// pass binds of them.
+    #[expect(clippy::too_many_arguments)]
+    fn new(
+        device: &wgpu::Device,
+        memory: &GpuMemory,
+        width: u32,
+        height: u32,
+        culling_pass: &CullingPass,
+        depth_pyramid_pass: &DepthPyramidPass,
+        main_pass: &MainPass,
+        shadow_mask_pass: &ShadowMaskPass,
+        tonemapping_pass: &TonemappingPass,
+        light_count_pass: Option<&LightCountPass>,
+    ) -> BoundTargets {
+        let render_targets = RenderTargets::new(device, memory, width, height);
+        BoundTargets {
+            aspect_ratio: width as f32 / height as f32,
+            lod_error_per_metre: lod_error_per_metre(height),
+            pixel_size_per_metre: pixel_size_per_metre(height),
+            culling: culling_pass.target_groups(device, &render_targets),
+            depth_pyramid: depth_pyramid_pass.target_groups(device, &render_targets),
+            main: main_pass.target_groups(device, &render_targets),
+            shadow_mask: shadow_mask_pass.target_groups(device, &render_targets),
+            tonemapping: tonemapping_pass.target_groups(device, &render_targets),
+            light_count: light_count_pass.map(|pass| pass.target_groups(device, &render_targets)),
+            render_targets,
+        }
+    }
 }
 
 impl Renderer {
@@ -388,7 +440,6 @@ impl Renderer {
             switches.residency,
         );
 
-        let render_targets = RenderTargets::new(&device, &memory, width, height);
         let culling_pass = CullingPass::new(
             &device,
             &memory,
@@ -399,7 +450,6 @@ impl Renderer {
             draw_capacity,
             &capacities,
             switches,
-            &render_targets,
         );
         let main_pass = MainPass::new(
             &device,
@@ -411,7 +461,6 @@ impl Renderer {
             culling_pass.meshlet_records(),
             culling_pass.packed_indices(),
             culling_pass.frame_draw(),
-            &render_targets,
             switches,
             &capacities,
         );
@@ -460,7 +509,6 @@ impl Renderer {
                 &camera_buffer,
                 &light_buffer,
                 &froxel_pass,
-                &render_targets,
                 &capacities,
             )
         });
@@ -543,20 +591,30 @@ impl Renderer {
                 ("froxel_lists", froxel_pass.froxel_lists()),
                 ("instance_offsets", culling_pass.instance_offsets()),
             ],
-            &render_targets,
             switches,
             &capacities,
         );
-        let depth_pyramid_pass = DepthPyramidPass::new(&device, &render_targets, &capacities);
+        let depth_pyramid_pass = DepthPyramidPass::new(&device, &capacities);
         let tonemapping_pass = TonemappingPass::new(
             &device,
             &memory,
             target_format,
-            &render_targets,
             &mut load_staging,
             &capacities,
         );
         let gpu_stats = GpuStatsReadback::new(&device, queue.get_timestamp_period());
+        let bound_targets = BoundTargets::new(
+            &device,
+            &memory,
+            width,
+            height,
+            &culling_pass,
+            &depth_pyramid_pass,
+            &main_pass,
+            &shadow_mask_pass,
+            &tonemapping_pass,
+            light_count_pass.as_ref(),
+        );
 
         Self {
             mesh_pool,
@@ -564,10 +622,7 @@ impl Renderer {
             load_staging,
             device,
             queue,
-            aspect_ratio: width as f32 / height as f32,
-            lod_error_per_metre: lod_error_per_metre(height),
-            pixel_size_per_metre: pixel_size_per_metre(height),
-            render_targets,
+            bound_targets,
             bend_pass,
             froxel_pass,
             culling_pass,
@@ -598,35 +653,28 @@ impl Renderer {
 
     /// Matches a new target size, both non-zero.
     pub fn resize(&mut self, width: u32, height: u32) {
-        // A pass whose bind groups read a target rebuilds them here, after
-        // the render targets.
-        self.render_targets = RenderTargets::new(&self.device, &self.memory, width, height);
-        self.depth_pyramid_pass
-            .bind_render_targets(&self.device, &self.render_targets);
-        self.culling_pass
-            .bind_render_targets(&self.device, &self.render_targets);
-        self.main_pass
-            .bind_render_targets(&self.device, &self.render_targets);
-        self.shadow_mask_pass
-            .bind_render_targets(&self.device, &self.render_targets);
-        self.tonemapping_pass
-            .bind_render_targets(&self.device, &self.render_targets);
-        if let Some(light_count_pass) = &mut self.light_count_pass {
-            light_count_pass.bind_render_targets(&self.device, &self.render_targets);
-        }
-        self.aspect_ratio = width as f32 / height as f32;
-        self.lod_error_per_metre = lod_error_per_metre(height);
-        self.pixel_size_per_metre = pixel_size_per_metre(height);
+        self.bound_targets = BoundTargets::new(
+            &self.device,
+            &self.memory,
+            width,
+            height,
+            &self.culling_pass,
+            &self.depth_pyramid_pass,
+            &self.main_pass,
+            &self.shadow_mask_pass,
+            &self.tonemapping_pass,
+            self.light_count_pass.as_ref(),
+        );
     }
 
     /// The width of the target over its height.
     pub fn aspect_ratio(&self) -> f32 {
-        self.aspect_ratio
+        self.bound_targets.aspect_ratio
     }
 
     /// The shadow mask the last frame's shadow mask pass wrote.
     pub(crate) fn shadow_mask(&self) -> &wgpu::Texture {
-        self.render_targets.shadow_mask().texture()
+        self.bound_targets.render_targets.shadow_mask().texture()
     }
 
     /// What its Instance buffer, light buffer and static TLAS hold, which
@@ -686,8 +734,8 @@ impl Renderer {
         let started = started + compaction_time + ray_scene_time;
         let [dynamic_tlas_bounds_min, dynamic_tlas_bounds_max] = ray_scene_frame.dynamic_bounds;
         let camera = CameraUniform {
-            lod_error_per_metre: self.lod_error_per_metre,
-            pixel_size_per_metre: self.pixel_size_per_metre,
+            lod_error_per_metre: self.bound_targets.lod_error_per_metre,
+            pixel_size_per_metre: self.bound_targets.pixel_size_per_metre,
             tlas_anchor: ray_scene_frame.anchor,
             dynamic_tlas_entries: ray_scene_frame.dynamic_entries,
             dynamic_tlas_bounds_min,
@@ -794,6 +842,7 @@ impl Renderer {
         ];
         self.culling_pass.record(
             &mut encoder,
+            &self.bound_targets.culling,
             &culling_bind_groups,
             frame,
             CullingPhase::One,
@@ -814,7 +863,8 @@ impl Renderer {
         ];
         self.main_pass.record_depth_pass(
             &mut encoder,
-            &self.render_targets,
+            &self.bound_targets.render_targets,
+            &self.bound_targets.main,
             &bind_groups,
             CullingPhase::One,
             timestamps
@@ -823,12 +873,14 @@ impl Renderer {
         );
         self.depth_pyramid_pass.record(
             &mut encoder,
+            &self.bound_targets.depth_pyramid,
             timestamps
                 .as_mut()
                 .map(|timestamps| timestamps.pass(DEPTH_PYRAMID_PASS).compute()),
         );
         self.culling_pass.record(
             &mut encoder,
+            &self.bound_targets.culling,
             &culling_bind_groups,
             frame,
             CullingPhase::Two,
@@ -837,7 +889,8 @@ impl Renderer {
         if self.shadow_rays {
             self.main_pass.record_depth_pass(
                 &mut encoder,
-                &self.render_targets,
+                &self.bound_targets.render_targets,
+                &self.bound_targets.main,
                 &bind_groups,
                 CullingPhase::Two,
                 timestamps
@@ -846,6 +899,7 @@ impl Renderer {
             );
             self.shadow_mask_pass.record(
                 &mut encoder,
+                &self.bound_targets.shadow_mask,
                 self.ray_scene.bind_group(),
                 timestamps
                     .as_mut()
@@ -854,7 +908,8 @@ impl Renderer {
         }
         self.main_pass.record_lit_pass(
             &mut encoder,
-            &self.render_targets,
+            &self.bound_targets.render_targets,
+            &self.bound_targets.main,
             &bind_groups,
             frame.background,
             timestamps
@@ -863,14 +918,17 @@ impl Renderer {
         );
         self.tonemapping_pass.record(
             &mut encoder,
+            &self.bound_targets.tonemapping,
             target,
             timestamps
                 .as_mut()
                 .map(|timestamps| timestamps.pass(TONEMAPPING_PASS).render()),
         );
         // Untimed, after the passes the frame's GPU time spans.
-        if let Some(light_count_pass) = &self.light_count_pass {
-            light_count_pass.record(&mut encoder);
+        if let Some(light_count_pass) = &self.light_count_pass
+            && let Some(target_groups) = &self.bound_targets.light_count
+        {
+            light_count_pass.record(&mut encoder, target_groups);
         }
         // The depth pre-pass draws phase one's draw, and phase two's depth
         // pass or the lit pass phase two's into depth, then the lit pass both
@@ -1139,6 +1197,109 @@ pub(crate) mod tests {
             resized_image == created_image,
             "the resized Renderer drew another image than one created at its size"
         );
+    }
+
+    /// A white quad over the left half of the view under three point lights
+    /// that reach it, so its lit pixels list point lights, once with the
+    /// `count_point_lights` Render switch on and once with shadow rays off.
+    /// After a frame at another size and a resize, a Renderer's next frame
+    /// is the image and the GPU counts of the second frame of one created at
+    /// the new size, whose first frame left it the same Instance visible.
+    #[test]
+    fn a_resized_renderer_counts_lights_and_draws_without_shadow_rays_as_one_created_at_its_size() {
+        let Some(context) = gpu_context() else {
+            return;
+        };
+        let (width, height) = (24, 20);
+        let view_proj = projection_matrix(1.0) * Camera::new().view_matrix();
+        let lit_frame = |renderer: &mut Renderer| {
+            let white = renderer
+                .material_pool
+                .insert(
+                    &mut renderer.load_staging,
+                    MaterialData {
+                        base_color: [1.0; 4],
+                        metallic_roughness: [0.0, 1.0, 0.0, 0.0],
+                        emissive: [0.0, 0.0, 0.0, 1.0],
+                        layers: [MaterialPool::DEFAULT_LAYER; 4],
+                        extra: [MaterialPool::DEFAULT_LAYER, 0, 0, 0],
+                    },
+                )
+                .expect("a Material fits");
+            let quad = load_quad(renderer);
+            let left_half = InstanceData {
+                rotation_scale: padded_columns(glam::Mat3::from_diagonal(glam::vec3(
+                    3.0, 4.0, 1.0,
+                ))),
+                offset: [-1.5, 0.0, -1.8],
+                ..instance(quad, white.index(), [0.0, 0.0])
+            };
+            let lights = [[-0.3, 0.0, -0.8], [0.3, 0.0, -0.8], [0.0, 0.3, -0.8]];
+            FrameData {
+                camera: CameraUniform {
+                    view_proj: view_proj.to_cols_array_2d(),
+                    exposure: 1.0,
+                    ..CameraUniform::default()
+                },
+                light: LightUniform {
+                    point_light_count: lights.len() as u32,
+                    ..LightUniform::default()
+                },
+                lights: lights
+                    .map(|offset| LightData {
+                        range: 10.0,
+                        offset,
+                        intensity: [0.3; 3],
+                        ..LightData::default()
+                    })
+                    .to_vec(),
+                ..frame_of(vec![left_half])
+            }
+        };
+        let counts = |gpu: GpuFrameStats| {
+            [
+                gpu.instances_drawn,
+                gpu.triangles_drawn,
+                gpu.phase_two_triangles_drawn,
+                gpu.instances_overflowed,
+                gpu.froxel_lights_overflowed,
+                gpu.shadow_mask_lights_overflowed,
+                gpu.lit_pixels,
+                gpu.listed_point_lights,
+                gpu.reaching_point_lights,
+            ]
+        };
+        let counting = RenderSwitches {
+            count_point_lights: true,
+            ..RenderSwitches::default()
+        };
+        let unshadowed = RenderSwitches {
+            shadow_rays: false,
+            ..RenderSwitches::default()
+        };
+        for switches in [counting, unshadowed] {
+            let mut resized = Renderer::new(&context, TARGET_FORMAT, SIZE, SIZE, switches);
+            let frame = lit_frame(&mut resized);
+            render_frame(&context, &mut resized, &frame, SIZE, SIZE);
+            resized.resize(width, height);
+            let (resized_image, _, resized_gpu) =
+                render_frame(&context, &mut resized, &frame, width, height);
+
+            let mut created = Renderer::new(&context, TARGET_FORMAT, width, height, switches);
+            let frame = lit_frame(&mut created);
+            render_frame(&context, &mut created, &frame, width, height);
+            let (created_image, _, created_gpu) =
+                render_frame(&context, &mut created, &frame, width, height);
+
+            let covered = u32::from(switches.count_point_lights) * width / 2 * height;
+            let counted = [resized_gpu.lit_pixels, resized_gpu.listed_point_lights];
+            assert_eq!(counted, [covered, 3 * covered], "{switches:?}");
+            assert_eq!(counts(resized_gpu), counts(created_gpu), "{switches:?}");
+            assert!(
+                resized_image == created_image,
+                "{switches:?}: the resized Renderer drew another image than one created at its size"
+            );
+        }
     }
 
     /// Two squares of a Texture whose mip 0 and Resident tail are distinct
@@ -1934,7 +2095,7 @@ pub(crate) mod tests {
                 values[first] = word.r;
                 values[first + 1u] = word.g;
             }",
-            renderer.render_targets.shadow_mask(),
+            renderer.bound_targets.render_targets.shadow_mask(),
             [SIZE, SIZE],
             2,
         )
@@ -3483,7 +3644,7 @@ pub(crate) mod tests {
             }])
         };
         let (image, _, gpu) = render_frame(context, &mut renderer, &frame, SIDE, SIDE);
-        let samples = read_depth_samples(context, renderer.render_targets.depth());
+        let samples = read_depth_samples(context, renderer.bound_targets.render_targets.depth());
         let kept_in = |column: usize| -> Vec<(usize, usize)> {
             (0..SIDE as usize)
                 .flat_map(|row| (0..4).map(move |sample| (row, sample)))
@@ -3547,7 +3708,8 @@ pub(crate) mod tests {
             // Twice: phase two draws it in the first frame, phase one in the next.
             render_frame(&context, &mut renderer, &frame, SIDE, SIDE);
             let (image, _, gpu) = render_frame(&context, &mut renderer, &frame, SIDE, SIDE);
-            let samples = read_depth_samples(&context, renderer.render_targets.depth());
+            let samples =
+                read_depth_samples(&context, renderer.bound_targets.render_targets.depth());
             let kept: Vec<(usize, usize)> = samples
                 .iter()
                 .enumerate()

@@ -25,27 +25,29 @@ const _: () = assert!(DITHER_MASK_SIDE.is_power_of_two());
 const DITHER_MASK: &[u8; (DITHER_MASK_SIDE * DITHER_MASK_SIDE) as usize] =
     include_bytes!("dither_mask.bin");
 
-/// The pass's pipeline, which draws into views of one format, its dither
-/// mask and its bind group.
+/// The pass's pipeline, which draws into views of one format, and its dither
+/// mask.
 pub struct TonemappingPass {
     pipeline: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
     dither_mask: Counted<wgpu::TextureView>,
-    /// Its group 3 (`TONEMAPPING_INPUT`), built from the render targets by
-    /// `new`, and again by `bind_render_targets`.
+}
+
+/// The pass's group 3 (`TONEMAPPING_INPUT`), which reads the render targets
+/// `target_groups` built it from.
+pub struct TonemappingTargetGroups {
     input: wgpu::BindGroup,
 }
 
 impl TonemappingPass {
     /// The pass for views of `target_format`, which is not sRGB: the pass
-    /// encodes sRGB itself, so its dither lands on 8-bit steps. It reads the
-    /// HDR target of `render_targets` and loads its dither mask through
-    /// `staging`. Its shader module is assembled with `capacities`.
+    /// encodes sRGB itself, so its dither lands on 8-bit steps. It loads its
+    /// dither mask through `staging`. Its shader module is assembled with
+    /// `capacities`.
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
         target_format: wgpu::TextureFormat,
-        render_targets: &RenderTargets,
         staging: &mut LoadStaging,
         capacities: &RenderCapacities,
     ) -> TonemappingPass {
@@ -105,33 +107,23 @@ impl TonemappingPass {
         staging.write_texture(&dither_mask, 0, 0, DITHER_MASK);
         let dither_mask =
             dither_mask.map(|texture| texture.create_view(&wgpu::TextureViewDescriptor::default()));
-        let input = Self::input_bind_group(device, &layout, render_targets, &dither_mask);
         TonemappingPass {
             pipeline,
             layout,
             dither_mask,
-            input,
         }
-    }
-
-    /// Builds the bind group that reads `render_targets` again, as `new`
-    /// builds it: after every resize, which creates them again.
-    pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
-        self.input =
-            Self::input_bind_group(device, &self.layout, render_targets, &self.dither_mask);
     }
 
     /// The bind group that reads `render_targets`' HDR target and the dither
     /// mask.
-    fn input_bind_group(
+    pub fn target_groups(
+        &self,
         device: &wgpu::Device,
-        layout: &wgpu::BindGroupLayout,
         render_targets: &RenderTargets,
-        dither_mask: &wgpu::TextureView,
-    ) -> wgpu::BindGroup {
-        TONEMAPPING_INPUT.bind_group(
+    ) -> TonemappingTargetGroups {
+        let input = TONEMAPPING_INPUT.bind_group(
             device,
-            layout,
+            &self.layout,
             [
                 (
                     "hdr_target",
@@ -139,18 +131,21 @@ impl TonemappingPass {
                 ),
                 (
                     "dither_mask",
-                    wgpu::BindingResource::TextureView(dither_mask),
+                    wgpu::BindingResource::TextureView(&self.dither_mask),
                 ),
             ],
-        )
+        );
+        TonemappingTargetGroups { input }
     }
 
     /// Records the pass into `encoder`: every pixel of `target`, a view in
     /// this pass's format and the render targets' size, takes its display
-    /// colour, timed into `timestamp_writes`.
+    /// colour from the HDR target `target_groups` bind, timed into
+    /// `timestamp_writes`.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
+        target_groups: &TonemappingTargetGroups,
         target: &wgpu::TextureView,
         timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>,
     ) {
@@ -172,7 +167,7 @@ impl TonemappingPass {
             multiview_mask: None,
         });
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(TONEMAPPING_INPUT.index, &self.input, &[]);
+        pass.set_bind_group(TONEMAPPING_INPUT.index, &target_groups.input, &[]);
         pass.draw(0..3, 0..1);
     }
 }
@@ -232,10 +227,10 @@ mod tests {
             device,
             &memory,
             format,
-            &render_targets,
             &mut staging,
             &RenderCapacities::checked_in(),
         );
+        let target_groups = pass.target_groups(device, &render_targets);
         staging.submit(&context.queue);
         let target = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Tonemapping Test Target"),
@@ -276,7 +271,7 @@ mod tests {
                 timestamp_writes: None,
                 multiview_mask: None,
             });
-            pass.record(&mut encoder, &view, None);
+            pass.record(&mut encoder, &target_groups, &view, None);
             context.queue.submit(std::iter::once(encoder.finish()));
             let pixels = read_back(&context, &target).expect("read back failed");
 
@@ -316,7 +311,6 @@ mod tests {
             device,
             &memory,
             TARGET_FORMAT,
-            &render_targets,
             &mut staging,
             &RenderCapacities::checked_in(),
         );
@@ -350,6 +344,7 @@ mod tests {
         });
         pass.record(
             &mut encoder,
+            &pass.target_groups(device, &render_targets),
             &target.create_view(&wgpu::TextureViewDescriptor::default()),
             None,
         );

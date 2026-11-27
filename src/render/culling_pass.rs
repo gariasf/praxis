@@ -173,8 +173,11 @@ pub struct CullingPass {
     phase_two: PhasePipelines,
     buffers: FrameDrawBuffers,
     frame_draw_layout: wgpu::BindGroupLayout,
-    /// Its group 3 (`FRAME_DRAW`), and the group `append_triangles` runs
-    /// with, both built by `frame_draw_bind_groups`.
+}
+
+/// The pass's group 3 (`FRAME_DRAW`), and the group `append_triangles` runs
+/// with, which read the render targets `target_groups` built them from.
+pub struct CullingTargetGroups {
     bind_group: wgpu::BindGroup,
     append_bind_group: wgpu::BindGroup,
 }
@@ -205,8 +208,7 @@ struct FrameDrawBuffers {
 impl CullingPass {
     /// The pass, given the layouts of the shared bind groups its shader
     /// module declares, with its draw of `draw_capacity` over the Instance slots
-    /// of `capacities`, as `switches` set, testing Instances against the
-    /// depth pyramid of `render_targets`.
+    /// of `capacities`, as `switches` set.
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
@@ -214,7 +216,6 @@ impl CullingPass {
         draw_capacity: DrawCapacity,
         capacities: &RenderCapacities,
         switches: RenderSwitches,
-        render_targets: &RenderTargets,
     ) -> CullingPass {
         // A record above its Meshlet vertex's bits, short of the all-ones
         // index.
@@ -289,8 +290,6 @@ impl CullingPass {
             instance_visibility,
         };
         let frame_draw_layout = FRAME_DRAW.layout(device);
-        let [bind_group, append_bind_group] =
-            frame_draw_bind_groups(device, &frame_draw_layout, &buffers, render_targets);
 
         let shader = shaders::CULLING.create_with_unbounded_loops(device, capacities);
         let mut layouts = bind_group_layouts.to_vec();
@@ -324,14 +323,13 @@ impl CullingPass {
             phase_two: phase_pipelines(CullingPhase::Two),
             buffers,
             frame_draw_layout,
-            bind_group,
-            append_bind_group,
         }
     }
 
     /// Records `phase` of the pass into `encoder`: phase one clears the
     /// frame's draw first. It appends the Meshlets of the LOD each Instance
-    /// draws, of those the phase draws among `frame`'s slots in use, with `bind_groups` set, in two
+    /// draws, of those the phase draws among `frame`'s slots in use, with
+    /// `bind_groups` and its own `target_groups` set, in two
     /// compute passes, each timed into its `timestamp_writes`: the pass over
     /// the slots, then the one over the Meshlet records. Where they need
     /// more Meshlet records or packed indices than the draw holds, it draws
@@ -340,6 +338,7 @@ impl CullingPass {
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
+        target_groups: &CullingTargetGroups,
         bind_groups: &[(&BindGroupDefinition, &wgpu::BindGroup)],
         frame: &FrameData,
         phase: CullingPhase,
@@ -359,7 +358,7 @@ impl CullingPass {
             phase.slots_label(),
             slots_timestamp_writes,
             bind_groups,
-            &self.bind_group,
+            &target_groups.bind_group,
         );
         if slots > 0 {
             // Each slot's offsets are the sum of the earlier slots' Meshlet
@@ -378,7 +377,7 @@ impl CullingPass {
             phase.triangles_label(),
             triangles_timestamp_writes,
             bind_groups,
-            &self.append_bind_group,
+            &target_groups.append_bind_group,
         );
         if slots > 0 {
             // A workgroup per Meshlet record the phase appends.
@@ -387,15 +386,23 @@ impl CullingPass {
         }
     }
 
-    /// Builds the bind groups that read `render_targets` again, as `new`
-    /// builds them: after every resize, which creates them again.
-    pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
-        [self.bind_group, self.append_bind_group] = frame_draw_bind_groups(
+    /// The bind groups that read `render_targets`, whose depth pyramid phase
+    /// two tests Instances against.
+    pub fn target_groups(
+        &self,
+        device: &wgpu::Device,
+        render_targets: &RenderTargets,
+    ) -> CullingTargetGroups {
+        let [bind_group, append_bind_group] = frame_draw_bind_groups(
             device,
             &self.frame_draw_layout,
             &self.buffers,
             render_targets,
         );
+        CullingTargetGroups {
+            bind_group,
+            append_bind_group,
+        }
     }
 
     /// The Instance slots in use, a u32 the CPU writes.

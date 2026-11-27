@@ -125,7 +125,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
       <dt>Reads</dt><dd>The HDR target, one texel per pixel; the dither mask, a 64&times;64 <code>R8Unorm</code> texture loaded once at creation.</dd>
       <dt>Writes</dt><dd>Every pixel of the target, an 8-bit UNORM format that is not sRGB: <code>Bgra8Unorm</code> or <code>Rgba8Unorm</code> for the surface, <code>Rgba8Unorm</code> for a capture.</dd>
       <dt>Draws</dt><dd>One triangle of three vertices from <code>vs_full_screen</code>, with no vertex buffer, shaded by <code>fs_tonemap</code>.</dd>
-      <dt>Bind groups</dt><dd>Group 3, tonemapping input: the HDR target and the dither mask, rebuilt by <code>bind_render_targets</code> after every resize.</dd>
+      <dt>Bind groups</dt><dd>Group 3, tonemapping input: the HDR target and the dither mask, rebuilt by <code>target_groups</code> after every resize.</dd>
       <dt>Shader</dt><dd><code>src/render/shaders/tonemapping.wgsl</code>, assembled after the HDR, GT7 and display parts: <code>hdr.wgsl</code>, <code>gt7.wgsl</code>, <code>display.wgsl</code>.</dd>
       <dt>Counted</dt><dd><code>tonemapping_pass</code> in GPU time; the dither mask's 4,096 bytes in GPU memory, under the scene and pass buffers' kind.</dd>
       <dt>Files</dt><dd><code>src/render/tonemapping_pass.rs</code>, <code>src/render/shaders/tonemapping.wgsl</code>, <code>src/render/shaders/display.wgsl</code>, <code>src/render/shaders/gt7.wgsl</code></dd>
@@ -167,7 +167,7 @@ fn fs_tonemap(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @location(0) v
 }</code></pre>
   <p class="code-source"><code>tonemapping.wgsl</code>.</p>
   <p>The four steps follow in order: <code>resolve_unweighted</code> turns the resolved texel back into exposed colour (<a href="hdr-target.html#unweighted">The HDR target</a>); <code>tonemap</code> maps exposed colour to display-linear colour in [0,&nbsp;1]; <code>srgb_encode</code> turns that into the encoded values a display expects; and the dither adds noise of up to one 8-bit step either way, which the target's rounding to 8 bits then resolves.</p>
-  <p><code>TonemappingPass::new</code> checks, in debug builds, that the target format is not sRGB, since the shader encodes and an sRGB view would encode again. It creates the pipeline from the module assembled with the Renderer's capacities, the dither mask through the GPU memory ledger, which counts it where it is created, and the bind group that reads the HDR target; <code>bind_render_targets</code> builds that group again whenever a resize creates the targets again.</p>
+  <p><code>TonemappingPass::new</code> checks, in debug builds, that the target format is not sRGB, since the shader encodes and an sRGB view would encode again. It creates the pipeline from the module assembled with the Renderer's capacities, the dither mask through the GPU memory ledger, which counts it where it is created, and the bind group that reads the HDR target; <code>target_groups</code> builds that group again whenever a resize creates the targets again.</p>
 </section>
 
 <section class="part prose" id="wrap">

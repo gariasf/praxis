@@ -18,25 +18,23 @@ pub(crate) const DEPTH_PYRAMID_TILE_SIZE: u32 = 8;
 // unroll a loop over them (`depth_pyramid.wgsl`).
 const _: () = assert!(SAMPLE_COUNT == 4);
 
-/// The pass's pipelines, level 0's and the later levels', and a bind group
-/// per level with its size.
+/// The pass's pipelines, level 0's and the later levels'.
 pub struct DepthPyramidPass {
     reduce_depth: wgpu::ComputePipeline,
     reduce_level: wgpu::ComputePipeline,
     reduce_depth_layout: wgpu::BindGroupLayout,
     reduce_level_layout: wgpu::BindGroupLayout,
-    /// Built from the render targets by `bind_render_targets`.
+}
+
+/// A bind group per level of the depth pyramid `target_groups` built them
+/// from, each with its level's size.
+pub struct DepthPyramidTargetGroups {
     levels: Vec<(wgpu::BindGroup, wgpu::Extent3d)>,
 }
 
 impl DepthPyramidPass {
-    /// The pass, building the pyramid of `render_targets`, its shader module
-    /// assembled with `capacities`.
-    pub fn new(
-        device: &wgpu::Device,
-        render_targets: &RenderTargets,
-        capacities: &RenderCapacities,
-    ) -> DepthPyramidPass {
+    /// The pass, its shader module assembled with `capacities`.
+    pub fn new(device: &wgpu::Device, capacities: &RenderCapacities) -> DepthPyramidPass {
         let shader = device.create_shader_module(shaders::DEPTH_PYRAMID.descriptor(capacities));
         // Level 0 reduces the depth target, each later level the one below.
         let reduce_depth_layout = DEPTH_PYRAMID_LEVEL.layout_of(device, &["level", "depth"]);
@@ -46,20 +44,21 @@ impl DepthPyramidPass {
             let pipeline_layout = pipeline_layout(device, label, &[(&DEPTH_PYRAMID_LEVEL, layout)]);
             compute_pipeline(device, &pipeline_layout, &shader, entry_point, &[])
         };
-        let mut pass = DepthPyramidPass {
+        DepthPyramidPass {
             reduce_depth: pipeline("reduce_depth", &reduce_depth_layout),
             reduce_level: pipeline("reduce_level", &reduce_level_layout),
             reduce_depth_layout,
             reduce_level_layout,
-            levels: Vec::new(),
-        };
-        pass.bind_render_targets(device, render_targets);
-        pass
+        }
     }
 
-    /// Builds the bind groups that read and write `render_targets`: at
-    /// creation, and after every resize, which creates them again.
-    pub fn bind_render_targets(&mut self, device: &wgpu::Device, render_targets: &RenderTargets) {
+    /// The bind groups that read the depth of `render_targets` and write
+    /// its depth pyramid.
+    pub fn target_groups(
+        &self,
+        device: &wgpu::Device,
+        render_targets: &RenderTargets,
+    ) -> DepthPyramidTargetGroups {
         let levels = render_targets.depth_pyramid_levels();
         let bind = |index: usize, layout, reduced: (&'static str, &wgpu::TextureView)| {
             let level = &levels[index];
@@ -82,7 +81,7 @@ impl DepthPyramidPass {
             &self.reduce_depth_layout,
             ("depth", render_targets.depth()),
         );
-        self.levels = std::iter::once(reduce_depth)
+        let levels = std::iter::once(reduce_depth)
             .chain((1..levels.len()).map(|index| {
                 bind(
                     index,
@@ -91,12 +90,15 @@ impl DepthPyramidPass {
                 )
             }))
             .collect();
+        DepthPyramidTargetGroups { levels }
     }
 
-    /// Records the pass into `encoder`, timed into `timestamp_writes`.
+    /// Records the pass into `encoder`, building the pyramid `target_groups`
+    /// bind, timed into `timestamp_writes`.
     pub fn record(
         &self,
         encoder: &mut wgpu::CommandEncoder,
+        target_groups: &DepthPyramidTargetGroups,
         timestamp_writes: Option<wgpu::ComputePassTimestampWrites<'_>>,
     ) {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -106,7 +108,7 @@ impl DepthPyramidPass {
         // Level 0 reduces the depth target, each later level the one below,
         // a workgroup per tile of texels: level 0's with an invocation per
         // pixel of the tile, the others' per texel.
-        for (index, (bind_group, size)) in self.levels.iter().enumerate() {
+        for (index, (bind_group, size)) in target_groups.levels.iter().enumerate() {
             pass.set_pipeline(if index == 0 {
                 &self.reduce_depth
             } else {
@@ -130,7 +132,7 @@ pub(crate) mod tests {
     use crate::render::targets;
     use crate::stats::gpu_memory::tests::gpu_memory;
 
-    /// The pass, rebound to render targets created again at an odd size, so
+    /// The pass, bound to render targets created at an odd size, so
     /// each level rounds down and some texels cover three below them, and at
     /// an even one, where level 0 halves exactly; each spans several of level
     /// 0's workgroups along both sides: after triangles at several depths
@@ -143,27 +145,24 @@ pub(crate) mod tests {
         let Some(context) = gpu_context() else {
             return;
         };
-        let device = &context.device;
-        let render_targets = RenderTargets::new(device, &gpu_memory(&context), 16, 16);
-        let mut pass =
-            DepthPyramidPass::new(device, &render_targets, &RenderCapacities::checked_in());
+        let pass = DepthPyramidPass::new(&context.device, &RenderCapacities::checked_in());
         for (width, height) in [(37, 23), (64, 48)] {
-            assert_pyramid_holds_minimum_depths(&context, &mut pass, width, height);
+            assert_pyramid_holds_minimum_depths(&context, &pass, width, height);
         }
     }
 
-    /// Asserts that `pass`, rebound to render targets created again at
+    /// Asserts that `pass`, bound to render targets created at
     /// `width` × `height`, builds the pyramid `minimum_depth_pyramid` reduces
     /// from the depth target's samples.
     fn assert_pyramid_holds_minimum_depths(
         context: &GpuContext,
-        pass: &mut DepthPyramidPass,
+        pass: &DepthPyramidPass,
         width: u32,
         height: u32,
     ) {
         let device = &context.device;
         let render_targets = RenderTargets::new(device, &gpu_memory(context), width, height);
-        pass.bind_render_targets(device, &render_targets);
+        let target_groups = pass.target_groups(device, &render_targets);
         // Each triangle's centre, half its width and its depth, in clip space.
         let triangles = [
             ([0.0, 0.0], 0.9, 0.2),
@@ -178,7 +177,7 @@ pub(crate) mod tests {
         });
         draw_depth(context, &render_targets, &triangles);
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        pass.record(&mut encoder, None);
+        pass.record(&mut encoder, &target_groups, None);
         context.queue.submit([encoder.finish()]);
 
         let samples = read_depth_samples(context, render_targets.depth());
