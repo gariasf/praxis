@@ -664,6 +664,14 @@ impl Renderer {
         self.bound_targets.render_targets.shadow_mask().texture()
     }
 
+    /// The shadow mask samples the last frame's shadow mask pass wrote.
+    pub(crate) fn shadow_mask_samples(&self) -> &wgpu::Texture {
+        self.bound_targets
+            .render_targets
+            .shadow_mask_samples()
+            .texture()
+    }
+
     /// What its Instance buffer, light buffer and static TLAS hold, which
     /// the Frame data it draws must fit.
     pub fn capacities(&self) -> RenderCapacities {

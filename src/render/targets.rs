@@ -235,7 +235,9 @@ impl RenderTargets {
                 "Shadow Mask Samples",
                 SHADOW_MASK_SAMPLES_FORMAT,
                 1,
-                wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+                wgpu::TextureUsages::STORAGE_BINDING
+                    | wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_SRC,
             ),
             second_surfaces: pixel_list("Second Surfaces Buffer"),
             directional_verdicts: buffer(

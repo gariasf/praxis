@@ -201,6 +201,11 @@ impl State {
         self.renderer.shadow_mask()
     }
 
+    /// The shadow mask samples the last frame rendered wrote.
+    pub(crate) fn shadow_mask_samples(&self) -> &wgpu::Texture {
+        self.renderer.shadow_mask_samples()
+    }
+
     /// One past the last frame whose submission completed, as far as the
     /// submissions and polls since have seen.
     #[cfg(test)]

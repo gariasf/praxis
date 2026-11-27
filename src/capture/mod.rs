@@ -430,6 +430,12 @@ pub(crate) fn render_frames(
                 ReadBack::ShadowMask => state.shadow_mask(),
             };
             pixels.push(self::read_back(context, texture)?);
+            if let Ok(prefix) = std::env::var("PRAXIS_PROBE_MASK") {
+                let mut mask = read_back_layer(context, state.shadow_mask(), 0)?;
+                mask.extend(read_back_layer(context, state.shadow_mask(), 1)?);
+                mask.extend(read_back_layer(context, state.shadow_mask_samples(), 0)?);
+                std::fs::write(format!("{prefix}-frame-{frame}.bin"), mask)?;
+            }
         }
     }
     anyhow::ensure!(
@@ -487,6 +493,15 @@ fn add_gpu_stats(frame_stats: &mut [FrameStats], state: &State) {
 /// without the row padding the copy needs: 4 bytes a pixel of an RGBA8
 /// texture, 8 of the shadow mask.
 pub(crate) fn read_back(context: &GpuContext, texture: &wgpu::Texture) -> anyhow::Result<Vec<u8>> {
+    read_back_layer(context, texture, 0)
+}
+
+/// As `read_back`, of `texture`'s `layer`.
+fn read_back_layer(
+    context: &GpuContext,
+    texture: &wgpu::Texture,
+    layer: u32,
+) -> anyhow::Result<Vec<u8>> {
     let (width, height) = (texture.width(), texture.height());
     let pixel_bytes = texture
         .format()
@@ -507,7 +522,14 @@ pub(crate) fn read_back(context: &GpuContext, texture: &wgpu::Texture) -> anyhow
             label: Some("Capture Read-back Encoder"),
         });
     encoder.copy_texture_to_buffer(
-        texture.as_image_copy(),
+        wgpu::TexelCopyTextureInfo {
+            origin: wgpu::Origin3d {
+                x: 0,
+                y: 0,
+                z: layer,
+            },
+            ..texture.as_image_copy()
+        },
         wgpu::TexelCopyBufferInfo {
             buffer: &buffer,
             layout: wgpu::TexelCopyBufferLayout {

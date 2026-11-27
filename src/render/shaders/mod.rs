@@ -269,7 +269,21 @@ impl ShaderModule {
 
     /// The module's WGSL.
     pub fn source(&self) -> String {
-        self.assemble().0
+        let mut source = self.assemble().0;
+        if let Ok(path) = std::env::var("PRAXIS_PROBE_WGSL") {
+            let probe = std::fs::read_to_string(path).unwrap();
+            let pieces: Vec<&str> = probe.split("\n@@@@\n").collect();
+            for pair in pieces.chunks(2) {
+                let text = pair[0].trim_end_matches('\n');
+                if source.contains(text) {
+                    tracing::warn!(module = self.name, text, "probe replaces");
+                    source = source.replace(text, pair[1].trim_end_matches('\n'));
+                } else if self.name == "shadow_mask" {
+                    tracing::error!(module = self.name, text, "probe text missing");
+                }
+            }
+        }
+        source
     }
 
     /// The part that byte `offset` of the module's WGSL falls in, and the

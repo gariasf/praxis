@@ -756,6 +756,26 @@ pub fn run(
         "a run of {frame_count} frames stops before the counter frames {COUNTER_FRAMES:?} end"
     );
     let (frames, scene_content_hash) = render_run(context, scene, configuration, switches)?;
+    if let Ok(probe_path) = std::env::var("PRAXIS_PROBE_FRAMES") {
+        let mut rows = String::from("frame,gpu_frame_us,shadow_mask_pass_us,probe_counter\n");
+        for (index, stats) in frames.iter().enumerate() {
+            if let Some(gpu) = stats.gpu.as_ref() {
+                let mask: f64 = gpu
+                    .pass_times
+                    .iter()
+                    .filter(|(name, _)| *name == "shadow_mask_pass")
+                    .map(|(_, time)| time.as_secs_f64() * 1e6)
+                    .sum();
+                rows += &format!(
+                    "{index},{:.1},{:.1},{}\n",
+                    gpu.frame_time.as_secs_f64() * 1e6,
+                    mask,
+                    gpu.shadow_mask_lights_overflowed
+                );
+            }
+        }
+        std::fs::write(format!("{probe_path}-{}.csv", scene.name()), rows)?;
+    }
     let (frames_without_rays, _) = render_run(
         context,
         scene,
