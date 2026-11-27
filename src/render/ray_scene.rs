@@ -80,6 +80,7 @@ impl RayScene {
                 [
                     ("static_tlas", static_binding),
                     ("dynamic_tlas", dynamic_tlas.binding()),
+                    ("dynamic_footprint", dynamic_tlas.footprint_binding()),
                 ],
             )
         });
@@ -130,7 +131,7 @@ impl RayScene {
         // Anchor.
         let anchor = self.static_tlas.anchor();
         let filling = Instant::now();
-        let dynamic_bounds = self.dynamic_tlas.fill(frame, mesh_pool, anchor);
+        let dynamic_bounds = self.dynamic_tlas.fill(frame, mesh_pool, anchor, queue);
         let fill_time = recorder.stage(DYNAMIC_TLAS_RECORDING, filling);
         let ray_scene_frame = RaySceneFrame {
             anchor,

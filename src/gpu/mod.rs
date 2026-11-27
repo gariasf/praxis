@@ -317,7 +317,7 @@ pub(crate) fn floor_limits() -> wgpu::Limits {
         max_acceleration_structures_per_shader_stage: 2,
         // The culling pass's compute stage reads and writes nine, the
         // visibility it keeps between frames among them (ADR 0019).
-        max_storage_buffers_per_shader_stage: 9,
+        max_storage_buffers_per_shader_stage: 10,
         ..wgpu::Limits::default().using_minimum_supported_acceleration_structure_values()
     }
 }

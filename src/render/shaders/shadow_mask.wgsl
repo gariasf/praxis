@@ -80,6 +80,37 @@ const TRIANGLE_TURN_MARGIN: f32 = 0.17364817766693033;
 // over it agree, as on a flat surface or a flat-shaded mesh: 3°.
 const NORMALS_AGREE: f32 = 0.9986295347545738;
 
+// Prototype: a ray's direction within this of the footprint grid's, in each
+// coordinate, reads the grid (src/render/acceleration_structures.rs).
+const DYNAMIC_FOOTPRINT_DIRECTION_TOLERANCE: f32 = 9.5367431640625e-7; // 2^-20
+
+fn dynamic_footprint_value(index: u32) -> f32 {
+    return bitcast<f32>(dynamic_footprint[index]);
+}
+
+// Whether the line from `origin` along `direction` meets no Moving
+// Instance's box: its cell of the footprint grid is clear, or lies off the
+// grid. False for a ray along any other direction than the grid's.
+fn misses_dynamic_footprint(origin: vec3<f32>, direction: vec3<f32>) -> bool {
+    let grid_direction = vec3<f32>(dynamic_footprint_value(8u), dynamic_footprint_value(9u), dynamic_footprint_value(10u));
+    if any(abs(direction - grid_direction) > vec3<f32>(DYNAMIC_FOOTPRINT_DIRECTION_TOLERANCE)) {
+        return false;
+    }
+    let first_axis = vec3<f32>(dynamic_footprint_value(0u), dynamic_footprint_value(1u), dynamic_footprint_value(2u));
+    let second_axis = vec3<f32>(dynamic_footprint_value(4u), dynamic_footprint_value(5u), dynamic_footprint_value(6u));
+    let cell = vec2<i32>(floor(vec2<f32>(
+        dot(origin, first_axis) + dynamic_footprint_value(3u),
+        dot(origin, second_axis) + dynamic_footprint_value(7u)
+    )));
+    let size = vec2<i32>(i32(dynamic_footprint[12]), i32(dynamic_footprint[13]));
+    if any(cell < vec2<i32>(0)) || any(cell >= size) {
+        return true;
+    }
+    let column = u32(cell.x);
+    let word = dynamic_footprint[16u + u32(cell.y) * dynamic_footprint[11] + (column >> 5u)];
+    return (word & (1u << (column & 31u))) == 0u;
+}
+
 // The first triangle either TLAS holds, of an entry whose instance mask
 // shares a bit with `mask`, from `start_distance` to `end_distance` (the
 // ray's tmin and tmax) along the ray from `origin`, in the TLAS's frame,
@@ -114,6 +145,9 @@ fn first_intersection(flags: u32, mask: u32, origin: vec3<f32>, direction: vec3<
     let extent = max(abs(origin), max(abs(bounds_min), abs(bounds_max)));
     let margin = DYNAMIC_TLAS_BOUNDS_MARGIN_SCALE * max(max(extent.x, extent.y), max(extent.z, 1.0));
     if !segment_meets_box(origin, direction, start_distance, dynamic_end_distance, bounds_min - margin, bounds_max + margin) {
+        return static_hit;
+    }
+    if misses_dynamic_footprint(origin, direction) {
         return static_hit;
     }
     rayQueryInitialize(&query, dynamic_tlas, RayDesc(RAY_FLAG_FORCE_OPAQUE | flags, mask, start_distance, dynamic_end_distance, origin, direction));

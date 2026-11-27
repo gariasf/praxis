@@ -115,6 +115,11 @@ pub const RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
     bindings: &[
         acceleration_structure("static_tlas", wgpu::ShaderStages::COMPUTE),
         acceleration_structure("dynamic_tlas", wgpu::ShaderStages::COMPUTE),
+        read_only_storage(
+            "dynamic_footprint",
+            "array<u32>",
+            wgpu::ShaderStages::COMPUTE,
+        ),
     ],
 };
 

@@ -793,6 +793,7 @@ pub struct DynamicTlas {
     _marker_result: Counted<wgpu::Buffer>,
     /// The encoder `prepare_encoder` created for the next `record`.
     encoder: Option<wgpu::CommandEncoder>,
+    footprint: DynamicFootprint,
 }
 
 impl DynamicTlas {
@@ -853,6 +854,7 @@ impl DynamicTlas {
             marker_bind_group,
             _marker_result: marker_result,
             encoder: None,
+            footprint: DynamicFootprint::new(device, memory),
         }
     }
 
@@ -868,7 +870,9 @@ impl DynamicTlas {
         frame: &FrameData,
         mesh_pool: &MeshPool,
         anchor: [i32; 3],
+        queue: &wgpu::Queue,
     ) -> [[f32; 3]; 2] {
+        let footprint_axes = self.footprint.begin(frame);
         // Prepare lists no more than its capacity.
         let listed = frame
             .moving_instances
@@ -891,6 +895,10 @@ impl DynamicTlas {
             self.tlas[index] = mesh.map(|(blas, mesh, thin_radius_metres)| {
                 let transform = anchored_transform(instance, anchor);
                 let [lowest, highest] = placed_bounds(&transform, mesh.bounds);
+                if let Some(axes) = footprint_axes {
+                    self.footprint
+                        .add(&transform, mesh.bounds, [lowest, highest], axes);
+                }
                 bounds = Some(
                     bounds.map_or([lowest, highest], |[held_lowest, held_highest]| {
                         [held_lowest.min(lowest), held_highest.max(highest)]
@@ -905,6 +913,10 @@ impl DynamicTlas {
         }
         self.unrecorded_upload_bytes = (filled > 0 || previously_filled > 0)
             .then_some(uploaded_entries * self.entry_upload_bytes);
+        if filled > 0 {
+            self.footprint
+                .upload(queue, footprint_axes, bounds.unwrap_or_default());
+        }
         bounds.unwrap_or_default().map(<[f32; 3]>::from)
     }
 
@@ -987,6 +999,229 @@ impl DynamicTlas {
     pub fn binding(&self) -> wgpu::BindingResource<'_> {
         self.tlas.as_binding()
     }
+
+    pub fn footprint_binding(&self) -> wgpu::BindingResource<'_> {
+        self.footprint.buffer.as_entire_binding()
+    }
+}
+
+/// Prototype: where the Moving Instances' boxes land when seen along the
+/// first directional light, as a bit per cell of a grid across that light's
+/// direction. A ray along that direction whose cell is clear meets none of
+/// them, so it skips the dynamic TLAS (`shadow_mask.wgsl`). Its first
+/// `FOOTPRINT_HEADER_WORDS` words place the grid; a zero direction there
+/// matches no ray.
+struct DynamicFootprint {
+    buffer: Counted<wgpu::Buffer>,
+    words: Vec<u32>,
+    /// Each box's lowest and highest coordinate along the grid's two axes.
+    intervals: Vec<[f32; 4]>,
+    /// `PRAXIS_PROBE_FOOTPRINT_CELLS`: the cells along the grid's longer
+    /// side; 0 builds no grid.
+    cells_per_side: u32,
+    /// `PRAXIS_PROBE_FOOTPRINT_GROUP`: with more than 1, one box holds each
+    /// run of that many Moving Instances, to count what a box per group
+    /// would skip.
+    group_size: usize,
+    group: Option<[glam::Vec3; 2]>,
+    grouped: usize,
+}
+
+const FOOTPRINT_HEADER_WORDS: usize = 16;
+const FOOTPRINT_LARGEST_CELLS_PER_SIDE: u32 = 4096;
+
+/// A box's interval grows by this share of the largest coordinate the boxes
+/// reach, and by `FOOTPRINT_SMALLEST_MARGIN_METRES` at least, which covers
+/// the rounding of the two sides' arithmetic and a ray direction that
+/// differs from the grid's by the shader's tolerance over 4 km.
+const FOOTPRINT_MARGIN_SHARE: f32 = 6.103515625e-5; // 2^-14
+const FOOTPRINT_SMALLEST_MARGIN_METRES: f32 = 0.0625;
+
+impl DynamicFootprint {
+    fn new(device: &wgpu::Device, memory: &GpuMemory) -> Self {
+        let setting = |name: &str, default: u32| {
+            std::env::var(name)
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(default)
+        };
+        let cells_per_side = setting("PRAXIS_PROBE_FOOTPRINT_CELLS", 1024)
+            .min(FOOTPRINT_LARGEST_CELLS_PER_SIDE)
+            .next_multiple_of(32);
+        let group_size = setting("PRAXIS_PROBE_FOOTPRINT_GROUP", 1) as usize;
+        let word_capacity =
+            FOOTPRINT_HEADER_WORDS + (cells_per_side * cells_per_side / 32) as usize;
+        let buffer = memory.create_buffer(
+            device,
+            GpuMemoryKind::SceneAndPassBuffers,
+            &wgpu::BufferDescriptor {
+                label: Some("Dynamic Footprint"),
+                size: (word_capacity * size_of::<u32>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
+        tracing::info!(cells_per_side, group_size, "dynamic footprint");
+        Self {
+            buffer,
+            words: Vec::with_capacity(word_capacity),
+            intervals: Vec::with_capacity(DYNAMIC_TLAS_CAPACITY as usize),
+            cells_per_side,
+            group_size,
+            group: None,
+            grouped: 0,
+        }
+    }
+
+    /// Starts a frame's grid. Returns the first directional light's
+    /// direction toward the light and the grid's two axes across it; none
+    /// without such a light or with no grid.
+    fn begin(&mut self, frame: &FrameData) -> Option<[glam::Vec3; 3]> {
+        self.intervals.clear();
+        self.group = None;
+        self.grouped = 0;
+        if self.cells_per_side == 0 || frame.light.directional_light_count == 0 {
+            return None;
+        }
+        let direction = (-glam::Vec3::from(frame.lights.first()?.offset)).try_normalize()?;
+        let first_axis = direction.any_orthonormal_vector();
+        Some([direction, first_axis, direction.cross(first_axis)])
+    }
+
+    /// Adds a Moving Instance: its Mesh's `bounds` placed by `transform`,
+    /// or, grouped, the `placed` box that holds them.
+    fn add(
+        &mut self,
+        transform: &[f32; 12],
+        bounds: [[f32; 3]; 2],
+        placed: [glam::Vec3; 2],
+        [_, first_axis, second_axis]: [glam::Vec3; 3],
+    ) {
+        if self.group_size <= 1 {
+            let [first, second] =
+                [first_axis, second_axis].map(|axis| projected_interval(transform, bounds, axis));
+            self.intervals
+                .push([first[0], first[1], second[0], second[1]]);
+            return;
+        }
+        let [lowest, highest] = placed;
+        self.group = Some(self.group.map_or(placed, |[held_lowest, held_highest]| {
+            [held_lowest.min(lowest), held_highest.max(highest)]
+        }));
+        self.grouped += 1;
+        if self.grouped == self.group_size {
+            self.close_group(first_axis, second_axis);
+        }
+    }
+
+    fn close_group(&mut self, first_axis: glam::Vec3, second_axis: glam::Vec3) {
+        let Some([lowest, highest]) = self.group.take() else {
+            return;
+        };
+        self.grouped = 0;
+        let centre = 0.5 * (lowest + highest);
+        let half_extent = 0.5 * (highest - lowest);
+        let [first, second] = [first_axis, second_axis].map(|axis| {
+            let reach = axis.abs().dot(half_extent);
+            [axis.dot(centre) - reach, axis.dot(centre) + reach]
+        });
+        self.intervals
+            .push([first[0], first[1], second[0], second[1]]);
+    }
+
+    /// Writes the frame's grid: the cells its intervals touch, across the
+    /// rectangle that holds them all.
+    fn upload(
+        &mut self,
+        queue: &wgpu::Queue,
+        axes: Option<[glam::Vec3; 3]>,
+        [lowest, highest]: [glam::Vec3; 2],
+    ) {
+        self.words.clear();
+        self.words.resize(FOOTPRINT_HEADER_WORDS, 0);
+        if let Some([direction, first_axis, second_axis]) = axes {
+            self.close_group(first_axis, second_axis);
+            let largest_coordinate = lowest.abs().max(highest.abs()).max_element();
+            let margin_metres =
+                (FOOTPRINT_MARGIN_SHARE * largest_coordinate).max(FOOTPRINT_SMALLEST_MARGIN_METRES);
+            let mut grid_lowest = glam::Vec2::INFINITY;
+            let mut grid_highest = glam::Vec2::NEG_INFINITY;
+            for interval in &mut self.intervals {
+                *interval = [
+                    interval[0] - margin_metres,
+                    interval[1] + margin_metres,
+                    interval[2] - margin_metres,
+                    interval[3] + margin_metres,
+                ];
+                grid_lowest = grid_lowest.min(glam::vec2(interval[0], interval[2]));
+                grid_highest = grid_highest.max(glam::vec2(interval[1], interval[3]));
+            }
+            let span = (grid_highest - grid_lowest).max(glam::Vec2::splat(1.0));
+            let cells_per_metre = self.cells_per_side as f32 / span.max_element();
+            let last_cell = (span * cells_per_metre)
+                .ceil()
+                .as_uvec2()
+                .clamp(glam::UVec2::ONE, glam::UVec2::splat(self.cells_per_side))
+                - glam::UVec2::ONE;
+            let row_words = (last_cell.x / 32 + 1) as usize;
+            self.words.resize(
+                FOOTPRINT_HEADER_WORDS + row_words * (last_cell.y as usize + 1),
+                0,
+            );
+            let header: [f32; 11] = [
+                first_axis.x * cells_per_metre,
+                first_axis.y * cells_per_metre,
+                first_axis.z * cells_per_metre,
+                -grid_lowest.x * cells_per_metre,
+                second_axis.x * cells_per_metre,
+                second_axis.y * cells_per_metre,
+                second_axis.z * cells_per_metre,
+                -grid_lowest.y * cells_per_metre,
+                direction.x,
+                direction.y,
+                direction.z,
+            ];
+            for (word, value) in self.words.iter_mut().zip(header) {
+                *word = value.to_bits();
+            }
+            self.words[11] = row_words as u32;
+            self.words[12] = last_cell.x + 1;
+            self.words[13] = last_cell.y + 1;
+            let cell = |metres: f32, lowest: f32, last: u32| {
+                (((metres - lowest) * cells_per_metre).floor().max(0.0) as u32).min(last)
+            };
+            for interval in &self.intervals {
+                let first_column = cell(interval[0], grid_lowest.x, last_cell.x);
+                let last_column = cell(interval[1], grid_lowest.x, last_cell.x);
+                let first_row = cell(interval[2], grid_lowest.y, last_cell.y);
+                let last_row = cell(interval[3], grid_lowest.y, last_cell.y);
+                for row in first_row..=last_row {
+                    let row_start = FOOTPRINT_HEADER_WORDS + row as usize * row_words;
+                    for column in first_column..=last_column {
+                        self.words[row_start + (column / 32) as usize] |= 1 << (column % 32);
+                    }
+                }
+            }
+        }
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&self.words));
+    }
+}
+
+/// The lowest and highest coordinate along `axis`, a unit vector, of
+/// `bounds`, a Mesh's box, grown and placed as `placed_bounds` does: the
+/// box's centre placed, and the axis's reach over the box's half-extent
+/// through `transform`.
+fn projected_interval(transform: &[f32; 12], bounds: [[f32; 3]; 2], axis: glam::Vec3) -> [f32; 2] {
+    let [lowest, highest] = bounds.map(glam::Vec3::from);
+    let centre = 0.5 * (lowest + highest);
+    let largest_coordinate = lowest.abs().max(highest.abs()).max_element();
+    let half_extent = 0.5 * (highest - lowest) + BEND_ROUNDING_SHARE * largest_coordinate;
+    let rows: [[f32; 4]; 3] = bytemuck::cast(*transform);
+    let row = |index: usize| glam::Vec4::from(rows[index]).truncate();
+    let mesh_axis = axis.x * row(0) + axis.y * row(1) + axis.z * row(2);
+    let middle = mesh_axis.dot(centre) + axis.dot(glam::vec3(rows[0][3], rows[1][3], rows[2][3]));
+    let reach = mesh_axis.abs().dot(half_extent);
+    [middle - reach, middle + reach]
 }
 
 /// How many of the narrowest width class's lower bound, 3.125 mm, a metre
