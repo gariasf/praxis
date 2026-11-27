@@ -258,7 +258,7 @@ struct InstanceData {
   <h2>One buffer at a fixed size, one bind group built once</h2>
   <p class="key-idea">The Renderer creates the buffer once, at the whole capacity its Budget gives, before any Scene loads, and builds the bind group that holds it in the same function. Since the buffer is never replaced, the bind group never goes stale and nothing rebuilds it.</p>
 <pre class="code"><code><span class="comment">// Created at its fixed capacity; it never grows.</span>
-let instance_buffer = memory.create_buffer(
+let instances = memory.create_buffer(
     &amp;device,
     GpuMemoryKind::SceneAndPassBuffers,
     &amp;wgpu::BufferDescriptor {
@@ -301,7 +301,7 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
 <pre class="code"><code>let instance_size = std::mem::size_of::&lt;InstanceData&gt;() as wgpu::BufferAddress;
 let instance_uploads = frame.instance_writes.iter().map(|write| {
     (
-        &amp;*self.instance_buffer,
+        &amp;*self.shared_buffers.instances,
         u64::from(write.first_slot) * instance_size,
         bytemuck::cast_slice(&amp;frame.instances[write.instances.clone()]),
     )

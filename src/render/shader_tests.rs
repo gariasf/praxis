@@ -19,12 +19,12 @@ use crate::render::bend_pass::BendData;
 use crate::render::bind_groups::{
     BindGroupDefinition, Binding, Writer, read_only_storage, uniform,
 };
-use crate::render::shaders::{LOOPS_UNBOUNDED, MODULES, Part, ShaderModule};
-use crate::render::{CameraUniform, InstanceData, LightData, LightUniform, RenderCapacities};
+use crate::render::shaders::{LOOPS_UNBOUNDED, Part, ShaderModule, modules};
+use crate::render::{CameraUniform, InstanceData, LightData, LightUniform};
 
 #[test]
 fn every_module_parses_and_validates() {
-    let errors: Vec<String> = MODULES
+    let errors: Vec<String> = modules()
         .iter()
         .filter_map(|module| validate(module).err())
         .collect();
@@ -35,7 +35,7 @@ fn every_module_parses_and_validates() {
 /// GPU; this also fails a binding visible to a stage that never uses it.
 #[test]
 fn every_binding_is_visible_to_exactly_the_stages_that_use_it() {
-    let problems = stage_problems(&MODULES);
+    let problems = stage_problems(&modules());
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
@@ -45,7 +45,7 @@ fn every_binding_is_visible_to_exactly_the_stages_that_use_it() {
 /// one.
 #[test]
 fn only_the_shadow_mask_pass_and_the_dynamic_tlas_markers_declare_a_tlas() {
-    let declaring: Vec<&str> = MODULES
+    let declaring: Vec<&str> = modules()
         .iter()
         .filter(|module| {
             module
@@ -104,12 +104,14 @@ fn a_binding_seen_by_a_stage_that_does_not_use_it_or_hidden_from_one_that_does_f
             enables: &[],
             bind_groups: &[&VALUES],
             parts: &[VERTEX],
+            instance_capacity: None,
         },
         ShaderModule {
             name: "fragment",
             enables: &[],
             bind_groups: &[&VALUES],
             parts: &[FRAGMENT],
+            instance_capacity: None,
         },
     ];
     assert_eq!(
@@ -124,7 +126,7 @@ fn a_binding_seen_by_a_stage_that_does_not_use_it_or_hidden_from_one_that_does_f
 
 #[test]
 fn every_wgsl_file_is_a_part_of_some_module() {
-    let parts: BTreeSet<&Path> = MODULES
+    let parts: BTreeSet<&Path> = modules()
         .iter()
         .flat_map(|module| module.parts)
         .map(|part| Path::new(part.path))
@@ -252,6 +254,7 @@ fn a_module_with_ray_queries_validates() {
         enables: &["wgpu_ray_query"],
         bind_groups: &[],
         parts: &[SHADOW],
+        instance_capacity: None,
     };
     assert_eq!(validate(&module).err(), None);
 }
@@ -279,6 +282,7 @@ fn an_error_names_its_module_part_and_line() {
         enables: &["wgpu_binding_array"],
         bind_groups: &[],
         parts: &[LIGHT, MISSPELT],
+        instance_capacity: None,
     })
     .unwrap_err();
     let validation_error = validate(&ShaderModule {
@@ -286,6 +290,7 @@ fn an_error_names_its_module_part_and_line() {
         enables: &["wgpu_binding_array"],
         bind_groups: &[],
         parts: &[LIGHT, UNALIGNED_UNIFORM],
+        instance_capacity: None,
     })
     .unwrap_err();
     assert!(
@@ -322,7 +327,7 @@ macro_rules! twin {
 
 #[test]
 fn structs_shared_with_the_cpu_match_their_rust_twins() {
-    let modules: Vec<(ShaderModule, naga::Module)> = MODULES
+    let modules: Vec<(ShaderModule, naga::Module)> = modules()
         .iter()
         .map(|module| {
             let (parsed, _) = validate(module).unwrap_or_else(|error| panic!("{error}"));
@@ -461,6 +466,7 @@ fn layout_check_reports_every_kind_of_mismatch() {
         enables: &[],
         bind_groups: &[],
         parts: &[PART],
+        instance_capacity: None,
     };
     let (parsed, _) = validate(&module).unwrap_or_else(|error| panic!("{error}"));
 
@@ -513,6 +519,7 @@ fn a_struct_only_the_gpu_writes_needs_no_twin() {
         enables: &[],
         bind_groups: &[&COUNTS],
         parts: &[PART],
+        instance_capacity: None,
     };
     let (parsed, _) = validate(&module).unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(
@@ -533,6 +540,7 @@ fn a_bind_group_past_the_device_limit_fails_validation() {
             enables: &[],
             bind_groups: &[],
             parts: &[PART],
+            instance_capacity: None,
         })
         .err()
         .as_deref(),
@@ -546,11 +554,10 @@ fn a_bind_group_past_the_device_limit_fails_validation() {
 /// naga's analysis of it. An error names the module, and the part and line
 /// it is in.
 fn validate(module: &ShaderModule) -> Result<(naga::Module, naga::valid::ModuleInfo), String> {
-    let capacities = RenderCapacities::checked_in();
-    let source = module.source(&capacities);
+    let source = module.source();
     let label = format!("{} module", module.name);
     let error = |location: Option<naga::SourceLocation>, message: &str| match location
-        .and_then(|location| module.locate(&capacities, location.offset as usize))
+        .and_then(|location| module.locate(location.offset as usize))
     {
         Some((path, line, column)) => format!("{label}: {path}:{line}:{column}: {message}"),
         None => format!("{label}: {message}"),

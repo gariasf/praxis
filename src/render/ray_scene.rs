@@ -71,7 +71,7 @@ impl RayScene {
         capacities: &RenderCapacities,
     ) -> Self {
         let static_tlas = StaticTlas::new(device, memory, queue, capacities.static_tlas_instances);
-        let dynamic_tlas = DynamicTlas::new(device, memory, queue, backend, capacities);
+        let dynamic_tlas = DynamicTlas::new(device, memory, queue, backend);
         let layout = RAY_SCENE.layout(device);
         let bind_groups = static_tlas.bindings().map(|static_binding| {
             RAY_SCENE.bind_group(
@@ -83,14 +83,7 @@ impl RayScene {
                 ],
             )
         });
-        let blas_refit = BlasRefit::new(
-            device,
-            memory,
-            queue,
-            backend,
-            switches.crowd_form,
-            capacities,
-        );
+        let blas_refit = BlasRefit::new(device, memory, queue, backend, switches.crowd_form);
         Self {
             static_tlas,
             dynamic_tlas,

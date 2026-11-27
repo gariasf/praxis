@@ -11,8 +11,8 @@
 //! resident, so a refit changes only what the BLAS holds.
 
 use crate::assets::MeshPool;
+use crate::render::CrowdForm;
 use crate::render::readback::PassQueries;
-use crate::render::{CrowdForm, RenderCapacities};
 #[cfg(target_vendor = "apple")]
 use crate::stats::Counted;
 use crate::stats::GpuMemory;
@@ -52,14 +52,13 @@ pub struct BlasRefit {
 impl BlasRefit {
     /// The update `form` takes on `backend`, through `device` and `queue`;
     /// None for `CrowdForm::Proxies`, and for a form the backend cannot run,
-    /// as logged. Its marker's shader module is assembled with `capacities`.
+    /// as logged.
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
         queue: &wgpu::Queue,
         backend: wgpu::Backend,
         form: CrowdForm,
-        capacities: &RenderCapacities,
     ) -> Option<Self> {
         if form == CrowdForm::Proxies {
             return None;
@@ -73,7 +72,7 @@ impl BlasRefit {
             .then(|| metal::Order::new(device, queue))
             .flatten();
         #[cfg(not(target_vendor = "apple"))]
-        let _ = (device, memory, queue, capacities);
+        let _ = (device, memory, queue);
         #[cfg(target_vendor = "apple")]
         let waits_on_cpu = backend == wgpu::Backend::Metal && order.is_none();
         #[cfg(not(target_vendor = "apple"))]
@@ -90,8 +89,7 @@ impl BlasRefit {
             #[cfg(target_vendor = "apple")]
             order,
             #[cfg(target_vendor = "apple")]
-            marker: (form == CrowdForm::Refit)
-                .then(|| metal::RefitMarker::new(device, memory, capacities)),
+            marker: (form == CrowdForm::Refit).then(|| metal::RefitMarker::new(device, memory)),
             #[cfg(target_vendor = "apple")]
             refusal_logged: false,
             waits_on_cpu,
@@ -281,7 +279,6 @@ mod metal {
     use crate::assets::MeshPool;
     use crate::assets::pools::{MeshBlas, REFITTED_BLAS_FLAGS};
     use crate::cooked::CookedVertex;
-    use crate::render::RenderCapacities;
     use crate::render::bind_groups::{BLAS_REFIT_MARKERS, compute_pipeline, pipeline_layout};
     use crate::render::shaders;
     use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
@@ -397,14 +394,9 @@ mod metal {
     }
 
     impl RefitMarker {
-        pub(super) fn new(
-            device: &wgpu::Device,
-            memory: &GpuMemory,
-            capacities: &RenderCapacities,
-        ) -> Self {
+        pub(super) fn new(device: &wgpu::Device, memory: &GpuMemory) -> Self {
             let layout = BLAS_REFIT_MARKERS.layout(device);
-            let shader =
-                device.create_shader_module(shaders::BLAS_REFIT_MARKER.descriptor(capacities));
+            let shader = device.create_shader_module(shaders::BLAS_REFIT_MARKER.descriptor());
             let groups = [(&BLAS_REFIT_MARKERS, &layout)];
             let label = "BLAS Refit Marker Pipeline Layout";
             let pipeline_layout = pipeline_layout(device, label, &groups);
