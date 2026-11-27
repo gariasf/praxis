@@ -13388,3 +13388,250 @@ quote = '''Zero out uninitialized parts of the mapping. (Spec dictates all resou
 // behave as if they were initialized with zero) [...] If this is a write mapping zeroing out the memory here is the only
 // reasonable way as all data is pushed to GPU anyways. [...] mapped[fill_range].fill(0);'''
 checked = 2026-11-23
+
+["naga-30.0.2-msl-intersection-query"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.2/naga/src/back/msl/ray.rs#L21-L24"
+section = "naga 30.0.2 (wgpu tag v30.0.2, 89f8a2be), back/msl/ray.rs, metal_intersector_ty, lines 21-24"
+quote = '''/// The ray query type, needs to be a function so it can format the constants.
+pub(super) fn metal_intersector_ty() -> String {
+    format!("{RT_NAMESPACE}::intersection_query<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data>")'''
+checked = 2026-11-27
+
+["naga-30.0.2-msl-ray-flags-honoured"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.2/naga/src/back/msl/ray.rs#L273-L315"
+section = "naga 30.0.2, back/msl/ray.rs, RayQueryFunction::Initialize: the ray flags written into Metal's intersection_params, lines 273-315 (no triangle cull mode is set anywhere in the file)"
+quote = '''let f_opaque = back::RayFlag::CULL_OPAQUE.bits();
+                    let f_no_opaque = back::RayFlag::CULL_NO_OPAQUE.bits(); [...] params.set_opacity_cull_mode(cull_mode); [...] let f_opaque = back::RayFlag::OPAQUE.bits();
+                    let f_no_opaque = back::RayFlag::NO_OPAQUE.bits(); [...] params.force_opacity( [...] let flag = back::RayFlag::TERMINATE_ON_FIRST_HIT.bits(); [...] "{inner_level}params.accept_any_intersection((desc.flags & {flag}) != 0);"'''
+checked = 2026-11-27
+
+["naga-30.0.2-ray-flag-bits"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.2/naga/src/back/mod.rs#L378-L389"
+section = "naga 30.0.2, back/mod.rs, RayFlag, lines 378-389"
+quote = '''pub struct RayFlag: u32 {
+        const OPAQUE = 0x01;
+        const NO_OPAQUE = 0x02;
+        const TERMINATE_ON_FIRST_HIT = 0x04;
+        const SKIP_CLOSEST_HIT_SHADER = 0x08;
+        const CULL_BACK_FACING = 0x10;
+        const CULL_FRONT_FACING = 0x20;
+        const CULL_OPAQUE = 0x40;
+        const CULL_NO_OPAQUE = 0x80;
+        const SKIP_TRIANGLES = 0x100;
+        const SKIP_AABBS = 0x200;
+    }'''
+checked = 2026-11-27
+
+["wgpu-hal-30.0.2-metal-as-usage"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-hal/src/metal/conv.rs#L485-L492"
+section = "wgpu-hal 30.0.2, metal/conv.rs, acceleration structure descriptor usage, lines 485-492 (geometry opacity at lines 433-436 and 464-467)"
+quote = '''let mut usage = MTLAccelerationStructureUsage::None;
+    if flags.contains(wgt::AccelerationStructureFlags::ALLOW_UPDATE) {
+        usage |= MTLAccelerationStructureUsage::Refit;
+    }
+    if flags.contains(wgt::AccelerationStructureFlags::PREFER_FAST_BUILD) {
+        usage |= MTLAccelerationStructureUsage::PreferFastBuild;
+    }
+    descriptor.setUsage(usage);'''
+checked = 2026-11-27
+
+["wgpu-hal-30.0.2-vulkan-as-build-flags"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-hal/src/vulkan/conv.rs#L999-L1036"
+section = "wgpu-hal 30.0.2, vulkan/conv.rs, map_acceleration_structure_flags and map_acceleration_structure_geometry_flags, lines 999-1036"
+quote = '''if flags.contains(crate::AccelerationStructureBuildFlags::PREFER_FAST_TRACE) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE;
+    } [...] if flags.contains(crate::AccelerationStructureBuildFlags::LOW_MEMORY) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::LOW_MEMORY;
+    } [...] if flags.contains(crate::AccelerationStructureBuildFlags::ALLOW_COMPACTION) {
+        vk_flags |= vk::BuildAccelerationStructureFlagsKHR::ALLOW_COMPACTION [...] if flags.contains(crate::AccelerationStructureGeometryFlags::OPAQUE) {
+        vk_flags |= vk::GeometryFlagsKHR::OPAQUE;'''
+checked = 2026-11-27
+
+["tokuyoshi-harada-2016-stochastic-light-culling"]
+url = "https://jcgt.org/published/0005/01/02/paper-lowres.pdf"
+section = "Tokuyoshi and Harada, Stochastic Light Culling, JCGT 5(1), 2016, Abstract (p. 35), §3 eq. (1)-(3) (pp. 38-39), §4.4 Experimental Results (pp. 43-45), §5.3.2 Restricting the Number of Shadow Rays"
+quote = '''To avoid such undesirable bias, the method proposed in this paper uses a stochastic light culling method that randomly determines a light range using Russian roulette. When this random range is calculated based on a user-specified error bound, our method produces a sublinear cost for shading after the culling process due to the unbiasedness. [...] However, the proposed method uses a single random number ξi for a light source, and all the shading points will use the same value for a given light. The advantage of using a single random number is that we can bound the influence range for each light which allows us to cull lights in an unbiased fashion (Figure 2). [...] For this implementation, variance is visible as banding artifacts. [...] It is preferable for the GPU to process uniform computation; thus we restrict the number of shadow rays to one at most by applying resampled importance sampling [Talbot et al. 2005].'''
+checked = 2026-11-27
+cost = '''We show the rendering results of the BRSM-based diffuse indirect illumination using stochastic tiled lighting with ǫmax = 0.0005 performed on an AMD Radeon R9 290X. [...] The frame buffer and RSM resolution are 1920×1152 and 256×256, respectively. 8×8 interleaved sampling and 17×17 geometry-aware filtering are used to reduce the shading cost. [...] For this scene, 65,536 VPLs can be handled in about 5 ms with a slight error.'''
+
+["moreau-2019-dynamic-many-light-sampling"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2019-07_Dynamic-Many-Light-Sampling/MPC19.pdf"
+section = "Moreau, Pharr and Clarberg, Dynamic Many-Light Sampling for Real-Time Ray Tracing, HPG 2019 (doi:10.2312/hpg.20191191), Abstract; §5 Results (hardware paragraph); end of §5 on the reconstruction filter"
+quote = '''Current GPUs only afford the capability of tracing a few rays per pixel at real-time frame rates, making it necessary to focus sampling on important light sources. [...] Our approach is based on a two-level BVH hierarchy that reduces the cost of partial hierarchy updates. [...] requiring less than 1 ms per frame for hierarchy updates for a scene with thousands of moving light sources on a modern GPU. [...] For practical use at low sample counts, it is essential to pair it with a reconstruction filter to remove the residual Monte Carlo noise. As a proof of concept, we have integrated spatiotemporal variance-guided filtering (SVGF) [SKW∗ 17] in the renderer.'''
+checked = 2026-11-27
+cost = '''Further, we show that with spatiotemporal filtering, our approach allows complex scenes with thousands of lights to be rendered with ray-traced shadows in 16.1 ms per frame. [...] All results were measured on an NVIDIA GeForce RTX 2080Ti GPU with 12GB RAM using driver 419.67 [...] The output resolution was 1920×1080 pixels.'''
+
+["bitterli-2020-restir"]
+url = "https://research.nvidia.com/sites/default/files/pubs/2020-07_Spatiotemporal-reservoir-resampling/ReSTIR.pdf"
+section = "Bitterli, Wyman, Pharr, Shirley, Lefohn, Jarosz, Spatiotemporal Reservoir Resampling for Real-Time Ray Tracing with Dynamic Direct Lighting, ACM TOG 39(4), SIGGRAPH 2020 (doi:10.1145/3386569.3392481), Fig. 1 caption, Abstract, §6 implementation (temporal reuse, hardware)"
+quote = '''We derive an unbiased Monte Carlo estimator for this approach, and show that it achieves equal-error 6×-60× faster than state-of-the-art methods. [...] For temporal reuse, we compute motion vectors to project the current pixel’s position into the previous frame, and use the pixel there for temporal reuse.'''
+checked = 2026-11-27
+cost = '''rendering complex scenes containing up to 3.4 million dynamic, emissive triangles in under 50 ms per frame while tracing at most 8 rays per pixel. [...] The Zero Day image is rendered in 15 ms and Amusement Park in 50 ms, both at 1920 × 1080 resolution. [...] Renderings and timings were obtained on a GeForce RTX 2080 Ti GPU, except for the Amusement Park scene, which required use of a Titan RTX due to high memory requirements.'''
+
+["narkowicz-costa-2025-megalights-cost"]
+url = "https://advances.realtimerendering.com/s2025/content/MegaLights_Stochastic_Direct_Lighting_2025.pdf#page=66"
+section = "Narkowicz and Costa (Epic Games), MegaLights: Stochastic Direct Lighting in Unreal Engine 5, SIGGRAPH 2025 Advances, PDF pp. 66-67, slide 'Performance' and speaker notes"
+quote = '''These numbers are from the MegaLights demo running on a PlayStation 5 at 1080p render resolution, with 1 sample per pixel, and async compute disabled. There are over 900 lights on screen, which results in around 20 to 80 lights per pixel. The total cost is about 5.5ms covering all shadowing and shading cost for direct lighting.'''
+checked = 2026-11-27
+cost = '''PS5, 1080p render resolution, 1 SPP, async compute off ● 941 area lights on screen [...] ● Total: 5.51 ms ○ Replaces all direct lighting shadowing and shading [...] Opaque [...] Sampling 0.7ms [...] Screen Space 0.47ms [...] HW Ray Tracing 1.35ms [...] Sample Shading 0.55ms [...] Visible Light List 0.05ms [...] Denoising 0.96ms'''
+
+["narkowicz-costa-2025-megalights-visible-light-list"]
+url = "https://advances.realtimerendering.com/s2025/content/MegaLights_Stochastic_Direct_Lighting_2025.pdf#page=14"
+section = "Narkowicz and Costa, MegaLights, SIGGRAPH 2025 Advances, PDF p. 14 (visible light list per 8×8 tile) and p. 24 (Downsampled Sampling), speaker notes"
+quote = '''History could be a great source for such a visible light list, as samples which were visible last frame likely will be also visible next frame. [...] output a sorted light list per 8x8 tile. [...] Light weights are usually pretty similar between pixels if their normals and depth are similar. We can use this to sample at a lower resolution. For example instead of picking 1 sample per pixel, we can pick 4 samples every 4 pixels reusing BRDF computations. [...] In that case we reuse history without any kind of history rectification like neighborhood clamp. [...] On the other hand it makes sampling almost four times faster, so it can be a pretty good tradeoff in practice.'''
+checked = 2026-11-27
+
+["nvidia-rtx-sdks-licence"]
+url = "https://github.com/NVIDIA-RTX/RTXDI/blob/fdbd9b36dc55827b67a03f926e78cfad9b1c1c57/LICENSE.txt"
+section = "NVIDIA RTX SDKs LICENSE, as shipped in the RTXDI repository at fdbd9b3 (the RTXGI repository's License.md carries the same licence), opening and §1"
+quote = '''NVIDIA RTX SDKs LICENSE
+
+This license is a legal agreement between you and NVIDIA Corporation ("NVIDIA") and governs the use of the NVIDIA RTX software development kits, including the DLSS SDK, Reflex SDK, NGX SDK, RTXGI SDK, RTXDI SDK, RTX Video SDK, RTX Dynamic Vibrance SDK and/or NRD SDK [...] NVIDIA hereby grants you a non-exclusive, non-transferable license, without the right to sublicense (except as expressly provided in this license)'''
+checked = 2026-11-27
+
+["falcor-licence"]
+url = "https://github.com/NVIDIAGameWorks/Falcor/blob/759aad033ff610fb0d82c74f7e0a508d0096d5f2/LICENSE.md"
+section = "Falcor at 759aad0, LICENSE.md"
+quote = '''Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions
+are met:'''
+checked = 2026-11-27
+
+["amd-fidelityfx-sdk-licence"]
+url = "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/c6efa6bf7f2027b3ec94f28578bb5965eabb9e55/LICENSE.txt"
+section = "AMD FidelityFX SDK at c6efa6b (v1.1.4), LICENSE.txt"
+quote = '''This file is part of the FidelityFX SDK.
+
+Copyright (C) 2024 Advanced Micro Devices, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files(the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and /or sell'''
+checked = 2026-11-27
+
+["olsson-2015-clustered-shadows-hybrid"]
+url = "https://www.cse.chalmers.se/~uffe/More%20Efficient%20Virtual%20Shadow%20Maps%20for%20Many%20Lights.pdf"
+section = "Olsson, Billeter, Sintorn, Kämpe and Assarsson, More Efficient Virtual Shadow Maps for Many Lights, IEEE TVCG 21(6), 2015 (doi:10.1109/TVCG.2015.2418772), Abstract, §I, Fig. 1 caption, §V-E (hybrid), §VIII Conclusion"
+quote = '''Moreover, clustered shading provides tight 3D bounds around groups of samples in the frame buffer and therefore can be viewed as a fast voxelization of the visible geometry. Thus, as we will show, these clusters provide opportunities for efficient culling of shadow casters and allocation of shadow map memory. [...] decide when ray tracing should be used, we simply use a threshold (in our tests we used 96 texels as the limit) on the resolution of the shadow map. Those shadow maps that are below the threshold are not further processed and are replaced by directly ray tracing the shadows in a separate shading pass. We refer to this as the hybrid algorithm. [...] We also demonstrate that using ray tracing can be more efficient than shadow maps for shadows with few samples and that a hybrid method building on the strength of both is a promising possibility.'''
+checked = 2026-11-27
+cost = '''Fig. 1. Scenes rendered with many lights casting shadows at 1920×1080 resolution on an NVIDIA Geforce Titan. From the left: H OUSES with 1.01M triangles and 256 lights (23ms), N ECROPOLIS with 2.58M triangles and 356 lights (34ms), C RY S PONZA with 302K triangles and 65 lights (16ms).'''
+
+["hasan-2007-row-column-sampling"]
+url = "https://doi.org/10.1145/1239451.1239477"
+section = "Hašan, Pellacini and Bala, Matrix Row-Column Sampling for the Many-Light Problem, ACM TOG 26(3), SIGGRAPH 2007, Fig. 1 caption and Abstract (copy read: visualcomp.ucsd.edu/classes/cse274/fa21/readings/a26-hasan.pdf)"
+quote = '''We view the problem as a large matrix of samplelight interactions; the ideal final image is the sum of the matrix columns. We propose an algorithm for approximating this sum by sampling entire rows and columns of the matrix on the GPU using shadow mapping. The key observation is that the inherent structure of the transfer matrix can be revealed by sampling just a small number of rows and columns.'''
+checked = 2026-11-27
+cost = '''Figure 1: In the above images, over 1.9 million surface samples are shaded from over 100 thousand point lights in a few seconds.'''
+
+["boksansky-meister-2025-neural-visibility-cache"]
+url = "https://arxiv.org/pdf/2506.05930v2"
+section = "Bokšanský and Meister (AMD), Neural Visibility Cache for Real-Time Light Sampling, JCGT 14(2), 2025 (arXiv 2506.05930v2), Fig. 1 caption, Abstract, §3 network parameters, §3.5 Dynamic Scenes, §3.6 Clustering, §4 Results"
+quote = '''We propose an online-trained [...] neural cache that stores visibility between lights and 3D positions. We feed light visibility to weighted reservoir sampling (WRS) [Chao 1982; Wyman 2021] to sample a light source. [...] This setup leads to approximately 562K learned parameters represented using 32-bit floats. [...] As our method is unbiased, this exhibits as an increase in variance (noise) but not bias. When training from scratch (see Figure 6), the training needs only about 16 frames to reduce the FLIP error to almost a half. [...] To solve a many-lights problem, we employ a clustered approach, where each output neuron represents the average visibility of a light cluster, instead of an individual light source.'''
+checked = 2026-11-27
+cost = '''Figure 1. Rendering of the kitchen scene with 32 lights using screen-space ReSTIR (top left) at 3.61 ms per frame, compared to our neural light sampling method (NLS) (top right) running at 3.95 ms, our neural direct illumination (Neural DI) (bottom left) at 4.41 ms, and ground truth (bottom right). [...] All tests were executed on AMD Radeon RX 7900 XT.'''
+
+["boksansky-2019-adaptive-shadows-temporal"]
+url = "https://www.realtimerendering.com/raytracinggems/unofficial_RayTracingGems_v1.9.pdf#page=197"
+section = "Boksansky, Wimmer and Bittner, Ray Traced Shadows: Maintaining Real-Time Frame Rates, Ray Tracing Gems (2019, doi:10.1007/978-1-4842-4427-2_13), §13.4.1 Temporal Reprojection, §13.4.4 Sampling Mask, Fig. 13-6 caption, §13.6.2 (PDF pages 197-208 of the v1.9 copy)"
+quote = '''To effectively increase the sample count used per pixel, we use temporal reprojection, [...] For these pixels we might skip the calculation of visibility completely and use value from the previous frame. However, this may lead to an accumulation of errors over time in these regions, for example when a light is moving fast or the camera is zooming slowly (in both these cases the reprojection succeeds, but visibility can change). Therefore, we use a mask that enforces regular sampling for at least one fourth of the pixels. [...] Compared to the unoptimized calculation using 8 samples per pixel, our adaptive sampling method provides a combined speedup of about 40–50% for the tested scenes. Our method, however, achieves better visual quality thanks to the temporal accumulation.'''
+checked = 2026-11-27
+cost = '''Left: using naive shadow-ray tests with 8 samples per pixel (4.25 ms per frame). Right: our method using 1 to 8 samples per pixel and the sampling mask (2.94 ms per frame).'''
+
+["olejnik-2026-cod-light-load-balancer"]
+url = "https://advances.realtimerendering.com/s2026/content/SIGGRAPH2026%20-%20Micha%C5%82%20Olejnik%20-%20Variable%20Rate%20Ray%20Tracing%20in%20COD%20MW4.pdf#page=5"
+section = "Olejnik (Infinity Ward), Variable Rate Ray Tracing in Call of Duty: Modern Warfare 4, SIGGRAPH 2026 Advances, speaker notes of PDF pp. 5-6 (early experiments), p. 40 (undersampling modes) and p. 46 (load balancing)"
+quote = '''We choose local light shadows for two reasons: they allowed us to keep BVH simple thanks to per-light TLASes, and they didn’t require shading [...] Before (and even years after our title's release) the industry standard was to do raytraced shadows with 1 denoiser per light, meaning spikes and performance drops when there were more than 1 light on screen. [...] we used light culling output to count average number of light per pixel on whole screen and decide on ray count per light. [...] Unfortunately, we were already ray tracing and denoising in quarter res (1440p => 720p) [...] Quarter rate mode – randomize one ray per quad of pixels, with each pixel having equal probability of casting ray [...] We want to achieve a fixed budget per frame (same number of rays each frame) - this is expressed as an 'average rays per pixel' slider, e.g. 1.5.'''
+checked = 2026-11-27
+
+["apple-techtalk-111375-hardware-traversal-reorder"]
+url = "https://developer.apple.com/videos/play/tech-talks/111375/"
+section = "Apple, Explore GPU advancements in M3 and A17 Pro, Tech Talk 111375 (2023), transcript, hardware-accelerated ray tracing"
+quote = '''The hardware-accelerated intersection does not execute in line with the GPU function. Thus, to facilitate the communication of the ray and the ray payload between the two, data is read and written to on-chip memory, which you can observe using the RT scratch performance counters in the new Xcode. [...] The first major improvement is that the hardware intersector is able to run each traversal completely independently using fixed function hardware. This is possible in part because the arrays are sent to the hardware intersector for processing instead of executing in line with the GPU function. This greatly decreases the time spent traversing and also removes the overhead of the traditional traversal's execution divergence. On the other hand, the intersection functions are Metal shading language code, so they still must be grouped into SIMDgroups to be run on the shader core. However, because the hardware intersector executes each ray independently, it is free to group together the intersection function calls from rays that originated from separate SIMDgroups. This is the role of the reorder stage.'''
+checked = 2026-11-27
+
+["meister-2020-ray-reordering"]
+url = "https://meistdan.github.io/publications/raysorting/paper.pdf"
+section = "Meister, Bokšanský, Guthe and Bittner, On Ray Reordering Techniques for Faster GPU Ray Tracing, I3D 2020 (doi:10.1145/3384382.3384534), authors' version, Fig. 1 caption and Abstract"
+quote = '''We evaluate the ray reordering techniques in the context of the wavefront path tracing using the RTX trace kernels. We show that ray reordering yields significantly higher trace speed on recent GPUs (1.3 − 2.0×), but to recover the reordering overhead in the hardware-accelerated trace phase is problematic.'''
+checked = 2026-11-27
+cost = '''The numbers below the images show trace performance for that bounce on the RTX 2080 Ti GPU using RTX trace kernels: original incoherent rays (left), rays reordered using origin-direction sorting key (middle), rays reordered using the origin-termination sorting key (right)'''
+
+["bavoil-2020-thread-group-id-swizzling"]
+url = "https://developer.nvidia.com/blog/optimizing-compute-shaders-for-l2-locality-using-thread-group-id-swizzling/"
+section = "Louis Bavoil (NVIDIA), Optimizing Compute Shaders for L2 Locality using Thread-Group ID Swizzling, NVIDIA Technical Blog, 16 July 2020, opening and results paragraphs"
+quote = '''This is an important technique for optimizing 2D, full-screen, compute shader passes that are doing widely spread texture fetches and which are VRAM-limited with a poor L2 hit rate. It is particularly important when doing convolution passes that use wide kernels (such as typical denoisers), or when using NVIDIA DXR1.1 RayQuery instructions in a regular 2D compute shader.'''
+checked = 2026-11-27
+cost = '''In my GDC 2019 talk, I showed that horizontal thread-group-ID tiling with N=16 produced a 47% gain on a full-screen, denoising, compute shader pass in Battlefield V DXR at 1440p on a RTX 2080 with SetStablePowerState(TRUE).'''
+
+["sintorn-2014-compact-precomputed-voxelized-shadows"]
+url = "https://www.cse.chalmers.se/~d00sint/CompressedShadowsPreprint.pdf"
+section = "Sintorn, Kämpe, Olsson and Assarsson, Compact Precomputed Voxelized Shadows, ACM TOG 33(4), SIGGRAPH 2014 (doi:10.1145/2601097.2601221), preprint, Fig. 1 caption and Abstract"
+quote = '''Most virtual scenes in real-time applications contain a large portion of static geometry, and it is not uncommon to have one or more static key lights (e.g. the sun). Under these circumstances, it can be desirable to use precomputed shadows, which can be both faster to evaluate and can provide higher quality shadows than what is possible with fully dynamic techniques. A dynamic technique, e.g. CSMs, can then be used for the dynamic geometry, which represents just a fraction of the triangles and fill-rate requirements.'''
+checked = 2026-11-27
+cost = '''Our compact data structure occupies 100MB of graphics memory and is equivalent to a 256k×256k (i.e. 2621442 ) shadow map. With a filter size of 9×9 taps, shadow evaluation is done in < 1ms at 1080p resolution.'''
+
+["kampe-2016-voxelized-shadows-many-lights"]
+url = "https://www.cse.chalmers.se/~uffe/Fast%20memory%20efficient%20construction%20of%20voxelized%20shadows%20TVCG.pdf"
+section = "Kämpe, Sintorn, Dolonius and Assarsson, Fast, Memory-Efficient Construction of Voxelized Shadows, IEEE TVCG 22(10), 2016, pp. 2239-2248, Abstract, Fig. 1 caption, §6 Results (hardware)"
+quote = '''Additionally, we examine the feasibility of using CPVS for many local lights and present two improvements to the original algorithm that allow us to handle hundreds of lights with high-quality, filtered shadows at real-time frame rates. [...] Our novel algorithm generates this shadow information in 32 seconds and compresses it to 48 MB (versus 100 MB for the previous CPVS method).'''
+checked = 2026-11-27
+cost = '''To the right is the same scene lit by 165 spotlights with precomputed shadows [...] The average build time for these CPVSs is 114 ms, and the average size is 0.5 MB (versus 128 MB for a 16-bit shadow map). Evaluating shadows for all lights at 1,920 [...] 1,080 takes 3.2 ms. [...] measurements were performed on a desktop computer with an Intel Core i7 3,930K CPU, 32 GB DDR3 1,600 MHz RAM, and an NVIDIA GTX 980 GPU connected via PCI Express 2.0 x16.'''
+
+["ue-5.9-vsm-page-caching"]
+url = "https://dev.epicgames.com/documentation/en-us/unreal-engine/virtual-shadow-maps-in-unreal-engine?application_version=5.9"
+section = "Unreal Engine 5.9 documentation, Virtual Shadow Maps: overview; Caching; Separate Static Caching; Overflow of Physical Page Pool"
+quote = '''To keep performance high at reasonable memory cost, VSMs split the shadow map into tiles (or Pages) that are 128x128 each. Pages are allocated and rendered only as needed to shade on-screen pixels based on an analysis of the depth buffer. The pages are cached between frames unless they are invalidated by moving objects or light, which further improves performance. [...] Any light movement or rotation will invalidate all cached pages for that light [...] Geometry that casts shadows moving, or being added or removed from the scene will invalidate any pages that overlap its bounding box from the light's perspective. [...] To better optimize in these cases, Virtual Shadow Maps stores what is effectively two copies of depth, one for each category of geometry. Thus, when the dynamic geometry moves, there is no need to redraw the static geometry. Instead, the cached static page can be cheaply composited on top. [...] With Virtual Shadow Maps, all of the shadow data in the scene for all lights is stored in a single large texture pool.'''
+checked = 2026-11-27
+
+["courreges-2016-doom-shadow-atlas-cache"]
+url = "https://www.adriancourreges.com/blog/2016/09/09/doom-2016-graphics-study/"
+section = "Adrian Courrèges, DOOM (2016) - Graphics Study, 9 September 2016, section Shadow Map Atlas"
+quote = '''For each light casting a shadow, a unique depth map is generated and saved into one tile of a giant 8k x 8k texture atlas. However not every single depth map is calculated at every frame: DOOM heavily re-uses the result of the previous frame and regenerates only the depth maps which need to be updated. [...] When a light is static and casts shadows only on static objects it makes sense to simply keep its depth map as-is instead of doing unnecessary re-calculation. If some enemy is moving under the light though, the depth map must be generated again. [...] DOOM has specific optimizations like caching the static portion of a depth map, computing then only the dynamic meshes projection and compositing the results.'''
+checked = 2026-11-27
+
+["rtxdi-fdbd9b3-regir-world-space-grid"]
+url = "https://github.com/NVIDIA-RTX/RTXDI/blob/fdbd9b36dc55827b67a03f926e78cfad9b1c1c57/Doc/Integration.md#world-space-sampling-and-regir"
+section = "NVIDIA RTXDI at fdbd9b3, Doc/Integration.md, World-Space sampling and ReGIR; Checkerboard rendering"
+quote = '''ReGIR constructs a spatial structure with cells distributed around a given location, typically around the camera. [...] The spatial structure is rebuilt every frame. Every cell is populated with a number of lights, typically on the order of hundreds to thousands. Each light in the cell is selected from the local light pool using RIS, with the target distribution function being average irradiance from the light to any surface within the cell. [...] To sample from the structure only, call the `RTXDI_SampleLocalLights` function that returns a reservoir with the selected light. Shadowing is not evaluated by that function.'''
+checked = 2026-11-27
+
+["amd-fidelityfx-shadow-classifier-ray-interval"]
+url = "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/c6efa6bf7f2027b3ec94f28578bb5965eabb9e55/docs/techniques/classifier.md"
+section = "AMD FidelityFX Classifier 1.3 docs at c6efa6b (SDK v1.1.4), Shadow Classifier: Pixel classification, Ray interval, Ray tracing pass; and docs/samples/hybrid-shadows.md"
+quote = '''At this stage, we reject pixels using the maximum and minimum depth values from the shadow map cascades. [...] It is also possible to calculate the ray interval using the shadow cascade maps. This information can be stored in the tiles and can later be used in the raytracing pass. [...] This pass uses the tile data generated by the FidelityFX Shadow Classifier to setup each workgroup to operate on an 8x4 tile, which perfectly maps to a thread group size of 32. This pass also makes use of a blue noise texture, which is sampled every frame to create a new ray to fire into the scene. If using the depth interval, the rays can be reversed, as to trace from the sun to the surface for faster traversal though the acceleration structure.'''
+checked = 2026-11-27
+
+["de-vahl-2025-indiana-jones-shadow-static-cache"]
+url = "https://enginearchitecture.org/downloads/REAC_2025_Indy.pdf#page=46"
+section = "de Vahl (MachineGames), the rendering of Indiana Jones and the Great Circle, REAC 2025, speaker notes of PDF pp. 46 (shadow atlas), 47 (sun shadows) and 54 (GI)"
+quote = '''We use a shadow atlas in which we allocate tiles of different size depending on what quality a light needs. For sun this is a static allocation but for other lights we prioritize lights so that we can fit the most important ones in. As most lights are not moving, they allocate a “static cache” tile as well. This is an optimization we do where we render static geometry into a tile and then we can copy that to a composite tile each frame and render dynamics on top of it. If needed. [...] The Static cache is amortized over several frames for the further cascades, spreading out the load of updating over up to 30 frames. [...] Our GI is based on a set of ray traced probe cascades, and similar to shadows we update one cascade every frame. [...] We calculate how far rays can reach and limit our top level acceleration structure to only that area.'''
+checked = 2026-11-27
+
+["4a-2021-metro-exodus-enhanced-light-clusters"]
+url = "https://www.4a-games.com.mt/4a-dna/in-depth-technical-dive-into-metro-exodus-pc-enhanced-edition"
+section = "4A Games, In-Depth Technical Dive into Metro Exodus PC Enhanced Edition (2021), sections on the extended ray-traced lighting pipeline and the probe grid"
+quote = '''We now allow for up to 256 analytic lights sources to contribute to each sample, meaning that for every pixel we can now have up to 256 light sources, in addition to the sun and the sky, all adding information to the RTGI term. These can all be spot or radial lights, each with their own shadow map to provide accurate secondary occlusion. [...] As an optimisation, to help cull as many lights as possible in areas where they have no effect, we partition our scenes using a world-space grid. In each grid cell (called a cluster), we simply list all of the light that are in range and might affect geometry in that location. [...] Instead, we have introduced a raytraced probe grid as part of a system known as Dynamic Diffuse Global Illumination (DDGI).'''
+checked = 2026-11-27
+
+["bend-2023-sss-code-licence"]
+url = "https://www.bendstudio.com/assets/cms/downloads/code_final_candidate.zip"
+section = "Sony Bend Studio, screen space shadows example code (linked from bendstudio.com/blog/inside-bend-screen-space-shadows/), bend_sss_gpu.h header, 2023"
+quote = '''// Copyright 2023 Sony Interactive Entertainment.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");'''
+checked = 2026-11-27
+
+["woo-amanatides-1990-voxel-occlusion-testing"]
+url = "https://graphicsinterface.org/wp-content/uploads/gi1990-26.pdf"
+section = "Woo and Amanatides, Voxel Occlusion Testing: A Shadow Determination Accelerator for Ray Tracing, Graphics Interface '90, pp. 213-220, §1 Abstract, §5.1 The Light Buffer, §6 A New Shadow Determination Accelerator, §6.1-6.2, §8.1"
+quote = '''Given the uniform grid structure, an extra 2-bit field needs to be added per light source in each voxel. Its value indicates the level of opaque occlusion of the voxel with respect to each light source: full. null and complicated occlusion. [...] When a ray intersects a surface in a voxel that has either full or null occlusion (a 2-bit comparison), then any intersected surface in the voxel is ensured to be in shadow or not in shadow, respectively. No shadow ray nor intersection checks need to be performed [...] The additional storage necessary is 2N 3 bits per light source, where NxNxN is the resolution of the grid. [...] If the exact definition of null occlusion is considered, this occlusion value can never be found in a voxel that contains a surface, even if the surface is completely unoccluded. Complicated occlusion will always be found in such voxels and thus first pass occlusion testing will fail.'''
+checked = 2026-11-27
+cost = '''Testing has been done on a SUN 31280 with fpa [...] All test images are rendered at a resolution of 512x512 with one sample per pixel. [...] Voxel and Occ indicate the total CPU time in seconds taken to render the image using voxel traversal and voxcl occlusion, respectively.'''
+
+["haines-greenberg-1986-light-buffer-via-woo"]
+url = "https://graphicsinterface.org/wp-content/uploads/gi1990-26.pdf"
+section = "Haines and Greenberg, The Light Buffer: A Shadow-Testing Accelerator, IEEE CG&A 6(9), 1986 (doi:10.1109/MCG.1986.276832), as described by Woo and Amanatides, Graphics Interface '90, §5.1 The Light Buffer and §8.3 (original not opened)"
+quote = '''The light buffer consists of six grid planes forming a box surrounding the light source origin (point light source is assumed). The cells of the buffer contain information on the smallest full occlusion (completely fills cell) distance from the light source, and sorted approximate depth values of candidate occlusion objects obtained by projecting objects onto the surface cells during preprocessing. [...] For each intersected point in question, if the depth value of the corresponding cell is greater than the smallest full occlusion distance, then the intersection point is in shadow. Similarly, if the cell is void of projected objects, then the surface is not in shadow. [...] Haines et al. report a substantial improvement in the shadow determination phase. However, large memory space'''
+checked = 2026-11-27
+
