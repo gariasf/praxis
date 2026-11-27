@@ -11,6 +11,7 @@
 //! sample's verdict, so the edge resolves as MSAA resolves geometry's. It
 //! runs once both culling phases' Instances are in the depth target.
 
+use crate::cooked::MESH_MAX_LODS;
 use crate::render::bind_groups::{RAY_SCENE, SHADOW_MASK_BUILD, compute_pipeline, pipeline_layout};
 use crate::render::culling_pass::CullingPass;
 use crate::render::froxel_pass::{FROXEL_SLICES, FroxelPass};
@@ -147,7 +148,14 @@ impl ShadowMaskPass {
                 (&SHADOW_MASK_BUILD, &layout),
             ],
         );
-        let constants = switches.constants();
+        let forced_lod = switches.forced_lod.map_or(MESH_MAX_LODS as u32, |lod| {
+            lod.min(MESH_MAX_LODS as u32 - 1)
+        });
+        let constants: Vec<(&str, f64)> = switches
+            .constants()
+            .into_iter()
+            .chain([("FORCED_LOD", f64::from(forced_lod))])
+            .collect();
         let pipeline = |entry_point| {
             compute_pipeline(device, &pipeline_layout, &shader, entry_point, &constants)
         };
