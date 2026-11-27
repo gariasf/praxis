@@ -155,8 +155,28 @@ _Avoid_: Cluster, chunk
 How a lighting term reaches its value over time: (a) complete each frame; (b) converging over frames in a world-space or probe-space cache, so it lags a change without smearing on screen; (c) reusing screen-space history (reprojection, temporal denoising).
 _Avoid_: Temporal stability, temporal tier
 
+**Probe**:
+A point of a Cascade that holds the indirect light arriving there from every direction and how far the surfaces around it lie, refreshed from rays over frames (Temporal class b).
+_Avoid_: Light probe, irradiance volume, GI probe; a patch that measures is not a probe in code or docs
+
+**Cascade**:
+One camera-centred grid of Probes at one spacing. Cascades nest, each coarser and wider than the one inside it.
+_Avoid_: Clipmap level, volume, shadow cascade
+
+**Probe update**:
+A frame's work that traces rays from a share of the Probes, shades their hits and blends the result into what those Probes hold.
+_Avoid_: GI pass, relight
+
+**Bounce colour**:
+The one base colour and emissive that a ray's hit reads for an Instance: the mean of its Mesh's Materials, or of the Material its Placement overrides them with.
+_Avoid_: Albedo, average material
+
+**Light grid**:
+World-space cells around the camera, each listing the lights that reach it, read at a ray's hit as a fragment reads its Froxel.
+_Avoid_: World Froxels, light clusters
+
 **Interior volume**:
-An authored region of a Game world marking a space as inside, so lighting sampled inside it ignores light gathered outside its walls, and the reverse.
+Authored oriented boxes under one identity that mark one interior of a Game world. A point inside it takes indirect light only from Probes inside it, and a point outside every Interior volume only from Probes outside them all.
 _Avoid_: Room, portal, light blocker
 
 **Input latency**:
