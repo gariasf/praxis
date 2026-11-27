@@ -911,12 +911,14 @@ impl DynamicTlas {
         for index in filled..previously_filled {
             self.tlas[index] = None;
         }
-        self.unrecorded_upload_bytes = (filled > 0 || previously_filled > 0)
-            .then_some(uploaded_entries * self.entry_upload_bytes);
-        if filled > 0 {
+        let footprint_bytes = if filled > 0 {
             self.footprint
-                .upload(queue, footprint_axes, bounds.unwrap_or_default());
-        }
+                .upload(queue, footprint_axes, bounds.unwrap_or_default())
+        } else {
+            0
+        };
+        self.unrecorded_upload_bytes = (filled > 0 || previously_filled > 0)
+            .then_some(uploaded_entries * self.entry_upload_bytes + footprint_bytes);
         bounds.unwrap_or_default().map(<[f32; 3]>::from)
     }
 
@@ -1025,6 +1027,7 @@ struct DynamicFootprint {
     group_size: usize,
     group: Option<[glam::Vec3; 2]>,
     grouped: usize,
+    logged: bool,
 }
 
 const FOOTPRINT_HEADER_WORDS: usize = 16;
@@ -1070,6 +1073,7 @@ impl DynamicFootprint {
             group_size,
             group: None,
             grouped: 0,
+            logged: false,
         }
     }
 
@@ -1130,13 +1134,13 @@ impl DynamicFootprint {
     }
 
     /// Writes the frame's grid: the cells its intervals touch, across the
-    /// rectangle that holds them all.
+    /// rectangle that holds them all. Returns the bytes it wrote.
     fn upload(
         &mut self,
         queue: &wgpu::Queue,
         axes: Option<[glam::Vec3; 3]>,
         [lowest, highest]: [glam::Vec3; 2],
-    ) {
+    ) -> u64 {
         self.words.clear();
         self.words.resize(FOOTPRINT_HEADER_WORDS, 0);
         if let Some([direction, first_axis, second_axis]) = axes {
@@ -1204,6 +1208,23 @@ impl DynamicFootprint {
             }
         }
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&self.words));
+        if !self.logged {
+            self.logged = true;
+            let set_cells: u32 = self.words[FOOTPRINT_HEADER_WORDS..]
+                .iter()
+                .map(|word| word.count_ones())
+                .sum();
+            tracing::info!(
+                columns = self.words[12],
+                rows = self.words[13],
+                set_cells,
+                boxes = self.intervals.len(),
+                first_box_metres = ?self.intervals.first().map(|interval| [interval[1] - interval[0], interval[3] - interval[2]]),
+                bytes = size_of_val(self.words.as_slice()),
+                "dynamic footprint's first grid"
+            );
+        }
+        size_of_val(self.words.as_slice()) as u64
     }
 }
 
