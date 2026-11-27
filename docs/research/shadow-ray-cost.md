@@ -133,6 +133,8 @@ Three ways to split them:
 
 None is chosen. Each says what it could take from `town`'s shadow mask pass on the M4 Pro.
 
+Decided 2026-11-27 ([decision](https://github.com/gariasf/praxis/issues/17#issuecomment-7223047291)): fixed shares (B1); of O1, the query order (8) and the dynamic TLAS's boxes (10) become prototype tickets of M6; O2 to O6 wait until ADR 0013's target hardware is named.
+
 - **O1. Inside the ADRs and wgpu 30.** The runtime checks (#873), 1.30 ms, 10.8% of the pass as #873 measured it; a query order that asks for the nearest hit only where a back face can be passed (8), under a measured ceiling of 27.5%; boxes tighter than one per frame for the dynamic TLAS (10), under 16.7%; a tiled dispatch order (11), unmeasured, with no bound below the rays' 82.9%. The ceilings overlap and none is a saving; each is a prototype's question.
 - **O2. Fewer rays, amending ADR 0020's one ray per light.** A relative bound (1), 2.9 to 3.3% measured, more if computed outside the ray-query kernel; a shadow range shorter than the light's (3), up to 22.2% at half the range (arithmetic) for missing lamp shadows past it; the sun's base rays from a sparse lattice with a history-free fill (5), 5.8 to 15.2% (arithmetic) for missed occluders thinner than the lattice.
 - **O3. Cheaper geometry.** Merged static Instances (7) and coarser shadow BLASes (6), unmeasured, with no bound below the rays' 82.9%; a prototype that merges `town`'s static Instances per Chunk would price both against BLAS memory.
