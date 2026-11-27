@@ -63,6 +63,10 @@ code { font-family: var(--mono); font-size: 0.88em; }
 .describes { font-size: 16px; color: var(--ink-soft); margin: 12px 0 0; }
 .reads { display: block; font-family: var(--mono); font-size: 13px; letter-spacing: 0.02em; color: var(--ink-soft); margin-top: 2px; }
 .reads a.reference { font-weight: 600; }
+.frame-map { margin: 0; display: grid; gap: 8px; }
+.frame-map pre { margin: 0; padding: 16px; background: var(--figure-bg); border: 1px solid var(--rule); border-radius: 6px; font-family: var(--mono); font-size: 12px; line-height: 1.5; color: var(--ink); overflow-x: auto; }
+.frame-map pre:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.frame-map figcaption { font-size: 15px; line-height: 1.5; color: var(--ink-soft); }
 footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; font-size: 15px; }
 @media (max-width: 640px) {
   body { font-size: 17px; }
@@ -77,6 +81,52 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
   <p class="lede">Praxis is a 3D engine in Rust for large open-world games. This is its frame in the order data flows through it, from the assets cooked before it to the stats read back after it, each step linking the page that describes its mechanism.</p>
   <p class="describes"><b>Describes</b> <code>main</code> at a7a5f65f (2026-11-05). A page describes its mechanism as it is at the commit its own Describes line names.</p>
 </header>
+
+<section class="stage" aria-labelledby="map">
+  <h2 id="map">The frame at a glance</h2>
+  <figure class="frame-map" aria-labelledby="map-caption">
+<pre tabindex="0"> CPU   fixed schedule, 64 Hz Ticks -&gt; ECS World -&gt; prepare -&gt; Frame data -&gt; upload
+       Chunk streamer -&gt; Mesh Arenas, Texture pool, Chunks, Far proxies
+       a Mesh loads -&gt; its BLAS, built from LOD 0
+       static Instances change -&gt; the static TLAS, rebuilt on a worker
+         |
+         |   Instance buffer, light buffer, uniforms, Mesh and Material tables
+         v
+ GPU   step                       reads                       writes
+       ---------------------------------------------------------------------------
+       dynamic TLAS build         Moving Instances            dynamic TLAS -----+
+       bend pass, BLAS refit      rest Meshes, the crowd's    bent Meshes       |
+       culling pass, phase one    Instances seen last frame   its draw          |
+       Froxel pass                point lights                Froxel lists      |
+       depth pre-pass             phase one's draw            depth, 4x MSAA,   |
+                                                              Surface normals   |
+       depth pyramid pass         depth                       depth pyramid     |
+       culling pass, phase two    other Instances, pyramid    its draw          |
+       phase two's depth pass     phase two's draw            depth, normals    |
+                                                                                |
+             Ray scene = static TLAS + dynamic TLAS &lt;---------------------------+
+                  |
+                  v
+       shadow mask pass           depth, Surface normals,     Shadow mask:
+         hard rays, traced:       Froxel lists, Ray scene     a bit a light,
+         one a pixel a light,                                 59 lights a pixel
+         second surfaces,
+         the sun's shadow edges
+
+       lit pass                   both draws, Materials,      HDR target,
+         clustered forward,       Froxel lists, Shadow mask   pre-exposed
+         4x MSAA, resolved
+         direct light: the sun and point lights, one bit of the mask each
+         indirect light: a constant ambient
+
+       tonemapping pass           HDR target                  8-bit target
+         GT7, sRGB, dither
+         |
+         v
+       GPU stats, read back -&gt; Frame stats -&gt; the bench, Baselines, Budgets</pre>
+    <figcaption id="map-caption">The frame on <code>main</code> at 7c676077 (2026-11-27): what the CPU hands the GPU, then the GPU's steps in the order they are recorded, with what each reads and writes. The stages below say more of each step and link its page.</figcaption>
+  </figure>
+</section>
 
 <section class="stage" aria-labelledby="before">
   <h2 id="before">Before the frame</h2>
