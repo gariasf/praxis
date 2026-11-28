@@ -2,3 +2,5 @@
 *.sh text eol=lf
 # The shader tests match WGSL lines ending in LF, and include_str! embeds its bytes.
 *.wgsl text eol=lf
+# A Baseline is the bench's own bytes, which a test reads back from the checkout.
+bench/baselines/**/*.json text eol=lf
