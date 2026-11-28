@@ -270,8 +270,10 @@ impl ShaderModule {
     /// The module's WGSL.
     pub fn source(&self) -> String {
         let mut source = self.assemble().0;
-        if let Ok(path) = std::env::var("PRAXIS_PROBE_WGSL") {
-            let probe = std::fs::read_to_string(path).unwrap();
+        if let Some(probe) = std::env::var("PRAXIS_PROBE_WGSL")
+            .ok()
+            .and_then(|path| std::fs::read_to_string(path).ok())
+        {
             let pieces: Vec<&str> = probe.split("\n@@@@\n").collect();
             for pair in pieces.chunks(2) {
                 let text = pair[0].trim_end_matches('\n');
