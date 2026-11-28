@@ -6,7 +6,7 @@ use praxis::{ReferenceScene, RenderSwitches};
 
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 360;
-const FIELD_OF_VIEW: f64 = std::f64::consts::FRAC_PI_4;
+const FIELD_OF_VIEW_RADIANS: f64 = std::f64::consts::FRAC_PI_4;
 
 struct View {
     frame: u32,
@@ -22,7 +22,7 @@ const ROOM_A: View = View {
     pitch_degrees: -17.0,
 };
 const ROOM_B: View = View {
-    frame: 870,
+    frame: 1260,
     camera: DVec3::new(0.7, 1.65, -1.6),
     yaw_degrees: -296.0,
     pitch_degrees: -19.0,
@@ -42,7 +42,7 @@ fn pixel_seeing(view: &View, point: DVec3) -> (u32, u32) {
     let up = right.cross(forward);
     let to_point = point - view.camera;
     let depth = to_point.dot(forward);
-    let half_height = (FIELD_OF_VIEW / 2.0).tan();
+    let half_height = (FIELD_OF_VIEW_RADIANS / 2.0).tan();
     let half_width = half_height * f64::from(WIDTH) / f64::from(HEIGHT);
     let across = to_point.dot(right) / (depth * half_width);
     let along_up = to_point.dot(up) / (depth * half_height);

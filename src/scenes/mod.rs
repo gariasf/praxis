@@ -261,13 +261,7 @@ impl ReferenceScene {
                 .collect(),
             Self::Town => town::materials(),
             Self::World => world::materials(),
-            Self::House => house::MATERIALS
-                .into_iter()
-                .map(|(name, [red, green, blue], roughness)| {
-                    let material = factors([red, green, blue, 1.0], 0.0, roughness, None);
-                    (name.into(), material)
-                })
-                .collect(),
+            Self::House => house::materials(),
         }
     }
 
@@ -593,7 +587,7 @@ impl ReferenceScene {
         match self {
             Self::Helmet => &[],
             Self::World => &[GOLDEN_FRAME, 300, 599, 1500],
-            Self::House => &[GOLDEN_FRAME, 360, 690, 870],
+            Self::House => &[GOLDEN_FRAME, 360, 690, 1260],
             Self::PbrSweep
             | Self::UvGrid
             | Self::NormalTangent

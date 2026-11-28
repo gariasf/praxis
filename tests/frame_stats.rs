@@ -413,8 +413,8 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
                 WORLD_TRIANGLES + WORLD_FAR_FIELD_TRIANGLES,
                 10_000,
             ),
-            // Its yard, two balls, a table of five boxes, 17 boxes and its
-            // door, a box and its one Moving Instance.
+            // Its yard, two balls, a table of five cuboids, 17 boxes and its
+            // door, a cuboid that is a Moving Instance.
             ReferenceScene::House => (
                 22,
                 plane_triangles + 2 * sphere_triangles + 5 * 12 + 18 * 12,

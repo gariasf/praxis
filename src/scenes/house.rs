@@ -15,9 +15,10 @@ use crate::cooked::{CookedLight, CookedPlacement};
 use crate::transform::PreviousWorldTransform;
 
 // Every pivot lies in Chunk (0, 0), the one Chunk `chunk_coordinates` lists for the scene.
-const MIDDLE: DVec3 = DVec3::new(32.0, 0.0, 32.0);
+const HOUSE_CENTRE: DVec3 = DVec3::new(32.0, 0.0, 32.0);
 
-pub(super) const MATERIALS: [(&str, [f32; 3], f32); 6] = [
+#[cfg(feature = "cook")]
+const MATERIALS: [(&str, [f32; 3], f32); 6] = [
     ("plaster", [0.65, 0.62, 0.56], 0.9),
     ("boards", [0.35, 0.24, 0.14], 0.7),
     ("grass", [0.10, 0.26, 0.06], 0.95),
@@ -45,7 +46,7 @@ const BALL_RADIUS_METRES: f32 = 0.3;
 const YARD_HALF_SIZE_METRES: f32 = 30.0;
 
 pub(super) const SUN_DIRECTION: glam::Vec3 = glam::Vec3::new(-0.4, -0.6, -0.7);
-const LAMP: DVec3 = DVec3::new(-3.3, 2.25, 1.4);
+const LAMP_POSITION: DVec3 = DVec3::new(-3.3, 2.25, 1.4);
 const LAMP_LIGHT: PointLight = PointLight {
     color: glam::Vec3::new(1.0, 0.85, 0.65),
     intensity: 0.1 * super::SUN_ILLUMINANCE,
@@ -60,7 +61,7 @@ struct PathKey {
     stops_under_the_yard: f32,
 }
 
-const PATH: [PathKey; 5] = [
+const PATH: [PathKey; 9] = [
     PathKey {
         frame: 0,
         position: DVec3::new(1.0, 1.65, 14.0),
@@ -90,7 +91,35 @@ const PATH: [PathKey; 5] = [
         stops_under_the_yard: 4.0,
     },
     PathKey {
+        frame: 780,
+        position: DVec3::new(-2.05, 1.65, 1.0),
+        yaw_degrees: -270.0,
+        pitch_degrees: -5.0,
+        stops_under_the_yard: 4.0,
+    },
+    PathKey {
         frame: 870,
+        position: DVec3::new(-2.05, 1.65, 3.6),
+        yaw_degrees: -360.0,
+        pitch_degrees: -5.0,
+        stops_under_the_yard: 0.0,
+    },
+    PathKey {
+        frame: 1020,
+        position: DVec3::new(2.6, 1.65, 3.6),
+        yaw_degrees: -450.0,
+        pitch_degrees: -5.0,
+        stops_under_the_yard: 0.0,
+    },
+    PathKey {
+        frame: 1110,
+        position: DVec3::new(2.6, 1.65, 1.0),
+        yaw_degrees: -450.0,
+        pitch_degrees: -10.0,
+        stops_under_the_yard: 4.0,
+    },
+    PathKey {
+        frame: 1260,
         position: DVec3::new(0.7, 1.65, -1.6),
         yaw_degrees: -296.0,
         pitch_degrees: -19.0,
@@ -112,7 +141,7 @@ pub(super) fn camera_at(frame: u32) -> Camera {
         from_degrees.lerp(to_degrees, progress as f32).to_radians()
     };
     Camera {
-        position: MIDDLE + from.position.lerp(to.position, progress),
+        position: HOUSE_CENTRE + from.position.lerp(to.position, progress),
         yaw: turned(from.yaw_degrees, to.yaw_degrees),
         pitch: turned(from.pitch_degrees, to.pitch_degrees),
         ..Camera::new()
@@ -130,7 +159,7 @@ pub(super) fn spawn_house(world: &mut World, loader: &mut dyn AssetLoader) -> an
     world.spawn((
         Transform {
             rotation: glam::Quat::from_rotation_y(-FRAC_PI_2),
-            ..Transform::from_translation(MIDDLE + DOOR_HINGE)
+            ..Transform::from_translation(HOUSE_CENTRE + DOOR_HINGE)
         },
         MeshRef(door),
         PreviousWorldTransform::default(),
@@ -148,7 +177,7 @@ fn block(material: &str, x: Range<f64>, y: Range<f64>, z: Range<f64>) -> CookedP
         ..super::placed(
             scene.mesh_id("box"),
             Some(scene.material_id(material)),
-            MIDDLE + foot,
+            HOUSE_CENTRE + foot,
         )
     }
 }
@@ -167,7 +196,8 @@ pub(super) fn static_content() -> (Vec<CookedPlacement>, Vec<CookedLight>) {
         let half = side / 2.0;
         block("wood", x - half..x + half, y..y + side, z - half..z + half)
     };
-    let prop = |mesh, x, y, z| super::placed(scene.mesh_id(mesh), None, MIDDLE + dvec3(x, y, z));
+    let prop =
+        |mesh, x, y, z| super::placed(scene.mesh_id(mesh), None, HOUSE_CENTRE + dvec3(x, y, z));
     let north_wall = block(
         "plaster",
         -outer_x..outer_x,
@@ -204,8 +234,26 @@ pub(super) fn static_content() -> (Vec<CookedPlacement>, Vec<CookedLight>) {
         prop("ball", 3.3, floor_top + ball_height, 1.2),
         prop("table", -3.3, floor_top, 1.5),
     ];
-    let lights = super::cooked_lights(&[(MIDDLE + LAMP, LAMP_LIGHT)]);
+    let lights = super::cooked_lights(&[(HOUSE_CENTRE + LAMP_POSITION, LAMP_LIGHT)]);
     (placements, lights)
+}
+
+#[cfg(feature = "cook")]
+pub(super) fn materials() -> Vec<(String, crate::cooked::CookedMaterial)> {
+    MATERIALS
+        .into_iter()
+        .map(|(name, [red, green, blue], roughness)| {
+            let material = crate::cooked::CookedMaterial {
+                base_color: [red, green, blue, 1.0],
+                metallic: 0.0,
+                roughness,
+                emissive: [0.0; 3],
+                normal_scale: 1.0,
+                textures: [None; 5],
+            };
+            (name.to_owned(), material)
+        })
+        .collect()
 }
 
 #[cfg(feature = "cook")]
@@ -250,6 +298,6 @@ mod tests {
         let within = |actual: f32, expected: f32| (actual - expected).abs() < 1e-3;
         assert!(within(ev100(59), 16.3466), "yard: {}", ev100(59));
         assert!(within(ev100(690), 12.3466), "room A: {}", ev100(690));
-        assert!(within(ev100(870), 12.3466), "room B: {}", ev100(870));
+        assert!(within(ev100(1260), 12.3466), "room B: {}", ev100(1260));
     }
 }
