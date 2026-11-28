@@ -23,7 +23,7 @@ pub(crate) const PROBE_TRACE_WORKGROUP_SIZE: u32 = 64;
 /// The share of what a Probe held that an update, one each cycle of 8
 /// frames, keeps: 0.917 a frame, within DDGI's 0.85 to 0.98
 /// [ref:majercik-2019-ddgi-hysteresis]; 32 frames take 15/16 of a step.
-const PROBE_HYSTERESIS: f64 = 0.5;
+const PROBE_HYSTERESIS_PER_UPDATE: f64 = 0.5;
 
 const PROBES_PER_FRAME: u32 = PROBE_LEVELS_PER_FRAME * PROBE_COUNTS[0] * PROBE_COUNTS[2];
 
@@ -32,8 +32,7 @@ const PROBE_RAYS_PER_FRAME: u32 = PROBES_PER_FRAME * PROBE_RAYS;
 /// Frames that update every level once.
 const FRAMES_PER_CYCLE: u64 = (PROBE_COUNTS[1] / PROBE_LEVELS_PER_FRAME) as u64;
 
-// A frame's first level is a multiple of its levels, which the blends read
-// each Probe's rays by.
+// The blends find a Probe's rays by its level modulo a frame's levels.
 const _: () = assert!(PROBE_COUNTS[1].is_multiple_of(PROBE_LEVELS_PER_FRAME));
 const _: () = assert!(PROBE_RAYS.is_multiple_of(PROBE_TRACE_WORKGROUP_SIZE));
 
@@ -150,7 +149,6 @@ impl ProbeUpdatePass {
             "Probe Blend Pipeline Layout",
             &[(&PROBE_BLEND_INPUTS, &blend_layout)],
         );
-        // What the pass's blend constant, the hysteresis, keeps of the texel.
         let hysteresis = wgpu::BlendComponent {
             src_factor: wgpu::BlendFactor::OneMinusConstant,
             dst_factor: wgpu::BlendFactor::Constant,
@@ -265,7 +263,7 @@ impl ProbeUpdatePass {
         let hysteresis = if self.updates < FRAMES_PER_CYCLE {
             0.0
         } else {
-            PROBE_HYSTERESIS
+            PROBE_HYSTERESIS_PER_UPDATE
         };
         let blends = [
             (
@@ -298,11 +296,11 @@ impl ProbeUpdatePass {
                 timestamp_writes,
                 multiview_mask: None,
             });
-            let level_width = (PROBE_COUNTS[0] * side_texels) as f32;
+            let level_width_texels = (PROBE_COUNTS[0] * side_texels) as f32;
             pass.set_viewport(
-                self.uniform.first_level as f32 * level_width,
+                self.uniform.first_level as f32 * level_width_texels,
                 0.0,
-                PROBE_LEVELS_PER_FRAME as f32 * level_width,
+                PROBE_LEVELS_PER_FRAME as f32 * level_width_texels,
                 (PROBE_COUNTS[2] * side_texels) as f32,
                 0.0,
                 1.0,

@@ -3,19 +3,19 @@ struct ProbeTexel {
     direction: vec3<f32>,
 }
 
-fn probe_texel(position: vec2<f32>, side: u32) -> ProbeTexel {
+fn probe_texel(position: vec2<f32>, side_texels: u32) -> ProbeTexel {
     let texel = vec2<u32>(position);
-    let column = texel.x / side;
+    let column = texel.x / side_texels;
     let level = column / PROBE_COUNTS.x;
-    let slot = ((level % PROBE_LEVELS_PER_FRAME) * PROBE_COUNTS.z + texel.y / side) * PROBE_COUNTS.x
+    let slot = ((level % PROBE_LEVELS_PER_FRAME) * PROBE_COUNTS.z + texel.y / side_texels) * PROBE_COUNTS.x
         + column % PROBE_COUNTS.x;
-    return ProbeTexel(slot * PROBE_RAYS, probe_map_direction(texel % side, side));
+    return ProbeTexel(slot * PROBE_RAYS, probe_map_direction(texel % side_texels, side_texels));
 }
 
 // Each ray weighs by its cosine to the texel's direction [ref:majercik-2019-ddgi-probe-update].
 @fragment
 fn blend_irradiance(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
-    let texel = probe_texel(position.xy, PROBE_IRRADIANCE_SIDE);
+    let texel = probe_texel(position.xy, PROBE_IRRADIANCE_SIDE_TEXELS);
     var weighted = vec3<f32>(0.0);
     var weight_sum = 0.0;
     for (var ray = 0u; ray < PROBE_RAYS; ray++) {
@@ -29,7 +29,7 @@ fn blend_irradiance(@builtin(position) position: vec4<f32>) -> @location(0) vec4
 
 @fragment
 fn blend_depth_moments(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
-    let texel = probe_texel(position.xy, PROBE_DEPTH_MOMENTS_SIDE);
+    let texel = probe_texel(position.xy, PROBE_DEPTH_MOMENTS_SIDE_TEXELS);
     var moments = vec2<f32>(0.0);
     var weight_sum = 0.0;
     for (var ray = 0u; ray < PROBE_RAYS; ray++) {

@@ -227,19 +227,19 @@ fn trace_probe_rays(@builtin(global_invocation_id) invocation: vec3&lt;u32&gt;) 
 moments(n) = &Sigma; w&#7522; (d&#7522;, d&#7522;&sup2;) / &Sigma; w&#7522;,&emsp;w&#7522; = max(0, n &middot; &omega;&#7522;)&sup1;&#8310;
 stored = (1 &minus; &alpha;) &middot; new + &alpha; &middot; old,&emsp;&alpha; = 0 in the first 8 frames, 0.5 after</div>
   <p class="note">n is the texel's direction, &omega;&#7522; ray i's, L&#7522; its radiance and d&#7522; its distance.</p>
-<pre class="code"><code>fn probe_texel(position: vec2&lt;f32&gt;, side: u32) -&gt; ProbeTexel {
+<pre class="code"><code>fn probe_texel(position: vec2&lt;f32&gt;, side_texels: u32) -&gt; ProbeTexel {
     let texel = vec2&lt;u32&gt;(position);
-    let column = texel.x / side;
+    let column = texel.x / side_texels;
     let level = column / PROBE_COUNTS.x;
-    let slot = ((level % PROBE_LEVELS_PER_FRAME) * PROBE_COUNTS.z + texel.y / side) * PROBE_COUNTS.x
+    let slot = ((level % PROBE_LEVELS_PER_FRAME) * PROBE_COUNTS.z + texel.y / side_texels) * PROBE_COUNTS.x
         + column % PROBE_COUNTS.x;
-    return ProbeTexel(slot * PROBE_RAYS, probe_map_direction(texel % side, side));
+    return ProbeTexel(slot * PROBE_RAYS, probe_map_direction(texel % side_texels, side_texels));
 }
 
 // Each ray weighs by its cosine to the texel's direction [ref:majercik-2019-ddgi-probe-update].
 @fragment
 fn blend_irradiance(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @location(0) vec4&lt;f32&gt; {
-    let texel = probe_texel(position.xy, PROBE_IRRADIANCE_SIDE);
+    let texel = probe_texel(position.xy, PROBE_IRRADIANCE_SIDE_TEXELS);
     var weighted = vec3&lt;f32&gt;(0.0);
     var weight_sum = 0.0;
     for (var ray = 0u; ray &lt; PROBE_RAYS; ray++) {
@@ -254,7 +254,7 @@ fn blend_irradiance(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @locatio
   <p><b>A triangle over the levels.</b> Each render pass loads its texture, sets the viewport to the frame's two levels and draws <code>vs_full_screen</code>'s one triangle over it, so only those texels run a fragment; a fragment's position, in the texture's texels, names its Probe and its texel.</p>
   <p><b>Irradiance.</b> The cosine-weighted mean of the rays' radiance, times &pi;, is the irradiance a surface facing the texel's direction would receive: under an open sky, the ambient illuminance. It is stored in lux times <code>PROBE_LIGHT_SCALE</code>, 2&#8315;&#8308;, and clamped to fp16's largest value, so fp16 holds ten times the sun's illuminance and the Probes are never pre-exposed by the frame's exposure (ADR 0023). A capture reads it back divided by the scale.</p>
   <p><b>Depth moments.</b> The mean distance and squared distance of the rays near the texel's direction, weighted by cos&sup1;&#8310;, which falls to half its peak 16.8&deg; off the texel's direction, about the 18&deg; between neighbouring rays of 128. A plane d below a Probe reads about 17/16 d.</p>
-  <p><b>The hysteresis.</b> The pipelines blend with <code>OneMinusConstant</code> for the new value and <code>Constant</code> for the old; the pass sets the constant to 0 for the first 8 frames, a cycle, so the first update of each Probe fills it, and to <code>PROBE_HYSTERESIS</code>, 0.5, after. An update every 8 frames at 0.5 is about 0.917 a frame, within the 0.85 to 0.98 DDGI sets; 32 frames take 15/16 of a step.</p>
+  <p><b>The hysteresis.</b> The pipelines blend with <code>OneMinusConstant</code> for the new value and <code>Constant</code> for the old; the pass sets the constant to 0 for the first 8 frames, a cycle, so the first update of each Probe fills it, and to <code>PROBE_HYSTERESIS_PER_UPDATE</code>, 0.5, after. An update every 8 frames at 0.5 is about 0.917 a frame, within the 0.85 to 0.98 DDGI sets; 32 frames take 15/16 of a step.</p>
 </section>
 
 <section class="part prose" id="tests">
@@ -290,7 +290,7 @@ fn blend_irradiance(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @locatio
   <p><b>A render pass's blend.</b> The store's formats take a render pass's blend on the Capability floor but no read-write storage (ADR 0021), so a compute pass could only blend into a second copy of each texture. One render pass reaches every Probe of a texture, and the viewport limits it to the frame's levels.</p>
   <p><b>One tracing function.</b> ADR 0020 has shadow rays and probe rays read the same Ray scene. Tracing it through <code>first_intersection</code> alone keeps the static-then-dynamic order, the empty-TLAS skip and the box test in one place, so the two passes cannot drift apart; the second pass that binds the TLAS adds wgpu-core's walk of its dependencies at submit, which the frame pays once more.</p>
   <p><b>A share of the levels each frame.</b> A fragment of a blend loops over its Probe's 128 rays, so a frame that updated every Probe would run 128 iterations for each of the Cascade's 5.2 million texels; two levels a frame run an eighth of that, and every Probe is still updated within 8 frames.</p>
-  <p><b>Fixed directions.</b> The same 128 directions each update converge a still scene to one value, so nothing flickers while nothing moves. DDGI rotates its spiral at random each update, trading that for noise the hysteresis averages; the deviation is recorded in <code>docs/audit/deviations.md</code>.</p>
+  <p><b>Fixed directions.</b> The same 128 directions each update converge a still scene to one value, so nothing flickers while nothing moves. DDGI rotates its spiral stochastically, trading that for noise the hysteresis averages; the deviation is recorded in <code>docs/audit/deviations.md</code>.</p>
   <p><b>Light that is not pre-exposed.</b> <code>house</code> keys its exposure along its camera path, so a Probe pre-exposed by the frame's exposure would change as the camera moves. A fixed scale of 2&#8315;&#8308; lets fp16 hold ten times direct sun at the top and about 0.001 lx at its smallest normal value (ADR 0023).</p>
 </section>
 
@@ -301,6 +301,7 @@ fn blend_irradiance(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @locatio
   <p><b>One Cascade that stays.</b> The Cascade stands where the first frame's camera stood and does not follow it, and nothing reads the Probes yet.</p>
   <p><b>No gutter.</b> A Probe's maps sit edge to edge, without the one-texel border DDGI copies around each, which bilinear sampling across a map's edge would need.</p>
   <p><b>A biased depth.</b> The cos&sup1;&#8310; lobe reads a plane about 1/16 farther than it is; a lobe that narrow needs more or rotated rays.</p>
+  <p><b>The span's end.</b> The Timed pass ends where the depth moments' blend ends. The irradiance blend, recorded before it, shares nothing it writes, so Metal can run the two side by side; with a quarter of its fragments it is expected to end first, which nothing guarantees.</p>
   <p><b>The first frame.</b> A frame before the static TLAS is first bound traces an empty static TLAS, so the levels it fills hold the sky until their next updates take it out by the hysteresis.</p>
 </section>
 
@@ -310,7 +311,7 @@ fn blend_irradiance(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @locatio
   <p class="note">Primary sources the update rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites.</p>
   <dl class="reading">
     <dt><a href="https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=10">Majercik and colleagues, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, &sect;4.4</a></dt><dd>a texel's update weights each ray by the cosine to the texel's direction, depth by a cosine power, and blends by a hysteresis; <code>majercik-2019-ddgi-probe-update</code></dd>
-    <dt><a href="https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=9">The same, &sect;4.2</a></dt><dd>a Fibonacci spiral of ray directions, which DDGI rotates at random; <code>majercik-2019-ddgi-ray-directions</code></dd>
+    <dt><a href="https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=9">The same, &sect;4.2</a></dt><dd>a Fibonacci spiral of ray directions, which DDGI rotates stochastically; <code>majercik-2019-ddgi-ray-directions</code></dd>
     <dt><a href="https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=10">The same, &sect;4.4, the blend factor</a></dt><dd>a hysteresis between 0.85 and 0.98 a frame; <code>majercik-2019-ddgi-hysteresis</code></dd>
     <dt><a href="https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=6">The same, &sect;3</a></dt><dd>8 &times; 8 texels of irradiance and 16 &times; 16 of depth moments a Probe; <code>majercik-2019-ddgi-probe-encoding</code></dd>
   </dl>

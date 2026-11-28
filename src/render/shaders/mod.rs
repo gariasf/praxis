@@ -398,8 +398,8 @@ impl ShaderModule {
              const SHADOW_WIDTH_CLASSES: u32 = {SHADOW_WIDTH_CLASSES}u;\n\
              const PROBE_COUNTS: vec3<u32> = vec3<u32>({}u, {}u, {}u);\n\
              const PROBE_SPACING_METRES: f32 = {PROBE_SPACING_METRES:?};\n\
-             const PROBE_IRRADIANCE_SIDE: u32 = {IRRADIANCE_SIDE_TEXELS}u;\n\
-             const PROBE_DEPTH_MOMENTS_SIDE: u32 = {DEPTH_MOMENTS_SIDE_TEXELS}u;\n\
+             const PROBE_IRRADIANCE_SIDE_TEXELS: u32 = {IRRADIANCE_SIDE_TEXELS}u;\n\
+             const PROBE_DEPTH_MOMENTS_SIDE_TEXELS: u32 = {DEPTH_MOMENTS_SIDE_TEXELS}u;\n\
              const PROBE_LIGHT_SCALE: f32 = {PROBE_LIGHT_SCALE:?};\n\
              const PROBE_RAYS: u32 = {PROBE_RAYS}u;\n\
              const PROBE_LEVELS_PER_FRAME: u32 = {PROBE_LEVELS_PER_FRAME}u;\n\

@@ -110,13 +110,13 @@ pub(crate) fn depth_moments_by_probe(texels: &[u8]) -> Vec<Vec<[f32; 2]>> {
 }
 
 /// The first `CHANNELS` fp16 values of each texel of `BYTES`, by Probe, of a
-/// map `side` texels wide.
+/// map `side_texels` wide.
 fn texels_by_probe<const BYTES: usize, const CHANNELS: usize>(
     texels: &[u8],
-    side: u32,
+    side_texels: u32,
 ) -> Vec<Vec<[f32; CHANNELS]>> {
     let [across, levels, deep] = PROBE_COUNTS.map(|count| count as usize);
-    let side = side as usize;
+    let side = side_texels as usize;
     let (texels, _) = texels.as_chunks::<BYTES>();
     assert_eq!(texels.len(), across * levels * deep * side * side);
     let probe = |probe_index: usize| {
