@@ -105,8 +105,8 @@ pub struct RenderSwitches {
     /// none so coarse, rather than the one the culling pass selects for it:
     /// `Some(0)` draws LOD 0 alone. `None`, as it ships, selects.
     pub forced_lod: Option<u32>,
-    /// Whether the Renderer creates a Cascade of Probes (ADR 0020), each
-    /// holding zero. Off, as it ships, it creates none.
+    /// Whether the Renderer creates a Cascade of Probes (ADR 0020). Off, as
+    /// it ships, it creates none.
     pub probes: bool,
 }
 

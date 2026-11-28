@@ -5,20 +5,19 @@ const PROBE_COUNTS: [u32; 3] = [32, 16, 32];
 
 /// Texels along a side of a Probe's octahedral map of irradiance, and of its
 /// depth moments [ref:majercik-2019-ddgi-probe-encoding].
-const IRRADIANCE_SIDE: u32 = 8;
-const DEPTH_MOMENTS_SIDE: u32 = 16;
+const IRRADIANCE_SIDE_TEXELS: u32 = 8;
+const DEPTH_MOMENTS_SIDE_TEXELS: u32 = 16;
 
-/// fp16 formats a render pass blends into; of the two, the Capability floor
-/// lets a compute pass write only the first, and read and write neither
+/// Blendable; the Capability floor gives neither read-write storage
 /// [ref:wgpu-types-30-guaranteed-format-features].
 const IRRADIANCE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 const DEPTH_MOMENTS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float;
 
 const STATE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
 
-/// One Cascade's Probes (ADR 0020), each holding zero. Each texture is one
-/// layer, which one render pass reaches whole: a Probe's map lies at its Z
-/// down the texture and its X across it, the levels along Y side by side.
+/// One Cascade's Probes (ADR 0020). Each texture is one layer: a Probe's map
+/// lies at its Z down the texture and its X across it, the levels along Y
+/// side by side.
 pub(crate) struct Cascade {
     irradiance: Counted<wgpu::Texture>,
     #[expect(dead_code, reason = "created and counted; no pass binds it")]
@@ -30,15 +29,15 @@ pub(crate) struct Cascade {
 impl Cascade {
     pub(crate) fn new(device: &wgpu::Device, memory: &GpuMemory) -> Cascade {
         let [across, levels, deep] = PROBE_COUNTS;
-        let texture = |label, side, format, usage| {
+        let texture = |label, side_texels, format, usage| {
             memory.create_texture(
                 device,
                 GpuMemoryKind::Probes,
                 &wgpu::TextureDescriptor {
                     label: Some(label),
                     size: wgpu::Extent3d {
-                        width: across * levels * side,
-                        height: deep * side,
+                        width: across * levels * side_texels,
+                        height: deep * side_texels,
                         depth_or_array_layers: 1,
                     },
                     mip_level_count: 1,
@@ -50,21 +49,21 @@ impl Cascade {
                 },
             )
         };
-        let sampled = wgpu::TextureUsages::TEXTURE_BINDING;
+        let binding = wgpu::TextureUsages::TEXTURE_BINDING;
         Cascade {
             irradiance: texture(
                 "Probe Irradiance",
-                IRRADIANCE_SIDE,
+                IRRADIANCE_SIDE_TEXELS,
                 IRRADIANCE_FORMAT,
-                sampled | wgpu::TextureUsages::COPY_SRC,
+                binding | wgpu::TextureUsages::COPY_SRC,
             ),
             depth_moments: texture(
                 "Probe Depth Moments",
-                DEPTH_MOMENTS_SIDE,
+                DEPTH_MOMENTS_SIDE_TEXELS,
                 DEPTH_MOMENTS_FORMAT,
-                sampled,
+                binding,
             ),
-            state: texture("Probe State", 1, STATE_FORMAT, sampled),
+            state: texture("Probe State", 1, STATE_FORMAT, binding),
         }
     }
 
@@ -78,21 +77,26 @@ impl Cascade {
 /// is a Cascade's irradiance, rows top first without padding.
 pub(crate) fn irradiance_by_probe(texels: &[u8]) -> Vec<Vec<[f32; 3]>> {
     let [across, levels, deep] = PROBE_COUNTS.map(|count| count as usize);
-    let side = IRRADIANCE_SIDE as usize;
+    let side = IRRADIANCE_SIDE_TEXELS as usize;
     let (texels, _) = texels.as_chunks::<8>();
     assert_eq!(texels.len(), across * levels * deep * side * side);
-    let probe = |index: usize| {
+    let probe = |probe_index: usize| {
         let (level, row, column) = (
-            index / (across * deep),
-            index / across % deep,
-            index % across,
+            probe_index / (across * deep),
+            probe_index / across % deep,
+            probe_index % across,
         );
-        let texel = |index: usize| {
-            let (texel_row, texel_column) = (index / side, index % side);
+        let texel = |texel_index: usize| {
+            let (texel_row, texel_column) = (texel_index / side, texel_index % side);
             let texture_row = row * side + texel_row;
             let texture_column = (level * across + column) * side + texel_column;
             let rgba = texels[texture_row * across * levels * side + texture_column];
-            [0, 2, 4].map(|byte| fp16_value(u16::from_le_bytes([rgba[byte], rgba[byte + 1]])))
+            [0, 2, 4].map(|byte_offset| {
+                fp16_value(u16::from_le_bytes([
+                    rgba[byte_offset],
+                    rgba[byte_offset + 1],
+                ]))
+            })
         };
         (0..side * side).map(texel).collect()
     };
@@ -136,8 +140,8 @@ mod tests {
     fn a_texel_of_the_irradiance_reads_back_in_its_probe() {
         let (width, height) = (32 * 16 * 8, 32 * 8);
         let mut texels = vec![0; width * height * 8];
-        let lit = (8 + 2) * width + (32 + 3) * 8 + 5;
-        texels[lit * 8..][..6].copy_from_slice(&[0x00, 0x3c, 0x00, 0x40, 0x00, 0x42]);
+        let lit_texel = (8 + 2) * width + (32 + 3) * 8 + 5;
+        texels[lit_texel * 8..][..6].copy_from_slice(&[0x00, 0x3c, 0x00, 0x40, 0x00, 0x42]);
 
         let irradiance = irradiance_by_probe(&texels);
 

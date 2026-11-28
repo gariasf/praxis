@@ -336,20 +336,6 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     assert!(printed.lines().count() <= 5, "over 5 lines:\n{printed}");
 }
 
-/// On every Reference scene, each frame reads back from the GPU the
-/// Instances and triangles its draw held, which equal the scene's
-/// closed-form counts, none overflowed: every Instance in use is drawn, at
-/// LOD 0, forced, as a coarser LOD's triangles are the simplifier's count.
-/// far-coplanar's tiles, town and `world`'s settlement lie partly out of
-/// any one view, so all three are drawn with culling off, which their
-/// Goldens compare with culling on: the frame's draw holds every tile, the
-/// whole town, and every Instance within `world`'s Load radius with the
-/// Far proxies past it and the ground past them.
-/// After the first frame, each frame writes the Instances of what moves
-/// alone, town's and `world`'s 10,000 birds among them, and those of the
-/// Chunks `world`'s camera leaves, and leaves no Moving Instance out of the
-/// dynamic TLAS; town's birds fill it, each uploading its entry every
-/// frame.
 /// One Cascade of 32 × 16 × 32 Probes: a Probe's irradiance, 8 × 8 texels of
 /// RGBA16F, its depth moments, 16 × 16 of RG16F, and its u32 of state.
 #[test]
@@ -382,6 +368,20 @@ fn the_probes_switch_counts_one_cascade_under_its_own_kind() {
     assert_eq!(on.gpu_memory_bytes, off.gpu_memory_bytes + cascade_bytes);
 }
 
+/// On every Reference scene, each frame reads back from the GPU the
+/// Instances and triangles its draw held, which equal the scene's
+/// closed-form counts, none overflowed: every Instance in use is drawn, at
+/// LOD 0, forced, as a coarser LOD's triangles are the simplifier's count.
+/// far-coplanar's tiles, town and `world`'s settlement lie partly out of
+/// any one view, so all three are drawn with culling off, which their
+/// Goldens compare with culling on: the frame's draw holds every tile, the
+/// whole town, and every Instance within `world`'s Load radius with the
+/// Far proxies past it and the ground past them.
+/// After the first frame, each frame writes the Instances of what moves
+/// alone, town's and `world`'s 10,000 birds among them, and those of the
+/// Chunks `world`'s camera leaves, and leaves no Moving Instance out of the
+/// dynamic TLAS; town's birds fill it, each uploading its entry every
+/// frame.
 #[test]
 fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
     let context = match pollster::block_on(GpuContext::headless()) {

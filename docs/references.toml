@@ -1775,9 +1775,18 @@ quote = '''let s_ro_wo = TextureFormatFeatureFlags::STORAGE_READ_ONLY
     | TextureFormatFeatureFlags::STORAGE_WRITE_ONLY;
 let s_all = s_ro_wo | TextureFormatFeatureFlags::STORAGE_READ_WRITE;
 [...]
+let (rg11b10f_f, rg11b10f_u) =
+    if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
+        (msaa_resolve, attachment)
+    } else {
+        (msaa, basic)
+    };
+[...]
 Self::R32Uint =>              (       s_all,     atomic),
 [...]
 Self::Rg16Float =>            (msaa_resolve, attachment),
+[...]
+Self::Rg11b10Ufloat =>        (  rg11b10f_f, rg11b10f_u),
 [...]
 Self::Rgba16Float =>          (msaa_resolve | s_ro_wo,  all_flags),
 [...]
