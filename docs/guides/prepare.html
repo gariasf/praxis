@@ -585,7 +585,7 @@ if chunks_changed
 // left untaken when every Instance is written again, takes an Instance
 // with no Mesh, so the GPU no longer draws it; Renderables may take it
 // from the next frame.
-let (rewritten_free_slots, rewritten_free_ranges) = if *rewrite_every_instance {
+let (free, free_ranges) = if *rewrite_every_instance {
     (
         instance_slots.free.as_slice(),
         instance_slots.free_ranges.as_slice(),
@@ -596,9 +596,9 @@ let (rewritten_free_slots, rewritten_free_ranges) = if *rewrite_every_instance {
 for slot in instance_slots
     .freed
     .iter()
-    .chain(rewritten_free_slots)
+    .chain(free)
     .copied()
-    .chain(rewritten_free_ranges.iter().flat_map(Range::clone))
+    .chain(free_ranges.iter().flat_map(Range::clone))
 {
     frame.write_instance(slot, no_mesh_instance(), false);
 }
