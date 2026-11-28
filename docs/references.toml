@@ -13660,3 +13660,104 @@ section = "Haines and Greenberg, The Light Buffer: A Shadow-Testing Accelerator,
 quote = '''The light buffer consists of six grid planes forming a box surrounding the light source origin (point light source is assumed). The cells of the buffer contain information on the smallest full occlusion (completely fills cell) distance from the light source, and sorted approximate depth values of candidate occlusion objects obtained by projecting objects onto the surface cells during preprocessing. [...] For each intersected point in question, if the depth value of the corresponding cell is greater than the smallest full occlusion distance, then the intersection point is in shadow. Similarly, if the cell is void of projected objects, then the surface is not in shadow. [...] Haines et al. report a substantial improvement in the shadow determination phase. However, large memory space'''
 checked = 2026-11-27
 
+
+["leblanc-conte-2025-acs-probe-hit-lighting"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=43"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, PDF pp. 43 and 46, slides Probe volume: G-buffer update (sun shadow) and Lighting update, speaker notes"
+quote = '''For shadow computation we first try to use a shadow map positioned around the camera, and if the hit position is outside, we will cast a shadow ray if the face is oriented toward the sun. [...] In the first pass, we compute the direct lighting from all lights and also the indirect diffuse illumination using the probe volume irradiance cache from the previous frame.'''
+checked = 2026-11-28
+
+["sousa-2025-idtech8-cascaded-light-grid"]
+url = "https://advances.realtimerendering.com/s2025/content/SOUSA_SIGGRAPH_2025_Final.pdf#page=11"
+section = "Sousa (id Software), Fast as Hell: idTech 8 Global Illumination, SIGGRAPH 2025 Advances, PDF pp. 13-15 (Lighting the RT World) and p. 20 (World Radiance Cache Update), slides and notes"
+quote = '''Cascaded Light Grid [...] Introduced in DOOM Eternal RT update [...] Similar in spirit to clustered binning [Olson2012] [...] But world space cells (AABBs). [...] 16 x 16 x 16 volume x 8 cascades (exponential distribution). [...] First cascade 32 meter bounds, 2 cubic meters per cell. [...] Max 64 ids per cell. [...] 1x Async compute dispatch [...] Coarse culling [...] Gather results into group shared memory, flat bit array buckets [Drobot2017] [...] Detailed culling [...] Item OBB vs cell AABB test. [...] Similar limitation to clustered binning: the further cascades the more overdraw due larger volume size. [...] Mostly same code for lighting/shading loop as raster. [...] Shading/lighting: access light grid/bindless resources, use inputs computed from ray hit packet data. Do light & shading loop.'''
+cost = '''~0.2ms consoles (~0.1ms on PC) [...] Cost around 30 MB Vram . Most of it from having ludicrous amount of decals around camera (limited to 30k) and input arrays having to be double buffered.'''
+checked = 2026-11-28
+
+["kuenlin-2024-snowdrop-probe-hit-lights"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Kuenlib_Quentin_Raytracing_In_Snowdrop.pdf#page=15"
+section = "Kuenlin (Massive Entertainment), Raytracing in Snowdrop, GDC 2024, PDF pp. 15-16 and 61, slides Light Probes 3 and 4 (probe trace and lighting), the RTGI hit lighting slide, and the performance slide's Xbox Series S note, with speaker notes"
+quote = '''We then check the cascade shadow map to see if the hit point is in shadow. If it is not, we will trace a ray toward the sun. [...] direct light from analytical lights using light BVH [...] We calculate the direct light from the sun,> plus from analytical lights. We are using a BVH to quickly get the relevant lights from anywhere in the world. [...] Lighting is much simplified and doesn’t use any point lights.'''
+checked = 2026-11-28
+
+["apers-2024-gibs-one-shadow-ray"]
+url = "https://advances.realtimerendering.com/s2024/content/EA-GIBS2/Apers_Advances-s2024_Shipping-Dynamic-GI.pdf#page=41"
+section = "Apers (Frostbite, EA), Shipping Dynamic Global Illumination (GIBS), SIGGRAPH 2024 Advances, PDF p. 41 (slide 26), the surfels' secondary rays, notes"
+quote = '''To do this efficiently, we go over N number of candidates using reservoir sampling, and we select one light sample to shoot a shadow ray towards. [...] When the selected light source has a shadow map available, we can tap that instead of tracing a ray, resulting in a significant reduction of ray intersection requests.'''
+checked = 2026-11-28
+
+["wright-2022-lumen-surface-cache-direct-lighting"]
+url = "https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-Lumen-Wright%20et%20al.pdf#page=75"
+section = "Wright, Narkowicz and Kelly (Epic Games), Lumen: Real-time Global Illumination in Unreal Engine 5, SIGGRAPH 2022 Advances, PDF p. 75, slide Direct Lighting (surface cache) and its notes"
+quote = '''Cull lights to 8x8 tiles in z-order [...] Select first 8 lights per tile [...] Then for every tile we select up to 8 lights. Currently we just pick the first 8 lights and it works fine for our use cases, but in future we would like to use a smarter light selection strategy. [...] During this pass we also build a compacted list of shadow rays, which couldn’t be resolved by shadow maps and will need to be traced. Usually those are texels located behind the camera.'''
+checked = 2026-11-28
+
+["majercik-2019-ddgi-hit-shading"]
+url = "https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=10"
+section = "Majercik, Guertin, Nowrouzezahrai and McGuire, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, §4.3 Secondary Surfel Shading (p. 10) and §5.1 Direct Illumination (p. 11)"
+quote = '''Both of these contexts use the same shading routine, composed of a direct illumination pass that uses state-of-the-art interactive practices and an indirect lighting pass that leverages our probe data. [...] We compute direct illumination from point and directional light sources using a deferred renderer with variance shadow mapping'''
+checked = 2026-11-28
+
+["olsson-2012-clustered-shading"]
+url = "https://www.cse.chalmers.se/~uffe/clustered_shading_preprint.pdf"
+section = "Olsson, Billeter and Assarsson, Clustered Deferred and Forward Shading, HPG 2012 (doi:10.2312/EGGH/HPG12/087-096), Fig. 1 caption (p. 1), §3.3 Light Assignment (p. 5), results' hardware (p. 7)"
+quote = '''To robustly support large numbers of lights and a dynamically varying number of clusters, we use a fully hierarchical approach based on a spatial tree over the lights. Each frame, we construct a bounding volume hierarchy (BVH) by first sorting the lights according to the Z-order (Morton Code) based on the discretized centre position of each light.'''
+cost = '''The scene contains around 2400 light sources, and is rendered in 17ms by our method (2.3ms for clustering, 1.5ms for light assignment and 5.6 ms for shading; [...] formed on an NVIDIA GTX 480 GPU'''
+checked = 2026-11-28
+
+["persson-2015-world-space-tiles-and-list-memory"]
+url = "https://www.humus.name/Articles/PracticalClusteredShading.pdf#page=3"
+section = "Persson, Practical Clustered Shading (SIGGRAPH 2015 course), PDF p. 3 (Lighting in Avalanche Engine), p. 16 (data structure) and p. 18 (Memory optimization)"
+quote = '''Just Cause 2, Renegade Ops [...] World-space XZ-tiled light-indexing [...] 4 lights per 4m x 4m tile [...] 128x128 RGBA8 light index texture [...] Cluster “pointers” in 3D texture [...] R32G32_UINT [...] R=Offset [...] G=[PointLightCount, SpotLightCount] [...] Light index list in texture buffer [...] Naive approach: Allocate theoretical max [...] Construct massive worst-case scenario [...] Multiply by 2, or what makes you comfortable [...] Assert at runtime that you never go over allocation'''
+checked = 2026-11-28
+
+["conty-kulla-2018-light-tree"]
+url = "https://fpsunflower.github.io/ckulla/data/many-lights-hpg2018.pdf"
+section = "Conty Estevez and Kulla, Importance Sampling of Many Lights with Adaptive Tree Splitting, Proc. ACM CGIT 1(2), HPG 2018 (doi:10.1145/3233305), Abstract and Fig. 1 caption"
+quote = '''A bounding volume hierarchy over all emitters is traversed at each shading point using a single random number in a way that importance samples their predicted contribution. The tree aggregates energy, spatial and orientation information from the emitters to enable accurate prediction of the effect of a cluster of lights on any given shading point.'''
+cost = '''A procedural city with 363,036 lights, one GI bounce and participating media. Rendered with 16 samples per pixel, each shading point takes an average of 7 shadow rays (45 for the volume integral). [...] The image rendered in 20 minutes on a quad core Intel i7.'''
+checked = 2026-11-28
+
+["yuksel-2019-stochastic-lightcuts"]
+url = "http://www.cemyuksel.com/research/stochasticlightcuts/stochasticlightcuts.pdf"
+section = "Yuksel, Stochastic Lightcuts, HPG 2019 short paper (doi:10.2312/hpg.20191192), Abstract and Fig. 1 caption"
+quote = '''We introduce stochastic lightcuts by combining the lighting approximation of lightcuts with stochastic sampling for efficiently rendering scenes with a large number of light sources. Our stochastic lightcuts method entirely eliminates the sampling correlation of lightcuts and replaces it with noise. [...] Using up to 1000 light samples reduces the error, but still leads to visible flickering and substantially increases the render time.'''
+checked = 2026-11-28
+
+["boisse-2023-gi-1.0-light-grid"]
+url = "https://arxiv.org/pdf/2310.19855v1"
+section = "Boissé, Bordes, Dufay, Pannetier and others (AMD), GI-1.0: A Fast Scalable Two-Level Radiance Caching Scheme for Real-Time Global Illumination, arXiv 2310.19855v1 (2023), Fig. 1 caption (p. 1), §2.3.1 Reservoir-based Resampling (p. 9) and §2.3.2 Light Grid Lookup Structure (pp. 9-10)"
+quote = '''we use a form of ReSTIR but implement world-space reservoir reuse described by Boissé instead of screen space [...] We start by generating a reservoir for each of the hit positions using Resampled Importance Sampling (RIS) [Talbot et al. 2005] [...] The generated reservoirs are then stored inside a hash grid [...] Our approach skips the visibility ray altogether and only uses a single shadow ray after the resampling has been completed. In effect, this reduces the required number of shadow rays to one per reservoir, but it increases the bias in the form of darkening [...] We generate the light grid by first determining its bounds from the positions of every hit point. [...] Within these bounds, we then create a uniform voxel grid. [...] Each grid cell finally holds a fixed-size list of the most important lights for that scene region. [...] we use a fast, cheap approximation to Equation (1) by sampling the light radiance at each corner of the grid cell and tri-linearly interpolating across the entire volume. [...] We further optimize this test by treating each cell’s AABB as a bounding sphere, as this significantly simplifies the calculations while only introducing minimal error.'''
+cost = '''Kitchen and Sponza scenes rendered with direct and indirect lighting calculated using our GI-1.0 pipeline in 3.5ms and 4.2ms respectively at 1080p on Radeon™ RX 6900 XT.'''
+checked = 2026-11-28
+
+["wyman-panteleev-2021-presampled-light-tiles"]
+url = "https://d1qx31qr3h6wln.cloudfront.net/publications/hpg21_rearchitectingReSTIR.pdf"
+section = "Wyman and Panteleev, Rearchitecting Spatiotemporal Resampling for Production, HPG 2021 (doi:10.2312/hpg.20211281), PDF p. 8: §5 (Fig. 7) and §5.2 Coherent Initial Candidate Generation"
+quote = '''presampling or prerandomizing the light lists reduces incoherency if it allows using smaller light subsets that remain in cache during the inner render loop. [...] We found 8 × 8 pixel tiles maximize coherence without introducing noticeable correlations not masked by spatiotemporal reuse. [...] We empirically found S=128 and |S j |=1024 minimizes cost without introducing artifacts, across a wide set of scenes.'''
+cost = '''(c) Amusement Park [...] 18.3 ms / 0.8 ms [...] Figure 7: Initial light candidate generation costs for varying complexity scenes, using Bitterli et al. [BWP∗ 20] and our presampling that pulls incoherent memory accesses out of the inner render loop. Times on (top) RTX 3090 and (bottom) laptop RTX 2080 Max-Q.'''
+checked = 2026-11-28
+
+["bevy-0.20.1-solari-world-cache-light-sampling"]
+url = "https://github.com/bevyengine/bevy/blob/a0577b5c6a7b208719dd761c5c6a7a539e472a97/crates/bevy_solari/src/realtime/world_cache_update.wesl#L86-L118"
+section = "Bevy v0.20.1 (commit a0577b5), crates/bevy_solari/src/realtime/world_cache_update.wesl, L86-L118, `sample_random_light_ris`; read, not run"
+quote = '''fn sample_random_light_ris(world_position: vec3<f32>, world_normal: vec3<f32>, workgroup_id: vec2<u32>, rng: ptr<function, u32>) -> vec3<f32> { [...] let light_tile_start = rand_range_u(128u, &workgroup_rng) * 1024u; [...] for (var i = 0u; i < constants.world_cache_direct_light_sample_count; i++) { [...] unbiased_contribution_weight *= trace_visibility(world_position + (world_normal * RAY_T_MIN), selected_sample_world_position);'''
+checked = 2026-11-28
+
+["godot-4.7.2-gi-light-limits"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/servers/rendering/renderer_rd/environment/gi.h#L222"
+section = "Godot 4.7.2-stable (commit ed1daf0), servers/rendering/renderer_rd/environment/gi.h, L222 (VoxelGI) and L565-L566 (SDFGI)"
+quote = '''uint32_t voxel_gi_max_lights = 32; [...] MAX_DYNAMIC_LIGHTS = 128, MAX_STATIC_LIGHTS = 1024,'''
+checked = 2026-11-28
+
+["godot-4.7.2-sdfgi-cascade-light-list"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/servers/rendering/renderer_rd/environment/gi.cpp#L1907-L1978"
+section = "Godot 4.7.2-stable (commit ed1daf0), servers/rendering/renderer_rd/environment/gi.cpp, L1907-L1978: each SDFGI cascade's list of dynamic lights"
+quote = '''/* Update dynamic lights in SDFGI cascades */ [...] SDFGIShader::Light lights[SDFGI::MAX_DYNAMIC_LIGHTS]; [...] for (uint32_t j = 0; j < p_render_data->sdfgi_update_data->positional_light_count; j++) { if (idx == SDFGI::MAX_DYNAMIC_LIGHTS) { break; } [...] if (i > max_sdfgi_cascade) { continue; } [...] if (!cascade_aabb.intersects(light_aabb)) { continue; }'''
+checked = 2026-11-28
+
+["godot-4.7.2-sdfgi-light-trace"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/servers/rendering/renderer_rd/shaders/environment/sdfgi_direct_light.glsl#L313-L318"
+section = "Godot 4.7.2-stable (commit ed1daf0), servers/rendering/renderer_rd/shaders/environment/sdfgi_direct_light.glsl, L313, L318 and L404: a voxel traces the cascade's distance field toward each light of its list"
+quote = '''// Raytrace light [...] for (uint i = 0; i < params.light_count; i++) { [...] while (advance < max_advance) { //read how much to advance from SDF'''
+checked = 2026-11-28
