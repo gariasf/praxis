@@ -88,14 +88,17 @@ const LOD_ERROR_MARGIN: f32 = 3.0;
 // for hits near the origin has to exceed the largest offset between the two
 // tessellations [ref:tabellion-lamorlette-2004-ray-origin-offset].
 // `pixel_width` is a pixel's width at `position`, and the ray passes a Thin
-// Primitive whose width class ends under it.
+// Primitive whose width class ends under it. A ray `toward_footprint_light`,
+// the first directional light, skips the dynamic TLAS where the line it runs
+// along misses the dynamic footprint.
 fn shadowed(
     position: vec3<f32>,
     pixel_width: f32,
     triangle_normal: vec3<f32>,
     interpolated_normal: vec3<f32>,
     direction: vec3<f32>,
-    distance: f32
+    distance: f32,
+    toward_footprint_light: bool
 ) -> bool {
     // The camera stands where an Instance does in this composition, and the
     // TLAS's frame, with no offset from its Anchor, where the camera does.
@@ -120,7 +123,7 @@ fn shadowed(
     // passes; the ray traces on from such a one, and any triangle past it
     // shadows it: two turns at most, through the one call.
     let mask = shadow_ray_mask(pixel_width);
-    var flags = 0u;
+    var flags = select(0u, SKIPS_DYNAMIC_TLAS, toward_footprint_light && misses_dynamic_footprint(origin));
     var start_distance = 0.0;
     var hidden = false;
     loop {
@@ -138,10 +141,20 @@ fn shadowed(
             hidden = found && shadows;
             break;
         }
-        flags = RAY_FLAG_TERMINATE_ON_FIRST_HIT;
+        flags |= RAY_FLAG_TERMINATE_ON_FIRST_HIT;
         start_distance = hit.t + offset;
     }
     return hidden;
+}
+
+// Whether the line from `origin`, in the TLAS's frame, along the first
+// directional light meets none of the dynamic TLAS's entries: the footprint
+// (`DynamicFootprint`, src/render/acceleration_structures.rs) has a grid,
+// and the line's cell of it is clear or off it.
+fn misses_dynamic_footprint(origin: vec3<f32>) -> bool {
+    let placement = dynamic_footprint_placement;
+    let bit = footprint_bit(placement, origin);
+    return placement.cells.x != 0u && (dynamic_footprint[bit.x] & bit.y) == 0u;
 }
 
 // Where `sample` of a pixel lies, from the pixel's top left corner, in
@@ -189,7 +202,7 @@ fn sample_surface(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>) ->
 fn directional_hidden(surface: SampleSurface, index: u32) -> bool {
     let direction = normalize(-lights[index].offset);
     return !(dot(surface.interpolated_normal, direction) > -INTERPOLATED_TURN_MARGIN)
-        || shadowed(surface.position, surface.pixel_width, surface.triangle_normal, surface.interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE);
+        || shadowed(surface.position, surface.pixel_width, surface.triangle_normal, surface.interpolated_normal, direction, UNBOUNDED_RAY_DISTANCE, index == 0u);
 }
 
 // The bits for the pixel's lights whose rays a surface found hidden, with
@@ -302,7 +315,8 @@ fn surface_word(pixel: vec2<i32>, sample: u32, depth: f32, size: vec2<f32>, othe
                     direction = to_light / distance;
                 }
             }
-            if shadowed(traced_surface.position, traced_surface.pixel_width, traced_surface.triangle_normal, traced_surface.interpolated_normal, direction, distance) {
+            let toward_footprint_light = entry == 0u && light.directional_light_count > 0u;
+            if shadowed(traced_surface.position, traced_surface.pixel_width, traced_surface.triangle_normal, traced_surface.interpolated_normal, direction, distance, toward_footprint_light) {
                 hidden = with_bit(hidden, entry);
             }
         }

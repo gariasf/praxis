@@ -202,14 +202,15 @@ pub const BENDS: BindGroupDefinition = BindGroupDefinition {
 
 /// Group 3 of the shadow mask pass, which builds the mask: the camera, the
 /// lights and the Froxel lists, which `FRAME` holds, the culling pass's
-/// per-slot offsets, which `FRAME_DRAW` holds, the depth target and the
-/// surface normals, and what the pass writes: the shadow mask, which samples
-/// show its second surface and the first directional lights' verdicts at
-/// each sample, how many lights it had no bit for, which the CPU reads back,
-/// the list of second surfaces its first dispatch writes for its second, with
-/// that dispatch's size, each pixel's directional verdicts, and the list of
-/// shadow edges its third dispatch writes for its fourth, with that
-/// dispatch's size.
+/// per-slot offsets, which `FRAME_DRAW` holds, the dynamic TLAS's footprint
+/// along the first directional light, its placement and its grid, which the
+/// Ray scene writes, the depth target and the surface normals, and what the
+/// pass writes: the shadow mask, which samples show its second surface and
+/// the first directional lights' verdicts at each sample, how many lights it
+/// had no bit for, which the CPU reads back, the list of second surfaces its
+/// first dispatch writes for its second, with that dispatch's size, each
+/// pixel's directional verdicts, and the list of shadow edges its third
+/// dispatch writes for its fourth, with that dispatch's size.
 pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
     index: 3,
     label: "Shadow Mask Build Bind Group",
@@ -233,6 +234,16 @@ pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
                 wgpu::ShaderStages::COMPUTE,
             )
         },
+        uniform(
+            "dynamic_footprint_placement",
+            "FootprintPlacement",
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        read_only_storage(
+            "dynamic_footprint",
+            "array<u32>",
+            wgpu::ShaderStages::COMPUTE,
+        ),
         loaded_texture(
             "depth_target",
             "texture_depth_multisampled_2d",

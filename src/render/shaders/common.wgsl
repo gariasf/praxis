@@ -1,8 +1,9 @@
 // Shared by the modules that read the frame, the geometry or the lights
 // (src/render/shaders/mod.rs): π, the structs more than one pass reads, the
 // Anchor composition, the position a depth target's depth places at a pixel,
-// the ray and box test, the point light's position, the packed index, the
-// vertex decode, the octahedral codec and the Layer decode.
+// the ray and box test, the dynamic footprint's cell, the point light's
+// position, the packed index, the vertex decode, the octahedral codec and the
+// Layer decode.
 
 // Positions reach the shaders relative to the camera (ADR 0014), so the
 // camera sits at the origin and view_proj holds no translation. The camera's
@@ -102,6 +103,32 @@ fn segment_meets_box(
         half_extent.x * reach.y + half_extent.y * reach.x
     );
     return !any(abs(cross(midpoint, half_segment)) > crossed_reach);
+}
+
+// Where the dynamic footprint's grid lies (src/render/acceleration_structures.rs):
+// each of its axes across the light, in cells per metre, with its offset in
+// w, and its columns and rows, none without a grid.
+struct FootprintPlacement {
+    first_axis: vec4<f32>,
+    second_axis: vec4<f32>,
+    cells: vec2<u32>,
+}
+
+// The word, among the grid's bits, that holds the cell `placement`'s grid
+// gives the line through `position` along its light, and the cell's bit in
+// it; a bit of 0 where the line passes off the grid. Each row of the grid
+// starts a word.
+fn footprint_bit(placement: FootprintPlacement, position: vec3<f32>) -> vec2<u32> {
+    let cell = floor(vec2<f32>(
+        dot(position, placement.first_axis.xyz) + placement.first_axis.w,
+        dot(position, placement.second_axis.xyz) + placement.second_axis.w
+    ));
+    if any(cell < vec2<f32>(0.0)) || any(cell >= vec2<f32>(placement.cells)) {
+        return vec2<u32>(0u);
+    }
+    let column = u32(cell.x);
+    let row_words = (placement.cells.x + 31u) / 32u;
+    return vec2<u32>(u32(cell.y) * row_words + column / 32u, 1u << (column % 32u));
 }
 
 // A Froxel's list: how many lights it holds, at most FROXEL_LIGHT_CAPACITY,

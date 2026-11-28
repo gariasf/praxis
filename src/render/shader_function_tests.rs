@@ -2293,6 +2293,91 @@ fn a_segment_meets_a_box_where_some_point_of_it_lies_in_the_box() {
     }
 }
 
+/// A grid of 70 columns, three words a row, and 5 rows, across a light along
+/// no axis, at 4 cells a metre: a point placed at a cell's centre, anywhere
+/// along the light, finds that cell's word and bit, the last column of a row
+/// in its third word and a column past 31 in its second; a point a cell past
+/// any side of the grid finds no bit.
+#[test]
+fn footprint_bit_finds_the_cell_a_line_along_the_light_crosses() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    let direction = glam::vec3(1.0, 2.0, 3.0).normalize();
+    let first_axis = direction.any_orthonormal_vector();
+    let second_axis = direction.cross(first_axis);
+    let cells_per_metre = 4.0;
+    let [first_offset, second_offset] = [7.5, -3.25];
+    // Column, row, and the cell's word and bit; no bit off the grid.
+    let cells: [(i32, i32, [u32; 2]); 10] = [
+        (0, 0, [0, 1]),
+        (1, 0, [0, 2]),
+        (31, 0, [0, 1 << 31]),
+        (32, 0, [1, 1]),
+        (69, 0, [2, 1 << 5]),
+        (40, 4, [13, 1 << 8]),
+        (-1, 2, [0, 0]),
+        (70, 2, [0, 0]),
+        (10, -1, [0, 0]),
+        (10, 5, [0, 0]),
+    ];
+    let placement = [
+        (first_axis * cells_per_metre)
+            .extend(first_offset)
+            .to_array(),
+        (second_axis * cells_per_metre)
+            .extend(second_offset)
+            .to_array(),
+        [70.0, 5.0, 0.0, 0.0],
+    ];
+    let cases: Vec<([i32; 2], f32, [[f32; 4]; 4])> = cells
+        .iter()
+        .flat_map(|&(column, row, _)| {
+            [-1000.0, 0.0, 250.0].map(move |along| {
+                let position = first_axis
+                    * ((column as f32 + 0.5 - first_offset) / cells_per_metre)
+                    + second_axis * ((row as f32 + 0.5 - second_offset) / cells_per_metre)
+                    + direction * along;
+                (
+                    [column, row],
+                    along,
+                    [
+                        placement[0],
+                        placement[1],
+                        placement[2],
+                        position.extend(0.0).to_array(),
+                    ],
+                )
+            })
+        })
+        .collect();
+    let inputs: Vec<[[f32; 4]; 4]> = cases.iter().map(|(.., inputs)| *inputs).collect();
+    let results = evaluate_cases(
+        &context,
+        "vec4<f32>(vec2<f32>(footprint_bit(FootprintPlacement(inputs[0], inputs[1], \
+         vec2<u32>(inputs[2].xy)), inputs[3].xyz)), 0.0, 0.0)",
+        &inputs,
+        &[],
+    );
+
+    for ((cell, along, _), result) in cases.iter().zip(results) {
+        let expected = cells
+            .iter()
+            .find(|(column, row, _)| [*column, *row] == *cell)
+            .map(|(.., bit)| *bit);
+        // Each word and bit is a power of two or under 2^24, which f32 holds.
+        let found = [result[0] as u32, result[1] as u32];
+        // WGSL floor: a cell centre lies half a cell from its edges, and its
+        // coordinates, at most 4,000 cells from the origin along the light,
+        // round by a few times 2^-24 of that, under 0.01 of a cell.
+        assert_eq!(
+            Some(found),
+            expected,
+            "cell {cell:?}, {along} m along the light"
+        );
+    }
+}
+
 /// A point at `camera + camera_relative`, drawn at `local_position` from its
 /// Instance's pivot, both placed as the renderer places them.
 #[derive(Debug)]

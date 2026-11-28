@@ -169,8 +169,9 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // pass's 4-byte overflow count and its two 12-byte dispatches and
     // stand-in, the tonemapping pass's 64×64 R8 dither mask, the Froxel
     // pass's lists, 32 × 18 × 32 of 128 u32s, and its 16 bytes of light
-    // counts, the dynamic TLAS's markers' 4-byte result, and the bend pass's
-    // 4,096 bends of 20 bytes.
+    // counts, the dynamic TLAS's markers' 4-byte result and its footprint's
+    // 48-byte placement and grid of a bit for each of 1,024² cells, and the
+    // bend pass's 4,096 bends of 20 bytes.
     let scene_and_pass_buffers = 16_371 * 220
         + (222 + 285) * 80
         + 144
@@ -192,6 +193,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         + 32 * 18 * 32 * 128 * 4
         + 16
         + 4
+        + 48
+        + 1024 * 1024 / 8
         + 4096 * 20;
     let by_kind = [
         (GpuMemoryKind::GeometryArenas, geometry_arenas),
@@ -494,13 +497,16 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
             ),
         };
         // The 144-byte camera and 32-byte light uniforms, the sun and the
-        // 1,024 lamps' lights of 48 bytes, and each bird's 128-byte Instance
-        // and its dynamic TLAS entry, as its backend's instance record.
+        // 1,024 lamps' lights of 48 bytes, each bird's 128-byte Instance
+        // and its dynamic TLAS entry, as its backend's instance record, and
+        // the birds' footprint along the sun: its 48-byte placement and a
+        // bit for each of its 1,024² cells.
         let entry_bytes = match context.backend() {
             wgpu::Backend::Metal => 72,
             _ => 64,
         };
-        let town_upload = 144 + 32 + 1025 * 48 + 10_000 * (128 + entry_bytes);
+        let footprint_bytes = 48 + 1024 * 1024 / 8;
+        let town_upload = 144 + 32 + 1025 * 48 + 10_000 * (128 + entry_bytes) + footprint_bytes;
         for (frame, stats) in frames.iter().enumerate() {
             let Some(gpu) = stats.gpu else {
                 panic!("{} frame {frame} read back no GPU stats", scene.name());
@@ -589,10 +595,12 @@ fn the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame() 
     for (frame, stats) in frames.iter().enumerate() {
         // The 144-byte camera and 32-byte light uniforms, the sun and four
         // point lights, 48 bytes each, the five 128-byte Instances and their
-        // entries, and on the first frame the 4-byte Instance slot count and
-        // the grid Texture's move to its whole chain's class: its Resident tail, mips
-        // 3 on of 2,048², in 16-byte blocks, 64², 32², … 2² of them, then 1
-        // at each of the last three mips.
+        // entries, their footprint along the sun, a 48-byte placement and a
+        // bit for each of its 1,024² cells, and on the first frame the
+        // 4-byte Instance slot count and the grid Texture's move to its whole
+        // chain's class: its Resident tail, mips 3 on of 2,048², in 16-byte
+        // blocks, 64², 32², … 2² of them, then 1 at each of the last three
+        // mips.
         let first_frame = if frame == 0 {
             4 + 16 * (4096 + 1024 + 256 + 64 + 16 + 4 + 3)
         } else {
@@ -600,7 +608,7 @@ fn the_orrerys_moving_instances_upload_their_dynamic_tlas_entries_every_frame() 
         };
         assert_eq!(
             stats.uploaded_bytes,
-            144 + 32 + 5 * 48 + 5 * 128 + 5 * entry_bytes + first_frame,
+            144 + 32 + 5 * 48 + 5 * 128 + 5 * entry_bytes + 48 + 1024 * 1024 / 8 + first_frame,
             "frame {frame}"
         );
         let timed: Vec<&str> = stats

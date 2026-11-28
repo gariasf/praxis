@@ -8,12 +8,15 @@
 //! surface's bits. Where a directional light's verdict at a pixel's nearest
 //! surface differs from a 4-neighbour's, a shadow edge, it traces that light
 //! again from each other sample that shows the surface, and keeps each
-//! sample's verdict, so the edge resolves as MSAA resolves geometry's. It
-//! runs once both culling phases' Instances are in the depth target.
+//! sample's verdict, so the edge resolves as MSAA resolves geometry's. A ray
+//! toward the first directional light skips the dynamic TLAS where the line
+//! it runs along misses the Moving Instances' footprint. It runs once both
+//! culling phases' Instances are in the depth target.
 
 use crate::render::bind_groups::{RAY_SCENE, SHADOW_MASK_BUILD, compute_pipeline, pipeline_layout};
 use crate::render::culling_pass::CullingPass;
 use crate::render::froxel_pass::{FROXEL_SLICES, FroxelPass};
+use crate::render::ray_scene::RayScene;
 use crate::render::readback::FrameTimestamps;
 use crate::render::renderer::{RenderSwitches, SharedBuffers};
 use crate::render::shaders;
@@ -96,14 +99,17 @@ pub struct ShadowMaskPass {
 }
 
 /// The buffers of others the pass reads, kept to build its bind groups: the
-/// shared camera, light uniform and lights, the Froxel pass's lists and the
-/// culling pass's per-slot offsets.
+/// shared camera, light uniform and lights, the Froxel pass's lists, the
+/// culling pass's per-slot offsets and the Ray scene's dynamic footprint,
+/// its placement and its grid.
 struct ShadowMaskBuffers {
     camera: wgpu::Buffer,
     light: wgpu::Buffer,
     lights: wgpu::Buffer,
     froxel_lists: wgpu::Buffer,
     instance_offsets: wgpu::Buffer,
+    dynamic_footprint_placement: wgpu::Buffer,
+    dynamic_footprint_grid: wgpu::Buffer,
 }
 
 /// The pass's bind groups that read and write the render targets
@@ -124,14 +130,14 @@ pub struct ShadowMaskTargetGroups {
 }
 
 impl ShadowMaskPass {
-    /// The pass, tracing the Ray scene, whose group is of
-    /// `ray_scene_layout`, reading `shared`'s camera, light uniform and
-    /// lights, `froxel_pass`'s lists and `culling_pass`'s per-slot offsets,
-    /// with its Froxel lookups as `switches` set.
+    /// The pass, tracing `ray_scene` and reading its dynamic footprint,
+    /// reading `shared`'s camera, light uniform and lights, `froxel_pass`'s
+    /// lists and `culling_pass`'s per-slot offsets, with its Froxel lookups
+    /// as `switches` set.
     pub fn new(
         device: &wgpu::Device,
         memory: &GpuMemory,
-        ray_scene_layout: &wgpu::BindGroupLayout,
+        ray_scene: &RayScene,
         shared: &SharedBuffers,
         froxel_pass: &FroxelPass,
         culling_pass: &CullingPass,
@@ -143,7 +149,7 @@ impl ShadowMaskPass {
             device,
             "Shadow Mask Pipeline Layout",
             &[
-                (&RAY_SCENE, ray_scene_layout),
+                (&RAY_SCENE, ray_scene.layout()),
                 (&SHADOW_MASK_BUILD, &layout),
             ],
         );
@@ -157,6 +163,8 @@ impl ShadowMaskPass {
             lights: wgpu::Buffer::clone(&shared.lights),
             froxel_lists: froxel_pass.froxel_lists().clone(),
             instance_offsets: culling_pass.instance_offsets().clone(),
+            dynamic_footprint_placement: ray_scene.dynamic_footprint_placement().clone(),
+            dynamic_footprint_grid: ray_scene.dynamic_footprint_grid().clone(),
         };
         let shadow_mask_lights_overflowed = memory.create_buffer(
             device,
@@ -252,6 +260,14 @@ impl ShadowMaskPass {
             (
                 "instance_offsets",
                 buffers.instance_offsets.as_entire_binding(),
+            ),
+            (
+                "dynamic_footprint_placement",
+                buffers.dynamic_footprint_placement.as_entire_binding(),
+            ),
+            (
+                "dynamic_footprint",
+                buffers.dynamic_footprint_grid.as_entire_binding(),
             ),
             (
                 "shadow_mask_lights_overflowed",

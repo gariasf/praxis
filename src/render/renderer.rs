@@ -4,7 +4,7 @@ use crate::assets::{MaterialPool, MeshPool, PoolCapacities};
 use crate::bench::Budgets;
 use crate::camera::FIELD_OF_VIEW;
 use crate::gpu::GpuContext;
-use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
+use crate::render::acceleration_structures::{DYNAMIC_FOOTPRINT_BYTES, DYNAMIC_TLAS_BUILD};
 use crate::render::bend_pass::{BEND_CAPACITY, BEND_PASS, BendData, BendPass};
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::blas_refit::BLAS_REFIT_PASS;
@@ -297,6 +297,7 @@ impl RenderCapacities {
             + BEND_CAPACITY as usize * size_of::<BendData>()) as u64
             + u64::from(lights) * size_of::<LightData>() as u64
             + u64::from(instances) * size_of::<InstanceData>() as u64
+            + DYNAMIC_FOOTPRINT_BYTES
     }
 
     /// These capacities with the Probes on, whose update's uniform each frame
@@ -605,6 +606,10 @@ impl Renderer {
             bend_pass.bends(),
         ]
         .into_iter()
+        .chain([
+            ray_scene.dynamic_footprint_placement(),
+            ray_scene.dynamic_footprint_grid(),
+        ])
         .chain(probe_update.as_ref().map(ProbeUpdatePass::uniform_buffer));
         let frame_staging =
             FrameStaging::new(&memory, uploaded_buffers.map(wgpu::Buffer::size).sum());
@@ -630,7 +635,7 @@ impl Renderer {
         let shadow_mask_pass = ShadowMaskPass::new(
             &device,
             &memory,
-            ray_scene.layout(),
+            &ray_scene,
             &shared_buffers,
             &froxel_pass,
             &culling_pass,
@@ -836,7 +841,8 @@ impl Renderer {
         .chain(bend_upload)
         .chain(instance_uploads)
         .chain(slot_count_upload)
-        .chain(probe_upload);
+        .chain(probe_upload)
+        .chain(self.ray_scene.footprint_uploads());
         let uploaded_bytes = self
             .frame_staging
             .write(&self.device, &mut encoder, uploads);
@@ -1115,7 +1121,7 @@ pub(crate) mod tests {
                 instances: 488_448,
                 lights: 4893,
                 static_tlas_instances: 264_720,
-                load_bytes_per_frame: 26_640_177,
+                load_bytes_per_frame: 26_509_057,
             }
         );
         let slot_bytes = INSTANCE_SCAN_BLOCK_BYTES as f64 / f64::from(SCAN_BLOCK_SIZE);

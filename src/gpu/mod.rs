@@ -315,9 +315,9 @@ pub(crate) fn floor_limits() -> wgpu::Limits {
         max_texture_array_layers: FLOOR_TEXTURE_ARRAY_LAYERS,
         // ADR 0020's static and dynamic TLAS.
         max_acceleration_structures_per_shader_stage: 2,
-        // The culling pass's compute stage reads and writes nine, the
-        // visibility it keeps between frames among them (ADR 0019).
-        max_storage_buffers_per_shader_stage: 9,
+        // The shadow mask pass's compute stage reads and writes ten, the
+        // dynamic TLAS's footprint among them (ADR 0020).
+        max_storage_buffers_per_shader_stage: 10,
         ..wgpu::Limits::default().using_minimum_supported_acceleration_structure_values()
     }
 }
@@ -850,7 +850,7 @@ mod tests {
             max_buffer_size: 2_147_483_647,
             max_binding_array_elements_per_shader_stage: 65_536,
             max_acceleration_structures_per_shader_stage: 2,
-            max_storage_buffers_per_shader_stage: 9,
+            max_storage_buffers_per_shader_stage: 10,
             ..wgpu::Limits::default().using_minimum_supported_acceleration_structure_values()
         };
         assert_eq!(
