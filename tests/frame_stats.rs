@@ -277,7 +277,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // back its passes' GPU time, none skipped: Metal reads a timestamp
     // resolved before its pass's submission completed as 0. The frame spans
     // its passes; nothing moves and nothing bends, so no frame builds the
-    // dynamic TLAS, runs the bend pass or refits BLASes, which take no time.
+    // dynamic TLAS, runs the bend pass or refits BLASes, and the Probes are
+    // off, so none updates them: these take no time.
     // Phase two's pass over its Meshlet records appends nothing and its depth
     // pass draws nothing in a frame whose phase one drew every visible
     // Instance, and NVIDIA times an empty pass at 0.
@@ -303,12 +304,19 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
                 "phase_two_depth_pass",
                 "shadow_mask_pass",
                 "lit_pass",
-                "tonemapping_pass"
+                "tonemapping_pass",
+                "probe_update"
             ],
             "frame {frame}"
         );
         for (pass, time) in gpu.pass_times {
-            let runs = !["dynamic_tlas_build", "bend_pass", "blas_refit"].contains(&pass);
+            let idle = [
+                "dynamic_tlas_build",
+                "bend_pass",
+                "blas_refit",
+                "probe_update",
+            ];
+            let runs = !idle.contains(&pass);
             let may_be_empty = ["culling_phase_two_triangles", "phase_two_depth_pass"]
                 .contains(&pass)
                 && gpu.phase_two_triangles_drawn == 0;
