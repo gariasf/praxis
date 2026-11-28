@@ -6791,6 +6791,12 @@ section = "Majercik, Guertin, Nowrouzezahrai and McGuire, Dynamic Diffuse Global
 quote = '''we encode the spherical diffuse irradiance (in GL_R11G11B10F format at 8 × 8 octahedral resolution), spherical distance and squared distances to the nearest geometry (both in GL_RG16F format at 16 × 16 octahedral resolution) [...] In a forward or deferred shading render pass, probes can [...] we apply mean- and variance-biased Chebyshev interpolants, as detailed in the variance shadow-mapping method, to our visibility queries (see Figure 7) in order to appropriately filter radiance queries [...] low probe count/density can lead to subtle light leaking artifacts [...] Our method does not suffer from light- or shadow-leaking artifacts [...] For human-scale scenes, we found a spacing of one to two meters sufficient'''
 checked = 2026-11-27
 
+["majercik-2019-ddgi-probe-update"]
+url = "https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=10"
+section = "Majercik, Guertin, Nowrouzezahrai and McGuire, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, §4.4, pp. 10-11, Equation (1) and the Technical Notes below it"
+quote = '''We update the probe texels (associated to each surfel) by alpha-blending in the new shading results at a rate of 1 − α, where α is a hysteresis parameter that controls the rate at which updated shading overrides shading results from previous frames (Equation (1)). [...] newIrradiance[texelDir] = lerp(oldIrradiance[texelDir], ∑_ProbeRays (max(0, texelDir · rayDir) ∗ rayRadiance), hysteresis) (1) [...] We update irradiance and depth texels against a cosine lobe distribution, a necessary step for correct irradiance representation [Akenine-Möller et al. 2018]. In the case of the depth and depth-squared buffers (as with [McGuire et al. 2017b]), we employ an additional depth sharpening, warping them according to a cosine-power lobe distribution.'''
+checked = 2026-11-28
+
 ["majercik-2021-ddgi-lag"]
 url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=9"
 section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §4.2, p. 9"

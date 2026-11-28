@@ -61,31 +61,6 @@ fn capture_draws_the_scene_over_the_tonemapped_background() {
     );
 }
 
-/// Nothing fills the Probes, so every texel of each one's 8 × 8 map of
-/// irradiance, in a Cascade of 32 × 16 × 32, reads back as no light.
-#[test]
-fn capture_reads_back_the_light_the_probes_hold() {
-    let context = match pollster::block_on(GpuContext::headless()) {
-        Ok(context) => context,
-        Err(error) if error.is::<wgpu::RequestAdapterError>() => {
-            writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
-            return;
-        }
-        Err(error) => panic!("headless GPU context failed: {error:#}"),
-    };
-
-    let frames = praxis::capture_probe_light(&context, ReferenceScene::PbrSweep, 160, 90, &[0, 2])
-        .expect("capture failed");
-
-    assert_eq!(frames.len(), 2);
-    for probes in frames {
-        assert_eq!(probes.len(), 32 * 16 * 32);
-        for probe in probes {
-            assert_eq!(probe, vec![[0.0; 3]; 8 * 8]);
-        }
-    }
-}
-
 /// `praxis capture --frame` lands on the frame it names: `town`'s camera
 /// moves along its path, so its first frame and its Golden's differ.
 #[cfg(feature = "cook")]

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::camera::Camera;
 use crate::gpu::GpuContext;
-use crate::render::probes::irradiance_by_probe;
+use crate::render::probes::{IRRADIANCE_BYTES, depth_moments_by_probe, irradiance_by_probe};
 use crate::render::shadow_mask_pass::SHADOW_MASK_LIGHTS;
 use crate::render::{FRAMES_IN_FLIGHT, RenderSwitches};
 use crate::scenes::ReferenceScene;
@@ -271,32 +271,53 @@ pub fn shadow_mask_differences(
         .collect())
 }
 
-/// The light each Probe holds after each of `frames` of `scene`, rendered as
-/// `capture_frames` renders them with the Probes on: a Probe's linear RGB at
-/// each texel of its octahedral map, row by row, as stored.
-pub fn capture_probe_light(
+/// What a Cascade's Probes hold, each at each texel of its octahedral maps,
+/// row by row: its irradiance, linear RGB in lux, and its depth moments, in
+/// metres and square metres. The Probes run along X, then Z, then Y.
+pub struct ProbeCapture {
+    pub irradiance: Vec<Vec<[f32; 3]>>,
+    pub depth_moments: Vec<Vec<[f32; 2]>>,
+}
+
+/// What the Probes hold after each of `frames` of `scene`, rendered as
+/// `capture_frames` renders them with the Probes on, every frame drawn up to
+/// the last, as each updates them.
+pub fn capture_probes(
     context: &GpuContext,
     scene: ReferenceScene,
     width: u32,
     height: u32,
     frames: &[u32],
-) -> anyhow::Result<Vec<Vec<Vec<[f32; 3]>>>> {
-    let irradiance = read_frames(
+) -> anyhow::Result<Vec<ProbeCapture>> {
+    let last = frames.iter().max().copied().unwrap_or_default();
+    let (texels, _, _) = render_frames(
         context,
         scene,
         glam::DVec3::ZERO,
+        &|frame| scene.camera_at(frame, glam::DVec3::ZERO),
         width,
         height,
+        0..=last,
         frames,
+        ReadBack::Probes,
+        scene.frame_delta(),
         RenderSwitches {
             probes: true,
+            wait_for_static_tlas: true,
             ..RenderSwitches::default()
         },
-        ReadBack::ProbeLight,
+        FrameWait::Block,
+        ..,
     )?;
-    Ok(irradiance
+    Ok(texels
         .iter()
-        .map(|texels| irradiance_by_probe(texels))
+        .map(|texels| {
+            let (irradiance, depth_moments) = texels.split_at(IRRADIANCE_BYTES);
+            ProbeCapture {
+                irradiance: irradiance_by_probe(irradiance),
+                depth_moments: depth_moments_by_probe(depth_moments),
+            }
+        })
         .collect())
 }
 
@@ -455,14 +476,20 @@ pub(crate) fn render_frames(
             }
         }
         if read_back.contains(&frame) {
-            let texture = match source {
-                ReadBack::Target => &target,
-                ReadBack::ShadowMask => state.shadow_mask(),
-                ReadBack::ProbeLight => state
-                    .probe_irradiance()
-                    .ok_or_else(|| anyhow::anyhow!("the Probes are off"))?,
+            let texels = match source {
+                ReadBack::Target => self::read_back(context, &target)?,
+                ReadBack::ShadowMask => self::read_back(context, state.shadow_mask())?,
+                ReadBack::Probes => {
+                    let (Some(irradiance), Some(depth_moments)) =
+                        (state.probe_irradiance(), state.probe_depth_moments())
+                    else {
+                        anyhow::bail!("the Probes are off");
+                    };
+                    let irradiance = self::read_back(context, irradiance)?;
+                    [irradiance, self::read_back(context, depth_moments)?].concat()
+                }
             };
-            pixels.push(self::read_back(context, texture)?);
+            pixels.push(texels);
         }
     }
     anyhow::ensure!(
@@ -491,8 +518,9 @@ pub(crate) enum ReadBack {
     Target,
     /// The shadow mask's first layer, each pixel's nearest surface's word.
     ShadowMask,
-    /// The irradiance the Probes hold, with the `probes` Render switch on.
-    ProbeLight,
+    /// The irradiance the Probes hold, then their depth moments, with the
+    /// `probes` Render switch on.
+    Probes,
 }
 
 /// How `render_frames` waits for the oldest frame in flight.

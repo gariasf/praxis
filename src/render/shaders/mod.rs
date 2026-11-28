@@ -19,7 +19,7 @@ use crate::render::bind_groups::BLAS_REFIT_MARKERS;
 use crate::render::bind_groups::{
     BENDS, BUFFER_VIEW_INPUT, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS,
     FRAME, FRAME_DRAW, FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS,
-    PROBE_TRACE_INPUTS, RAY_SCENE, SCENE_GEOMETRY, SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
+    PROBE_BLEND_INPUTS, PROBE_TRACE_INPUTS, RAY_SCENE, SCENE_GEOMETRY, SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::{MAX_WORKGROUPS_PER_DIMENSION, SCAN_BLOCK_SIZE, SLOT_LOD_SHIFT};
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
@@ -29,8 +29,13 @@ use crate::render::froxel_pass::{
 };
 use crate::render::instance::{ANCHOR_CELL_SIZE, NO_MATERIAL, NO_MESH};
 use crate::render::light_count_pass::LIGHT_COUNT_TILE_SIZE;
-use crate::render::probe_update_pass::{PROBE_RAYS, PROBE_TRACE_WORKGROUP_SIZE};
-use crate::render::probes::{PROBE_COUNTS, PROBE_SPACING_METRES};
+use crate::render::probe_update_pass::{
+    PROBE_LEVELS_PER_FRAME, PROBE_RAYS, PROBE_TRACE_WORKGROUP_SIZE,
+};
+use crate::render::probes::{
+    DEPTH_MOMENTS_SIDE_TEXELS, IRRADIANCE_SIDE_TEXELS, PROBE_COUNTS, PROBE_LIGHT_SCALE,
+    PROBE_SPACING_METRES,
+};
 #[cfg(test)]
 use crate::render::renderer::RenderCapacities;
 use crate::render::renderer::RenderSwitches;
@@ -87,6 +92,9 @@ const HDR: Part = part!("hdr.wgsl");
 /// Tracing the Ray scene, which every pass that traces shares.
 const RAY_SCENE_TRACING: Part = part!("ray_scene.wgsl");
 
+/// A Probe's octahedral maps.
+const PROBES: Part = part!("probes.wgsl");
+
 /// GT7's tone mapping, under Polyphony's MIT notice.
 const GT7: Part = part!("gt7.wgsl");
 
@@ -142,6 +150,15 @@ pub const PROBE_TRACE: ShaderModule = ShaderModule {
     enables: &["wgpu_ray_query"],
     bind_groups: &[&RAY_SCENE, &PROBE_TRACE_INPUTS],
     parts: &[COMMON, RAY_SCENE_TRACING, part!("probe_trace.wgsl")],
+    instance_capacity: None,
+};
+
+/// The Probe update's blends.
+pub const PROBE_BLEND: ShaderModule = ShaderModule {
+    name: "probe_blend",
+    enables: &[],
+    bind_groups: &[&PROBE_BLEND_INPUTS],
+    parts: &[COMMON, HDR, PROBES, FULL_SCREEN, part!("probe_blend.wgsl")],
     instance_capacity: None,
 };
 
@@ -242,7 +259,7 @@ pub const SHARED: ShaderModule = ShaderModule {
     name: "shared",
     enables: &[],
     bind_groups: &[],
-    parts: &[COMMON, SHADING, HDR, GT7, DISPLAY],
+    parts: &[COMMON, SHADING, HDR, GT7, DISPLAY, PROBES],
     instance_capacity: None,
 };
 
@@ -253,12 +270,13 @@ pub const LOOPS_UNBOUNDED: [ShaderModule; 2] = [MAIN, CULLING];
 /// Every module, the culling pass's with the checked-in Instance capacity,
 /// which `shader_tests` validates.
 #[cfg(test)]
-pub fn modules() -> [ShaderModule; 13] {
+pub fn modules() -> [ShaderModule; 14] {
     [
         SHARED,
         MAIN,
         SHADOW_MASK,
         PROBE_TRACE,
+        PROBE_BLEND,
         CULLING.with_instance_capacity(RenderCapacities::checked_in().instances),
         FROXEL,
         LIGHT_COUNT,
@@ -380,7 +398,11 @@ impl ShaderModule {
              const SHADOW_WIDTH_CLASSES: u32 = {SHADOW_WIDTH_CLASSES}u;\n\
              const PROBE_COUNTS: vec3<u32> = vec3<u32>({}u, {}u, {}u);\n\
              const PROBE_SPACING_METRES: f32 = {PROBE_SPACING_METRES:?};\n\
+             const PROBE_IRRADIANCE_SIDE: u32 = {IRRADIANCE_SIDE_TEXELS}u;\n\
+             const PROBE_DEPTH_MOMENTS_SIDE: u32 = {DEPTH_MOMENTS_SIDE_TEXELS}u;\n\
+             const PROBE_LIGHT_SCALE: f32 = {PROBE_LIGHT_SCALE:?};\n\
              const PROBE_RAYS: u32 = {PROBE_RAYS}u;\n\
+             const PROBE_LEVELS_PER_FRAME: u32 = {PROBE_LEVELS_PER_FRAME}u;\n\
              const PROBE_TRACE_WORKGROUP_SIZE: u32 = {PROBE_TRACE_WORKGROUP_SIZE}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),

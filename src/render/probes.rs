@@ -7,8 +7,11 @@ pub(crate) const PROBE_SPACING_METRES: f32 = 1.0;
 
 /// Texels along a side of a Probe's octahedral map of irradiance, and of its
 /// depth moments [ref:majercik-2019-ddgi-probe-encoding].
-const IRRADIANCE_SIDE_TEXELS: u32 = 8;
-const DEPTH_MOMENTS_SIDE_TEXELS: u32 = 16;
+pub(crate) const IRRADIANCE_SIDE_TEXELS: u32 = 8;
+pub(crate) const DEPTH_MOMENTS_SIDE_TEXELS: u32 = 16;
+
+/// What a Probe's irradiance, in lux, is stored at (ADR 0023).
+pub(crate) const PROBE_LIGHT_SCALE: f32 = 0.0625;
 
 /// Blendable; the Capability floor gives neither read-write storage
 /// [ref:wgpu-types-30-guaranteed-format-features].
@@ -17,12 +20,19 @@ const DEPTH_MOMENTS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float
 
 const STATE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Uint;
 
+/// Bytes of a Cascade's irradiance, rows unpadded.
+pub(crate) const IRRADIANCE_BYTES: usize = (PROBE_COUNTS[0]
+    * PROBE_COUNTS[1]
+    * PROBE_COUNTS[2]
+    * IRRADIANCE_SIDE_TEXELS
+    * IRRADIANCE_SIDE_TEXELS) as usize
+    * 8;
+
 /// One Cascade's Probes (ADR 0020). Each texture is one layer: a Probe's map
 /// lies at its Z down the texture and its X across it, the levels along Y
 /// side by side.
 pub(crate) struct Cascade {
     irradiance: Counted<wgpu::Texture>,
-    #[expect(dead_code, reason = "created and counted; no pass binds it")]
     depth_moments: Counted<wgpu::Texture>,
     #[expect(dead_code, reason = "created and counted; no pass binds it")]
     state: Counted<wgpu::Texture>,
@@ -52,18 +62,20 @@ impl Cascade {
             )
         };
         let binding = wgpu::TextureUsages::TEXTURE_BINDING;
+        let blended =
+            binding | wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
         Cascade {
             irradiance: texture(
                 "Probe Irradiance",
                 IRRADIANCE_SIDE_TEXELS,
                 IRRADIANCE_FORMAT,
-                binding | wgpu::TextureUsages::COPY_SRC,
+                blended,
             ),
             depth_moments: texture(
                 "Probe Depth Moments",
                 DEPTH_MOMENTS_SIDE_TEXELS,
                 DEPTH_MOMENTS_FORMAT,
-                binding,
+                blended,
             ),
             state: texture("Probe State", 1, STATE_FORMAT, binding),
         }
@@ -72,15 +84,40 @@ impl Cascade {
     pub(crate) fn irradiance(&self) -> &wgpu::Texture {
         &self.irradiance
     }
+
+    pub(crate) fn depth_moments(&self) -> &wgpu::Texture {
+        &self.depth_moments
+    }
 }
 
-/// The irradiance each Probe holds, as stored: linear RGB at each texel of
-/// its map, row by row, the Probes ordered by X within Z within Y. `texels`
-/// is a Cascade's irradiance, rows top first without padding.
+/// The irradiance each Probe holds, in lux: linear RGB at each texel of its
+/// map, row by row, the Probes ordered by X within Z within Y. `texels` is a
+/// Cascade's irradiance, rows top first without padding.
 pub(crate) fn irradiance_by_probe(texels: &[u8]) -> Vec<Vec<[f32; 3]>> {
+    texels_by_probe::<8, 3>(texels, IRRADIANCE_SIDE_TEXELS)
+        .into_iter()
+        .map(|probe| {
+            let unscaled = |texel: [f32; 3]| texel.map(|value| value / PROBE_LIGHT_SCALE);
+            probe.into_iter().map(unscaled).collect()
+        })
+        .collect()
+}
+
+/// The depth moments each Probe holds, in metres and square metres, laid out
+/// as `irradiance_by_probe` lays out irradiance.
+pub(crate) fn depth_moments_by_probe(texels: &[u8]) -> Vec<Vec<[f32; 2]>> {
+    texels_by_probe::<4, 2>(texels, DEPTH_MOMENTS_SIDE_TEXELS)
+}
+
+/// The first `CHANNELS` fp16 values of each texel of `BYTES`, by Probe, of a
+/// map `side` texels wide.
+fn texels_by_probe<const BYTES: usize, const CHANNELS: usize>(
+    texels: &[u8],
+    side: u32,
+) -> Vec<Vec<[f32; CHANNELS]>> {
     let [across, levels, deep] = PROBE_COUNTS.map(|count| count as usize);
-    let side = IRRADIANCE_SIDE_TEXELS as usize;
-    let (texels, _) = texels.as_chunks::<8>();
+    let side = side as usize;
+    let (texels, _) = texels.as_chunks::<BYTES>();
     assert_eq!(texels.len(), across * levels * deep * side * side);
     let probe = |probe_index: usize| {
         let (level, row, column) = (
@@ -92,11 +129,11 @@ pub(crate) fn irradiance_by_probe(texels: &[u8]) -> Vec<Vec<[f32; 3]>> {
             let (texel_row, texel_column) = (texel_index / side, texel_index % side);
             let texture_row = row * side + texel_row;
             let texture_column = (level * across + column) * side + texel_column;
-            let rgba = texels[texture_row * across * levels * side + texture_column];
-            [0, 2, 4].map(|byte_offset| {
+            let channels = texels[texture_row * across * levels * side + texture_column];
+            std::array::from_fn(|channel| {
                 fp16_value(u16::from_le_bytes([
-                    rgba[byte_offset],
-                    rgba[byte_offset + 1],
+                    channels[2 * channel],
+                    channels[2 * channel + 1],
                 ]))
             })
         };
@@ -149,7 +186,7 @@ mod tests {
 
         assert_eq!(irradiance.len(), 32 * 16 * 32);
         assert!(irradiance.iter().all(|probe| probe.len() == 8 * 8));
-        assert_eq!(irradiance[32 * 32 + 32 + 3][2 * 8 + 5], [1.0, 2.0, 3.0]);
+        assert_eq!(irradiance[32 * 32 + 32 + 3][2 * 8 + 5], [16.0, 32.0, 48.0]);
         let lit_texels = irradiance
             .iter()
             .flatten()
