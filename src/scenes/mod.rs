@@ -24,10 +24,10 @@ use crate::helmet::HelmetAssets;
 use crate::render::CrowdForm;
 #[cfg(feature = "cook")]
 use crate::streaming::{LoadedChunks, load_chunk};
-use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
+use crate::time::{FixedTime, SIXTY_HERTZ, TICK, TICK_SECONDS};
 use crate::transform::{PreviousWorldTransform, Teleported};
 
-mod house;
+pub mod house;
 pub(crate) mod simulation;
 mod town;
 pub(crate) mod world;
@@ -535,7 +535,7 @@ impl ReferenceScene {
     /// The scene's exposure at `frame`, an EV100 set by hand (ADR 0023).
     /// Each scene exposes the sun's illuminance to 1, as it was lit before
     /// its lights took photometric units: EV100 16.35; house does in its
-    /// yard and keys it down along its path into its rooms.
+    /// yard and keys it four stops down in its rooms along its path.
     fn ev100(self, frame: u32) -> f32 {
         let sunlit = ev100_for_exposure(1.0 / SUN_ILLUMINANCE);
         match self {
@@ -576,18 +576,26 @@ impl ReferenceScene {
         }
     }
 
+    /// The frame of its camera path that runs Tick `tick`, the first to draw
+    /// what it changed, when every frame advances the World by `frame_delta`
+    /// as a capture's do.
+    pub fn frame_running_tick(self, tick: u64) -> u32 {
+        let through_tick_nanoseconds = u128::from(tick + 1) * TICK.as_nanos();
+        (through_tick_nanoseconds.div_ceil(self.frame_delta().as_nanos()) - 1) as u32
+    }
+
     /// The frames of its camera path whose captures are its Goldens, the
     /// first the last `capture` renders. `helmet`, whose source is fetched,
     /// has none. `world`'s are over farmland with its settlement across the
     /// Load radius, at the settlement's edge, over its roofs, and over the
     /// farmland past it with the next settlement whole in the Far field.
-    /// `house`'s are in its yard, in room A's doorway, in room A and in
-    /// room B.
+    /// `house`'s are in room A before its lamp comes on and its door opens,
+    /// in room A after, in its yard, and in room B before the sun's step.
     pub fn golden_frames(self) -> &'static [u32] {
         match self {
             Self::Helmet => &[],
             Self::World => &[GOLDEN_FRAME, 300, 599, 1500],
-            Self::House => &[GOLDEN_FRAME, 360, 690, 1260],
+            Self::House => &[GOLDEN_FRAME, 300, 750, 1320],
             Self::PbrSweep
             | Self::UvGrid
             | Self::NormalTangent
@@ -657,8 +665,8 @@ impl ReferenceScene {
     /// whose forward axis is turned to shine along the scene's direction.
     /// town's stands 33° up in the south-southwest, behind the camera's
     /// street, so the street takes the sun between long shadows. house's
-    /// stands 37° up in the south-southeast, so it shines through room B's
-    /// window onto its floor.
+    /// stands 37° up in the south-southeast at Tick 0, so it shines through
+    /// room B's window onto its floor, and turns west from there.
     pub(crate) fn sun(self) -> (Transform, DirectionalLight) {
         let direction = match self {
             Self::Helmet
@@ -711,8 +719,9 @@ impl ReferenceScene {
     }
 
     /// The scene's own spawn: loads through `loader` the Assets it needs
-    /// before any Chunk and adds to `world` what neither a Chunk nor
-    /// `Simulation::spawned` places, its crowd as `crowd_form` traces it.
+    /// before any Chunk and adds to `world`, which holds the scene's sun
+    /// already, what neither a Chunk nor `Simulation::spawned` places, its
+    /// crowd as `crowd_form` traces it.
     pub(crate) fn spawn(
         self,
         world: &mut World,

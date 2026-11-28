@@ -46,7 +46,7 @@ pub use capture::{
 pub use render::{
     BufferView, CrowdForm, RenderSwitches, blas_bytes, compacted_blas_fraction, tlas_bytes,
 };
-pub use scenes::{DEFAULT_MODEL, ReferenceScene};
+pub use scenes::{DEFAULT_MODEL, ReferenceScene, house};
 pub use stats::{FrameStats, GpuFrameStats, GpuMemoryKind};
 
 const LOGICAL_PIXELS_PER_SCROLLED_LINE: f32 = 20.0;
