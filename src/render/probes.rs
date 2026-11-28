@@ -1,7 +1,9 @@
 use crate::stats::{Counted, GpuMemory, GpuMemoryKind};
 
 /// Probes along X, Y and Z of a Cascade.
-const PROBE_COUNTS: [u32; 3] = [32, 16, 32];
+pub(crate) const PROBE_COUNTS: [u32; 3] = [32, 16, 32];
+
+pub(crate) const PROBE_SPACING_METRES: f32 = 1.0;
 
 /// Texels along a side of a Probe's octahedral map of irradiance, and of its
 /// depth moments [ref:majercik-2019-ddgi-probe-encoding].

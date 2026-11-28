@@ -1,5 +1,5 @@
 // Shared by the modules that read the frame, the geometry or the lights
-// (src/render/shaders/mod.rs): the structs more than one pass reads, the
+// (src/render/shaders/mod.rs): π, the structs more than one pass reads, the
 // Anchor composition, the position a depth target's depth places at a pixel,
 // the ray and box test, the point light's position, the packed index, the
 // vertex decode, the octahedral codec and the Layer decode.
@@ -26,6 +26,8 @@ struct CameraUniform {
     pixel_size_per_metre: f32,
     dynamic_tlas_bounds_max: vec3<f32>,
 }
+
+const PI: f32 = 3.14159265;
 
 // ANCHOR_CELL_SIZE, the anchor grid's edge in metres, is declared from
 // Rust's when a module is assembled (src/render/shaders/mod.rs).

@@ -19,6 +19,7 @@ use crate::render::bend_pass::BendData;
 use crate::render::bind_groups::{
     BindGroupDefinition, Binding, Writer, read_only_storage, uniform,
 };
+use crate::render::probe_update_pass::ProbeUpdateUniform;
 use crate::render::shaders::{LOOPS_UNBOUNDED, Part, ShaderModule, modules};
 use crate::render::{CameraUniform, InstanceData, LightData, LightUniform};
 
@@ -39,12 +40,11 @@ fn every_binding_is_visible_to_exactly_the_stages_that_use_it() {
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
-/// At submit, wgpu-core 30.0.1 walks a TLAS's dependencies, one BLAS per
-/// Instance, for each flush of a group holding it, so only the pass that
-/// traces rays and the markers that time the dynamic TLAS's build declare
-/// one.
+/// At submit, wgpu-core walks a TLAS's dependencies, one per distinct BLAS,
+/// for each flush of a group holding it, so only the passes that trace rays
+/// and the markers that time the dynamic TLAS's build declare one.
 #[test]
-fn only_the_shadow_mask_pass_and_the_dynamic_tlas_markers_declare_a_tlas() {
+fn only_the_passes_that_trace_and_the_dynamic_tlas_markers_declare_a_tlas() {
     let declaring: Vec<&str> = modules()
         .iter()
         .filter(|module| {
@@ -61,7 +61,10 @@ fn only_the_shadow_mask_pass_and_the_dynamic_tlas_markers_declare_a_tlas() {
         })
         .map(|module| module.name)
         .collect();
-    assert_eq!(declaring, ["shadow_mask", "dynamic_tlas_marker"]);
+    assert_eq!(
+        declaring,
+        ["shadow_mask", "probe_trace", "dynamic_tlas_marker"]
+    );
 }
 
 /// A group's layout serves every module that declares it, so a binding is
@@ -406,6 +409,12 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             vertex_count,
             azimuth,
             curvature,
+        }),
+        twin!(ProbeUpdateUniform {
+            cascade_anchor,
+            first_level,
+            cascade_offset,
+            _pad_cascade_offset,
         }),
     ];
     let problems = layout_problems(&modules, &twins);

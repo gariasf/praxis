@@ -766,7 +766,7 @@ pub fn run(
         },
     )?;
     let adapter = context.adapter.get_info();
-    let measurements = measure(
+    let mut measurements = measure(
         scene,
         adapter.name.clone(),
         adapter.backend,
@@ -774,6 +774,7 @@ pub fn run(
         &frames,
         &frames_without_rays,
     )?;
+    (measurements.gpu_pass_microseconds).retain(|pass, _| switches.can_time(pass));
     let aliasing = configuration
         .aliasing
         .then(|| measure_aliasing(context, scene, switches))

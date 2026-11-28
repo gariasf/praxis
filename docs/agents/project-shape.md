@@ -127,6 +127,9 @@ src/
                                  pyramid; tonemapping_pass: the pass
                                  that turns the HDR target into the
                                  target's display colour;
+                                 probe_update_pass: with the probes
+                                 Render switch, the compute pass that
+                                 traces the Probe update's rays;
                                  light_count_pass: with the
                                  count_point_lights Render switch, the
                                  compute pass that counts each lit

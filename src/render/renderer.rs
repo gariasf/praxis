@@ -19,7 +19,7 @@ use crate::render::light_count_pass::{LightCountPass, LightCountTargetGroups};
 use crate::render::main_pass::{
     DEPTH_PREPASS, LIT_PASS, MainPass, MainTargetGroups, PHASE_TWO_DEPTH_PASS,
 };
-use crate::render::probes::Cascade;
+use crate::render::probe_update_pass::{PROBE_UPDATE_PASS, ProbeUpdatePass};
 use crate::render::ray_scene::{RayScene, create_frame_encoder};
 use crate::render::readback::GpuStatsReadback;
 use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass, ShadowMaskTargetGroups};
@@ -41,9 +41,10 @@ use crate::stats::{
 /// The bend pass runs in frames that bend Meshes, and the BLAS refit, timed
 /// from the end of the bend pass to the start of the marker after it, in
 /// those frames with the crowd's refit form; phase two's depth pass and the
-/// shadow mask pass only with shadow rays on. The rebuild form, an oracle,
-/// times neither its rebuild nor its build.
-pub(crate) const TIMED_PASSES: [&str; 14] = [
+/// shadow mask pass only with shadow rays on, and the Probe update only with
+/// the Probes on. The rebuild form, an oracle, times neither its rebuild nor
+/// its build.
+pub(crate) const TIMED_PASSES: [&str; 15] = [
     DYNAMIC_TLAS_BUILD,
     BEND_PASS,
     BLAS_REFIT_PASS,
@@ -58,6 +59,7 @@ pub(crate) const TIMED_PASSES: [&str; 14] = [
     SHADOW_MASK_PASS,
     LIT_PASS,
     TONEMAPPING_PASS,
+    PROBE_UPDATE_PASS,
 ];
 
 /// The CPU stage that waits for newly loaded Meshes' BLASes to build and
@@ -105,8 +107,8 @@ pub struct RenderSwitches {
     /// none so coarse, rather than the one the culling pass selects for it:
     /// `Some(0)` draws LOD 0 alone. `None`, as it ships, selects.
     pub forced_lod: Option<u32>,
-    /// Whether the Renderer creates a Cascade of Probes (ADR 0020). Off, as
-    /// it ships, it creates none.
+    /// Whether the Renderer creates a Cascade of Probes and updates it each
+    /// frame (ADR 0020). Off, as it ships, it creates none.
     pub probes: bool,
 }
 
@@ -176,6 +178,12 @@ impl RenderSwitches {
             ("FROXEL_LIGHTS", f64::from(u8::from(self.froxel_lights))),
             ("SHADOW_RAYS", f64::from(u8::from(self.shadow_rays))),
         ]
+    }
+
+    /// Whether a Renderer with these switches can run `pass`, of
+    /// `TIMED_PASSES`.
+    pub(crate) fn can_time(&self, pass: &str) -> bool {
+        pass != PROBE_UPDATE_PASS || self.probes
     }
 }
 
@@ -371,7 +379,7 @@ pub struct Renderer {
     /// With the `count_point_lights` Render switch on.
     light_count_pass: Option<LightCountPass>,
     /// With the `probes` Render switch on.
-    probe_cascade: Option<Cascade>,
+    probe_update: Option<ProbeUpdatePass>,
     shared_buffers: SharedBuffers,
     /// The camera, the lights and the Froxel lists (`FRAME`).
     frame_bind_group: wgpu::BindGroup,
@@ -493,7 +501,7 @@ impl Renderer {
         // samplers) serves every material. Created before the main pass
         // because its pipeline layout references its bind group layout.
         let pool_capacities = PoolCapacities::checked_in();
-        let capacities = RenderCapacities::checked_in();
+        let mut capacities = RenderCapacities::checked_in();
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(
             &device,
@@ -546,19 +554,6 @@ impl Renderer {
 
         let mesh_pool = MeshPool::new(&device, &memory, &pool_capacities);
         let bend_pass = BendPass::new(&device, &memory, mesh_pool.vertex_arena());
-        // The most a frame uploads: every buffer `upload` writes, in full.
-        let uploaded_buffers: [&wgpu::Buffer; 6] = [
-            &shared_buffers.camera,
-            &shared_buffers.light,
-            &shared_buffers.lights,
-            &shared_buffers.instances,
-            culling_pass.instance_slot_count(),
-            bend_pass.bends(),
-        ];
-        let frame_staging = FrameStaging::new(
-            &memory,
-            uploaded_buffers.iter().map(|buffer| buffer.size()).sum(),
-        );
 
         let ray_scene = RayScene::new(
             &device,
@@ -568,6 +563,24 @@ impl Renderer {
             switches,
             &capacities,
         );
+        let probe_update = (switches.probes)
+            .then(|| ProbeUpdatePass::new(&device, &memory, ray_scene.layout(), &shared_buffers));
+        // The most a frame uploads: every buffer `upload` writes, in full.
+        let uploaded_buffers = [
+            &*shared_buffers.camera,
+            &shared_buffers.light,
+            &shared_buffers.lights,
+            &shared_buffers.instances,
+            culling_pass.instance_slot_count(),
+            bend_pass.bends(),
+        ]
+        .into_iter()
+        .chain(probe_update.as_ref().map(ProbeUpdatePass::uniform_buffer));
+        let frame_staging =
+            FrameStaging::new(&memory, uploaded_buffers.map(wgpu::Buffer::size).sum());
+        if let Some(probe_update) = &probe_update {
+            capacities.load_bytes_per_frame -= probe_update.uniform_buffer().size();
+        }
         let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
             &scene_geometry_bind_group_layout,
@@ -612,7 +625,6 @@ impl Renderer {
             &tonemapping_pass,
             light_count_pass.as_ref(),
         );
-        let probe_cascade = (switches.probes).then(|| Cascade::new(&device, &memory));
 
         Self {
             mesh_pool,
@@ -630,7 +642,7 @@ impl Renderer {
             depth_pyramid_pass,
             tonemapping_pass,
             light_count_pass,
-            probe_cascade,
+            probe_update,
             shared_buffers,
             frame_bind_group,
             scene_geometry_bind_group,
@@ -676,7 +688,7 @@ impl Renderer {
     /// The irradiance its Cascade's Probes hold, with the `probes` Render
     /// switch on.
     pub(crate) fn probe_irradiance(&self) -> Option<&wgpu::Texture> {
-        self.probe_cascade.as_ref().map(Cascade::irradiance)
+        Some(self.probe_update.as_ref()?.cascade().irradiance())
     }
 
     /// What its Instance buffer, light buffer and static TLAS hold, which
@@ -771,6 +783,10 @@ impl Renderer {
                 bytemuck::cast_slice(&frame.bends),
             )
         });
+        let probe_upload = self.probe_update.as_mut().map(|probe_update| {
+            let (buffer, bytes) = probe_update.frame_upload(&frame.camera);
+            (buffer, 0, bytes)
+        });
         let uploads = [
             (&*self.shared_buffers.camera, 0, bytemuck::bytes_of(&camera)),
             (
@@ -783,7 +799,8 @@ impl Renderer {
         .chain(light_upload)
         .chain(bend_upload)
         .chain(instance_uploads)
-        .chain(slot_count_upload);
+        .chain(slot_count_upload)
+        .chain(probe_upload);
         let uploaded_bytes = self
             .frame_staging
             .write(&self.device, &mut encoder, uploads);
@@ -911,6 +928,14 @@ impl Renderer {
             target,
             &mut timestamps,
         );
+        if let Some(probe_update) = &mut self.probe_update {
+            probe_update.record(
+                &mut encoder,
+                self.ray_scene.bind_group(),
+                &mut timestamps,
+                recorder,
+            );
+        }
         // Untimed, after the passes the frame's GPU time spans.
         if let Some(light_count_pass) = &self.light_count_pass
             && let Some(target_groups) = &self.bound_targets.light_count
