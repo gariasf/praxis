@@ -277,7 +277,8 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     // back its passes' GPU time, none skipped: Metal reads a timestamp
     // resolved before its pass's submission completed as 0. The frame spans
     // its passes; nothing moves and nothing bends, so no frame builds the
-    // dynamic TLAS, runs the bend pass or refits BLASes, which take no time.
+    // dynamic TLAS, runs the bend pass or refits BLASes, and the Probes are
+    // off, so none updates them: these take no time.
     // Phase two's pass over its Meshlet records appends nothing and its depth
     // pass draws nothing in a frame whose phase one drew every visible
     // Instance, and NVIDIA times an empty pass at 0.
@@ -303,12 +304,19 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
                 "phase_two_depth_pass",
                 "shadow_mask_pass",
                 "lit_pass",
-                "tonemapping_pass"
+                "tonemapping_pass",
+                "probe_update"
             ],
             "frame {frame}"
         );
         for (pass, time) in gpu.pass_times {
-            let runs = !["dynamic_tlas_build", "bend_pass", "blas_refit"].contains(&pass);
+            let idle = [
+                "dynamic_tlas_build",
+                "bend_pass",
+                "blas_refit",
+                "probe_update",
+            ];
+            let runs = !idle.contains(&pass);
             let may_be_empty = ["culling_phase_two_triangles", "phase_two_depth_pass"]
                 .contains(&pass)
                 && gpu.phase_two_triangles_drawn == 0;
@@ -336,10 +344,14 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
     assert!(printed.lines().count() <= 5, "over 5 lines:\n{printed}");
 }
 
-/// One Cascade of 32 × 16 × 32 Probes: a Probe's irradiance, 8 × 8 texels of
-/// RGBA16F, its depth moments, 16 × 16 of RG16F, and its u32 of state.
+/// One Cascade of 32 × 16 × 32 Probes, under its own kind: a Probe's
+/// irradiance, 8 × 8 texels of RGBA16F, its depth moments, 16 × 16 of RG16F,
+/// and its u32 of state; and its update's 32-byte uniform, its 128 rays'
+/// directions and what the frame's 262,144 rays found, 16 bytes each. Every
+/// frame updates 2,048 Probes with those rays, timed; with the switch off,
+/// none.
 #[test]
-fn the_probes_switch_counts_one_cascade_under_its_own_kind() {
+fn the_probes_switch_counts_a_cascade_and_each_frame_updates_the_same_probes() {
     let context = match pollster::block_on(GpuContext::headless()) {
         Ok(context) => context,
         Err(error) if error.is::<wgpu::RequestAdapterError>() => {
@@ -348,24 +360,51 @@ fn the_probes_switch_counts_one_cascade_under_its_own_kind() {
         }
         Err(error) => panic!("headless GPU context failed: {error:#}"),
     };
-    let last_frame = |probes| {
+    let frames = |probes| {
         let switches = praxis::RenderSwitches {
             probes,
             ..praxis::RenderSwitches::default()
         };
         let scene = ReferenceScene::PbrSweep;
-        let (_, mut frames) =
-            praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90, switches)
-                .expect("capture failed");
-        frames.pop().expect("no frame stats")
+        let (_, frames) = praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90, switches)
+            .expect("capture failed");
+        frames
     };
-    let (off, on) = (last_frame(false), last_frame(true));
-    let cascade_bytes = 32 * 16 * 32 * (8 * 8 * 8 + 16 * 16 * 4 + 4);
-    assert_eq!(
-        on.gpu_memory_bytes_by_kind[GpuMemoryKind::Probes as usize],
-        cascade_bytes
-    );
-    assert_eq!(on.gpu_memory_bytes, off.gpu_memory_bytes + cascade_bytes);
+    let (off, on) = (frames(false), frames(true));
+    let (last_off, last_on) = (off.last().unwrap(), on.last().unwrap());
+    let probes_bytes = 32 * 16 * 32 * (8 * 8 * 8 + 16 * 16 * 4 + 4) + 32 + 128 * 16 + 262_144 * 16;
+    let bytes_of = |stats: &praxis::FrameStats, kind: GpuMemoryKind| {
+        stats.gpu_memory_bytes_by_kind[kind as usize]
+    };
+    assert_eq!(bytes_of(last_on, GpuMemoryKind::Probes), probes_bytes);
+    for kind in GpuMemoryKind::ALL {
+        if ![GpuMemoryKind::Probes, GpuMemoryKind::Staging].contains(&kind) {
+            assert_eq!(
+                bytes_of(last_on, kind),
+                bytes_of(last_off, kind),
+                "{kind:?}"
+            );
+        }
+    }
+    let update_time = |stats: &praxis::FrameStats| {
+        let gpu = stats.gpu.expect("every frame read back its GPU stats");
+        let pass_time = gpu
+            .pass_times
+            .into_iter()
+            .find(|&(pass, _)| pass == "probe_update");
+        pass_time.expect("the Probe update is a Timed pass").1
+    };
+    for stats in &on {
+        assert_eq!(
+            (stats.probes_updated, stats.probe_rays_traced),
+            (2_048, 262_144)
+        );
+        assert!(update_time(stats) > Duration::ZERO);
+    }
+    for stats in &off {
+        assert_eq!((stats.probes_updated, stats.probe_rays_traced), (0, 0));
+        assert_eq!(update_time(stats), Duration::ZERO);
+    }
 }
 
 /// On every Reference scene, each frame reads back from the GPU the

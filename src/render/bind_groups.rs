@@ -4,8 +4,8 @@
 //! and declares its bindings in every shader module assembled with it, so no
 //! shader part declares one. Groups are packed by how often they change,
 //! within the Capability floor's four (ADR 0021): 0 the frame's, 1 the
-//! Materials', 2 the scene geometry's, or the TLAS in the one pass that
-//! traces rays, 3 a pass's own.
+//! Materials', 2 the scene geometry's, or the TLAS in the passes that trace
+//! rays, 3 a pass's own.
 
 use std::num::NonZeroU32;
 
@@ -103,12 +103,12 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
 
 /// Group 2 of a pass that traces, the Ray scene, built once per static TLAS
 /// since each TLAS is rebuilt in place: a static TLAS and the dynamic TLAS,
-/// which its rays are traced against (ADR 0020). The shadow mask pass alone
-/// sets it, and the dynamic TLAS's markers bind the dynamic one: at submit,
-/// wgpu-core walks a TLAS's dependencies, one per distinct BLAS it holds
-/// [ref:wgpu-pr-9835], for each flush of a group holding it, at least once
-/// per pass that binds one [ref:wgpu-30-use-tlas-per-flush]
-/// [ref:wgpu-30-submit-tlas-dependencies].
+/// which its rays are traced against (ADR 0020). The shadow mask pass and the
+/// Probe update's trace set it, and the dynamic TLAS's markers bind the
+/// dynamic one: at submit, wgpu-core walks a TLAS's dependencies, one per
+/// distinct BLAS it holds [ref:wgpu-pr-9835], for each flush of a group
+/// holding it, at least once per pass that binds one
+/// [ref:wgpu-30-use-tlas-per-flush] [ref:wgpu-30-submit-tlas-dependencies].
 pub const RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
     index: 2,
     label: "Ray Scene Bind Group",
@@ -277,6 +277,29 @@ pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
         storage("directional_verdicts", "array<u32>"),
         storage("shadow_edges", "PixelList"),
         storage("shadow_edge_dispatch", "array<atomic<u32>, 3>"),
+    ],
+};
+
+/// Group 3 of the Probe update's trace: the camera and the light uniform,
+/// which `FRAME` holds, the Cascade's place and the frame's first level, its
+/// rays' directions, and what each ray found.
+pub const PROBE_TRACE_INPUTS: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Probe Trace Bind Group",
+    bindings: &[
+        uniform("camera", "CameraUniform", wgpu::ShaderStages::COMPUTE),
+        uniform("light", "LightUniform", wgpu::ShaderStages::COMPUTE),
+        uniform(
+            "probe_update",
+            "ProbeUpdateUniform",
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        uniform(
+            "probe_ray_directions",
+            "array<vec4<f32>, PROBE_RAYS>",
+            wgpu::ShaderStages::COMPUTE,
+        ),
+        storage("probe_rays", "array<vec4<f32>>"),
     ],
 };
 

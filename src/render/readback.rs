@@ -797,8 +797,9 @@ pub(crate) mod tests {
             built: false,
         };
 
-        /// The log of its passes, marked as `render` marks them, phase two's
-        /// depth pass and the shadow mask pass among them if `shadow_rays`.
+        /// The log of its passes, marked as `render` marks them with the
+        /// Probes on, phase two's depth pass and the shadow mask pass among
+        /// them if `shadow_rays`.
         pub(crate) fn log(self, shadow_rays: bool) -> PassLog {
             let mut log = PassLog::default();
             if !matches!(self.bending, Bending::Unbent) {
@@ -878,16 +879,16 @@ pub(crate) mod tests {
         assert_eq!(times.gate_time, microseconds(gate_microseconds), "{kind}");
         let lit_pass_wait = microseconds(lit_pass_wait_microseconds);
         assert_eq!(times.lit_pass_wait, lit_pass_wait, "{kind}");
-        assert_eq!(times.last_pass_end, 1334, "{kind}");
+        assert_eq!(times.last_pass_end, 1344, "{kind}");
     }
 
     #[test]
     fn a_frame_that_neither_builds_nor_bends_spans_its_last_submission() {
         let frame = RecordedFrame::STILL;
-        let with_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(frame, true, with_shadow_rays, 104, 94, 6);
-        let without_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(frame, false, without_shadow_rays, 104, 94, 26);
+        let with_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(frame, true, with_shadow_rays, 114, 94, 6);
+        let without_shadow_rays = [0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4, 4];
+        assert_spread_frame(frame, false, without_shadow_rays, 114, 94, 26);
     }
 
     #[test]
@@ -896,10 +897,10 @@ pub(crate) mod tests {
             built: true,
             ..RecordedFrame::STILL
         };
-        let with_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(frame, true, with_shadow_rays, 107, 94, 6);
-        let without_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(frame, false, without_shadow_rays, 107, 94, 26);
+        let with_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(frame, true, with_shadow_rays, 117, 94, 6);
+        let without_shadow_rays = [3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4, 4];
+        assert_spread_frame(frame, false, without_shadow_rays, 117, 94, 26);
     }
 
     /// A bent frame whose refit is absent and whose build is not bracketed,
@@ -915,10 +916,10 @@ pub(crate) mod tests {
             (untimed_refit, true),
         ] {
             let frame = RecordedFrame { bending, built };
-            let with_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-            assert_spread_frame(frame, true, with_shadow_rays, 224, 94, 6);
-            let without_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-            assert_spread_frame(frame, false, without_shadow_rays, 224, 94, 26);
+            let with_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+            assert_spread_frame(frame, true, with_shadow_rays, 234, 94, 6);
+            let without_shadow_rays = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4, 4];
+            assert_spread_frame(frame, false, without_shadow_rays, 234, 94, 26);
         }
     }
 
@@ -928,10 +929,10 @@ pub(crate) mod tests {
             bending: Bending::InFrame,
             built: true,
         };
-        let with_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(frame, true, with_shadow_rays, 227, 94, 6);
-        let without_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(frame, false, without_shadow_rays, 227, 94, 26);
+        let with_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(frame, true, with_shadow_rays, 237, 94, 6);
+        let without_shadow_rays = [3, 4, 0, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4, 4];
+        assert_spread_frame(frame, false, without_shadow_rays, 237, 94, 26);
     }
 
     /// No Moving Instance, so no build, beside a timed refit of a bent Mesh.
@@ -941,10 +942,10 @@ pub(crate) mod tests {
             bending: Bending::Submitted { refit_timed: true },
             built: false,
         };
-        let with_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(frame, true, with_shadow_rays, 115, 94, 6);
-        let without_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(frame, false, without_shadow_rays, 115, 94, 26);
+        let with_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(frame, true, with_shadow_rays, 125, 94, 6);
+        let without_shadow_rays = [0, 4, 7, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4, 4];
+        assert_spread_frame(frame, false, without_shadow_rays, 125, 94, 26);
     }
 
     #[test]
@@ -953,10 +954,10 @@ pub(crate) mod tests {
             bending: Bending::Submitted { refit_timed: true },
             built: true,
         };
-        let with_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
-        assert_spread_frame(frame, true, with_shadow_rays, 118, 94, 6);
-        let without_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4];
-        assert_spread_frame(frame, false, without_shadow_rays, 118, 94, 26);
+        let with_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
+        assert_spread_frame(frame, true, with_shadow_rays, 128, 94, 6);
+        let without_shadow_rays = [3, 4, 7, 4, 4, 4, 4, 4, 4, 4, 0, 0, 4, 4, 4];
+        assert_spread_frame(frame, false, without_shadow_rays, 128, 94, 26);
     }
 
     #[test]
@@ -1210,6 +1211,10 @@ pub(crate) mod tests {
         };
         let frame = |bending, built| RecordedFrame { bending, built };
         let submitted = |refit_timed| Bending::Submitted { refit_timed };
+        let with_probes = RenderSwitches {
+            probes: true,
+            ..defaults
+        };
         let mut frames = vec![
             (ReferenceScene::PbrSweep, defaults, RecordedFrame::STILL),
             (
@@ -1217,6 +1222,7 @@ pub(crate) mod tests {
                 without_shadow_rays,
                 RecordedFrame::STILL,
             ),
+            (ReferenceScene::PbrSweep, with_probes, RecordedFrame::STILL),
             (
                 ReferenceScene::Orrery,
                 defaults,
@@ -1254,11 +1260,13 @@ pub(crate) mod tests {
                 ..,
             )
             .expect("the scene renders");
+            let mut expected_passes = marked(expected.log(switches.shadow_rays));
+            expected_passes.retain(|&(pass, _, _)| switches.can_time(pass));
             for (frame, stats) in frame_stats.iter().enumerate() {
                 let gpu = stats.gpu.expect("every frame read back its GPU stats");
                 assert_eq!(
                     marked(gpu.pass_log),
-                    marked(expected.log(switches.shadow_rays)),
+                    expected_passes,
                     "{scene:?} with {switches:?}, frame {frame}"
                 );
             }

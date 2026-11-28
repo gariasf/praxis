@@ -22,7 +22,8 @@ pub enum GpuMemoryKind {
     /// The Instance and light buffers, the Mesh and Material tables, and the
     /// passes' own buffers and textures that no target size sets.
     SceneAndPassBuffers,
-    /// A Cascade's Probes: their irradiance, depth moments and state.
+    /// A Cascade's Probes: their irradiance, depth moments and state, and
+    /// their update's uniform, ray directions and what its rays found.
     Probes,
 }
 

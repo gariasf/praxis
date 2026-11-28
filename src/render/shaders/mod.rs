@@ -18,8 +18,8 @@ use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
 use crate::render::bind_groups::BLAS_REFIT_MARKERS;
 use crate::render::bind_groups::{
     BENDS, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
-    FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, RAY_SCENE, SCENE_GEOMETRY,
-    SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
+    FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, PROBE_TRACE_INPUTS, RAY_SCENE,
+    SCENE_GEOMETRY, SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::{MAX_WORKGROUPS_PER_DIMENSION, SCAN_BLOCK_SIZE, SLOT_LOD_SHIFT};
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
@@ -29,6 +29,8 @@ use crate::render::froxel_pass::{
 };
 use crate::render::instance::{ANCHOR_CELL_SIZE, NO_MATERIAL, NO_MESH};
 use crate::render::light_count_pass::LIGHT_COUNT_TILE_SIZE;
+use crate::render::probe_update_pass::{PROBE_RAYS, PROBE_TRACE_WORKGROUP_SIZE};
+use crate::render::probes::{PROBE_COUNTS, PROBE_SPACING_METRES};
 #[cfg(test)]
 use crate::render::renderer::RenderCapacities;
 use crate::render::renderer::RenderSwitches;
@@ -67,7 +69,7 @@ macro_rules! part {
     };
 }
 
-/// The structs more than one pass reads, the Anchor composition, the
+/// π, the structs more than one pass reads, the Anchor composition, the
 /// position a depth places at a pixel, the ray and box test, the point
 /// light's position, the packed index, the vertex decode, the octahedral
 /// codec and the Layer decode.
@@ -81,6 +83,9 @@ const FROXEL_GRID: Part = part!("froxel_grid.wgsl");
 
 /// Exposed colour as the HDR target stores it.
 const HDR: Part = part!("hdr.wgsl");
+
+/// Tracing the Ray scene, which every pass that traces shares.
+const RAY_SCENE_TRACING: Part = part!("ray_scene.wgsl");
 
 /// GT7's tone mapping, under Polyphony's MIT notice.
 const GT7: Part = part!("gt7.wgsl");
@@ -118,7 +123,22 @@ pub const SHADOW_MASK: ShaderModule = ShaderModule {
     // It traces rays against both TLAS.
     enables: &["wgpu_ray_query"],
     bind_groups: &[&RAY_SCENE, &SHADOW_MASK_BUILD],
-    parts: &[COMMON, FROXEL_GRID, part!("shadow_mask.wgsl")],
+    parts: &[
+        COMMON,
+        FROXEL_GRID,
+        RAY_SCENE_TRACING,
+        part!("shadow_mask.wgsl"),
+    ],
+    instance_capacity: None,
+};
+
+/// The Probe update's trace.
+pub const PROBE_TRACE: ShaderModule = ShaderModule {
+    name: "probe_trace",
+    // It traces rays against both TLAS.
+    enables: &["wgpu_ray_query"],
+    bind_groups: &[&RAY_SCENE, &PROBE_TRACE_INPUTS],
+    parts: &[COMMON, RAY_SCENE_TRACING, part!("probe_trace.wgsl")],
     instance_capacity: None,
 };
 
@@ -212,11 +232,12 @@ pub const LOOPS_UNBOUNDED: [ShaderModule; 2] = [MAIN, CULLING];
 /// Every module, the culling pass's with the checked-in Instance capacity,
 /// which `shader_tests` validates.
 #[cfg(test)]
-pub fn modules() -> [ShaderModule; 11] {
+pub fn modules() -> [ShaderModule; 12] {
     [
         SHARED,
         MAIN,
         SHADOW_MASK,
+        PROBE_TRACE,
         CULLING.with_instance_capacity(RenderCapacities::checked_in().instances),
         FROXEL,
         LIGHT_COUNT,
@@ -334,12 +355,19 @@ impl ShaderModule {
              const ALL_SAMPLES: u32 = {ALL_SAMPLES}u;\n\
              const SLICES_PER_CLASS: u32 = {SLICES_PER_CLASS}u;\n\
              const NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE: f32 = {NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE:?};\n\
-             const SHADOW_WIDTH_CLASSES: u32 = {SHADOW_WIDTH_CLASSES}u;\n",
+             const SHADOW_WIDTH_CLASSES: u32 = {SHADOW_WIDTH_CLASSES}u;\n\
+             const PROBE_COUNTS: vec3<u32> = vec3<u32>({}u, {}u, {}u);\n\
+             const PROBE_SPACING_METRES: f32 = {PROBE_SPACING_METRES:?};\n\
+             const PROBE_RAYS: u32 = {PROBE_RAYS}u;\n\
+             const PROBE_TRACE_WORKGROUP_SIZE: u32 = {PROBE_TRACE_WORKGROUP_SIZE}u;\n",
             ANCHOR_CELL_SIZE as f32,
             MESHLET_MAX_VERTICES.ilog2(),
             LUMINANCE_COEFFICIENTS[0],
             LUMINANCE_COEFFICIENTS[1],
             LUMINANCE_COEFFICIENTS[2],
+            PROBE_COUNTS[0],
+            PROBE_COUNTS[1],
+            PROBE_COUNTS[2],
         ));
         let sample_offsets: Vec<String> = SAMPLE_OFFSETS
             .iter()

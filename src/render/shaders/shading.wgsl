@@ -8,8 +8,6 @@
 // https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc
 // https://github.com/KhronosGroup/glTF/blob/854a757a61e6bc0dde91631579b9d3d2e1743df9/extensions/2.0/Khronos/KHR_lights_punctual/README.md
 
-const PI: f32 = 3.14159265;
-
 // Appendix B's reflectance of a dielectric at normal incidence,
 // ((1 − ior) / (1 + ior))² at its index of refraction of 1.5
 // [ref:gltf-2.0-metal-and-dielectric-brdf].

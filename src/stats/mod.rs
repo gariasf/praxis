@@ -62,6 +62,9 @@ pub struct FrameStats {
     /// Bends the bend pass had no room for, so their Meshes kept the shape
     /// they last took.
     pub bends_left_out: u32,
+    /// Probes the frame's Probe update traced rays from, and the rays.
+    pub probes_updated: u32,
+    pub probe_rays_traced: u32,
     /// Bytes of the GPU buffers and textures the State created, its Pools
     /// included, summed by the engine on every backend (ADR 0013), and of
     /// its acceleration structures. The render target and
