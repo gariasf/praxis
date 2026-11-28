@@ -7,7 +7,8 @@ src/
   lib.rs, state.rs             # library root (window shell) + orchestrator
   bin/praxis.rs                # thin binary: command dispatch
   gpu/                         # GPU context, windowed or headless
-  capture/                     # offscreen render read back as an image,
+  capture/                     # offscreen render, or one of its Buffer
+                                 views, read back as an image,
                                  or as the light the Probes hold, where
                                  its Goldens live, and how two images,
                                  or two shadow masks, differ
@@ -133,7 +134,11 @@ src/
                                  light_count_pass: with the
                                  count_point_lights Render switch, the
                                  compute pass that counts each lit
-                                 pixel's point lights), targets
+                                 pixel's point lights; buffer_view_pass:
+                                 with the buffer_view Render switch, the
+                                 pass that draws one of the frame's
+                                 buffers over the target as an image),
+                                 targets
                                  (every size-dependent target, the depth
                                  pyramid, the HDR target and the shadow
                                  mask among them,

@@ -580,6 +580,8 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
       <span class="reads">Pages: <a class="reference" href="hdr-target.html">The HDR target</a>, for what the lit pass resolves into and this pass reads; <a class="reference" href="tonemapping-pass.html">The tonemapping pass</a></span></li>
     <li>With the <code>count_point_lights</code> Render switch on, which ships off: the light count pass, which counts each lit pixel's point lights for the GPU stats.
       <span class="reads">Page: <a class="reference" href="froxel-pass.html#light-count">The Froxel pass, its light count section</a></span></li>
+    <li>With the <code>buffer_view</code> Render switch naming a buffer, which ships naming none: the buffer view pass, which draws that buffer over the target as an image, for a capture to read.
+      <span class="reads">Page: <a class="reference" href="buffer-view-pass.html">The buffer view pass</a></span></li>
   </ol>
 </section>
 

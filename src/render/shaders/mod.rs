@@ -17,9 +17,9 @@ use crate::render::bend_pass::BEND_WORKGROUP_SIZE;
 #[cfg(any(test, target_vendor = "apple"))]
 use crate::render::bind_groups::BLAS_REFIT_MARKERS;
 use crate::render::bind_groups::{
-    BENDS, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS, FRAME, FRAME_DRAW,
-    FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS, PROBE_TRACE_INPUTS, RAY_SCENE,
-    SCENE_GEOMETRY, SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
+    BENDS, BUFFER_VIEW_INPUT, BindGroupDefinition, DEPTH_PYRAMID_LEVEL, DYNAMIC_TLAS_MARKERS,
+    FRAME, FRAME_DRAW, FROXEL_LISTS, LIGHT_COUNT_INPUT, MAIN_PASS_INPUTS, MATERIALS,
+    PROBE_TRACE_INPUTS, RAY_SCENE, SCENE_GEOMETRY, SHADOW_MASK_BUILD, TONEMAPPING_INPUT,
 };
 use crate::render::culling_pass::{MAX_WORKGROUPS_PER_DIMENSION, SCAN_BLOCK_SIZE, SLOT_LOD_SHIFT};
 use crate::render::depth_pyramid_pass::DEPTH_PYRAMID_TILE_SIZE;
@@ -92,6 +92,9 @@ const GT7: Part = part!("gt7.wgsl");
 
 /// What turns exposed colour into display colour, around GT7.
 const DISPLAY: Part = part!("display.wgsl");
+
+/// The vertex stage of a pass that writes every pixel of a target.
+const FULL_SCREEN: Part = part!("full_screen.wgsl");
 
 /// A WGSL module: the extensions it enables, the bind groups whose bindings
 /// it declares, then its parts in order.
@@ -183,7 +186,25 @@ pub const TONEMAPPING: ShaderModule = ShaderModule {
     name: "tonemapping",
     enables: &[],
     bind_groups: &[&TONEMAPPING_INPUT],
-    parts: &[HDR, GT7, DISPLAY, part!("tonemapping.wgsl")],
+    parts: &[HDR, GT7, DISPLAY, FULL_SCREEN, part!("tonemapping.wgsl")],
+    instance_capacity: None,
+};
+
+/// The buffer view pass, with the `buffer_view` Render switch naming a
+/// buffer.
+pub const BUFFER_VIEW: ShaderModule = ShaderModule {
+    name: "buffer_view",
+    enables: &[],
+    bind_groups: &[&BUFFER_VIEW_INPUT],
+    parts: &[
+        COMMON,
+        FROXEL_GRID,
+        HDR,
+        GT7,
+        DISPLAY,
+        FULL_SCREEN,
+        part!("buffer_view.wgsl"),
+    ],
     instance_capacity: None,
 };
 
@@ -232,7 +253,7 @@ pub const LOOPS_UNBOUNDED: [ShaderModule; 2] = [MAIN, CULLING];
 /// Every module, the culling pass's with the checked-in Instance capacity,
 /// which `shader_tests` validates.
 #[cfg(test)]
-pub fn modules() -> [ShaderModule; 12] {
+pub fn modules() -> [ShaderModule; 13] {
     [
         SHARED,
         MAIN,
@@ -243,6 +264,7 @@ pub fn modules() -> [ShaderModule; 12] {
         LIGHT_COUNT,
         DEPTH_PYRAMID,
         TONEMAPPING,
+        BUFFER_VIEW,
         DYNAMIC_TLAS_MARKER,
         BLAS_REFIT_MARKER,
         BEND,

@@ -43,7 +43,9 @@ pub use capture::{
     capture_frames, capture_probe_light, compare_images, difference_image, golden_captures,
     golden_key, shadow_mask_differences,
 };
-pub use render::{CrowdForm, RenderSwitches, blas_bytes, compacted_blas_fraction, tlas_bytes};
+pub use render::{
+    BufferView, CrowdForm, RenderSwitches, blas_bytes, compacted_blas_fraction, tlas_bytes,
+};
 pub use scenes::{DEFAULT_MODEL, ReferenceScene};
 pub use stats::{FrameStats, GpuFrameStats, GpuMemoryKind};
 

@@ -8,6 +8,7 @@ use crate::render::acceleration_structures::DYNAMIC_TLAS_BUILD;
 use crate::render::bend_pass::{BEND_CAPACITY, BEND_PASS, BendData, BendPass};
 use crate::render::bind_groups::{FRAME, MATERIALS, SCENE_GEOMETRY};
 use crate::render::blas_refit::BLAS_REFIT_PASS;
+use crate::render::buffer_view_pass::{BufferView, BufferViewPass, BufferViewTargetGroups};
 use crate::render::culling_pass::{
     CullingPass, CullingPhase, CullingTargetGroups, DrawCapacity, SCAN_BLOCK_SIZE,
 };
@@ -110,6 +111,10 @@ pub struct RenderSwitches {
     /// Whether the Renderer creates a Cascade of Probes and updates it each
     /// frame (ADR 0020). Off, as it ships, it creates none.
     pub probes: bool,
+    /// The buffer a pass after the tonemapping pass draws over the target
+    /// as an image, from the depth the main pass then keeps. `None`, as it
+    /// ships, the target keeps the frame's display colour.
+    pub buffer_view: Option<BufferView>,
 }
 
 /// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR
@@ -165,6 +170,7 @@ impl Default for RenderSwitches {
             wait_for_static_tlas: false,
             forced_lod: None,
             probes: false,
+            buffer_view: None,
         }
     }
 }
@@ -389,6 +395,8 @@ pub struct Renderer {
     tonemapping_pass: TonemappingPass,
     /// With the `count_point_lights` Render switch on.
     light_count_pass: Option<LightCountPass>,
+    /// With the `buffer_view` Render switch naming a buffer.
+    buffer_view_pass: Option<BufferViewPass>,
     /// With the `probes` Render switch on.
     probe_update: Option<ProbeUpdatePass>,
     shared_buffers: SharedBuffers,
@@ -436,6 +444,8 @@ struct BoundTargets {
     tonemapping: TonemappingTargetGroups,
     /// With the `count_point_lights` Render switch on.
     light_count: Option<LightCountTargetGroups>,
+    /// With the `buffer_view` Render switch naming a buffer.
+    buffer_view: Option<BufferViewTargetGroups>,
 }
 
 impl BoundTargets {
@@ -453,6 +463,7 @@ impl BoundTargets {
         shadow_mask_pass: &ShadowMaskPass,
         tonemapping_pass: &TonemappingPass,
         light_count_pass: Option<&LightCountPass>,
+        buffer_view_pass: Option<&BufferViewPass>,
     ) -> BoundTargets {
         let render_targets = RenderTargets::new(device, memory, width, height);
         BoundTargets {
@@ -465,6 +476,7 @@ impl BoundTargets {
             shadow_mask: shadow_mask_pass.target_groups(device, &render_targets),
             tonemapping: tonemapping_pass.target_groups(device, &render_targets),
             light_count: light_count_pass.map(|pass| pass.target_groups(device, &render_targets)),
+            buffer_view: buffer_view_pass.map(|pass| pass.target_groups(device, &render_targets)),
             render_targets,
         }
     }
@@ -553,6 +565,9 @@ impl Renderer {
         let light_count_pass = switches
             .count_point_lights
             .then(|| LightCountPass::new(&device, &shared_buffers, &froxel_pass));
+        let buffer_view_pass = switches.buffer_view.map(|view| {
+            BufferViewPass::new(&device, target_format, &shared_buffers, &froxel_pass, view)
+        });
         let frame_bind_group = FRAME.bind_group(
             &device,
             &frame_bind_group_layout,
@@ -636,6 +651,7 @@ impl Renderer {
             &shadow_mask_pass,
             &tonemapping_pass,
             light_count_pass.as_ref(),
+            buffer_view_pass.as_ref(),
         );
 
         Self {
@@ -654,6 +670,7 @@ impl Renderer {
             depth_pyramid_pass,
             tonemapping_pass,
             light_count_pass,
+            buffer_view_pass,
             probe_update,
             shared_buffers,
             frame_bind_group,
@@ -684,6 +701,7 @@ impl Renderer {
             &self.shadow_mask_pass,
             &self.tonemapping_pass,
             self.light_count_pass.as_ref(),
+            self.buffer_view_pass.as_ref(),
         );
     }
 
@@ -953,6 +971,12 @@ impl Renderer {
             && let Some(target_groups) = &self.bound_targets.light_count
         {
             light_count_pass.record(&mut encoder, target_groups);
+        }
+        if let Some(buffer_view_pass) = &self.buffer_view_pass
+            && let Some(target_groups) = &self.bound_targets.buffer_view
+        {
+            buffer_view_pass.record(&mut encoder, target_groups, target);
+            recorder.counters.draw_calls += 1;
         }
         // The depth pre-pass draws phase one's draw, and phase two's depth
         // pass or the lit pass phase two's into depth, then the lit pass both

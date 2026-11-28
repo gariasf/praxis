@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Buffer View Pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/buffer_view_pass.rs</code></div>
+  <h1>The buffer view pass</h1>
+  <p class="definition">A pass that ships off: with the <code>buffer_view</code> Render switch naming one of the frame's buffers, one triangle over the target, after the tonemapping pass, writes that buffer there as an image, in one fixed mapping to colour, in place of the frame's display colour. A capture asks for it by name, so the depth target, the Surface normals, the depth pyramid, the Froxel lists, the Shadow mask and the HDR target of a frame can each be looked at.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 72d70450 (2026-11-28). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="msaa.html">MSAA</a> for the four samples a pixel of the depth target holds, <a href="depth-prepass.html">The depth pre-pass</a> for the depth and the Surface normals, <a href="shadow-mask.html">The shadow mask pass</a> for the mask's bits, <a href="hdr-target.html">The HDR target</a> for what the lit pass resolves.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>Only with the <code>buffer_view</code> Render switch naming a buffer, which <code>praxis capture --buffer</code> sets: after the tonemapping pass, as its own render pass into the frame's target. Off, as Praxis ships, the Renderer creates no pass, pipeline or bind group for it.</dd>
+      <dt>Reads</dt><dd>The camera; the Froxel lists; the 4x MSAA depth target and Surface normals; the depth pyramid, every level; the Shadow mask, its first layer; the HDR target. A view reads only its own buffers of these.</dd>
+      <dt>Writes</dt><dd>Every pixel of the target, over the display colour the tonemapping pass wrote there.</dd>
+      <dt>Draws</dt><dd>One triangle of three vertices from <code>vs_full_screen</code>, with no vertex buffer, shaded by the view's fragment entry point: <code>fs_depth_view</code>, <code>fs_surface_normals_view</code>, <code>fs_depth_pyramid_view</code>, <code>fs_point_lights_view</code>, <code>fs_shadow_mask_view</code> or <code>fs_hdr_view</code>.</dd>
+      <dt>Bind groups</dt><dd>Group 3, buffer view input, rebuilt by <code>target_groups</code> after every resize.</dd>
+      <dt>Shader</dt><dd><code>src/render/shaders/buffer_view.wgsl</code>, assembled after the common, Froxel grid, HDR, GT7, display and full-screen triangle parts.</dd>
+      <dt>Counted</dt><dd>One draw call, in a frame that runs it. It is untimed and creates no buffer or texture, so GPU time and GPU memory hold nothing of it.</dd>
+      <dt>Files</dt><dd><code>src/render/buffer_view_pass.rs</code>, <code>src/render/shaders/buffer_view.wgsl</code>, <code>src/render/shaders/full_screen.wgsl</code></dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#views">1 &middot; Seven views of one frame</a>
+    <a href="#pass">2 &middot; One pass over the target</a>
+    <a href="#nearest">3 &middot; The nearest sample</a>
+    <a href="#depth">4 &middot; Depth as grey</a>
+    <a href="#normals">5 &middot; Normals as colour</a>
+    <a href="#lights">6 &middot; Point lights as heat</a>
+    <a href="#mask">7 &middot; One light's bit</a>
+    <a href="#hdr">8 &middot; The HDR target</a>
+    <a href="#tests">9 &middot; How it is tested</a>
+    <a href="#cost">10 &middot; What it costs</a>
+    <a href="#why">11 &middot; Why this way</a>
+    <a href="#limits">12 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="views">
+  <div class="part-mark">1 &middot; <code>praxis capture town &lt;png&gt; --buffer &lt;name&gt;</code></div>
+  <h2>Seven views of one frame</h2>
+  <p class="key-idea">A capture is deterministic, so each view below is the same frame of <code>town</code>, its Golden's, drawn once per view: together they show what each step of the frame left behind at one moment.</p>
+  <div class="compare">
+    <figure><img src="img/buffer-view/town-target.png" alt="The town scene's street as displayed" width="640" height="360"><figcaption><b><code>target</code>.</b> The frame as displayed, and the default: no view.</figcaption></figure>
+    <figure><img src="img/buffer-view/town-depth.png" alt="The same street in grey, the road near the camera light, the far buildings dark, the sky black" width="640" height="360"><figcaption><b><code>depth</code>.</b> Nearer is lighter; the sky, where nothing is drawn, is black.</figcaption></figure>
+    <figure><img src="img/buffer-view/town-normals.png" alt="The same street coloured by direction: the road green, walls salmon, teal and violet, trees shaded smoothly" width="640" height="360"><figcaption><b><code>normals</code>.</b> The interpolated normal: the road, facing up, is green.</figcaption></figure>
+    <figure><img src="img/buffer-view/town-triangle-normals.png" alt="The same colours with each tree in flat facets" width="640" height="360"><figcaption><b><code>triangle-normals</code>.</b> Each triangle's own normal: the trees' cones show their facets.</figcaption></figure>
+    <figure><img src="img/buffer-view/town-depth-pyramid-3.png" alt="The street in coarse grey blocks" width="640" height="360"><figcaption><b><code>depth-pyramid:3</code>.</b> Level 3 of the depth pyramid: each texel the farthest depth over its share of the screen.</figcaption></figure>
+    <figure><img src="img/buffer-view/town-point-lights.png" alt="The street in dark red, brightening through orange to white down the street" width="640" height="360"><figcaption><b><code>point-lights</code>.</b> How many point lights each pixel's Froxel lists: none at the left wall, more down the street, where the Froxels are deeper.</figcaption></figure>
+    <figure><img src="img/buffer-view/town-shadow-mask.png" alt="The street in two greys, dark where the sun is hidden" width="640" height="360"><figcaption><b><code>shadow-mask</code>.</b> Dark where the sun is hidden from the pixel's nearest surface.</figcaption></figure>
+    <figure><img src="img/buffer-view/town-hdr.png" alt="The street much as displayed" width="640" height="360"><figcaption><b><code>hdr</code>.</b> The HDR target's exposed colour with no tone curve.</figcaption></figure>
+  </div>
+  <p class="note"><code>town</code> at 640&times;360, as <code>praxis capture town &lt;png&gt; --buffer &lt;name&gt;</code> writes each on the Apple M4 Pro.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Name</th><th>Buffer</th><th>Mapping to colour</th></tr></thead>
+    <tbody>
+      <tr><td><code>target</code></td><td>the target</td><td>none: the frame's display colour</td></tr>
+      <tr><td><code>depth</code></td><td>the depth target, each pixel's nearest sample</td><td>grey, 1 over 1 plus the view depth in metres over 16; black where nothing is drawn</td></tr>
+      <tr><td><code>normals</code>, <code>triangle-normals</code></td><td>the Surface normals at that sample</td><td>the normal's three components from &minus;1 to 1 as red, green and blue; black where nothing is drawn</td></tr>
+      <tr><td><code>depth-pyramid</code>, with a level after a colon</td><td>one level of the depth pyramid, level 0 unless named, the coarsest past the last</td><td>depth's grey, each texel a block</td></tr>
+      <tr><td><code>point-lights</code></td><td>the Froxel lists</td><td>the count of the pixel's Froxel as heat: black at none, through red and yellow to white at 8 or more</td></tr>
+      <tr><td><code>shadow-mask</code>, with a light after a colon</td><td>the Shadow mask's first layer</td><td>dark grey, code 64, where the light's bit is set, light grey, code 192, elsewhere; the light is named by its place in the lit pass's order, the sun's, 0, unless named</td></tr>
+      <tr><td><code>hdr</code></td><td>the HDR target</td><td>exposed colour, clamped to 1 and sRGB-encoded</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><code>praxis help</code> prints the same list, from <code>BufferView::USAGE</code>, and <code>BufferView::from_name</code> turns a name into the view; a name it does not know, or a light the Shadow mask has no bit for, is refused with that list.</p>
+</section>
+
+<section class="part prose" id="pass">
+  <div class="part-mark">2 &middot; <code>BufferViewPass::record</code></div>
+  <h2>One pass over the target</h2>
+  <p class="key-idea">A view is the frame, not a second render: the Renderer draws the whole frame as it ships, then one more pass reads a buffer the frame left and writes the target again.</p>
+  <p class="order-label">The frame's passes with shadow rays on and a view asked for, in the order the GPU receives them</p>
+  <ol class="pass-order">
+    <li>dynamic TLAS build</li><li>bend pass</li><li>culling, phase one</li><li>Froxel pass</li><li>depth pre-pass</li><li>depth pyramid pass</li><li>culling, phase two</li><li>phase two's depth pass</li><li>shadow mask pass</li><li>lit pass</li><li>tonemapping pass</li><li class="focus">buffer view pass</li>
+  </ol>
+  <p>The switch holds an <code>Option</code> of a <code>BufferView</code>, <code>None</code> by default. Given one, <code>Renderer::new</code> creates the pass with a pipeline for that view alone: the module holds a fragment entry point per buffer, and the view picks its own. The target's format is the pipeline's, so the pass writes whatever a capture reads back, and a capture reads the target as it always does.</p>
+  <p>One thing changes earlier in the frame: the lit pass keeps the depth it ends with, where it otherwise discards it, since four of the views read the depth target after it. That is the one cost a view puts on the frame's own passes, and it changes no pixel.</p>
+  <p>Three views show one of several things their buffer holds: one of the depth pyramid's levels, one of the Shadow mask's bits, one of a sample's two normals. Which one reaches the shader as one pipeline-overridable constant, <code>BUFFER_VIEW_INDEX</code>, set when the pipeline is created, so the pass uploads nothing and has no buffer of its own.</p>
+</section>
+
+<section class="part prose" id="nearest">
+  <div class="part-mark">3 &middot; <code>nearest_sample</code></div>
+  <h2>The nearest sample</h2>
+  <p class="key-idea">The depth target and the Surface normals hold four samples a pixel, and an image holds one value: a view shows the nearest sample's, the one whose surface the Shadow mask's first layer describes.</p>
+<pre class="code"><code>fn nearest_sample(pixel: vec2&lt;u32&gt;) -&gt; NearestSample {
+    var nearest = NearestSample(0u, textureLoad(depth, pixel, 0u));
+    for (var sample = 1u; sample &lt; SAMPLE_COUNT; sample++) {
+        let sample_depth = textureLoad(depth, pixel, sample);
+        if sample_depth &gt; nearest.depth {
+            nearest = NearestSample(sample, sample_depth);
+        }
+    }
+    return nearest;
+}</code></pre>
+  <p class="code-source"><code>buffer_view.wgsl</code>.</p>
+  <p>Depth is reversed, so the nearest sample has the greatest depth, and the first such sample wins a tie, as in the shadow mask pass. A depth of 0 is the clear value: no sample of the pixel shows a surface, and the depth and normals views write black there.</p>
+</section>
+
+<section class="part prose" id="depth">
+  <div class="part-mark">4 &middot; <code>depth_grey</code>, <code>fs_depth_view</code>, <code>fs_depth_pyramid_view</code></div>
+  <h2>Depth as grey, by distance</h2>
+  <p class="key-idea">Reversed depth with no far plane is the near plane's distance over the view depth: 0.01 at ten metres with a near plane of 0.1. Drawn raw it is black almost everywhere, so the view maps the view depth instead.</p>
+<pre class="code"><code>fn depth_grey(reversed_depth: f32) -&gt; vec4&lt;f32&gt; {
+    let near = camera.view_proj[3].z;
+    let grey = reversed_depth / (reversed_depth + near / HALF_GREY_VIEW_DEPTH);
+    return vec4&lt;f32&gt;(vec3&lt;f32&gt;(grey), 1.0);
+}</code></pre>
+  <p class="code-source"><code>buffer_view.wgsl</code>.</p>
+  <p>With the view depth in metres, the grey is 1 over 1 plus that depth over <code>HALF_GREY_VIEW_DEPTH</code>, 16 metres: white at the camera, half grey at 16 metres, a quarter at 48, and black only at infinity, which is also what the clear value gives. Written in the stored depth, the same expression needs no division by it, so the clear value's 0 gives 0 and not a division by zero. The grey is written as the target's code, not as light to encode: equal steps of the expression are equal steps of the image.</p>
+  <p>The depth pyramid's view uses the same grey, so a level reads against the depth view directly. It scales the pixel to the level's size and loads that texel, so each texel shows as a block; a level past the coarsest shows the coarsest, the frame's farthest depth. The pyramid is what the depth pyramid pass reduced from phase one's depth, so an Instance that only phase two draws is in the depth view and not yet in the pyramid's.</p>
+</section>
+
+<section class="part prose" id="normals">
+  <div class="part-mark">5 &middot; <code>fs_surface_normals_view</code></div>
+  <h2>Normals as colour</h2>
+  <p class="key-idea">A unit normal's three components, each from &minus;1 to 1, become red, green and blue from 0 to 1: straight up is (128, 255, 128), the green of every road.</p>
+<pre class="code"><code>@fragment
+fn fs_surface_normals_view(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @location(0) vec4&lt;f32&gt; {
+    let pixel = vec2&lt;u32&gt;(position.xy);
+    let nearest = nearest_sample(pixel);
+    let encoded = textureLoad(surface_normals, pixel, nearest.index) * 2.0 - 1.0;
+    let normal = octahedral_decode(select(encoded.xy, encoded.zw, BUFFER_VIEW_INDEX == 1u));
+    return vec4&lt;f32&gt;(select(vec3&lt;f32&gt;(0.0), normal * 0.5 + 0.5, nearest.depth &gt; 0.0), 1.0);
+}</code></pre>
+  <p class="code-source"><code>buffer_view.wgsl</code>.</p>
+  <p>The Surface normals hold two normals a sample, each as two octahedral coordinates of 8 bits: the triangle's own, index 0, then the one interpolated over the triangle, index 1. The view decodes one with the function the shadow mask pass decodes them with, so it shows the normal that pass traced from, 8-bit rounding included. The depth passes write the Surface normals only with shadow rays on; with them off the view shows whatever the target last held.</p>
+</section>
+
+<section class="part prose" id="lights">
+  <div class="part-mark">6 &middot; <code>fs_point_lights_view</code></div>
+  <h2>Point lights as heat</h2>
+  <p class="key-idea">The lit pass sums, at each pixel, the point lights its Froxel lists. The view finds the Froxel of the pixel's first sample, as the light count pass does, and shows the length of its list.</p>
+<pre class="code"><code>    let view_depth = camera.view_proj[3].z / first_depth;
+    let size = vec2&lt;f32&gt;(textureDimensions(depth));
+    let froxel = froxel_at(vec2&lt;f32&gt;(pixel) + SAMPLE_OFFSETS[0], size, view_depth);
+    let heat = 3.0 * f32(froxel_lists[froxel].light_count) / HOTTEST_POINT_LIGHTS;
+    return vec4&lt;f32&gt;(saturate(vec3&lt;f32&gt;(heat, heat - 1.0, heat - 2.0)), 1.0);</code></pre>
+  <p class="code-source"><code>fs_point_lights_view</code>, <code>buffer_view.wgsl</code>.</p>
+  <p>The heat rises through red, then yellow, then white, a third of the way each, and is white at <code>HOTTEST_POINT_LIGHTS</code>, 8, or more: one light is a red of code 96, three are a full red beginning to turn orange. The count is the term the light count pass adds for each pixel whose first sample shows a surface, the lights that sample's Froxel lists, shown pixel by pixel instead of summed; a pixel whose first sample shows none is black, as that pass skips it. It shows the Froxel grid itself: its rectangles on screen and its slices in depth are the edges of the heat's steps.</p>
+</section>
+
+<section class="part prose" id="mask">
+  <div class="part-mark">7 &middot; <code>fs_shadow_mask_view</code></div>
+  <h2>One light's bit</h2>
+  <p class="key-idea">The Shadow mask holds a bit per light at each pixel. The view shows one bit: dark where it is set, the light hidden from the pixel's nearest surface.</p>
+<pre class="code"><code>@fragment
+fn fs_shadow_mask_view(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @location(0) vec4&lt;f32&gt; {
+    let word = textureLoad(shadow_mask, vec2&lt;u32&gt;(position.xy), 0u, 0).rg;
+    let half = select(word.x, word.y, BUFFER_VIEW_INDEX &gt;= 32u);
+    let hidden = BUFFER_VIEW_INDEX &lt; SHADOW_MASK_LIGHTS
+        &amp;&amp; ((half &gt;&gt; (BUFFER_VIEW_INDEX &amp; 31u)) &amp; 1u) == 1u;
+    return vec4&lt;f32&gt;(vec3&lt;f32&gt;(select(192.0, 64.0, hidden) / 255.0), 1.0);
+}</code></pre>
+  <p class="code-source"><code>buffer_view.wgsl</code>.</p>
+  <p>A bit's place is the light's place in the order the lit pass sums a pixel's lights: the directional lights first, so bit 0 is the sun's in every Reference scene that has one, then the point lights of the pixel's Froxel in its list's order. A point light therefore has no one bit across the image: bit 1 is each pixel's first listed point light, whichever that is there. The view reads the mask's first layer, the nearest surface's word; the second surface an edge pixel also holds is not shown. A light past the mask's 59 bits is never hidden, as in the lit pass. The two greys are the ones <code>praxis shadow-mask-difference</code> draws a mask in.</p>
+</section>
+
+<section class="part prose" id="hdr">
+  <div class="part-mark">8 &middot; <code>fs_hdr_view</code></div>
+  <h2>The HDR target without the curve</h2>
+  <p class="key-idea">The tonemapping pass reads the HDR target through GT7's curve and a dither. The view reads it through neither: exposed colour, clamped to 1 and sRGB-encoded, so a pixel's code can be checked against a luminance times the exposure.</p>
+<pre class="code"><code>@fragment
+fn fs_hdr_view(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @location(0) vec4&lt;f32&gt; {
+    let weighted = textureLoad(hdr_target, vec2&lt;u32&gt;(position.xy), 0).rgb;
+    return vec4&lt;f32&gt;(srgb_encode(resolve_unweighted(weighted)), 1.0);
+}</code></pre>
+  <p class="code-source"><code>buffer_view.wgsl</code>.</p>
+  <p><code>resolve_unweighted</code> undoes the weighting the lit pass stores colour under (<a href="hdr-target.html">The HDR target</a>), and <code>srgb_encode</code> clamps to 1 before it encodes. Exposed colour below 1 shows as it is; anything above shows as 1, where GT7 would have rolled it off, so the view's highlights clip where the frame's do not.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">9 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">Each view is captured on the <code>shadows</code> scene and held to that scene's geometry, intersected analytically in f64: what the camera sees through each pixel says what each view must show there.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>the_depth_view_is_brighter_on_the_sphere_than_on_the_ground_behind_it</code></td><td><code>tests/shadows.rs</code></td><td>grey everywhere, black on the sky, the sphere lighter than the ground above it in every column, and the ground at the grey its analytic view depth gives, within a step</td></tr>
+      <tr><td><code>the_normals_views_of_the_ground_are_the_colour_of_straight_up</code></td><td><code>tests/shadows.rs</code></td><td>the ground at (128, 255, 128) within a step, by the interpolated normal and by the triangle's own</td></tr>
+      <tr><td><code>the_depth_pyramid_view_is_the_depth_views_grey_or_just_darker</code></td><td><code>tests/shadows.rs</code></td><td>level 0 at the depth view's grey or up to two steps darker away from edges, black on the sky; a level past the coarsest black everywhere, the sky's depth</td></tr>
+      <tr><td><code>the_point_lights_view_is_one_lights_heat_on_every_surface</code></td><td><code>tests/shadows.rs</code></td><td>the scene's one point light, which reaches all the camera sees, as a red of code 96 on every surface, black on the sky</td></tr>
+      <tr><td><code>the_shadow_mask_view_is_hidden_exactly_where_the_analytic_shadow_lies</code></td><td><code>tests/shadows.rs</code></td><td>for the sun's bit and the point light's, the ground dark exactly where the sphere hides that light and light elsewhere, outside a one-pixel band at each edge</td></tr>
+      <tr><td><code>the_hdr_view_of_the_sunlit_ground_is_its_luminance_times_the_exposure</code></td><td><code>tests/shadows.rs</code></td><td>the ground under the sun alone at the code of its luminance, by glTF's dielectric BRDF and the ambient term in f64, times the exposure, within a step</td></tr>
+      <tr><td><code>capture_takes_a_buffer_by_name_and_the_usage_lists_each</code></td><td><code>src/bin/praxis.rs</code></td><td>each name parses to its view, <code>target</code> and no option to none; an unknown name, or a light past the mask's bits, is refused with the list; the usage names every buffer</td></tr>
+      <tr><td><code>every_module_parses_and_validates</code>, <code>every_binding_is_visible_to_exactly_the_stages_that_use_it</code></td><td><code>shader_tests.rs</code></td><td>the module validates, and each binding of its group is read by a fragment entry point</td></tr>
+      <tr><td>the Goldens</td><td><code>tests/goldens.rs</code></td><td>with no view asked for, every Reference scene's frame is its <span class="concept" data-term="Golden" data-tip="A committed image that a Reference scene must reproduce within tolerance.">Golden</span>, as before the pass existed</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Test names at the commit above; <code>cargo test</code> runs them all, the GPU ones on any adapter that meets the capability floor.</p>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">10</div>
+  <h2>What it costs</h2>
+  <p class="key-idea">Nothing as Praxis ships: with the switch off no pass is created, so no <span class="concept" data-term="Baseline" data-tip="The recorded measurements of a Reference scene on one adapter and backend: the reference machine, where Budgets are judged against it; CI's lavapipe, where only its counters are judged; or the RTX 2070 SUPER, the hardware floor benched for comparison, on Vulkan and on DX12.">Baseline</span> holds a time for it and none of their counters moved when it landed.</p>
+  <p>A frame that runs it is not a frame whose time is quoted: the pass carries no timestamps, and it makes the lit pass store the 4x MSAA depth it would discard. What a view reads and writes per pixel:</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Per pixel</th><th>Format</th><th class="n">Bytes</th></tr></thead>
+    <tbody>
+      <tr><td>read: the depth target's four samples (depth and normals views), or its first (point lights view)</td><td><code>Depth32Float</code></td><td class="n">16 or 4</td></tr>
+      <tr><td>read: the Surface normals' nearest sample (normals views)</td><td><code>Rgba8Unorm</code></td><td class="n">4</td></tr>
+      <tr><td>read: a texel of one level of the depth pyramid (its view)</td><td><code>R32Float</code></td><td class="n">4</td></tr>
+      <tr><td>read: the Froxel's count (point lights view)</td><td>a <code>u32</code> of its list</td><td class="n">4</td></tr>
+      <tr><td>read: the Shadow mask's word, first layer (its view)</td><td><code>Rg32Uint</code></td><td class="n">8</td></tr>
+      <tr><td>read: the HDR target's texel (its view)</td><td><code>Rgba16Float</code></td><td class="n">8</td></tr>
+      <tr><td>written: the target's pixel</td><td>8-bit UNORM</td><td class="n">4</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">11 &middot; ADRs 0015, 0019, 0023</div>
+  <h2>Why this way</h2>
+  <p><b>A pass on the GPU, not a mapping on the CPU.</b> A capture already reads the Shadow mask back and maps it on the CPU. The depth target and the Surface normals are 4x MSAA, though, and a multisampled texture cannot be copied to a buffer: something on the GPU has to choose a sample first. One pass that does that for every buffer, and writes the target's own format, leaves the capture's read-back as it was.</p>
+  <p><b>Over the target, not into a texture of its own.</b> The target is already the size and the format a capture reads, so a view needs no texture: with the switch off the Renderer creates nothing for the views, and no Reference scene's GPU memory or counters move.</p>
+  <p><b>A Render switch, not a debug mode in the window.</b> The views are for looking at one frame beside its others, which a capture gives exactly and repeatably. A switch whose default is off changes nothing the engine draws as it ships.</p>
+  <p><b>The nearest sample.</b> An image holds one value a pixel. Averaging four depths, or four normals, across a silhouette gives a value no surface has; the nearest sample's is a real surface's, and the same one the Shadow mask's first layer was traced from, so the views line up pixel for pixel.</p>
+  <p><b>One fixed mapping a buffer.</b> A view whose scale follows the frame, the nearest and farthest depth for instance, cannot be compared with another frame's or checked against a number. Each mapping here is a constant expression the tests hold to an analytic value.</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">12</div>
+  <h2>Limits</h2>
+  <p><b>One sample.</b> The other three samples of the depth target and the Surface normals are never shown, nor the Shadow mask's second layer or its per-sample verdicts.</p>
+  <p><b>Depth below a grey step.</b> Past about 8 km the grey rounds to code 0, so a surface that far shows black, like the sky; the Surface normals view tells them apart.</p>
+  <p><b>The heat stops at 8.</b> A Froxel's list holds up to 127 point lights; every count from 8 up is white.</p>
+  <p><b>The HDR view clips.</b> Exposed colour above 1 shows as 1.</p>
+  <p><b>A capture only.</b> No key or panel shows a view in the window, and the Probes' light, which a capture reads back as numbers, has no view here.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the pass and its tests rest on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites.</p>
+  <dl class="reading">
+    <dt><a href="https://registry.khronos.org/DataFormat/specs/1.3/dataformat.1.3.html#TRANSFER_SRGB_INVEOTF">Khronos Data Format Specification 1.3, &sect;13.3.2</a></dt><dd>the sRGB encoding the HDR view writes and its test applies to the expected colour, restating IEC 61966-2-1; <code>khronos-dfs-srgb</code></dd>
+    <dt><a href="https://github.com/KhronosGroup/glTF/blob/7cee0fcddd5730e90d488bfb5aa2e52171483dde/specification/2.0/Specification.adoc">Khronos, glTF 2.0 Specification, Appendix B</a></dt><dd>the dielectric BRDF, its specular lobe and its Fresnel term, which the HDR view's test evaluates in f64 for the sunlit ground; <code>gltf-2.0-metal-and-dielectric-brdf</code>, <code>gltf-2.0-specular-brdf</code>, <code>gltf-2.0-fresnel</code></dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The pass came in the sixth milestone, when the frame's buffers were first wanted as images beside the frame. Until then a capture showed the target, and the Shadow mask only as its difference between two LODs.</p>
+  <footer class="sources">Written from <code>src/render/buffer_view_pass.rs</code>, <code>src/render/shaders/buffer_view.wgsl</code>, <code>full_screen.wgsl</code>, <code>src/render/bind_groups.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/main_pass.rs</code>, <code>src/bin/praxis.rs</code>, the tests named above, ADRs 0015, 0019 and 0023, and the sources above, all at <code>main</code> 72d70450 with the pass's own change.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="tonemapping-pass.html">Previous: The tonemapping pass</a><a href="index.html">All field guides</a><a href="frame-stats.html">Next: Frame stats</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>

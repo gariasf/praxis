@@ -432,6 +432,65 @@ pub const TONEMAPPING_INPUT: BindGroupDefinition = BindGroupDefinition {
     ],
 };
 
+/// Group 3 of the buffer view pass, which runs with the `buffer_view` Render
+/// switch naming a buffer: the camera, which the CPU writes as `FRAME` holds
+/// it, and the buffers its views read.
+pub const BUFFER_VIEW_INPUT: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Buffer View Input Bind Group",
+    bindings: &[
+        uniform("camera", "CameraUniform", wgpu::ShaderStages::FRAGMENT),
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage(
+                "froxel_lists",
+                "array<FroxelList>",
+                wgpu::ShaderStages::FRAGMENT,
+            )
+        },
+        loaded_texture(
+            "depth",
+            "texture_depth_multisampled_2d",
+            wgpu::TextureSampleType::Depth,
+            true,
+            wgpu::ShaderStages::FRAGMENT,
+        ),
+        loaded_texture(
+            "surface_normals",
+            "texture_multisampled_2d<f32>",
+            wgpu::TextureSampleType::Float { filterable: false },
+            true,
+            wgpu::ShaderStages::FRAGMENT,
+        ),
+        loaded_texture(
+            "depth_pyramid",
+            "texture_2d<f32>",
+            wgpu::TextureSampleType::Float { filterable: false },
+            false,
+            wgpu::ShaderStages::FRAGMENT,
+        ),
+        Binding {
+            name: "shadow_mask",
+            wgsl_type: "texture_2d_array<u32>",
+            binding_type: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Uint,
+                view_dimension: wgpu::TextureViewDimension::D2Array,
+                multisampled: false,
+            },
+            stages: wgpu::ShaderStages::FRAGMENT,
+            count: None,
+            writer: Writer::Gpu,
+        },
+        loaded_texture(
+            "hdr_target",
+            "texture_2d<f32>",
+            wgpu::TextureSampleType::Float { filterable: false },
+            false,
+            wgpu::ShaderStages::FRAGMENT,
+        ),
+    ],
+};
+
 /// A bind group: its index and its bindings, each numbered by its place.
 pub struct BindGroupDefinition {
     /// Where pipeline layouts hold the group and passes set it.
