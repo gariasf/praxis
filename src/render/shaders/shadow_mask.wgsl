@@ -181,42 +181,38 @@ fn shadowed(
     let origin = tlas_position + triangle_normal * select(-offset, offset, leaves_surface);
     // The nearest triangle shadows the ray unless it is a back face the ray
     // passes; the ray traces on from such a one, and any triangle past it
-    // shadows it. A ray that leaves the surface asks first for any triangle:
-    // none clears it, and one past every back face it could pass, by more
-    // than the offset, shadows it. Only a triangle nearer than that asks for
-    // the nearest: three turns at most, through the one call.
+    // shadows it. A ray that leaves the surface asks for the nearest only up
+    // to `passable_end`, past which lies no back face it could pass, and for
+    // any triangle beyond: three turns at most, through the one call.
     let mask = shadow_ray_mask(pixel_width);
     // The stored normal errs by as much as the margin, so the height is its upper bound.
     let slope = facing + AGREEING_TRIANGLE_TURN_MARGIN;
     // `instance_lod` draws no LOD whose error reaches `lod_error_per_metre` times the distance from
-    // the camera to the Instance's nearest point, so a passed back face is no higher than this rate
-    // times its own distance. A forced LOD breaks that, and asks for the nearest first.
+    // the camera to the Instance's nearest point; a forced LOD breaks that.
     let passable_rate = LOD_ERROR_MARGIN * camera.lod_error_per_metre;
-    let range = length(position);
-    let asks_any_first = leaves_surface && slope > passable_rate && FORCED_LOD >= MESH_MAX_LODS;
-    var flags = select(0u, RAY_FLAG_TERMINATE_ON_FIRST_HIT, asks_any_first);
+    let passable_end = (passable_rate * (length(position) + offset) - offset) / (slope - passable_rate) + offset;
+    let splits = leaves_surface && slope > passable_rate && FORCED_LOD >= MESH_MAX_LODS;
+    var flags = 0u;
     var start_distance = 0.0;
+    var end_distance = select(distance, clamp(passable_end, 0.0, distance), splits);
     var hidden = false;
     loop {
-        let hit = first_intersection(flags, mask, origin, direction, start_distance, distance);
+        let hit = first_intersection(flags, mask, origin, direction, start_distance, end_distance);
         let found = hit.kind != RAY_QUERY_INTERSECTION_NONE;
         let any_hit = (flags & RAY_FLAG_TERMINATE_ON_FIRST_HIT) != 0u;
-        let first_any = any_hit && start_distance == 0.0;
         let height = offset + hit.t * slope;
         // A TLAS entry's custom data is its Instance's slot, whose fourth word the culling pass wrote.
         let drawn_lod_error = bitcast<f32>(instance_offsets[hit.instance_custom_data].w);
-        let past_passable = offset + (hit.t - offset) * slope > passable_rate * (range + hit.t);
-        let shadows = select(
-            any_hit || hit.front_face || (leaves_surface && height > LOD_ERROR_MARGIN * drawn_lod_error),
-            past_passable,
-            first_any
-        );
-        if !found || shadows || (!first_any && hit.t + offset >= distance) {
+        let shadows = any_hit
+            || hit.front_face
+            || (leaves_surface && height > LOD_ERROR_MARGIN * drawn_lod_error);
+        if select(end_distance >= distance, shadows || hit.t + offset >= distance, found) {
             hidden = found && shadows;
             break;
         }
-        flags = select(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0u, first_any);
-        start_distance = select(hit.t + offset, 0.0, first_any);
+        flags = RAY_FLAG_TERMINATE_ON_FIRST_HIT;
+        start_distance = select(end_distance, hit.t + offset, found);
+        end_distance = distance;
     }
     return hidden;
 }
