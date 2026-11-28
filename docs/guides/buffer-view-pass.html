@@ -117,7 +117,7 @@ dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
   <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/buffer_view_pass.rs</code></div>
   <h1>The buffer view pass</h1>
   <p class="definition">A pass that ships off: with the <code>buffer_view</code> Render switch naming one of the frame's buffers, one triangle over the target, after the tonemapping pass, writes that buffer there as an image, in one fixed mapping to colour, in place of the frame's display colour. A capture asks for it by name, so the depth target, the Surface normals, the depth pyramid, the Froxel lists, the Shadow mask and the HDR target of a frame can each be looked at.</p>
-  <p class="describes"><b>Describes</b> <code>main</code> at ed1139a8 (2026-11-28). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="msaa.html">MSAA</a> for the four samples a pixel of the depth target holds, <a href="depth-prepass.html">The depth pre-pass</a> for the depth and the Surface normals, <a href="shadow-mask.html">The shadow mask pass</a> for the mask's bits, <a href="hdr-target.html">The HDR target</a> for what the lit pass resolves.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 72d70450 (2026-11-28). A change to the pass rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="msaa.html">MSAA</a> for the four samples a pixel of the depth target holds, <a href="depth-prepass.html">The depth pre-pass</a> for the depth and the Surface normals, <a href="shadow-mask.html">The shadow mask pass</a> for the mask's bits, <a href="hdr-target.html">The HDR target</a> for what the lit pass resolves.</p>
   <aside class="interface" aria-labelledby="interface">
     <h2 id="interface">Interface</h2>
     <dl>
@@ -357,7 +357,7 @@ fn fs_hdr_view(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @location(0) 
   </dl>
   <h3>History</h3>
   <p class="note">The pass came in the sixth milestone, when the frame's buffers were first wanted as images beside the frame. Until then a capture showed the target, and the Shadow mask only as its difference between two LODs.</p>
-  <footer class="sources">Written from <code>src/render/buffer_view_pass.rs</code>, <code>src/render/shaders/buffer_view.wgsl</code>, <code>full_screen.wgsl</code>, <code>src/render/bind_groups.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/main_pass.rs</code>, <code>src/bin/praxis.rs</code>, the tests named above, ADRs 0015, 0019 and 0023, and the sources above, all at <code>main</code> ed1139a8 with the pass's own change.</footer>
+  <footer class="sources">Written from <code>src/render/buffer_view_pass.rs</code>, <code>src/render/shaders/buffer_view.wgsl</code>, <code>full_screen.wgsl</code>, <code>src/render/bind_groups.rs</code>, <code>src/render/renderer.rs</code>, <code>src/render/main_pass.rs</code>, <code>src/bin/praxis.rs</code>, the tests named above, ADRs 0015, 0019 and 0023, and the sources above, all at <code>main</code> 72d70450 with the pass's own change.</footer>
 </section>
 
 <nav class="series" aria-label="Praxis field guides"><a href="tonemapping-pass.html">Previous: The tonemapping pass</a><a href="index.html">All field guides</a><a href="frame-stats.html">Next: Frame stats</a></nav>

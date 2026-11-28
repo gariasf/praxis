@@ -237,6 +237,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         })
         .transpose()?;
     let buffer = take_option(&mut arguments, "--buffer")?;
+    #[cfg(feature = "cook")]
     let buffer_view = buffer
         .as_deref()
         .filter(|&name| name != "target")
