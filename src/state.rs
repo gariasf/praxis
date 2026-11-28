@@ -206,6 +206,11 @@ impl State {
         self.renderer.probe_irradiance()
     }
 
+    /// The depth moments the Probes hold, with the `probes` Render switch on.
+    pub(crate) fn probe_depth_moments(&self) -> Option<&wgpu::Texture> {
+        self.renderer.probe_depth_moments()
+    }
+
     /// One past the last frame whose submission completed, as far as the
     /// submissions and polls since have seen.
     #[cfg(test)]

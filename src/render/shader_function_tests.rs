@@ -1861,6 +1861,83 @@ fn octahedral_coordinates_decode_to_the_unit_vector_they_encode() {
     }
 }
 
+/// Each texel of a Probe's 8- and 16-texel maps gives a unit direction that
+/// encodes back to its centre, and the axes lie where the octahedral map
+/// puts them: +Z at its centre, -Z at its four corners, ±X at the middles of
+/// its right and left edges and ±Y of its bottom and top, the texels around
+/// each point symmetric about the axis.
+#[test]
+fn a_probe_maps_texels_to_directions_that_round_trip_with_the_axes_in_place() {
+    let Some(context) = gpu_context() else {
+        return;
+    };
+    for side in [8u32, 16] {
+        let texels: Vec<[u32; 2]> = (0..side)
+            .flat_map(|row| (0..side).map(move |column| [column, row]))
+            .collect();
+        let inputs: Vec<[f32; 4]> = texels
+            .iter()
+            .map(|&[column, row]| [column as f32, row as f32, side as f32, 0.0])
+            .collect();
+        let directions = evaluate(
+            &context,
+            "vec4<f32>(probe_map_direction(vec2<u32>(input.xy), u32(input.z)), 0.0)",
+            &inputs,
+        );
+        let direction_inputs: Vec<[f32; 4]> = directions.clone();
+        let encoded = evaluate(
+            &context,
+            "vec4<f32>(octahedral_encode(input.xyz), 0.0, 0.0)",
+            &direction_inputs,
+        );
+        for ((&[column, row], direction), coordinates) in
+            texels.iter().zip(&directions).zip(encoded)
+        {
+            let length = glam::Vec3::from_slice(direction).length();
+            assert!(
+                (length - 1.0).abs() <= 4.0 * TOLERANCE,
+                "texel {column}, {row}: {length}"
+            );
+            let centre = [column, row].map(|index| (index as f32 + 0.5) / side as f32 * 2.0 - 1.0);
+            for (coordinate, expected) in coordinates.into_iter().zip(centre) {
+                assert!(
+                    (coordinate - expected).abs() <= 4.0 * TOLERANCE,
+                    "texel {column}, {row} of {side}: {coordinates:?}, its centre {centre:?}"
+                );
+            }
+        }
+        let direction_at = |[column, row]: [u32; 2]| {
+            glam::Vec3::from_slice(&directions[(row * side + column) as usize]).as_dvec3()
+        };
+        let (low, high, last) = (side / 2 - 1, side / 2, side - 1);
+        let axes = [
+            (
+                glam::DVec3::Z,
+                vec![[low, low], [high, low], [low, high], [high, high]],
+            ),
+            (
+                -glam::DVec3::Z,
+                vec![[0, 0], [last, 0], [0, last], [last, last]],
+            ),
+            (glam::DVec3::X, vec![[last, low], [last, high]]),
+            (-glam::DVec3::X, vec![[0, low], [0, high]]),
+            (glam::DVec3::Y, vec![[low, last], [high, last]]),
+            (-glam::DVec3::Y, vec![[low, 0], [high, 0]]),
+        ];
+        for (axis, around) in axes {
+            let mean = around
+                .iter()
+                .map(|&texel| direction_at(texel))
+                .sum::<glam::DVec3>();
+            assert!(
+                mean.normalize().distance(axis) <= 4.0 * f64::from(TOLERANCE),
+                "{axis} on the {side}-texel map: the texels {around:?} centre on {}",
+                mean.normalize()
+            );
+        }
+    }
+}
+
 /// ADR 0014's precision bar: 0.25 px at 1440p and a 45° vertical field of
 /// view, for a point 0.3 m from the camera, is 0.043 mm. WGSL floors of what
 /// the assertions measure against the f64 reference, the chain's roundings

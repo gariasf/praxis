@@ -282,7 +282,7 @@ pub const SHADOW_MASK_BUILD: BindGroupDefinition = BindGroupDefinition {
 
 /// Group 3 of the Probe update's trace: the camera and the light uniform,
 /// which `FRAME` holds, the Cascade's place and the frame's first level, its
-/// rays' directions, and what each ray found.
+/// rays' directions, and what each ray found, which the blends read.
 pub const PROBE_TRACE_INPUTS: BindGroupDefinition = BindGroupDefinition {
     index: 3,
     label: "Probe Trace Bind Group",
@@ -300,6 +300,28 @@ pub const PROBE_TRACE_INPUTS: BindGroupDefinition = BindGroupDefinition {
             wgpu::ShaderStages::COMPUTE,
         ),
         storage("probe_rays", "array<vec4<f32>>"),
+    ],
+};
+
+/// Group 3 of the Probe update's blends: the rays' directions and what each
+/// ray found, which the trace writes.
+pub const PROBE_BLEND_INPUTS: BindGroupDefinition = BindGroupDefinition {
+    index: 3,
+    label: "Probe Blend Bind Group",
+    bindings: &[
+        uniform(
+            "probe_ray_directions",
+            "array<vec4<f32>, PROBE_RAYS>",
+            wgpu::ShaderStages::FRAGMENT,
+        ),
+        Binding {
+            writer: Writer::Gpu,
+            ..read_only_storage(
+                "probe_rays",
+                "array<vec4<f32>>",
+                wgpu::ShaderStages::FRAGMENT,
+            )
+        },
     ],
 };
 

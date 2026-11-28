@@ -102,3 +102,73 @@ fn the_sun_patch_and_the_wall_by_the_lamp_are_lit_and_the_floor_and_wall_beyond_
         "room A's wall by the lamp reads {wall_by_the_lamp}, room B's east wall {wall_no_light_reaches}"
     );
 }
+
+/// The Cascade stands where the camera of the first frame stands, its 32 × 16
+/// × 32 Probes 1 m apart, centred on it.
+const CASCADE_CENTRE: DVec3 = DVec3::new(1.0, 1.65, 14.0);
+const PROBE_COUNTS: [usize; 3] = [32, 16, 32];
+
+/// The index of the Probe at `point`, in the order a capture lists them: X,
+/// then Z, then Y.
+fn probe_at(point: DVec3) -> usize {
+    let [across, levels, deep] = PROBE_COUNTS;
+    let grid = point - CASCADE_CENTRE
+        + (DVec3::new(across as f64, levels as f64, deep as f64) - 1.0) / 2.0;
+    assert_eq!(grid, grid.round(), "no Probe stands at {point}");
+    (grid.y as usize * deep + grid.z as usize) * across + grid.x as usize
+}
+
+/// A Probe 1.15 m above the open yard holds the sky's 10,000 lx, within 2%,
+/// in the texels that face up, and none from the yard, within 2% of the sky,
+/// in those that face down; one as high in room B, under the roof, holds
+/// under a tenth of the open one's from above. The open Probe's depth
+/// moments put the yard 1.15 m below it, within 10%: a cos¹⁶ lobe reads a
+/// plane at about 17/16 of its distance.
+#[test]
+fn a_probe_holds_the_sky_from_above_in_the_open_and_less_under_the_roof() {
+    let context = match pollster::block_on(GpuContext::headless()) {
+        Ok(context) => context,
+        Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+            writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+            return;
+        }
+        Err(error) => panic!("headless GPU context failed: {error:#}"),
+    };
+    let probes = praxis::capture_probes(&context, ReferenceScene::House, 64, 36, &[63])
+        .expect("capture failed")
+        .pop()
+        .expect("one frame");
+    // The texels either side of the middle of a map's bottom edge face +Y, of its top edge -Y.
+    let mean_of = |texels: [usize; 2], probe: usize| {
+        texels
+            .map(|texel| probes.irradiance[probe][texel][1])
+            .iter()
+            .sum::<f32>()
+            / 2.0
+    };
+    let (up, down) = ([8 * 7 + 3, 8 * 7 + 4], [3, 4]);
+    let sky_lux = 10_000.0;
+    let open = probe_at(dvec3(1.5, 1.15, 14.5));
+    let under_roof = probe_at(dvec3(1.5, 1.15, -0.5));
+
+    let (open_up, open_down) = (mean_of(up, open), mean_of(down, open));
+    assert!(
+        (open_up / sky_lux - 1.0).abs() < 0.02,
+        "the open Probe holds {open_up} lx from above"
+    );
+    assert!(
+        open_down < 0.02 * sky_lux,
+        "the open Probe holds {open_down} lx from below"
+    );
+    let roofed_up = mean_of(up, under_roof);
+    assert!(
+        roofed_up < 0.1 * open_up,
+        "under the roof a Probe holds {roofed_up} lx from above"
+    );
+
+    let [distance, _] = probes.depth_moments[open][7];
+    assert!(
+        (distance / 1.15 - 1.0).abs() < 0.1,
+        "the yard reads {distance} m below the open Probe"
+    );
+}

@@ -147,6 +147,9 @@ pub enum PassKind {
     /// Work a compute pass ends at its start, from the end of the pass
     /// before it.
     Marker,
+    /// Work from the start of a compute pass to the end of a render pass
+    /// after it.
+    Span,
 }
 
 #[derive(Clone, Copy)]
@@ -553,8 +556,12 @@ impl PassLog {
     /// Whether the frame ran the pass at `position` and it wrote both its
     /// timestamps, at its start and its end.
     fn wrote_both(&self, position: usize) -> bool {
-        self.passes[position]
-            .is_some_and(|pass| matches!(pass.kind, PassKind::Compute | PassKind::Render))
+        self.passes[position].is_some_and(|pass| {
+            matches!(
+                pass.kind,
+                PassKind::Compute | PassKind::Render | PassKind::Span
+            )
+        })
     }
 }
 
@@ -596,6 +603,29 @@ impl<'a> PassQueries<'a, '_> {
             beginning_of_pass_write_index: Some(self.first_query),
             end_of_pass_write_index: Some(self.first_query + 1),
         }
+    }
+
+    /// The timestamp writes of the pass, a span: its start, a compute
+    /// pass's, and its end, a later render pass's.
+    pub fn span(
+        self,
+    ) -> (
+        wgpu::ComputePassTimestampWrites<'a>,
+        wgpu::RenderPassTimestampWrites<'a>,
+    ) {
+        self.log.mark(self.position, PassKind::Span);
+        (
+            wgpu::ComputePassTimestampWrites {
+                query_set: self.query_set,
+                beginning_of_pass_write_index: Some(self.first_query),
+                end_of_pass_write_index: None,
+            },
+            wgpu::RenderPassTimestampWrites {
+                query_set: self.query_set,
+                beginning_of_pass_write_index: None,
+                end_of_pass_write_index: Some(self.first_query + 1),
+            },
+        )
     }
 
     /// The timestamp writes that bracket the pass, in a command buffer of
@@ -768,6 +798,7 @@ pub(crate) mod tests {
     use crate::capture::{FrameWait, ReadBack, render_frames};
     use crate::gpu::GpuContext;
     use crate::render::main_pass::{DEPTH_PREPASS, PHASE_TWO_DEPTH_PASS};
+    use crate::render::probe_update_pass::PROBE_UPDATE_PASS;
     use crate::render::shadow_mask_pass::SHADOW_MASK_PASS;
     use crate::render::tonemapping_pass::TONEMAPPING_PASS;
     use crate::render::{CrowdForm, RenderSwitches};
@@ -826,6 +857,8 @@ pub(crate) mod tests {
                 if shadow_rays || !shadow_ray_passes.contains(pass) {
                     let kind = if render_passes.contains(pass) {
                         PassKind::Render
+                    } else if *pass == PROBE_UPDATE_PASS {
+                        PassKind::Span
                     } else {
                         PassKind::Compute
                     };

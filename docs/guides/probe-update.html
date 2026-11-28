@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Probe Update</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a reference page of the Praxis engine reference. One reading column; code, tables and figures break out wider. The series' lab-notebook look, with the tutorial devices (You'll learn, Check yourself, a running Status) left out: a reference is consulted, not read through. */
+:root {
+  --paper: #f5f6f8;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-soft: #4a5566;
+  --rule: #d7dce4;
+  --accent: #2c56c9;
+  --accent-wash: rgba(44, 86, 201, 0.13);
+  --warm: #c9771a;
+  --warm-wash: rgba(201, 119, 26, 0.14);
+  --figure-bg: #eceff4;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+    --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+    --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1a2029; --ink: #e6e9ee; --ink-soft: #a5afbd;
+  --rule: #2e3643; --accent: #7a9bff; --accent-wash: rgba(122, 155, 255, 0.17); --warm: #e8a34a;
+  --warm-wash: rgba(232, 163, 74, 0.17); --figure-bg: #1f2631; color-scheme: dark;
+}
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 18px; line-height: 1.6; }
+.sheet { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+.page { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 680px; margin: 0 auto; }
+header.intro { padding-block: 56px 8px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6vw, 58px); line-height: 1.05; margin: 12px 0 16px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 16px; }
+.definition { font-size: 21px; line-height: 1.5; color: var(--ink); }
+.describes { font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--ink-soft); border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 20px; }
+.describes b { color: var(--ink); font-weight: 600; }
+code, .num { font-family: var(--mono); font-size: 0.84em; }
+sup, sub { line-height: 0; }
+section.part { padding-block: 44px 8px; border-top: 1px solid var(--rule); margin-top: 28px; }
+.part-mark { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.04em; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 14px; margin-top: 20px; }
+nav.toc a { text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+figure { margin: 24px 0 28px; background: var(--figure-bg); border-radius: 6px; padding: 18px; }
+figure.wide { margin-left: auto; margin-right: auto; max-width: 1040px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 12px; line-height: 1.5; }
+figcaption b { color: var(--ink); }
+.prose code, figcaption code, .keypoints code, table code { overflow-wrap: anywhere; }
+.formula { font-family: var(--mono); font-size: 14.5px; line-height: 1.75; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.table-wrap { overflow-x: auto; }
+table.facts { border-collapse: collapse; font-size: 15px; width: 100%; }
+table.facts th, table.facts td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.facts th { font-family: var(--display); font-weight: 700; font-size: 14px; }
+table.facts td.n, table.facts th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+table.facts tr.focus td { background: var(--accent-wash); }
+table.compact { font-size: 14px; }
+table.compact th, table.compact td { padding: 5px 8px; }
+.prose.table-wrap { margin-bottom: 16px; }
+pre.code { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--ink); overflow-x: auto; tab-size: 4; }
+pre.code code { font-size: inherit; }
+pre.code .comment { color: var(--ink-soft); }
+.code-source { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: -10px 0 18px; }
+.key-idea { background: var(--accent-wash); border-radius: 6px; padding: 10px 14px; margin: 0 0 20px; }
+.interface { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; padding: 16px 18px; margin: 4px 0 24px; }
+.interface h2 { font-family: var(--mono); font-size: 13px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.interface dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 16px; }
+.interface dt { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); padding-top: 3px; }
+.interface dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .interface dl { grid-template-columns: minmax(0, 1fr); } .interface dt { padding-top: 8px; } }
+.order-label { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+.pass-order { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 14px; font-family: var(--mono); font-size: 13px; }
+.pass-order li { border: 1.5px solid var(--rule); border-radius: 999px; padding: 2px 10px; background: var(--panel); }
+.pass-order li.focus { border-color: var(--accent); background: var(--accent-wash); font-weight: 600; }
+.pass-order li.warm { border-color: var(--warm); background: var(--warm-wash); }
+.bits { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; margin: 0 0 16px; overflow-x: auto; white-space: pre; }
+.concept { text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: help; border-radius: 2px; }
+.concept:hover, .concept:focus-visible, .concept[aria-describedby] { background: var(--accent-wash); outline: none; }
+.concept-tip { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 11px; font-family: var(--body); font-size: 15px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); pointer-events: none; }
+.concept-tip b { display: block; font-family: var(--display); font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.series-home { margin-bottom: 20px; font-family: var(--mono); font-size: 14px; }
+nav.series { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 14px; }
+.series-home a, nav.series a { color: var(--accent); text-underline-offset: 2px; }
+.sources { font-size: 15px; color: var(--ink-soft); line-height: 1.55; margin-top: 32px; }
+dl.reading { margin: 0; }
+dl.reading dt { font-weight: 600; margin-top: 10px; }
+dl.reading dd { margin: 0 0 4px; color: var(--ink-soft); font-size: 16px; }
+.note { font-size: 15px; color: var(--ink-soft); }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.compare figure { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+<header class="intro prose">
+  <div class="series-home"><a href="index.html">&larr; Praxis engine reference</a></div>
+  <div class="eyebrow">Praxis &middot; the frame &middot; <code>src/render/probe_update_pass.rs</code></div>
+  <h1>The Probe update</h1>
+  <p class="definition">A compute pass that traces, each frame, a fixed count of rays from a share of a Cascade's <span class="concept" data-term="Probe" data-tip="A point of a Cascade that holds the indirect light arriving there from every direction and how far the surfaces around it lie, refreshed from rays over frames (Temporal class b).">Probes</span> through the Ray scene, and two render passes that blend what the rays found into those Probes' irradiance and depth moments: so far the sky where a ray escapes and nothing where it hits, which is sky light with visibility.</p>
+  <p class="describes"><b>Describes</b> <code>main</code> at 4395cfeb (2026-11-28), with the <code>probes</code> Render switch on; it ships off. A change to the update rewrites this page and moves the commit; nothing is appended. <b>Read first:</b> <a href="shadow-mask.html">The shadow mask pass</a> for the other pass that traces the Ray scene, <a href="camera-relative-placement.html">Camera-relative placement</a> for the Anchor and offset a Probe's place is composed from, <a href="light-units.html">Light units</a> for the lux a Probe holds.</p>
+  <aside class="interface" aria-labelledby="interface">
+    <h2 id="interface">Interface</h2>
+    <dl>
+      <dt>Runs</dt><dd>In every frame, with the <code>probes</code> <span class="concept" data-term="Render switches" data-tip="The variants a Renderer is created with and keeps, among them whether a Cascade of Probes is created and updated. Their defaults are what ships.">Render switch</span> on: the last passes recorded into the frame's encoder, after the tonemapping pass.</dd>
+      <dt>Reads</dt><dd>The Ray scene: the static and the dynamic TLAS, through <code>RAY_SCENE</code>; the camera uniform, for the TLAS's Anchor and the dynamic TLAS's box; the light uniform, for the sky; the update's own uniform, the Cascade's place and the frame's first level; the 128 rays' directions.</dd>
+      <dt>Writes</dt><dd>What each ray found, a buffer of 262,144 entries; then, through each render pass's blend, the irradiance and the depth moments of the frame's two levels of Probes.</dd>
+      <dt>Dispatches</dt><dd>One, <code>trace_probe_rays</code>: 2 &times; 2,048 workgroups of 64 invocations, a ray each. Then two draws of one triangle, <code>blend_irradiance</code> and <code>blend_depth_moments</code>, each over its texture's two levels.</dd>
+      <dt>Bind groups</dt><dd>The trace: group 2, <code>RAY_SCENE</code>; group 3, <code>PROBE_TRACE_INPUTS</code>. The blends: group 3, <code>PROBE_BLEND_INPUTS</code>.</dd>
+      <dt>Shader</dt><dd><code>probe_trace.wgsl</code> after the common part and <code>ray_scene.wgsl</code>, as the module <code>PROBE_TRACE</code>; <code>probe_blend.wgsl</code> after the common part, <code>hdr.wgsl</code>, <code>probes.wgsl</code> and <code>full_screen.wgsl</code>, as <code>PROBE_BLEND</code>.</dd>
+      <dt>Counted</dt><dd><code>probe_update</code> in GPU time, one Timed pass from the trace's start to the last blend's end; <code>probes_updated</code> and <code>probe_rays_traced</code> in Frame stats; the Cascade, the uniform, the directions and the rays' results in GPU memory under <code>probes</code>; the uniform, each frame, in <code>uploaded_bytes</code>.</dd>
+      <dt>Files</dt><dd><code>src/render/probe_update_pass.rs</code>, <code>src/render/probes.rs</code>, <code>src/render/shaders/probe_trace.wgsl</code>, <code>src/render/shaders/probe_blend.wgsl</code>, <code>src/render/shaders/probes.wgsl</code>, <code>src/render/shaders/ray_scene.wgsl</code></dd>
+    </dl>
+  </aside>
+  <nav class="toc" aria-label="Sections">
+    <a href="#frame">1 &middot; Where it sits</a>
+    <a href="#cascade">2 &middot; The Cascade and its levels</a>
+    <a href="#trace">3 &middot; The trace</a>
+    <a href="#blend">4 &middot; The blends</a>
+    <a href="#tests">5 &middot; How it is tested</a>
+    <a href="#cost">6 &middot; What it costs</a>
+    <a href="#why">7 &middot; Why this way</a>
+    <a href="#limits">8 &middot; Limits</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section class="part prose" id="frame">
+  <div class="part-mark">1 &middot; <code>src/render/renderer.rs</code></div>
+  <h2>Where it sits in the frame</h2>
+  <p class="key-idea">The update reads nothing the frame's other passes write, only the Ray scene and the uniforms, so it is recorded last, after the tonemapping pass, outside ADR 0019's gate; whatever reads the Probes reads them as the frame before left them.</p>
+  <p class="order-label">The frame's passes with the Probes on, in the order the GPU receives them</p>
+  <ol class="pass-order">
+    <li>dynamic TLAS build</li><li>bend pass</li><li>culling, phase one</li><li>Froxel pass</li><li>depth pre-pass</li><li>depth pyramid pass</li><li>culling, phase two</li><li>phase two's depth pass</li><li>shadow mask pass</li><li>lit pass</li><li>tonemapping pass</li><li class="focus">Probe update</li>
+  </ol>
+<pre class="code"><code>if let Some(probe_update) = &amp;mut self.probe_update {
+    probe_update.record(
+        &amp;mut encoder,
+        self.ray_scene.bind_group(),
+        &amp;mut timestamps,
+        recorder,
+    );
+}</code></pre>
+  <p class="code-source"><code>Renderer::render</code>, <code>src/render/renderer.rs</code>.</p>
+  <p>It is three passes of wgpu, a compute pass and two render passes, and one <span class="concept" data-term="Timed pass" data-tip="A span of a frame's GPU work that the GPU timestamps at its start and end for Frame stats: a compute or render pass, a span that markers bound, or one from a compute pass's start to a later render pass's end (the Probe update).">Timed pass</span>, <code>probe_update</code>: the compute pass writes the start timestamp and the second render pass the end, as <code>PassQueries::span</code> hands them out. The bench lists the pass only where its Renderer's switches can run it (<code>RenderSwitches::can_time</code>), so a Baseline recorded with the Probes off holds no entry for it.</p>
+</section>
+
+<section class="part prose" id="cascade">
+  <div class="part-mark">2 &middot; <code>Cascade</code> &middot; <code>ProbeUpdatePass::frame_upload</code></div>
+  <h2>The Cascade and its levels</h2>
+  <p class="key-idea">One Cascade of 32 &times; 16 &times; 32 Probes, 1 m apart, centred where the camera of the first frame stood. Each frame updates two of its 16 levels along Y, the next two each frame, so every Probe is updated once in 8 frames.</p>
+  <p><code>Cascade::new</code> in <code>src/render/probes.rs</code> creates the store: each texture one layer, a Probe's map at its Z down the texture and its X across it, the levels side by side. Irradiance is 8 &times; 8 texels of <code>Rgba16Float</code> a Probe, depth moments 16 &times; 16 of <code>Rg16Float</code>, both now render attachments too, since the blends write them.</p>
+<pre class="code"><code>pub fn frame_upload(&amp;mut self, camera: &amp;CameraUniform) -&gt; (&amp;wgpu::Buffer, &amp;[u8]) {
+    if !self.placed {
+        self.uniform.cascade_anchor = camera.anchor;
+        self.uniform.cascade_offset = camera.offset;
+        self.placed = true;
+    }
+    self.uniform.first_level =
+        (self.updates % FRAMES_PER_CYCLE) as u32 * PROBE_LEVELS_PER_FRAME;
+    (&amp;self.uniform_buffer, bytemuck::bytes_of(&amp;self.uniform))
+}</code></pre>
+  <p class="code-source"><code>ProbeUpdatePass::frame_upload</code>, <code>src/render/probe_update_pass.rs</code>, called by <code>Renderer::upload</code>, which writes the 32 bytes through frame staging with the frame's other uploads.</p>
+  <p>The place is the camera's own <span class="concept" data-term="Anchor" data-tip="The integer grid cell a World position is stored relative to, beside an f32 offset within it, so the GPU composes positions camera-relative (ADR 0014).">Anchor</span> and offset, as the camera uniform holds them, so it is never an f32 World position. <code>PROBE_LEVELS_PER_FRAME</code> divides the 16 levels, so a frame's first level is a multiple of it, which the blends read a Probe's rays by. With the Probes on, frame staging's bound grows by the uniform, and the load staging's share of the staging Budget gives up as much (<code>RenderCapacities::load_bytes_per_frame</code>).</p>
+</section>
+
+<section class="part prose" id="trace">
+  <div class="part-mark">3 &middot; <code>trace_probe_rays</code> &middot; <code>first_intersection</code></div>
+  <h2>The trace</h2>
+  <p class="key-idea">An invocation per ray: it composes its Probe's place into the Ray scene's frame, takes its ray's direction, asks <code>first_intersection</code>, the one tracing function both passes that trace share, for the nearest hit, and writes the sky's radiance where the ray escapes, black where it hits, and the distance.</p>
+<pre class="code"><code>@compute @workgroup_size(PROBE_TRACE_WORKGROUP_SIZE)
+fn trace_probe_rays(@builtin(global_invocation_id) invocation: vec3&lt;u32&gt;) {
+    let ray = invocation.x;
+    let slot = invocation.y;
+    let probes_per_level = PROBE_COUNTS.x * PROBE_COUNTS.z;
+    let probe = vec3&lt;u32&gt;(
+        slot % PROBE_COUNTS.x,
+        probe_update.first_level + slot / probes_per_level,
+        slot / PROBE_COUNTS.x % PROBE_COUNTS.z
+    );
+    let centred = (vec3&lt;f32&gt;(probe) - 0.5 * vec3&lt;f32&gt;(PROBE_COUNTS - 1u)) * PROBE_SPACING_METRES;
+    let origin = camera_relative_position(
+        probe_update.cascade_anchor,
+        probe_update.cascade_offset,
+        camera.tlas_anchor,
+        vec3&lt;f32&gt;(0.0),
+        centred
+    );
+    let direction = probe_ray_directions[ray].xyz;
+    let hit = first_intersection(0u, 0xffu, origin, direction, 0.0, UNBOUNDED_RAY_DISTANCE);
+    let missed = hit.kind == RAY_QUERY_INTERSECTION_NONE;
+    let radiance = select(vec3&lt;f32&gt;(0.0), light.ambient_illuminance.rgb / PI, missed);
+    let distance = select(min(hit.t, PROBE_DEPTH_LIMIT_METRES), PROBE_DEPTH_LIMIT_METRES, missed);
+    probe_rays[slot * PROBE_RAYS + ray] = vec4&lt;f32&gt;(radiance, distance);
+}</code></pre>
+  <p class="code-source"><code>trace_probe_rays</code>, <code>src/render/shaders/probe_trace.wgsl</code>. <code>PROBE_COUNTS</code>, <code>PROBE_SPACING_METRES</code>, <code>PROBE_RAYS</code> and the workgroup size are declared into the WGSL from Rust.</p>
+  <p><b>The origin.</b> <code>camera_relative_position</code> composes the Probe as the shadow mask pass composes a surface point: the Cascade's Anchor less the TLAS's, exact in integers, plus the offsets, in the frame whose origin is the corner of the static TLAS's Anchor. When the static TLAS re-anchors, the next frame composes the same Probe into the new frame.</p>
+  <p><b>The directions.</b> <code>probe_ray_directions</code> in Rust lays 128 directions along a Fibonacci spiral about Y, evenly over the sphere, and the update creates them once into a uniform buffer the trace and the blends both read. Every update traces the same 128.</p>
+  <p><b>One tracing function.</b> <code>first_intersection</code>, in <code>ray_scene.wgsl</code>, traces the static TLAS, then the dynamic TLAS unless it is empty or the ray misses the box that holds it before the static hit. Flags of 0 ask for the nearest hit, which a probe ray wants for its distance; the shadow mask pass asks the same function for the nearest, then any. Its mask takes every instance bit, so a probe ray sees every triangle, Thin Primitives included, as ADR 0020 has it see what a shadow ray sees.</p>
+  <p><b>What a ray finds.</b> The sky is the scene's ambient illuminance over &pi;, the same radiance from every direction, so a Probe with nothing around it holds the ambient illuminance from every side. A hit is black for now. A distance is capped at <code>PROBE_DEPTH_LIMIT_METRES</code>, twice the spacing, past a cell's diagonal, the farthest a point a Probe lights lies from it; a miss reads the cap.</p>
+</section>
+
+<section class="part prose" id="blend">
+  <div class="part-mark">4 &middot; <code>blend_irradiance</code> &middot; <code>blend_depth_moments</code></div>
+  <h2>The blends</h2>
+  <p class="key-idea">On the Capability floor neither fp16 format takes read-write storage, so the blend is the render pass's: a fragment per texel of the frame's levels computes the texel's new value from its Probe's rays, and the blend keeps the hysteresis of the old one, set as the pass's blend constant.</p>
+  <div class="formula">irradiance(n) = &pi; &middot; &Sigma; max(0, n &middot; &omega;&#7522;) L&#7522; / &Sigma; max(0, n &middot; &omega;&#7522;) &times; 2&#8315;&#8308;
+moments(n) = &Sigma; w&#7522; (d&#7522;, d&#7522;&sup2;) / &Sigma; w&#7522;,&emsp;w&#7522; = max(0, n &middot; &omega;&#7522;)&sup1;&#8310;
+stored = (1 &minus; &alpha;) &middot; new + &alpha; &middot; old,&emsp;&alpha; = 0 in the first 8 frames, 0.5 after</div>
+  <p class="note">n is the texel's direction, &omega;&#7522; ray i's, L&#7522; its radiance and d&#7522; its distance.</p>
+<pre class="code"><code>fn probe_texel(position: vec2&lt;f32&gt;, side_texels: u32) -&gt; ProbeTexel {
+    let texel = vec2&lt;u32&gt;(position);
+    let column = texel.x / side_texels;
+    let level = column / PROBE_COUNTS.x;
+    let slot = ((level % PROBE_LEVELS_PER_FRAME) * PROBE_COUNTS.z + texel.y / side_texels) * PROBE_COUNTS.x
+        + column % PROBE_COUNTS.x;
+    return ProbeTexel(slot * PROBE_RAYS, probe_map_direction(texel % side_texels, side_texels));
+}
+
+// Each ray weighs by its cosine to the texel's direction [ref:majercik-2019-ddgi-probe-update].
+@fragment
+fn blend_irradiance(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @location(0) vec4&lt;f32&gt; {
+    let texel = probe_texel(position.xy, PROBE_IRRADIANCE_SIDE_TEXELS);
+    var weighted = vec3&lt;f32&gt;(0.0);
+    var weight_sum = 0.0;
+    for (var ray = 0u; ray &lt; PROBE_RAYS; ray++) {
+        let weight = max(dot(texel.direction, probe_ray_directions[ray].xyz), 0.0);
+        weighted += weight * probe_rays[texel.first_ray + ray].rgb;
+        weight_sum += weight;
+    }
+    let irradiance = PI * PROBE_LIGHT_SCALE * weighted / max(weight_sum, 1e-6);
+    return vec4&lt;f32&gt;(min(irradiance, vec3&lt;f32&gt;(LARGEST_HALF)), 0.0);
+}</code></pre>
+  <p class="code-source"><code>probe_texel</code> and <code>blend_irradiance</code>, <code>src/render/shaders/probe_blend.wgsl</code>; <code>blend_depth_moments</code> beside them loops alike with the cos&sup1;&#8310; weight. <code>probe_map_direction</code>, in <code>probes.wgsl</code>, decodes the texel's centre through the octahedral map: +Z at the map's centre, &minus;Z at its corners, &plusmn;X at the middles of its right and left edges, &plusmn;Y of its bottom and top.</p>
+  <p><b>A triangle over the levels.</b> Each render pass loads its texture, sets the viewport to the frame's two levels and draws <code>vs_full_screen</code>'s one triangle over it, so only those texels run a fragment; a fragment's position, in the texture's texels, names its Probe and its texel.</p>
+  <p><b>Irradiance.</b> The cosine-weighted mean of the rays' radiance, times &pi;, is the irradiance a surface facing the texel's direction would receive: under an open sky, the ambient illuminance. It is stored in lux times <code>PROBE_LIGHT_SCALE</code>, 2&#8315;&#8308;, and clamped to fp16's largest value, so fp16 holds ten times the sun's illuminance and the Probes are never pre-exposed by the frame's exposure (ADR 0023). A capture reads it back divided by the scale.</p>
+  <p><b>Depth moments.</b> The mean distance and squared distance of the rays near the texel's direction, weighted by cos&sup1;&#8310;, which falls to half its peak 16.8&deg; off the texel's direction, about the 18&deg; between neighbouring rays of 128. A plane d below a Probe reads about 17/16 d.</p>
+  <p><b>The hysteresis.</b> The pipelines blend with <code>OneMinusConstant</code> for the new value and <code>Constant</code> for the old; the pass sets the constant to 0 for the first 8 frames, a cycle, so the first update of each Probe fills it, and to <code>PROBE_HYSTERESIS_PER_UPDATE</code>, 0.5, after. An update every 8 frames at 0.5 is about 0.917 a frame, within the 0.85 to 0.98 DDGI sets; 32 frames take 15/16 of a step.</p>
+</section>
+
+<section class="part prose" id="tests">
+  <div class="part-mark">5 &middot; <code>cargo test</code></div>
+  <h2>How it is tested</h2>
+  <p class="key-idea">A capture of <code>house</code> reads back what its Probes hold; a GPU oracle holds the octahedral map's texels and axes; Frame stats tests pin the memory, the counts and the Timed pass; the shader tests pin which modules declare a TLAS and the uniform's layout.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Test</th><th>Where</th><th>What it pins</th></tr></thead>
+    <tbody>
+      <tr><td><code>a_probe_holds_the_sky_from_above_in_the_open_and_less_under_the_roof</code></td><td><code>tests/house.rs</code></td><td>after 64 frames: a Probe 1.15 m above the yard holds 10,000 lx from above within 2% and under 2% of it from below; one at that height in room B holds under a tenth of that from above; the yard reads 1.15 m below the open Probe within 10%</td></tr>
+      <tr><td><code>a_probe_maps_texels_to_directions_that_round_trip_with_the_axes_in_place</code></td><td><code>shader_function_tests.rs</code></td><td>every texel of an 8- and a 16-texel map gives a unit direction that encodes back to its centre; the texels around each map position of the six axes centre on that axis</td></tr>
+      <tr><td><code>probe_rays_are_unit_directions_spread_over_the_sphere</code></td><td><code>probe_update_pass.rs</code></td><td>the 128 directions are unit vectors whose mean is within 1/128 of zero</td></tr>
+      <tr><td><code>the_probes_switch_counts_a_cascade_and_each_frame_updates_the_same_probes</code></td><td><code>tests/frame_stats.rs</code></td><td>the <code>probes</code> kind holds the Cascade, the uniform, the directions and the rays' results to the byte; every frame counts 2,048 Probes and 262,144 rays and times <code>probe_update</code>; with the switch off, none</td></tr>
+      <tr><td><code>render_marks_the_passes_each_kind_of_frame_runs</code></td><td><code>readback.rs</code></td><td>a rendered frame with the Probes on marks <code>probe_update</code> as a span after the tonemapping pass</td></tr>
+      <tr><td><code>only_the_passes_that_trace_and_the_dynamic_tlas_markers_declare_a_tlas</code></td><td><code>shader_tests.rs</code></td><td>the shadow mask pass, the Probe update's trace and the dynamic TLAS's markers, and no other module</td></tr>
+      <tr><td><code>structs_shared_with_the_cpu_match_their_rust_twins</code></td><td><code>shader_tests.rs</code></td><td><code>ProbeUpdateUniform</code>'s fields and offsets match its WGSL twin</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="part prose" id="cost">
+  <div class="part-mark">6 &middot; <code>praxis report</code></div>
+  <h2>What it costs</h2>
+  <p class="key-idea">No Baseline times the update, since the Probes ship off. On <code>town</code> at the reference size, the update's Timed pass and the GPU frame it adds are measured with the Probes on against the same binary's frames with them off.</p>
+  <p>Medians and 95th percentiles in microseconds from <code>praxis bench</code> on <code>town</code>, a release build at 2560&times;1440 with 4x MSAA over 1,800 measured frames, three rounds interleaved with the same build's frames with the Probes off. The frame grows by much less than the update's span: Metal runs the update beside the lit and tonemapping passes, which share nothing it writes, and those passes slow by part of what it takes.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>probe_update</code> median</th><th class="n"><code>probe_update</code> p95</th><th class="n">GPU frame added, median, by round</th><th class="n">Heap allocations added a frame</th></tr></thead>
+    <tbody>
+      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">4,836.5</td><td class="n">5,235.1</td><td class="n">1,061.7; 1,087.1; 1,129.4</td><td class="n">45</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">The rounds' runs, off then on: GPU frame medians 18,872.3 and 19,933.9, 18,855.1 and 19,942.2, 18,855.8 and 19,985.2. The update's memory, in every scene with the Probes on, is under <code>probes</code>, 29,427,744 bytes: the Cascade's 25,231,360, what a frame's 262,144 rays found at 16 bytes each, the directions' 2,048 and the uniform's 32; each frame uploads the uniform's 32 bytes and draws two triangles more.</p>
+</section>
+
+<section class="part prose" id="why">
+  <div class="part-mark">7 &middot; ADRs 0014, 0020, 0021, 0023</div>
+  <h2>Why this way</h2>
+  <p><b>A render pass's blend.</b> The store's formats take a render pass's blend on the Capability floor but no read-write storage (ADR 0021), so a compute pass could only blend into a second copy of each texture. One render pass reaches every Probe of a texture, and the viewport limits it to the frame's levels.</p>
+  <p><b>One tracing function.</b> ADR 0020 has shadow rays and probe rays read the same Ray scene. Tracing it through <code>first_intersection</code> alone keeps the static-then-dynamic order, the empty-TLAS skip and the box test in one place, so the two passes cannot drift apart; the second pass that binds the TLAS adds wgpu-core's walk of its dependencies at submit, which the frame pays once more.</p>
+  <p><b>A share of the levels each frame.</b> A fragment of a blend loops over its Probe's 128 rays, so a frame that updated every Probe would run 128 iterations for each of the Cascade's 5.2 million texels; two levels a frame run an eighth of that, and every Probe is still updated within 8 frames.</p>
+  <p><b>Fixed directions.</b> The same 128 directions each update converge a still scene to one value, so nothing flickers while nothing moves. DDGI rotates its spiral stochastically, trading that for noise the hysteresis averages; the deviation is recorded in <code>docs/audit/deviations.md</code>.</p>
+  <p><b>Light that is not pre-exposed.</b> <code>house</code> keys its exposure along its camera path, so a Probe pre-exposed by the frame's exposure would change as the camera moves. A fixed scale of 2&#8315;&#8308; lets fp16 hold ten times direct sun at the top and about 0.001 lx at its smallest normal value (ADR 0023).</p>
+</section>
+
+<section class="part prose" id="limits">
+  <div class="part-mark">8</div>
+  <h2>Limits</h2>
+  <p><b>A hit is black.</b> No Bounce colour, sun or point light lights a hit yet, so a Probe holds the sky and how much of it is hidden, no bounced light.</p>
+  <p><b>One Cascade that stays.</b> The Cascade stands where the first frame's camera stood and does not follow it, and nothing reads the Probes yet.</p>
+  <p><b>No gutter.</b> A Probe's maps sit edge to edge, without the one-texel border DDGI copies around each, which bilinear sampling across a map's edge would need.</p>
+  <p><b>A biased depth.</b> The cos&sup1;&#8310; lobe reads a plane about 1/16 farther than it is; a lobe that narrow needs more or rotated rays.</p>
+  <p><b>The span's end.</b> The Timed pass ends where the depth moments' blend ends. The irradiance blend, recorded before it, shares nothing it writes, so Metal can run the two side by side; with a quarter of its fragments it is expected to end first, which nothing guarantees.</p>
+  <p><b>The first frame.</b> A frame before the static TLAS is first bound traces an empty static TLAS, so the levels it fills hold the sky until their next updates take it out by the hysteresis.</p>
+</section>
+
+<section class="part prose" id="sources">
+  <div class="part-mark">Sources</div>
+  <h2>Sources</h2>
+  <p class="note">Primary sources the update rests on, each with what it settles here; the engine's registry, <code>docs/references.toml</code>, holds the section and the verbatim quote under the key the code cites.</p>
+  <dl class="reading">
+    <dt><a href="https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=10">Majercik and colleagues, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, &sect;4.4</a></dt><dd>a texel's update weights each ray by the cosine to the texel's direction, depth by a cosine power, and blends by a hysteresis; <code>majercik-2019-ddgi-probe-update</code></dd>
+    <dt><a href="https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=9">The same, &sect;4.2</a></dt><dd>a Fibonacci spiral of ray directions, which DDGI rotates stochastically; <code>majercik-2019-ddgi-ray-directions</code></dd>
+    <dt><a href="https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=10">The same, &sect;4.4, the blend factor</a></dt><dd>a hysteresis between 0.85 and 0.98 a frame; <code>majercik-2019-ddgi-hysteresis</code></dd>
+    <dt><a href="https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=6">The same, &sect;3</a></dt><dd>8 &times; 8 texels of irradiance and 16 &times; 16 of depth moments a Probe; <code>majercik-2019-ddgi-probe-encoding</code></dd>
+  </dl>
+  <h3>History</h3>
+  <p class="note">The Cascade's store came first, created and counted but filled by nothing; the update then gave it its first rays, the sky with visibility, and with it the Ray scene's tracing became one function the shadow mask pass shares. This page describes the update as it is.</p>
+  <footer class="sources">Written from <code>src/render/probe_update_pass.rs</code>, <code>src/render/probes.rs</code>, <code>src/render/shaders/probe_trace.wgsl</code>, <code>probe_blend.wgsl</code>, <code>probes.wgsl</code>, <code>ray_scene.wgsl</code>, <code>common.wgsl</code>, <code>src/render/shaders/mod.rs</code>, <code>src/render/bind_groups.rs</code>, <code>renderer.rs</code>, <code>readback.rs</code>, <code>src/capture/mod.rs</code>, the tests named above, <code>CONTEXT.md</code>, ADRs 0014, 0020, 0021 and 0023, and the sources above.</footer>
+</section>
+
+<nav class="series" aria-label="Praxis field guides"><a href="tonemapping-pass.html">Previous: The tonemapping pass</a><a href="index.html">All field guides</a><a href="buffer-view-pass.html">Next: The buffer view pass</a></nav>
+</div>
+</div>
+<div class="concept-tip" id="concept-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  "use strict";
+  const tip = document.getElementById("concept-tip");
+  let current = null;
+  let lastPointer = "mouse";
+  document.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType || "mouse"; }, true);
+  function show(target) {
+    if (current && current !== target) current.removeAttribute("aria-describedby");
+    current = target;
+    tip.replaceChildren();
+    const heading = document.createElement("b");
+    heading.textContent = target.dataset.term || target.textContent.trim();
+    tip.append(heading, document.createTextNode(target.dataset.tip));
+    tip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight;
+    const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 12), window.innerWidth - width - 12);
+    let top = box.bottom + 8;
+    if (top + height > window.innerHeight - 12) top = box.top - height - 8;
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(top, 12) + "px";
+    target.setAttribute("aria-describedby", "concept-tip");
+  }
+  function hide() {
+    if (current) current.removeAttribute("aria-describedby");
+    current = null;
+    tip.hidden = true;
+  }
+  document.querySelectorAll(".concept[data-tip]").forEach((node) => {
+    node.setAttribute("tabindex", "0");
+    node.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") show(node); });
+    node.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hide(); });
+    node.addEventListener("focus", () => { if (node.matches(":focus-visible")) show(node); });
+    node.addEventListener("blur", hide);
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (current === node && lastPointer !== "mouse") hide(); else show(node);
+    });
+  });
+  document.addEventListener("click", hide);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hide(); });
+  window.addEventListener("scroll", hide, { passive: true });
+})();
+</script>
+</body>
+</html>

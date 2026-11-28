@@ -578,6 +578,8 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
       <span class="reads">Page: <a class="reference" href="lit-pass.html">The lit pass</a>, and <a class="reference" href="box-filtering.html">Box filtering</a> for what its samplers average</span></li>
     <li id="step-tone">The tonemapping pass, which maps the HDR target through GT7, encodes it as sRGB and dithers it into the 8-bit target.
       <span class="reads">Pages: <a class="reference" href="hdr-target.html">The HDR target</a>, for what the lit pass resolves into and this pass reads; <a class="reference" href="tonemapping-pass.html">The tonemapping pass</a></span></li>
+    <li>With the <code>probes</code> Render switch on, which ships off: the Probe update, which traces rays from a share of a Cascade's Probes through both TLAS and blends what they find, the sky where they escape, into the Probes' irradiance and depth moments.
+      <span class="reads">Page: <a class="reference" href="probe-update.html">The Probe update</a></span></li>
     <li>With the <code>count_point_lights</code> Render switch on, which ships off: the light count pass, which counts each lit pixel's point lights for the GPU stats.
       <span class="reads">Page: <a class="reference" href="froxel-pass.html#light-count">The Froxel pass, its light count section</a></span></li>
     <li>With the <code>buffer_view</code> Render switch naming a buffer, which ships naming none: the buffer view pass, which draws that buffer over the target as an image, for a capture to read.

@@ -39,8 +39,8 @@ mod transform;
 
 pub use assets::cooked;
 pub use capture::{
-    GOLDEN_DIRECTORY, GOLDEN_TOLERANCE, ImageDifference, ShadowMaskDifference, capture,
-    capture_frames, capture_probe_light, compare_images, difference_image, golden_captures,
+    GOLDEN_DIRECTORY, GOLDEN_TOLERANCE, ImageDifference, ProbeCapture, ShadowMaskDifference,
+    capture, capture_frames, capture_probes, compare_images, difference_image, golden_captures,
     golden_key, shadow_mask_differences,
 };
 pub use render::{

@@ -279,7 +279,7 @@ What one frame cost, measured by the engine itself: CPU time per system and stag
 _Avoid_: Metrics, telemetry
 
 **Timed pass**:
-A span of a frame's GPU work that the GPU timestamps at its start and end for Frame stats: a compute or render pass, or a span that markers bound (the dynamic TLAS's build, the BLAS refit). The set and its order are fixed; a frame that does not run one reads it as taking no time, and a bench lists only those its Render switches can run.
+A span of a frame's GPU work that the GPU timestamps at its start and end for Frame stats: a compute or render pass, a span that markers bound (the dynamic TLAS's build, the BLAS refit), or one from a compute pass's start to a later render pass's end (the Probe update). The set and its order are fixed; a frame that does not run one reads it as taking no time, and a bench lists only those its Render switches can run.
 _Avoid_: GPU pass (unqualified), timer, query
 
 **Baseline**:

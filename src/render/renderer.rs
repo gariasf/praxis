@@ -721,6 +721,12 @@ impl Renderer {
         Some(self.probe_update.as_ref()?.cascade().irradiance())
     }
 
+    /// The depth moments its Cascade's Probes hold, with the `probes` Render
+    /// switch on.
+    pub(crate) fn probe_depth_moments(&self) -> Option<&wgpu::Texture> {
+        Some(self.probe_update.as_ref()?.cascade().depth_moments())
+    }
+
     /// What its Instance buffer, light buffer and static TLAS hold, which
     /// the Frame data it draws must fit.
     pub fn capacities(&self) -> RenderCapacities {
