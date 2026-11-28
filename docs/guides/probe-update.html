@@ -281,7 +281,16 @@ fn blend_irradiance(@builtin(position) position: vec4&lt;f32&gt;) -&gt; @locatio
   <div class="part-mark">6 &middot; <code>praxis report</code></div>
   <h2>What it costs</h2>
   <p class="key-idea">No Baseline times the update, since the Probes ship off. On <code>town</code> at the reference size, the update's Timed pass and the GPU frame it adds are measured with the Probes on against the same binary's frames with them off.</p>
-  COST_TABLE
+  <p>Medians and 95th percentiles in microseconds from <code>praxis bench</code> on <code>town</code>, a release build at 2560&times;1440 with 4x MSAA over 1,800 measured frames, three rounds interleaved with the same build's frames with the Probes off. The frame grows by much less than the update's span: Metal runs the update beside the lit and tonemapping passes, which share nothing it writes, and those passes slow by part of what it takes.</p>
+  <div class="table-wrap">
+  <table class="facts compact">
+    <thead><tr><th>Scene</th><th>Adapter</th><th class="n"><code>probe_update</code> median</th><th class="n"><code>probe_update</code> p95</th><th class="n">GPU frame added, median, by round</th><th class="n">Heap allocations added a frame</th></tr></thead>
+    <tbody>
+      <tr><td><code>town</code></td><td>Apple M4 Pro, Metal</td><td class="n">4,836.5</td><td class="n">5,235.1</td><td class="n">1,061.7; 1,087.1; 1,129.4</td><td class="n">45</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">The rounds' runs, off then on: GPU frame medians 18,872.3 and 19,933.9, 18,855.1 and 19,942.2, 18,855.8 and 19,985.2. The update's memory, in every scene with the Probes on, is under <code>probes</code>, 29,427,744 bytes: the Cascade's 25,231,360, what a frame's 262,144 rays found at 16 bytes each, the directions' 2,048 and the uniform's 32; each frame uploads the uniform's 32 bytes and draws two triangles more.</p>
 </section>
 
 <section class="part prose" id="why">
