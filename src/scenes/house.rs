@@ -4,7 +4,9 @@ use std::f32::consts::FRAC_PI_2;
 use std::ops::Range;
 
 use bevy_ecs::prelude::*;
-use glam::{DVec3, FloatExt, dvec3};
+#[cfg(feature = "cook")]
+use glam::dvec3;
+use glam::{DVec3, FloatExt};
 
 use super::ReferenceScene;
 use crate::assets::AssetLoader;
