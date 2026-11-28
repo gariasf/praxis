@@ -27,6 +27,7 @@ use crate::streaming::{LoadedChunks, load_chunk};
 use crate::time::{FixedTime, SIXTY_HERTZ, TICK_SECONDS};
 use crate::transform::{PreviousWorldTransform, Teleported};
 
+mod house;
 pub(crate) mod simulation;
 mod town;
 pub(crate) mod world;
@@ -85,10 +86,16 @@ pub enum ReferenceScene {
     /// pool, seen out to its 2 km View distance, its Chunks past the 256 m
     /// Load radius as Far proxies, with flat ground beyond (`world.rs`).
     World,
+    /// Two rooms sharing a thin wall, room A with an open door and a lamp,
+    /// room B with a window that lets the sun onto its floor, in a yard
+    /// with a freestanding thin wall and props on the ground, seen from the
+    /// yard, through the door and in each room, exposed for each
+    /// (`house.rs`).
+    House,
 }
 
 impl ReferenceScene {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Helmet,
         Self::PbrSweep,
         Self::UvGrid,
@@ -101,6 +108,7 @@ impl ReferenceScene {
         Self::Crowd,
         Self::Town,
         Self::World,
+        Self::House,
     ];
 
     /// The name the capture command selects the scene by.
@@ -118,6 +126,7 @@ impl ReferenceScene {
             Self::Crowd => "crowd",
             Self::Town => "town",
             Self::World => "world",
+            Self::House => "house",
         }
     }
 
@@ -158,7 +167,8 @@ impl ReferenceScene {
             | Self::Shadows
             | Self::Crowd
             | Self::Town
-            | Self::World => &[],
+            | Self::World
+            | Self::House => &[],
         }
     }
 
@@ -251,6 +261,7 @@ impl ReferenceScene {
                 .collect(),
             Self::Town => town::materials(),
             Self::World => world::materials(),
+            Self::House => house::materials(),
         }
     }
 
@@ -297,7 +308,8 @@ impl ReferenceScene {
             | Self::FarCoplanar
             | Self::Shadows
             | Self::Crowd
-            | Self::Town => Vec::new(),
+            | Self::Town
+            | Self::House => Vec::new(),
             Self::World => world::textures(),
         }
     }
@@ -345,6 +357,7 @@ impl ReferenceScene {
             }
             Self::Town => town::meshes(),
             Self::World => world::meshes(),
+            Self::House => house::meshes(),
         }
     }
 
@@ -386,7 +399,7 @@ impl ReferenceScene {
     /// streamer streams within the Load radius.
     pub(crate) fn chunk_coordinates(self) -> Vec<[i32; 2]> {
         match self {
-            Self::Minification | Self::Shadows | Self::Crowd => vec![[0, 0]],
+            Self::Minification | Self::Shadows | Self::Crowd | Self::House => vec![[0, 0]],
             Self::Helmet
             | Self::PbrSweep
             | Self::UvGrid
@@ -444,6 +457,7 @@ impl ReferenceScene {
             Self::Crowd => (at_origin("ground"), Vec::new()),
             Self::Town => town::static_content(),
             Self::World => world::static_content(),
+            Self::House => house::static_content(),
         }
     }
 
@@ -511,16 +525,19 @@ impl ReferenceScene {
             Self::Crowd => Camera::looking_at(CROWD_CAMERA, CROWD_CAMERA_TARGET),
             Self::Town => town::camera_at(frame),
             Self::World => world::camera_at(frame),
+            Self::House => house::camera_at(frame),
         };
         camera.position += shift;
-        camera.ev100 = self.ev100();
+        camera.ev100 = self.ev100(frame);
         camera
     }
 
-    /// The scene's exposure, an EV100 set by hand (ADR 0023). Each scene
-    /// exposes the sun's illuminance to 1, as it was lit before its lights
-    /// took photometric units: EV100 16.35.
-    fn ev100(self) -> f32 {
+    /// The scene's exposure at `frame`, an EV100 set by hand (ADR 0023).
+    /// Each scene exposes the sun's illuminance to 1, as it was lit before
+    /// its lights took photometric units: EV100 16.35; house does in its
+    /// yard and keys it down along its path into its rooms.
+    fn ev100(self, frame: u32) -> f32 {
+        let sunlit = ev100_for_exposure(1.0 / SUN_ILLUMINANCE);
         match self {
             Self::Helmet
             | Self::PbrSweep
@@ -533,7 +550,8 @@ impl ReferenceScene {
             | Self::Shadows
             | Self::Crowd
             | Self::Town
-            | Self::World => ev100_for_exposure(1.0 / SUN_ILLUMINANCE),
+            | Self::World => sunlit,
+            Self::House => sunlit - house::stops_under_the_yard(frame),
         }
     }
 
@@ -553,7 +571,8 @@ impl ReferenceScene {
             | Self::Shadows
             | Self::Crowd
             | Self::Town
-            | Self::World => SIXTY_HERTZ,
+            | Self::World
+            | Self::House => SIXTY_HERTZ,
         }
     }
 
@@ -562,10 +581,13 @@ impl ReferenceScene {
     /// has none. `world`'s are over farmland with its settlement across the
     /// Load radius, at the settlement's edge, over its roofs, and over the
     /// farmland past it with the next settlement whole in the Far field.
+    /// `house`'s are in its yard, in room A's doorway, in room A and in
+    /// room B.
     pub fn golden_frames(self) -> &'static [u32] {
         match self {
             Self::Helmet => &[],
             Self::World => &[GOLDEN_FRAME, 300, 599, 1500],
+            Self::House => &[GOLDEN_FRAME, 360, 690, 1260],
             Self::PbrSweep
             | Self::UvGrid
             | Self::NormalTangent
@@ -596,7 +618,8 @@ impl ReferenceScene {
             | Self::TextureWall
             | Self::Shadows
             | Self::Crowd
-            | Self::World => self.golden_frames(),
+            | Self::World
+            | Self::House => self.golden_frames(),
         }
     }
 
@@ -616,7 +639,8 @@ impl ReferenceScene {
             | Self::TextureWall
             | Self::Shadows
             | Self::Crowd
-            | Self::World => 256.0,
+            | Self::World
+            | Self::House => 256.0,
         }
     }
 
@@ -632,7 +656,9 @@ impl ReferenceScene {
     /// The scene's sun, white, of `SUN_ILLUMINANCE`: a directional light
     /// whose forward axis is turned to shine along the scene's direction.
     /// town's stands 33° up in the south-southwest, behind the camera's
-    /// street, so the street takes the sun between long shadows.
+    /// street, so the street takes the sun between long shadows. house's
+    /// stands 37° up in the south-southeast, so it shines through room B's
+    /// window onto its floor.
     pub(crate) fn sun(self) -> (Transform, DirectionalLight) {
         let direction = match self {
             Self::Helmet
@@ -647,6 +673,7 @@ impl ReferenceScene {
             | Self::Crowd
             | Self::World => glam::vec3(0.5, -1.0, -0.3),
             Self::Town => glam::vec3(0.25, -0.55, -0.8),
+            Self::House => house::SUN_DIRECTION,
         };
         let transform = Transform {
             rotation: glam::Quat::from_rotation_arc(glam::Vec3::NEG_Z, direction.normalize()),
@@ -675,7 +702,8 @@ impl ReferenceScene {
             | Self::Shadows
             | Self::Crowd
             | Self::Town
-            | Self::World => Environment {
+            | Self::World
+            | Self::House => Environment {
                 ambient_illuminance: glam::Vec3::splat(0.1 * SUN_ILLUMINANCE),
                 background_luminance: glam::vec3(0.1, 0.2, 0.3) * SUN_ILLUMINANCE,
             },
@@ -704,6 +732,7 @@ impl ReferenceScene {
             Self::Crowd => spawn_crowd_as(world, loader, crowd_form),
             Self::Town => town::spawn_town(world, loader),
             Self::World => world::spawn_world(world, loader),
+            Self::House => house::spawn_house(world, loader),
         }
     }
 }

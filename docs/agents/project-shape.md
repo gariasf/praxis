@@ -72,7 +72,8 @@ src/
                                  it, and the schedules that advance it;
                                  town.rs, the dense scene's generator;
                                  world.rs, the streamed Game world's
-                                 generator
+                                 generator; house.rs, the interior
+                                 scene's generator and camera path
   components.rs                # ECS components (Transform, MeshRef)
   threading.rs                 # compute pool, schedule executor (ADR 0016)
   camera/, time/, input/,      # feature modules: resource (+ systems)
