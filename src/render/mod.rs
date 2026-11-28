@@ -2,6 +2,7 @@ pub mod acceleration_structures;
 pub mod bend_pass;
 pub mod bind_groups;
 pub mod blas_refit;
+pub mod buffer_view_pass;
 pub mod culling_pass;
 pub mod depth_pyramid_pass;
 pub mod froxel_pass;
@@ -31,6 +32,7 @@ mod shader_tests;
 pub use acceleration_structures::{
     DYNAMIC_TLAS_CAPACITY, blas_bytes, compacted_blas_fraction, tlas_bytes,
 };
+pub use buffer_view_pass::BufferView;
 pub use instance::{InstanceData, NO_MATERIAL, NO_MESH};
 pub use prepare::{FrameData, FramePreparer};
 pub(crate) use ray_scene::{BLAS_REFIT, DYNAMIC_TLAS_RECORDING, DYNAMIC_TLAS_SUBMIT};

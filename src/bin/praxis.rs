@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use anyhow::Context;
 use praxis::bench::{BenchStart, Budgets, CompareMode, Configuration, Measurements, Verdict};
 use praxis::gpu::GpuContext;
-use praxis::{CrowdForm, ReferenceScene, RenderSwitches};
+use praxis::{BufferView, CrowdForm, ReferenceScene, RenderSwitches};
 
 /// The capture size when the command names none: small, and 16:9 like the
 /// window.
@@ -56,6 +56,8 @@ enum Command {
         golden_frames: bool,
         /// The LOD every Instance draws, in place of the one selected.
         forced_lod: Option<u32>,
+        /// The buffer written in place of the frame's display colour.
+        buffer_view: Option<BufferView>,
     },
     #[cfg(feature = "cook")]
     ShadowMaskDifference {
@@ -137,14 +139,19 @@ fn run_command(arguments: &[String]) -> anyhow::Result<()> {
             frames,
             golden_frames,
             forced_lod,
+            buffer_view,
         } => capture(
             &scene,
             &output,
             &size,
-            crowd_form,
             &frames,
             golden_frames,
-            forced_lod,
+            RenderSwitches {
+                crowd_form,
+                forced_lod,
+                buffer_view,
+                ..RenderSwitches::default()
+            },
         ),
         #[cfg(feature = "cook")]
         Command::ShadowMaskDifference {
@@ -229,6 +236,16 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
                 .map_err(|_| anyhow::anyhow!("--lod takes a LOD's number, not {lod:?}"))
         })
         .transpose()?;
+    let buffer = take_option(&mut arguments, "--buffer")?;
+    let buffer_view = buffer
+        .as_deref()
+        .filter(|&name| name != "target")
+        .map(|name| {
+            BufferView::from_name(name).ok_or_else(|| {
+                anyhow::anyhow!("--buffer takes {}, not {name:?}", BufferView::USAGE)
+            })
+        })
+        .transpose()?;
     let release_build_seconds = take_option(&mut arguments, "--release-build-seconds")?
         .map(|seconds| {
             seconds.parse::<u64>().map_err(|_| {
@@ -251,6 +268,10 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
     anyhow::ensure!(
         !golden_frames || frames.is_empty(),
         "`capture` takes --golden-frames or --frame, not both"
+    );
+    anyhow::ensure!(
+        buffer.is_none() || command == Some("capture"),
+        "only `capture` takes --buffer"
     );
     anyhow::ensure!(
         !skip_aliasing || command == Some("bench"),
@@ -335,6 +356,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             frames,
             golden_frames,
             forced_lod,
+            buffer_view,
         },
         #[cfg(feature = "cook")]
         [command, scene, output, size] if command == "capture" => Command::Capture {
@@ -345,6 +367,7 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
             frames,
             golden_frames,
             forced_lod,
+            buffer_view,
         },
         #[cfg(feature = "cook")]
         [command, scene, output, size @ ..]
@@ -439,22 +462,23 @@ fn parse_command(arguments: &[String]) -> anyhow::Result<Command> {
         }
         _ => {
             // Like the commands, their usage exists only in a `cook` build.
-            let (cook_commands, crowd_form_clause) = if cfg!(feature = "cook") {
+            let (cook_commands, crowd_form_clause, buffer_clause) = if cfg!(feature = "cook") {
                 (
-                    "`cook [<scene>]`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>[,<n>...] | --golden-frames] [--lod <n>]`, \
+                    "`cook [<scene>]`, `fetch`, `capture <scene> <png path> [<width>x<height>] [--frame <n>[,<n>...] | --golden-frames] [--lod <n>] [--buffer <name>]`, \
                      `shadow-mask-difference <scene> <png path> [<width>x<height>] --frame <n>[,<n>...]`, \
                      `export-scene <scene> <directory> [--frame <n>]`, \
                      `difference <expected png> <actual png> <difference png>`, ",
                     "`capture` and `bench` also take",
+                    format!("; `capture --buffer` takes {}", BufferView::USAGE),
                 )
             } else {
-                ("", "`bench` also takes")
+                ("", "`bench` also takes", String::new())
             };
             anyhow::bail!(
                 "unexpected arguments {arguments:?}: run `praxis [<scene>]`, `capabilities`, \
              `preflight`, `scenes`, {cook_commands}`bench <output directory> [--ci | --counters | --ci-counters] [--skip-aliasing] [--no-publish [--lod <n>] | --experiment <name>] [<scene>...]`, \
              `publish <bench directory> [--release-build-seconds <seconds> | --experiment <name>]`, `history import`, `history unrecorded`, `history suspects`, `history bisect <night directory>`, `history publish-night <night directory>`, `history regressions`, `history rerecord <bench directory>`, `compare <bench directory> [--ci | --recording]`, `report <bench directory>`, or `traverse`; {crowd_form_clause} \
-             `--crowd-form <proxies | refit | rebuild>`; scenes are {:?}",
+             `--crowd-form <proxies | refit | rebuild>`{buffer_clause}; scenes are {:?}",
                 ReferenceScene::ALL.map(ReferenceScene::name)
             )
         }
@@ -927,31 +951,28 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
 }
 
 /// Renders the Reference scene named `scene` headless at `size`,
-/// `<width>x<height>`, its crowd in `crowd_form`, and writes `frames` of its
+/// `<width>x<height>`, as `switches` set, and writes `frames` of its
 /// camera path, rendered in one run, as PNGs: one frame to `output`, each of
 /// several beside it as `<output stem>-frame-<n>.png`. With `golden_frames`,
 /// it writes the scene's Golden frames, named the same way, rendered as the
 /// Goldens test renders them (`praxis::golden_captures`). With neither, it
 /// writes the last frame `praxis::capture` renders and prints that frame's
-/// stats, its point lights per lit pixel counted. With `forced_lod`, every Instance draws that LOD.
+/// stats, its point lights per lit pixel counted.
 /// The PNG encoder comes with `cook`.
 #[cfg(feature = "cook")]
 fn capture(
     scene: &str,
     output: &str,
     size: &str,
-    crowd_form: CrowdForm,
     frames: &[u32],
     golden_frames: bool,
-    forced_lod: Option<u32>,
+    switches: RenderSwitches,
 ) -> anyhow::Result<()> {
     let scene = parse_scene(scene)?;
     let (width, height) = parse_size(size)?;
     let switches = RenderSwitches {
         count_point_lights: frames.is_empty() && !golden_frames,
-        crowd_form,
-        forced_lod,
-        ..RenderSwitches::default()
+        ..switches
     };
     let context = || pollster::block_on(GpuContext::headless());
     let (captures, last_frame) = if golden_frames {
@@ -1357,6 +1378,50 @@ mod tests {
             error.contains("only `bench` takes --skip-aliasing"),
             "{error}"
         );
+    }
+
+    #[cfg(feature = "cook")]
+    #[test]
+    fn capture_takes_a_buffer_by_name_and_the_usage_lists_each() {
+        let parse_buffer = |name| parse(&["capture", "--buffer", name, "town", "out.png"]);
+        let buffer_view = |command| match command {
+            Command::Capture { buffer_view, .. } => buffer_view,
+            _ => panic!("capture parsed as another command"),
+        };
+        let usage = parse(&["help"]).unwrap_err().to_string();
+        assert!(usage.contains("`target`"), "{usage}");
+        assert_eq!(
+            buffer_view(parse(&["capture", "town", "out.png"]).unwrap()),
+            None
+        );
+        assert_eq!(buffer_view(parse_buffer("target").unwrap()), None);
+        for (name, expected) in [
+            ("depth", BufferView::Depth),
+            ("normals", BufferView::SurfaceNormals),
+            ("triangle-normals", BufferView::TriangleNormals),
+            ("depth-pyramid", BufferView::DepthPyramid(0)),
+            ("depth-pyramid:3", BufferView::DepthPyramid(3)),
+            ("point-lights", BufferView::PointLights),
+            ("shadow-mask", BufferView::ShadowMask(0)),
+            ("shadow-mask:58", BufferView::ShadowMask(58)),
+            ("hdr", BufferView::Hdr),
+        ] {
+            assert_eq!(
+                buffer_view(parse_buffer(name).unwrap()),
+                Some(expected),
+                "{name}"
+            );
+            let buffer = name.split(':').next().unwrap_or(name);
+            assert!(usage.contains(&format!("`{buffer}")), "{buffer}: {usage}");
+        }
+        for name in ["albedo", "depth:1", "shadow-mask:59", "depth-pyramid:last"] {
+            let error = parse_buffer(name).unwrap_err().to_string();
+            assert!(error.contains("--buffer takes `target`"), "{name}: {error}");
+        }
+        let error = parse(&["bench", "out", "--buffer", "depth"])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("only `capture` takes --buffer"), "{error}");
     }
 
     #[cfg(feature = "cook")]

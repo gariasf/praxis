@@ -250,8 +250,9 @@ When reviewing changes, check for:
 - [ ] A new or changed shading function in WGSL has an oracle test
       in `src/render/shader_function_tests.rs`
 - [ ] Texture formats match between creation and surface config, and
-      sRGB is encoded once: the tonemapping pass alone encodes it, in its
-      shader, into 8-bit UNORM targets, so its dither lands on 8-bit steps
+      sRGB is encoded once, in the shader of the pass that writes the target,
+      into 8-bit UNORM targets: the tonemapping pass, so its dither lands on
+      8-bit steps, and the buffer view pass over it, for its HDR view
 - [ ] Outside `src/render/`, no `unwrap()` on a GPU operation that could
       fail at runtime: `?` or explicit handling
 - [ ] No GPU resources stored on ECS components — components are pure

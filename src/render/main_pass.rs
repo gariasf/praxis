@@ -52,7 +52,8 @@ pub struct MainPass {
     /// pass rather than by the lit pass.
     shadow_rays: bool,
     /// Whether the lit pass keeps the depth it ends with, for the light
-    /// count pass (the `count_point_lights` Render switch).
+    /// count pass (the `count_point_lights` Render switch) or the buffer
+    /// view pass (`buffer_view`).
     keeps_depth: bool,
 }
 
@@ -223,7 +224,7 @@ impl MainPass {
             packed_indices_buffer: culling_pass.packed_indices().clone(),
             frame_draw_buffer: culling_pass.frame_draw().clone(),
             shadow_rays: switches.shadow_rays,
-            keeps_depth: switches.count_point_lights,
+            keeps_depth: switches.count_point_lights || switches.buffer_view.is_some(),
         }
     }
 

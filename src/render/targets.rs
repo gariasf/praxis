@@ -190,7 +190,8 @@ impl RenderTargets {
             },
         );
         RenderTargets {
-            // Bound by the depth pyramid, shadow mask and light count passes.
+            // Bound by the depth pyramid, shadow mask, light count and buffer
+            // view passes.
             depth: target(
                 "Depth Texture",
                 DEPTH_FORMAT,

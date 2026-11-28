@@ -25,8 +25,9 @@ fn tonemap(exposed: vec3<f32>) -> vec3<f32> {
 }
 
 // IEC 61966-2-1's sRGB encoding of display-linear colour
-// [ref:khronos-dfs-srgb], clamped to [0, 1]. The tonemapping pass encodes here,
-// once, into an 8-bit UNORM target, so its dither lands on 8-bit steps.
+// [ref:khronos-dfs-srgb], clamped to [0, 1]. The pass that writes the target
+// encodes here, once, into an 8-bit UNORM target, so the tonemapping pass's
+// dither lands on 8-bit steps.
 fn srgb_encode(display: vec3<f32>) -> vec3<f32> {
     let clamped = clamp(display, vec3<f32>(0.0), vec3<f32>(1.0));
     return select(
