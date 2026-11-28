@@ -1,10 +1,7 @@
-//! The Probe update (ADR 0020): a compute pass traces a fixed count of rays
-//! from the Probes of a share of a Cascade's levels through the Ray scene. A
-//! ray that misses reads the sky, the scene's ambient illuminance over π; a
-//! hit reads black.
-
 use crate::render::CameraUniform;
-use crate::render::bind_groups::{PROBE_TRACE_INPUTS, RAY_SCENE, compute_pipeline, pipeline_layout};
+use crate::render::bind_groups::{
+    PROBE_TRACE_INPUTS, RAY_SCENE, compute_pipeline, pipeline_layout,
+};
 use crate::render::probes::{Cascade, PROBE_COUNTS};
 use crate::render::readback::FrameTimestamps;
 use crate::render::renderer::SharedBuffers;
@@ -207,7 +204,6 @@ fn probe_ray_directions() -> [[f32; 4]; PROBE_RAYS as usize] {
 mod tests {
     use super::*;
 
-    /// Unit vectors whose mean is within a ray's share of zero.
     #[test]
     fn probe_rays_are_unit_directions_spread_over_the_sphere() {
         let directions = probe_ray_directions().map(|[x, y, z, _]| glam::vec3(x, y, z));

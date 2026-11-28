@@ -357,7 +357,7 @@ impl ShaderModule {
              const NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE: f32 = {NARROWEST_SHADOW_CLASS_BOUNDS_PER_METRE:?};\n\
              const SHADOW_WIDTH_CLASSES: u32 = {SHADOW_WIDTH_CLASSES}u;\n\
              const PROBE_COUNTS: vec3<u32> = vec3<u32>({}u, {}u, {}u);\n\
-             const PROBE_SPACING: f32 = {PROBE_SPACING_METRES:?};\n\
+             const PROBE_SPACING_METRES: f32 = {PROBE_SPACING_METRES:?};\n\
              const PROBE_RAYS: u32 = {PROBE_RAYS}u;\n\
              const PROBE_TRACE_WORKGROUP_SIZE: u32 = {PROBE_TRACE_WORKGROUP_SIZE}u;\n",
             ANCHOR_CELL_SIZE as f32,

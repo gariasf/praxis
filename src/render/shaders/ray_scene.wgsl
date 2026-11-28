@@ -1,5 +1,3 @@
-// Tracing the Ray scene (src/render/ray_scene.rs), shared by the passes that trace it.
-
 // A directional light's shadow ray and a probe ray run to f32's largest
 // distance, past anything a TLAS holds.
 const UNBOUNDED_RAY_DISTANCE: f32 = 3.40282347e38;

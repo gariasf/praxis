@@ -105,11 +105,10 @@ pub const SCENE_GEOMETRY: BindGroupDefinition = BindGroupDefinition {
 /// since each TLAS is rebuilt in place: a static TLAS and the dynamic TLAS,
 /// which its rays are traced against (ADR 0020). The shadow mask pass and the
 /// Probe update's trace set it, and the dynamic TLAS's markers bind the
-/// dynamic one: at submit,
-/// wgpu-core walks a TLAS's dependencies, one per distinct BLAS it holds
-/// [ref:wgpu-pr-9835], for each flush of a group holding it, at least once
-/// per pass that binds one [ref:wgpu-30-use-tlas-per-flush]
-/// [ref:wgpu-30-submit-tlas-dependencies].
+/// dynamic one: at submit, wgpu-core walks a TLAS's dependencies, one per
+/// distinct BLAS it holds [ref:wgpu-pr-9835], for each flush of a group
+/// holding it, at least once per pass that binds one
+/// [ref:wgpu-30-use-tlas-per-flush] [ref:wgpu-30-submit-tlas-dependencies].
 pub const RAY_SCENE: BindGroupDefinition = BindGroupDefinition {
     index: 2,
     label: "Ray Scene Bind Group",

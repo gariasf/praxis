@@ -774,7 +774,9 @@ pub fn run(
         &frames,
         &frames_without_rays,
     )?;
-    (measurements.gpu_pass_microseconds).retain(|pass, _| switches.can_time(pass));
+    measurements
+        .gpu_pass_microseconds
+        .retain(|pass, _| switches.can_time(pass));
     let aliasing = configuration
         .aliasing
         .then(|| measure_aliasing(context, scene, switches))

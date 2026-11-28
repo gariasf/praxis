@@ -19,7 +19,7 @@ use crate::render::light_count_pass::{LightCountPass, LightCountTargetGroups};
 use crate::render::main_pass::{
     DEPTH_PREPASS, LIT_PASS, MainPass, MainTargetGroups, PHASE_TWO_DEPTH_PASS,
 };
-use crate::render::probe_update_pass::{PROBE_UPDATE_PASS, ProbeUpdatePass};
+use crate::render::probe_update_pass::{PROBE_UPDATE_PASS, ProbeUpdatePass, ProbeUpdateUniform};
 use crate::render::ray_scene::{RayScene, create_frame_encoder};
 use crate::render::readback::GpuStatsReadback;
 use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass, ShadowMaskTargetGroups};
@@ -282,7 +282,8 @@ impl RenderCapacities {
         }
     }
 
-    /// The most one frame uploads: every buffer `upload` writes, in full.
+    /// The most one frame uploads with the Probes off: every buffer `upload`
+    /// writes, in full.
     fn most_uploaded_bytes(instances: u32, lights: u32) -> u64 {
         (size_of::<CameraUniform>()
             + size_of::<LightUniform>()
@@ -290,6 +291,16 @@ impl RenderCapacities {
             + BEND_CAPACITY as usize * size_of::<BendData>()) as u64
             + u64::from(lights) * size_of::<LightData>() as u64
             + u64::from(instances) * size_of::<InstanceData>() as u64
+    }
+
+    /// These capacities with the Probes on, whose update's uniform each frame
+    /// also uploads: the load staging's share gives up its bytes.
+    fn with_probes(self) -> Self {
+        let uniform_bytes = size_of::<ProbeUpdateUniform>() as u64;
+        Self {
+            load_bytes_per_frame: self.load_bytes_per_frame - uniform_bytes,
+            ..self
+        }
     }
 
     /// The capacities of `Budgets::checked_in`.
@@ -501,7 +512,11 @@ impl Renderer {
         // samplers) serves every material. Created before the main pass
         // because its pipeline layout references its bind group layout.
         let pool_capacities = PoolCapacities::checked_in();
-        let mut capacities = RenderCapacities::checked_in();
+        let capacities = if switches.probes {
+            RenderCapacities::checked_in().with_probes()
+        } else {
+            RenderCapacities::checked_in()
+        };
         let mut load_staging = LoadStaging::new(device.clone());
         let material_pool = MaterialPool::new(
             &device,
@@ -578,9 +593,6 @@ impl Renderer {
         .chain(probe_update.as_ref().map(ProbeUpdatePass::uniform_buffer));
         let frame_staging =
             FrameStaging::new(&memory, uploaded_buffers.map(wgpu::Buffer::size).sum());
-        if let Some(probe_update) = &probe_update {
-            capacities.load_bytes_per_frame -= probe_update.uniform_buffer().size();
-        }
         let scene_geometry_bind_group = SCENE_GEOMETRY.bind_group(
             &device,
             &scene_geometry_bind_group_layout,
