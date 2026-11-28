@@ -13761,3 +13761,189 @@ url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f13
 section = "Godot 4.7.2-stable (commit ed1daf0), servers/rendering/renderer_rd/shaders/environment/sdfgi_direct_light.glsl, L313, L318 and L404: a voxel traces the cascade's distance field toward each light of its list"
 quote = '''// Raytrace light [...] for (uint i = 0; i < params.light_count; i++) { [...] while (advance < max_advance) { //read how much to advance from SDF'''
 checked = 2026-11-28
+
+["majercik-2019-ddgi-lookup-weights"]
+url = "https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=13"
+section = "Majercik, Guertin, Nowrouzezahrai and McGuire, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, §5.2, pp. 13-15, with Figures 6 and 7: the weights of the eight-probe cage"
+quote = '''To avoid sampling visibility near the visibility-function boundary (i.e., the surface), we offset from the world-space position at X based on the surface normal and the camera-view vector. [...] we backface-cull probes that lie below the shading point’s tangent plane, using a soft threshold that falls off smoothly as the dot product of the shading normal with the direction towards a probe approaches zero, [...] we reduce the contribution of very low-irradiance values (i.e., less than 5% of the representable intensity range) according to a monotonically [...] we apply mean- and variance-biased Chebyshev interpolants, as detailed in the variance shadow-mapping method, to our visibility queries [...] Each of these weighting terms are appropriately bound using conservative epsilon tests in order to avoid numerical issues when normalizing the weights, e.g., when per-probe weights approach zero.'''
+checked = 2026-11-28
+
+["majercik-2019-ddgi-probes-in-walls"]
+url = "https://jcgt.org/published/0008/02/01/paper-lowres.pdf#page=8"
+section = "Majercik, Guertin, Nowrouzezahrai and McGuire, Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields, JCGT 8(2), 2019, §4.1, pp. 8-9"
+quote = '''probes that fall inside walls or other geometry will [...] be ignored by visibility-query metrics [2017b]. [...] We recommend using a grid resolution and scale that results in at least one full cage of vertices in each room-like space.'''
+checked = 2026-11-28
+
+["majercik-2021-ddgi-probe-query"]
+url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=4"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §2.2, p. 4"
+quote = '''For every point within the volume, there are eight probes (corners of a 3D box) that surround it. Loop over those eight probes. For each one, compute a probe weight from a combination of [...] the trilinear weight from probe position; [...] the backface weight (is the probe behind the point relative to the normal?); [...] Read the value from each probe in the direction of the normal and sum those using the computed weights'''
+checked = 2026-11-28
+
+["majercik-2021-ddgi-self-shadow-bias"]
+url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=8"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §4.1, pp. 8-9, with Equation (2) and Figure 3"
+quote = '''variance in the visibility estimate will be highest around the mean of the distribution—in other words, at the surface. [...] where n is the normal vector at the sample point, ωo is the direction from the sample point to the camera, 0.2 and 0.8 are empirically determined constants [...] and TunableShadow [...] Bias is a user-tunable parameter (with a default value of 0.3). [...] a higher self-shadow bias is necessary when there is increased variance in the depth estimate, as would be the case when lower ray counts are used to update the probes [...] probe-update rays that hit backfaces record a value of 0 for irradiance and shorten their depth values by 80%. [...] The wall entering the alley in the left image [...] shows light leaking due to overly high self-shadow bias.'''
+checked = 2026-11-28
+
+["majercik-2021-ddgi-perceptual-encoding"]
+url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=9"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §4.2, pp. 9-10, with Listing 2"
+quote = '''We determined experimentally that an exponent of 5.0 leads to best results [...] // Decode the tone curve, but leave a gamma = 2 curve [...] // to approximate sRGB blending for the trilinear'''
+checked = 2026-11-28
+
+["majercik-2021-ddgi-probe-relocation"]
+url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=12"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §5, pp. 12-14 and 16, with Figures 5 and 6"
+quote = '''The probe visibility information prevents light and shadow leaks from occluded probes, but leaves some probes in total occlusion such that they never contribute to shading. [...] The acute corner leads to shadow leaking (labeled with a green ellipse) with a default probe grid (top). Our optimizer adjusts probes out of the wall and ceiling to remove the leak [...] We do not move probes around dynamic geometry because this causes instability—a stable result is preferable to an unstable result with lower average error. [...] probes never move more than one half the minimum probe spacing (relative to a grid axis) during optimization. [...] We cap the number of iterations at five to prevent probes from moving back and forth (infinitely) through tangent backfaces.'''
+checked = 2026-11-28
+
+["majercik-2021-ddgi-probe-off-state"]
+url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=16"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §6.1-6.2, pp. 16-17, and Listing 5, p. 18"
+quote = '''We identify probes that remain inside static geometry and turn them “off” (never trace or update). As the optimizer only considers static geome [...] try, probes that happen to spawn inside dynamic geometry are unaffected and will correctly turn on when appropriate. [...] if (still in wall): [...] OFF'''
+checked = 2026-11-28
+
+["majercik-2021-ddgi-tracking-window"]
+url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=21"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §7.3, p. 21, and §7.4, p. 24, with Figure 13"
+quote = '''As the camera moves, if it moves further from the center than the distance between two probes in a cage (along any axis), a new plane of probes spawns in front of it (relative to its direction of motion), and the plane furthest behind it disappears. [...] the probes “leapfrog” over the camera in discrete steps [...] can cause popping in the GI when applied to camera-locked volumes. [...] we address this by tightening the transition region by one grid cell (along each axis) then centering it on the camera.'''
+checked = 2026-11-28
+
+["majercik-2021-ddgi-volume-blending"]
+url = "https://jcgt.org/published/0010/02/01/paper.pdf#page=22"
+section = "Majercik, Marrs, Spjut and McGuire, Scaling Probe-Based Real-Time Dynamic Global Illumination for Production, JCGT 10(2), 2021, §7.4, pp. 22 and 24"
+quote = '''We blend between volumes by linearly falling off from 1.0–0.0 at the last grid cell (starting at the second-to-last plane of probes) along each axis of the 3D grid [...] We sample in density order because the densest volume will have the best approximation of the local light field at a point it contains. [...] After the weight total reaches 1.0, further volumes are skipped. [...] test to determine which volumes contain the shaded point is fast to evaluate; [...] For the pure cascaded method, these optimizations are not necessary because volumes are axis-aligned in world space and nested in a regular pattern.'''
+checked = 2026-11-28
+
+["mcguire-2017-light-field-probes-visibility"]
+url = "https://casual-effects.com/research/McGuire2017LightField/McGuire2017LightField.pdf#page=6"
+section = "McGuire, Mara, Nowrouzezahrai and Luebke, Real-Time Global Illumination using Precomputed Light Field Probes, I3D 2017, the authors' copy, §5, pp. 6-7"
+quote = '''a clamped dot product of the shading point’s surface normal and the direction towards each probe center (i.e., projected area, corresponding to a spatiallysmooth backface test), and by a Chebyshev visibility test of the local radiance distance distribution, using the two filtered moments as spherical analogues of a variance shadow map test [Donnelly and Lauritzen 2006] [...] first, when a probe (or texel or voxel) lies inside an object, it is completely black and leaks darkness around itself; second, when the probe is in free space but illumination conditions vary rapidly around it (i.e., due to occlusions) then light can leak, e.g., through the wall.'''
+checked = 2026-11-28
+
+["lauritzen-2007-vsm-light-bleeding"]
+url = "https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-8-summed-area-variance-shadow-maps"
+section = "Lauritzen, Summed-Area Variance Shadow Maps, GPU Gems 3, chapter 8, 2007, §8.4.3 Light Bleeding, with Listing 8-3 (NVIDIA's online edition)"
+quote = '''One known issue of variance shadow maps is the potential for light bleeding (light that occurs in areas that should be fully in shadow). [...] a simple modification to p max can greatly reduce the light bleeding, at the cost of somewhat darkening the penumbra regions. [...] We can remove these regions by modifying p max so that any values below some minimum intensity are mapped to 0, and the remaining values are rescaled so that they map from 0 (at the minimum intensity) to 1. [...] setting it too high will decrease shadow detail.'''
+checked = 2026-11-28
+
+["nvidia-rtxgi-f33e496-licence"]
+url = "https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/f33e496ca31b3f0eec1c4e2cbaa8bb620e337fa6/License.txt#L1"
+section = "NVIDIA RTXGI-DDGI SDK at commit f33e496 (2024-02-05), License.txt (L1, L27): the SDK is under NVIDIA's RTX SDKs licence; only the licence and the docs folder were read, no shader code"
+quote = '''NVIDIA RTX SDKs LICENSE [...] (b) Modify and create derivative works of sample source code delivered in the [...] SDK, and'''
+checked = 2026-11-28
+
+["nvidia-rtxgi-f33e496-relocation-classification"]
+url = "https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/f33e496ca31b3f0eec1c4e2cbaa8bb620e337fa6/docs/DDGIVolume.md#L718"
+section = "NVIDIA RTXGI-DDGI SDK at commit f33e496 (2024-02-05), docs/DDGIVolume.md, Probe Relocation (L718-L734), Probe Classification (L736-L751) and Fixed Probe Rays (L761-L767)"
+quote = '''If enough of the probe's total rays are backfaces hits, then the probe is likely inside geometry. [...] the maximum adjustment to its position is 45% of the grid cell distance to prevent probes from being relocated outside of their grid voxel. [...] If the ratio of backface hits exceeds the threshold, mark the probe as inactive. [...] If no ray marks the probe as active, mark the probe as inactive. [...] Fixed rays have the *same* direction(s) every update cycle and are **not** randomly rotated. Fixed rays are *excluded* from probe blending since their regularity would bias the radiance and distance results. [...] The number of fixed rays is specified by the ```RTXGI_DDGI_NUM_FIXED_RAYS``` define, which is 32 by default.'''
+checked = 2026-11-28
+
+["nvidia-rtxgi-f33e496-scrolling"]
+url = "https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/f33e496ca31b3f0eec1c4e2cbaa8bb620e337fa6/docs/DDGIVolume.md#L686"
+section = "NVIDIA RTXGI-DDGI SDK at commit f33e496 (2024-02-05), docs/DDGIVolume.md, Infinite Scrolling Movement (L686-L716)"
+quote = '''Critically, instead of adjusting the position of all probes when the active area is scrolled, *only the planes of probes on the edges of the volume* on the axis of motion are invalidated and must reconverge. *All interior probes remain stationary* and retain valid irradiance and distance values. [...] Anchor the infinite scrolling volume to the camera view or a player character and use the camera or player's movement to drive the volume's scrolling of the active area.'''
+checked = 2026-11-28
+
+["nvidia-rtxgi-f33e496-walls-and-view-bias"]
+url = "https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/f33e496ca31b3f0eec1c4e2cbaa8bb620e337fa6/docs/DDGIVolume.md#L788"
+section = "NVIDIA RTXGI-DDGI SDK at commit f33e496 (2024-02-05), docs/DDGIVolume.md, Rules of Thumb: Geometry Configuration (L788-L794), Probe Density and Counts (L796-L801), View Bias (L803-L808)"
+quote = '''Walls should have a "thickness" that is proportional to the probe density of the containing ```DDGIVolume```. [...] If walls are too thin relative to the volume's probe density, you will observe **light leaking**. [...] **We recommend a probe every 2-3 meters for typical use cases.** [...] ```probeViewBias``` is a world-space offset along the camera view ray applied to the shaded surface point to avoid numerical instabilities when determining visibility. [...] Since ```probeViewBias``` is a world-space value, scene scale matters!'''
+checked = 2026-11-28
+
+["nvidia-rtxgi-f33e496-shader-api"]
+url = "https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/f33e496ca31b3f0eec1c4e2cbaa8bb620e337fa6/docs/ShaderAPI.md#L119"
+section = "NVIDIA RTXGI-DDGI SDK at commit f33e496 (2024-02-05), docs/ShaderAPI.md, DDGIStoreProbeRayBackfaceHit (L91-L93), DDGIGetSurfaceBias (L119-L121) and DDGIGetVolumeBlendWeight (L124-L126)"
+quote = '''Negates and decreases the hit distance by 80% to decrease the probe's influence during blending and mark a backface hit for probe relocation and classification. [...] Computes the ```surfaceBias``` parameter that should be passed to ```DDGIGetVolumeIrradiance(...)```. The ```surfaceNormal``` and ```cameraDirection``` arguments should be normalized. [...] All positions inside the given volume recieve a weight of 1. Positions outside the volume receive a weight in [0, 1] that decreases as the position moves away from the volume.'''
+checked = 2026-11-28
+
+["unity-hdrp-17-apv-leak-fixes"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/probevolumes-fixissues.html"
+section = "Unity, High Definition Render Pipeline 17.0.4 manual, Fix issues with Adaptive Probe Volumes: How Light Probe validity works, Fix light leaks, Use Rendering Layer Masks, Fix seams"
+quote = '''Virtual Offset tries to make invalid Light Probes valid, by moving their capture points so they're outside any colliders. [...] Dilation detects Light Probes that remain invalid after Virtual Offset, and gives them data from valid Light Probes nearby. [...] Adjust walls so their width is closer to the distance between probes in the local brick [...] For performance reasons, Adaptive Probe Volumes only supports up to 4 Rendering Layers Masks. [...] At runtime, renderers will only sample lighting data from probes that have a matching Rendering Layer Mask. If the object doesn't match any of the Masks defined in the Lighting window, it will sample lighting from all the valid surrounding probes. [...] you can create an Interior and an Exterior Rendering Layer Mask to ensure interior objects will never sample lighting data from exterior probes [...] A renderer can have several Rendering Layers enabled in it's Rendering Layer Masks. This is useful when dealing with dynamic objects that may want to sample lighting from both the exterior and interior probes. [...] Using a Probe Adjustment Volume component solves most light leak issues, but often not all. [...] Seams are caused when two adjacent bricks have different Light Probe densities.'''
+checked = 2026-11-28
+
+["unity-hdrp-17-apv-sampling-options"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/probevolumes-options-override-reference.html"
+section = "Unity, High Definition Render Pipeline 17.0.4 manual, Adaptive Probe Volumes Options Override reference"
+quote = '''Normal Bias [...] Enable to move the position used by shaded pixels when sampling Light Probes. The value is in meters. This affects how sampling is moved along the pixel's surface normal. [...] Enable to move the sampling position towards the camera when sampling Light Probes. The results of View Bias vary depending on the camera position. [...] Enable to animate sampling noise when Temporal Anti-Aliasing (TAA) is enabled. [...] Performance: The uvw used to sample APV data are warped to try to have invalid probe not contributing to lighting. This samples APV a single time so it's a cheap option but will only work in the simplest cases. [...] Quality: This option samples APV between 1 and 3 times to provide the smoothest result without introducing artifacts.'''
+checked = 2026-11-28
+
+["unity-hdrp-17-apv-dilation-settings"]
+url = "https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.0/manual/probevolumes-lighting-panel-reference.html"
+section = "Unity, High Definition Render Pipeline 17.0.4 manual, Adaptive Probe Volumes panel reference, Probe Dilation Settings and Virtual Offset Settings"
+quote = '''Search Radius: Determine how far from an invalid probe HDRP searches for valid neighbors. Higher values include more distant probes that might be in different lighting conditions than the invalid probe, resulting in unwanted behaviors such as light leaks. [...] Validity Threshold: Set the ratio of backfaces a probe samples before HDRP considers it invalid. [...] Search Distance Multiplier: Set the length of the sampling ray HDRP uses to search for valid probe positions. High values might cause unwanted results, such as probe capture points pushing through neighboring geometry.'''
+checked = 2026-11-28
+
+["godot-4.7.2-sdfgi-probe-weights"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/servers/rendering/renderer_rd/shaders/environment/gi.glsl#L194-L257"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), servers/rendering/renderer_rd/shaders/environment/gi.glsl, sdfvoxel_gi_process (L194-L257): the eight probes' weights in SDFGI's lookup; MIT, read for what it does, not copied"
+quote = '''cascade_pos += cam_normal * sdfgi.normal_bias; [...] vec3 trilinear = vec3(1.0) - abs(probe_to_pos); [...] float weight = trilinear.x * trilinear.y * trilinear.z * max(0.005, dot(cam_normal, probe_dir)); [...] weight *= max(occlusion, 0.01);'''
+checked = 2026-11-28
+
+["godot-4.7.2-sdfgi-cascade-blend"]
+url = "https://github.com/godotengine/godot/blob/ed1daf0bf001b61586d9930840f2f1394092c079/servers/rendering/renderer_rd/shaders/environment/gi.glsl#L315-L366"
+section = "Godot 4.7.2-stable (commit ed1daf0, 2026-08-16), servers/rendering/renderer_rd/shaders/environment/gi.glsl, sdfgi_process (L315-L366): the cascade a point takes and the blend into the next; MIT, read for what it does, not copied"
+quote = '''float blend_from = (float(sdfgi.probe_axis_size - 1) / 2.0) - 2.5; [...] float blend_to = blend_from + 2.0; [...] blend = smoothstep(blend_from, blend_to, len); [...] if (cascade == sdfgi.max_cascades - 1) { [...] ambient_light.a = 1.0 - blend; [...] sdfvoxel_gi_process(cascade + 1, cascade_pos, cam_pos, cam_normal, reflection, roughness, diffuse2, specular2); [...] diffuse = mix(diffuse, diffuse2, blend);'''
+checked = 2026-11-28
+
+["leblanc-conte-2025-acs-probe-weights"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=105"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, slides Convolution (p. 49), Light leaks: Indirect lighting (p. 103), Probe filtering (pp. 104-105) and Outdoor probe leaks (p. 106), with speaker notes"
+quote = '''we need rescale and clamp values between [0, 1] since we are encoding it in 8 bits. But we do it before computing the average and average^2 value. This help reduce leaks in some cases (interior corner). [...] Outdoor lighting is many factors stronger than indoor [...] Even reducing outdoor probes’ weights does not compensate the difference. [...] The last offset we use, introduced by the DDGI Resampling paper, moves the position backwards along the ray. We limit that final offset to half the traced distance on our side. Our most common issue with inverse ray direction is that many rays tend to run almost parallel to the walls and so doesn’t distance our sampling position enough. [...] Using a pure dot product might rule out all the probes so we use wrap shading. [...] Then we crush weights smaller than 0.2 [...] Sampling offsets can push the [...] position closer to walls or outside.'''
+checked = 2026-11-28
+
+["leblanc-conte-2025-acs-probe-relocation"]
+url = "https://advances.realtimerendering.com/s2025/content/Advances%202025%20-%20Raytracing%20the%20world%20of%20Assassin's%20Creed%20Shadows.pdf#page=52"
+section = "Leblanc and Conte (Ubisoft), Ray Tracing the World of Assassin's Creed Shadows, SIGGRAPH 2025 Advances, slides Probe volume (p. 36), Probe selection (p. 41) and Relocation (p. 52), with speaker notes"
+quote = '''Following camera with forward 3d offset [...] Toroidal addressing [...] Flags (indoor, disabled, half resolution) [...] For probes under the terrain, those just under will be moved above and the rest will be disabled. [...] The probe will be disabled if we are not able to move it outside of geometry. [...] A probe is considered inside geometry if the number of back-face triangle hit is above a threshold. [...] If the minimum depth is too small the probe is moved in the direction of the maximum depth.'''
+checked = 2026-11-28
+
+["patry-2021-got-interior-mask-blend"]
+url = "https://advances.realtimerendering.com/s2021/jpatry_advances2021.pdf#page=52"
+section = "Patry (Sucker Punch Productions), Real-Time Samurai Cinema: Lighting, Atmosphere, and Tonemapping in Ghost of Tsushima, SIGGRAPH 2021 Advances, slides on tetrahedral meshes (pp. 18, 22) and the light-leaking solution (p. 52), with speaker notes"
+quote = '''When loaded, the tet meshes override the grid, and they blend at the boundary. [...] a property on the geometry or shader, [...] a vertex color channel, [...] or applied separately as a deferred decal. [...] there is a smooth transition between the regular grid lighting and the tet mesh lighting. [...] To perform the lighting, we calculate the tetrahedral barycentric coordinates as normal, but then we multiply each one by [...] w if the coordinate belongs to an interior probe, [...] or by 1-w if it belongs to an exterior probe. [...] We then renormalize the barycentrics and compute the weighted irradiance blend as usual. (In the event that all the weights are zero, we fall back to the [...] original barycentrics.)'''
+checked = 2026-11-28
+
+["wohllaib-2026-yotei-interior-blend"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Wohllaib_Eric_Ambient_Diffuse_Lighting_in_Ghost_of_Yotei.pdf#page=40"
+section = "Wohllaib (Sucker Punch Productions), Ambient Diffuse Lighting in Ghost of Yōtei, GDC 2026, slides on Tsushima's masking (p. 6), the interior mask (pp. 40-41), interior volume geometry (pp. 43, 47) and dynamic objects (pp. 52-53), with speaker notes"
+quote = '''Interior probes affected interior surfaces, and exterior probes affected exterior surfaces, with some surfaces having a blend of both for transitions. [...] For doors, windows, or cave mouths, we want to have a smooth transition between interior and exterior, so those surfaces are marked up as a blend. [...] If a probe can see mostly interior surfaces, we mark it as interior, and the same for exterior. [...] At runtime, we would take this geometry and render it similar to classic stenciled shadows. [...] The only downside is that it’s pixel perfect, with no blending. [...] So we still had to vertex paint windows and doors. [...] To ensure this works in motion, we blend with last frame’s result, to help reduce popping as probes are occluded or disoccluded.'''
+checked = 2026-11-28
+
+["wohllaib-2026-yotei-embedded-probes"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Wohllaib_Eric_Ambient_Diffuse_Lighting_in_Ghost_of_Yotei.pdf#page=21"
+section = "Wohllaib (Sucker Punch Productions), Ambient Diffuse Lighting in Ghost of Yōtei, GDC 2026, slides Probe Embedded in Geometry (p. 21) and Probes embedded in geometry (p. 22), with speaker notes"
+quote = '''If some ratio of normals are pointing away from the camera, it means this probe was embedded in geometry, and should be culled. [...] However, if we just leave these positions empty, it can cause interpolation issues where we don’t have enough good probes to sample from. [...] Then at runtime, after we’ve relit our probes, we blend those neighbors to come up with a passable result for the culled probe.'''
+checked = 2026-11-28
+
+["wohllaib-2026-yotei-octree-blend"]
+url = "https://media.gdcvault.com/gdc2026/Slides/Wohllaib_Eric_Ambient_Diffuse_Lighting_in_Ghost_of_Yotei.pdf#page=27"
+section = "Wohllaib (Sucker Punch Productions), Ambient Diffuse Lighting in Ghost of Yōtei, GDC 2026, slides Interpolating in the Octree (pp. 24-25), Normal Bias Off and On (pp. 27-28), Blending edge cases (p. 31), Handling No Relevant Probes (p. 32) and Edge blend (p. 36), with speaker notes"
+quote = '''But if the next node is larger or smaller, then as soon as we pass through the face, we’ll be sampling different probes. [...] In addition to trilinear weights, we reduce a probe’s weight when it’s behind the surface by looking at the surface’s normal. [...] since we’re not sampling from the dark probes behind this wall, this shot brightens up a bit. [...] In this situation here, both the node and its parent have no interior probes, so the surface is falling back to sampling exterior probes, causing light leaking. [...] When an interior surface tries to sample from an exterior only node, we push the position we sample the octree at to be in that adjacent node instead, giving us interior probes to sample from. [...] As we approach a face of the octree, we blend back to the world spanning grid of probes, giving us a smooth transition.'''
+checked = 2026-11-28
+
+["kuenlin-2024-snowdrop-probe-sampling"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Kuenlib_Quentin_Raytracing_In_Snowdrop.pdf#page=18"
+section = "Kuenlin (Massive Entertainment), Raytracing in Snowdrop, GDC 2024 Advanced Graphics Summit, slides Volume Sampling (pp. 18-19), listing and speaker notes"
+quote = '''float trilinearWeight = saturate(axisWeights.x * axisWeights.y * axisWeights.z) + 1e-5; [...] wrapWeight = saturate((d + 1.f) / 2.f); [...] float weight = wrapWeight * wrapWeight; [...] weight *= RTVisibilityFromDepth(t, distanceToProbe); // Chebyshev’s Inequality [...] if (weight < 0.2f) [...] weight *= (weight * weight) * (1.f / (CrushThreshold * CrushThreshold)); [...] probe that are inside objects, or below the terrain are marked as invalid and their lighting will be full black. This might lead to leaks of dark lighting if we sample the average 3d texture only.'''
+checked = 2026-11-28
+
+["kuenlin-2024-snowdrop-cascade-placement"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Kuenlib_Quentin_Raytracing_In_Snowdrop.pdf#page=12"
+section = "Kuenlin (Massive Entertainment), Raytracing in Snowdrop, GDC 2024 Advanced Graphics Summit, slides Update Pipeline (p. 11), Update Cascades Position (p. 12), Cascade debug view (p. 13) and Select Probes to be Updated (p. 14), with speaker notes"
+quote = '''Probe relocation is an option to move the probes a little bit to push them away from object surface, or get them out of objects. It didn’t gave any significant benefit in Avatar so it was not used. [...] float3 centerPos = lerp(cameraPos, forwardPos, CacheVolumeForwardAlignment[i]); [...] Cascade 3 is the closest one, where the spacing between each probes is 2m, covering 64x64x16m [...] If the cascade moved, the new probes will be selected for update'''
+checked = 2026-11-28
+
+["kuenlin-2024-snowdrop-indoor-filtering"]
+url = "https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Kuenlib_Quentin_Raytracing_In_Snowdrop.pdf#page=72"
+section = "Kuenlin (Massive Entertainment), Raytracing in Snowdrop, GDC 2024 Advanced Graphics Summit, slides Limitations: Probe Cascade Size and Spacing (p. 65) and What's Next?: Indoor/Outdoor Aware Probes (p. 72), with speaker notes"
+quote = '''Those need to be thick enough to not cause any leaks due to low precision in the Chebyshev inequality when resolving the visibility. [...] Indeed big interior can lead us to have to use a low density cascade which could lead to leaks. [...] So we have added a way to filter probes between outdoor and indoor, only sampling the one that correspond to where the ray is [...] In the case of room with doors, or windows, we need to know if the ray left the room. To do that we’ve added a new portal BVH that we trace into for every rays that start indoor.'''
+checked = 2026-11-28
+
+["pearce-2025-overwatch-ddgi-volumes"]
+url = "https://enginearchitecture.org/downloads/REAC_2025_Overwatch.pdf#page=17"
+section = "Pearce (Blizzard Entertainment), the rendering of Overwatch 2, Rendering Engine Architecture Conference 2025, slides on nested volumes (p. 13), the lookup's texture samples (p. 17), the stencil and depth tests (pp. 41-42) and the challenges (p. 77), speaker notes"
+quote = '''During our capture process, we blend the last ring of probes in a child volume out towards the nearest probes in the parent volume. [...] The asterisk here is because the DDGI algorithm is actually 16 texture samples, so a bit heavier than “just a lookup” implies. [...] Now each pixel will only receive full GI evaluation once. [...] The stencil fill draws are very cheap – single digit microsecond range on low end, and [...] There can still be light leaking in some areas. [...] Mainly due to probe spacing and thin geometry.'''
+checked = 2026-11-28
