@@ -322,6 +322,19 @@ struct InstanceSlots {
 }
 
 impl InstanceSlots {
+    fn new(capacity: u32) -> Self {
+        Self {
+            capacity,
+            ..Self::default()
+        }
+    }
+
+    /// Moves what the frame before freed into `free` and `free_ranges`.
+    fn begin_frame(&mut self) {
+        self.free.append(&mut self.freed);
+        self.join_freed_ranges();
+    }
+
     /// `entity`'s slot, taking one if it has none: a freed slot, else a fresh
     /// one, else the last slot of the highest free range; None when none is
     /// left, warned about the first time `entity` is refused.
@@ -353,6 +366,31 @@ impl InstanceSlots {
         self.by_entity.insert(entity, slot);
         self.refused.remove(&entity);
         Some(slot)
+    }
+
+    /// `chunk`'s range, taking one of `count` slots if it has none, and
+    /// whether it already had one whose Instances were last written `held`,
+    /// which they are recorded as from now; None when refused one.
+    fn get_or_take_range(
+        &mut self,
+        chunk: AssetId,
+        count: u32,
+        held: bool,
+    ) -> Option<(Range<u32>, bool)> {
+        if let Some(slots) = self.by_chunk.get_mut(&chunk) {
+            let already_written = slots.held == held;
+            slots.held = held;
+            return Some((slots.range.clone(), already_written));
+        }
+        let range = self.take_range(chunk, count)?;
+        if let Some(taken) = self.by_chunk.get_mut(&chunk) {
+            taken.held = held;
+        }
+        Some((range, false))
+    }
+
+    fn refuses_a_chunk(&self) -> bool {
+        !self.refused_chunks.is_empty()
     }
 
     /// A range of `count` slots for the Chunk `chunk`: the start of the first
@@ -398,8 +436,12 @@ impl InstanceSlots {
     }
 
     /// Gives back the ranges of the Chunks `loaded` no longer holds, but empty
-    /// ones, into `freed_ranges`.
-    fn free_unloaded<'chunks>(&mut self, loaded: impl Iterator<Item = &'chunks LoadedChunk>) {
+    /// ones, into `freed_ranges`, and returns the slots freed into it this
+    /// frame, each to take an Instance with no Mesh.
+    fn free_unloaded<'chunks>(
+        &mut self,
+        loaded: impl Iterator<Item = &'chunks LoadedChunk>,
+    ) -> impl Iterator<Item = u32> {
         let loaded: HashSet<AssetId> = loaded.map(|chunk| chunk.id).collect();
         let freed_ranges = &mut self.freed_ranges;
         self.by_chunk.retain(|chunk, slots| {
@@ -410,6 +452,7 @@ impl InstanceSlots {
             kept
         });
         self.refused_chunks.retain(|chunk| loaded.contains(chunk));
+        self.freed_ranges.iter().flat_map(Range::clone)
     }
 
     /// Moves the ranges freed in the frame before into `free_ranges`, each
@@ -438,6 +481,26 @@ impl InstanceSlots {
         if let Some(slot) = self.by_entity.remove(&entity) {
             self.freed.push(slot);
         }
+    }
+
+    /// The slots to take an Instance with no Mesh at the frame's end, so the
+    /// GPU no longer draws them: those freed this frame, and with
+    /// `every_free_slot` every free slot and free range's slot left untaken.
+    fn slots_to_empty(&self, every_free_slot: bool) -> impl Iterator<Item = u32> {
+        let (free, free_ranges) = if every_free_slot {
+            (self.free.as_slice(), self.free_ranges.as_slice())
+        } else {
+            (&[][..], &[][..])
+        };
+        self.freed
+            .iter()
+            .chain(free)
+            .copied()
+            .chain(free_ranges.iter().flat_map(Range::clone))
+    }
+
+    fn end(&self) -> u32 {
+        self.end
     }
 }
 
@@ -513,10 +576,7 @@ impl FramePreparer {
             warned_of_overflowed_lights: false,
             renderable_query: world.query(),
             changed_renderable_query: world.query_filtered(),
-            instance_slots: InstanceSlots {
-                capacity: capacities.instances,
-                ..InstanceSlots::default()
-            },
+            instance_slots: InstanceSlots::new(capacities.instances),
             unwritten: bevy_ecs::entity::EntityHashSet::default(),
             skipped: bevy_ecs::entity::EntityHashSet::default(),
             drawn: Vec::new(),
@@ -685,44 +745,31 @@ impl FramePreparer {
         frame.instance_writes.clear();
         frame.moving_instances.clear();
         *renderables_refused = 0;
-        instance_slots.join_freed_ranges();
+        instance_slots.begin_frame();
         if chunks_changed {
-            instance_slots.free_unloaded(chunks_and_far_field());
-        }
-        for slot in instance_slots.freed_ranges.iter().flat_map(Range::clone) {
-            frame.write_instance(slot, no_mesh_instance(), false);
+            for slot in instance_slots.free_unloaded(chunks_and_far_field()) {
+                frame.write_instance(slot, no_mesh_instance(), false);
+            }
         }
         if chunks_changed
             || *rewrite_every_instance
             || pools_freed
-            || !instance_slots.refused_chunks.is_empty()
+            || instance_slots.refuses_a_chunk()
         {
             for chunk in chunks_and_far_field() {
-                let slots = match instance_slots.by_chunk.get_mut(&chunk.id) {
-                    Some(slots)
-                        if !*rewrite_every_instance
-                            && slots.held == chunk.held
-                            && !(pools_freed
-                                && draws_a_freed_entry(chunk, meshes, material_generations)) =>
-                    {
-                        continue;
-                    }
-                    Some(slots) => {
-                        slots.held = chunk.held;
-                        slots.range.clone()
-                    }
-                    None => {
-                        let count = chunk.placements.len() as u32;
-                        let Some(slots) = instance_slots.take_range(chunk.id, count) else {
-                            *renderables_refused += count;
-                            continue;
-                        };
-                        if let Some(taken) = instance_slots.by_chunk.get_mut(&chunk.id) {
-                            taken.held = chunk.held;
-                        }
-                        slots
-                    }
+                let count = chunk.placements.len() as u32;
+                let Some((slots, already_written)) =
+                    instance_slots.get_or_take_range(chunk.id, count, chunk.held)
+                else {
+                    *renderables_refused += count;
+                    continue;
                 };
+                if already_written
+                    && !*rewrite_every_instance
+                    && !(pools_freed && draws_a_freed_entry(chunk, meshes, material_generations))
+                {
+                    continue;
+                }
                 if chunk.held {
                     for slot in slots {
                         frame.write_instance(slot, no_mesh_instance(), false);
@@ -831,29 +878,10 @@ impl FramePreparer {
             blend_weight,
             compute_pool,
         );
-        // A slot freed this frame, or every free slot and free range's slot
-        // left untaken when every Instance is written again, takes an Instance
-        // with no Mesh, so the GPU no longer draws it; Renderables may take it
-        // from the next frame.
-        let (rewritten_free_slots, rewritten_free_ranges) = if *rewrite_every_instance {
-            (
-                instance_slots.free.as_slice(),
-                instance_slots.free_ranges.as_slice(),
-            )
-        } else {
-            (&[][..], &[][..])
-        };
-        for slot in instance_slots
-            .freed
-            .iter()
-            .chain(rewritten_free_slots)
-            .copied()
-            .chain(rewritten_free_ranges.iter().flat_map(Range::clone))
-        {
+        for slot in instance_slots.slots_to_empty(*rewrite_every_instance) {
             frame.write_instance(slot, no_mesh_instance(), false);
         }
-        instance_slots.free.append(&mut instance_slots.freed);
-        frame.instance_slot_count = instance_slots.end;
+        frame.instance_slot_count = instance_slots.end();
         // Past the dynamic TLAS's capacity, the lowest slots keep their place.
         let capacity = DYNAMIC_TLAS_CAPACITY as usize;
         *moving_instances_left_out = frame.moving_instances.len().saturating_sub(capacity) as u32;
