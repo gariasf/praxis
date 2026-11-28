@@ -57,8 +57,7 @@ const YARD_HALF_SIZE_METRES: f32 = 30.0;
 
 pub(super) const SUN_DIRECTION: glam::Vec3 = glam::Vec3::new(-0.4, -0.6, -0.7);
 /// Turns about +Y that carry the sun west, as across a southern sky: half a
-/// degree a second, and a step of 30°, which moves room B's sun patch off
-/// its place.
+/// degree a second, and a step of 30°.
 const SUN_RADIANS_PER_SECOND: f64 = -std::f64::consts::PI / 360.0;
 const SUN_STEP_RADIANS: f64 = -std::f64::consts::FRAC_PI_6;
 const LAMP_POSITION: DVec3 = DVec3::new(-3.3, 2.25, 1.4);
@@ -216,13 +215,13 @@ pub(super) fn turn_sun(
     mut suns: Query<(Entity, &mut Transform), With<TurningSun>>,
 ) {
     let tick = fixed_time.tick;
-    let stepped = if tick >= SUN_STEPS_AT_TICK {
+    let step_radians = if tick >= SUN_STEPS_AT_TICK {
         SUN_STEP_RADIANS
     } else {
         0.0
     };
-    let radians = SUN_RADIANS_PER_SECOND * (tick + 1) as f64 * TICK_SECONDS + stepped;
-    let direction = glam::Quat::from_rotation_y(radians as f32) * SUN_DIRECTION.normalize();
+    let turn_radians = SUN_RADIANS_PER_SECOND * (tick + 1) as f64 * TICK_SECONDS + step_radians;
+    let direction = glam::Quat::from_rotation_y(turn_radians as f32) * SUN_DIRECTION.normalize();
     for (entity, mut transform) in &mut suns {
         transform.rotation = glam::Quat::from_rotation_arc(glam::Vec3::NEG_Z, direction);
         if tick == SUN_STEPS_AT_TICK {

@@ -184,46 +184,53 @@ fn a_probe_holds_the_sky_from_above_in_the_open_and_less_under_the_roof() {
 }
 
 /// Each step shows in the first frame drawn after its Tick, and not in the
-/// frame before: the frames around a step are all a test needs.
+/// frame before.
 #[test]
 fn the_lamp_the_door_and_the_suns_step_each_change_the_direct_light_from_the_frame_after_their_tick()
  {
     let house = ReferenceScene::House;
-    let [lamp, door, sun] = [
+    let [lamp_frame, door_frame, sun_frame] = [
         LAMP_SWITCHES_ON_AT_TICK,
         DOOR_OPENS_AT_TICK,
         SUN_STEPS_AT_TICK,
     ]
     .map(|tick| house.frame_running_tick(tick));
-    let Some(frames) = house_frames(&[lamp - 1, lamp, door - 1, door, sun - 1, sun]) else {
+    let Some(frames) = house_frames(&[
+        lamp_frame - 1,
+        lamp_frame,
+        door_frame - 1,
+        door_frame,
+        sun_frame - 1,
+        sun_frame,
+    ]) else {
         return;
     };
-    let read = |index: usize, view: &View, point: DVec3| {
+    let before_and_after = |index: usize, view: &View, point: DVec3| {
         let [before, after] = [&frames[index], &frames[index + 1]];
         let [before, after] = [before, after].map(|image| mean_channel_around(image, view, point));
         (before, after)
     };
 
-    let (dark, lit) = read(0, &ROOM_A, dvec3(-3.3, 1.6, 2.0));
+    let (dark, lit) = before_and_after(0, &ROOM_A, dvec3(-3.3, 1.6, 2.0));
     assert!(
         lit > dark + 20.0,
-        "room A's wall by the lamp reads {dark} in frame {} and {lit} in frame {lamp}",
-        lamp - 1
+        "room A's wall by the lamp reads {dark} in frame {} and {lit} in frame {lamp_frame}",
+        lamp_frame - 1
     );
 
-    let (shut, open) = read(2, &ROOM_A, dvec3(-2.4, 0.05, 1.5));
+    let (shut, open) = before_and_after(2, &ROOM_A, dvec3(-2.4, 0.05, 1.5));
     assert!(
         open > shut + 60.0,
-        "room A's floor inside the doorway reads {shut} in frame {} and {open} in frame {door}",
-        door - 1
+        "room A's floor inside the doorway reads {shut} in frame {} and {open} in frame {door_frame}",
+        door_frame - 1
     );
 
-    let (left_lit, left_after) = read(4, &ROOM_B, dvec3(2.0, 0.05, 0.3));
-    let (reached_before, reached_lit) = read(4, &ROOM_B, dvec3(3.0, 0.05, 0.2));
+    let (left_lit, left_after) = before_and_after(4, &ROOM_B, dvec3(2.0, 0.05, 0.3));
+    let (reached_before, reached_lit) = before_and_after(4, &ROOM_B, dvec3(3.0, 0.05, 0.2));
     assert!(
         left_lit > left_after + 60.0 && reached_lit > reached_before + 60.0,
-        "room B's floor where the sun patch was reads {left_lit} in frame {} and {left_after} in frame {sun}; \
+        "room B's floor where the sun patch was reads {left_lit} in frame {} and {left_after} in frame {sun_frame}; \
          where it moves to, {reached_before} and {reached_lit}",
-        sun - 1
+        sun_frame - 1
     );
 }

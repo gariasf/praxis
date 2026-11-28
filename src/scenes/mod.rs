@@ -535,7 +535,7 @@ impl ReferenceScene {
     /// The scene's exposure at `frame`, an EV100 set by hand (ADR 0023).
     /// Each scene exposes the sun's illuminance to 1, as it was lit before
     /// its lights took photometric units: EV100 16.35; house does in its
-    /// yard and keys it down along its path into its rooms.
+    /// yard and keys it four stops down in its rooms along its path.
     fn ev100(self, frame: u32) -> f32 {
         let sunlit = ev100_for_exposure(1.0 / SUN_ILLUMINANCE);
         match self {
@@ -580,8 +580,8 @@ impl ReferenceScene {
     /// what it changed, when every frame advances the World by `frame_delta`
     /// as a capture's do.
     pub fn frame_running_tick(self, tick: u64) -> u32 {
-        let ticks_through = u128::from(tick + 1) * TICK.as_nanos();
-        (ticks_through.div_ceil(self.frame_delta().as_nanos()) - 1) as u32
+        let through_tick_nanoseconds = u128::from(tick + 1) * TICK.as_nanos();
+        (through_tick_nanoseconds.div_ceil(self.frame_delta().as_nanos()) - 1) as u32
     }
 
     /// The frames of its camera path whose captures are its Goldens, the
@@ -719,8 +719,9 @@ impl ReferenceScene {
     }
 
     /// The scene's own spawn: loads through `loader` the Assets it needs
-    /// before any Chunk and adds to `world` what neither a Chunk nor
-    /// `Simulation::spawned` places, its crowd as `crowd_form` traces it.
+    /// before any Chunk and adds to `world`, which holds the scene's sun
+    /// already, what neither a Chunk nor `Simulation::spawned` places, its
+    /// crowd as `crowd_form` traces it.
     pub(crate) fn spawn(
         self,
         world: &mut World,
