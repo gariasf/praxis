@@ -234,7 +234,7 @@ pub(crate) fn traversal_camera_at(frame: u32) -> Camera {
     let gaze = heading * GAZE_METRES - glam::DVec3::Y * CAMERA_HEIGHT_METRES;
     Camera {
         teleported: frame == TRAVERSAL_SIDE_FRAMES,
-        ev100: ReferenceScene::World.ev100(),
+        ev100: ReferenceScene::World.ev100(frame),
         ..Camera::looking_at(position, position + gaze)
     }
 }

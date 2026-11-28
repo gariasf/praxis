@@ -119,6 +119,7 @@ Test scenes, each one benched. Images are the Metal goldens, 640×360.
 | <img src="tests/goldens/metal/crowd.png" width="320" alt="crowd"> | **crowd**: 100 figures bent on the GPU every frame, a stand-in for skinning, with shadows from per-bone proxies. |
 | <img src="tests/goldens/metal/town.png" width="320" alt="town"> | **town**: the scene at the top, here as its golden; the top image is the same view at 2560×1440. |
 | <img src="tests/goldens/metal/world.png" width="320" alt="world"> | **world**: a streamed 40 × 40-Chunk Game world, flown into at 50 m/s; past the 256 m Load radius each Chunk draws as its Far proxy, out to 2 km. |
+| <img src="tests/goldens/metal/house.png" width="320" alt="house"> | **house**: two rooms sharing a thin wall, one with a door and a lamp, one with a window, in a yard with a freestanding wall; its exposure steps down from the yard to the rooms. |
 
 Plus one without a golden:
 

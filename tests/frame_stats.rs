@@ -339,11 +339,11 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 /// Instances and triangles its draw held, which equal the scene's
 /// closed-form counts, none overflowed: every Instance in use is drawn, at
 /// LOD 0, forced, as a coarser LOD's triangles are the simplifier's count.
-/// far-coplanar's tiles, town and `world`'s settlement lie partly out of
-/// any one view, so all three are drawn with culling off, which their
-/// Goldens compare with culling on: the frame's draw holds every tile, the
-/// whole town, and every Instance within `world`'s Load radius with the
-/// Far proxies past it and the ground past them.
+/// far-coplanar's tiles, town, `world`'s settlement and house's rooms lie
+/// partly out of any one view, so all four are drawn with culling off, which
+/// their Goldens compare with culling on: the frame's draw holds every tile,
+/// the whole town, every Instance within `world`'s Load radius with the
+/// Far proxies past it and the ground past them, and the whole house.
 /// After the first frame, each frame writes the Instances of what moves
 /// alone, town's and `world`'s 10,000 birds among them, and those of the
 /// Chunks `world`'s camera leaves, and leaves no Moving Instance out of the
@@ -377,7 +377,10 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
         let switches = praxis::RenderSwitches {
             culling: !matches!(
                 scene,
-                ReferenceScene::Town | ReferenceScene::FarCoplanar | ReferenceScene::World
+                ReferenceScene::Town
+                    | ReferenceScene::FarCoplanar
+                    | ReferenceScene::World
+                    | ReferenceScene::House
             ),
             forced_lod: Some(0),
             ..praxis::RenderSwitches::default()
@@ -409,6 +412,13 @@ fn each_reference_scene_draws_its_closed_form_instances_and_triangles() {
                 WORLD_INSTANCES + WORLD_FAR_FIELD_INSTANCES,
                 WORLD_TRIANGLES + WORLD_FAR_FIELD_TRIANGLES,
                 10_000,
+            ),
+            // Its yard, two balls, a table of five boxes, 17 boxes and its
+            // door, a box and its one Moving Instance.
+            ReferenceScene::House => (
+                22,
+                plane_triangles + 2 * sphere_triangles + 5 * 12 + 18 * 12,
+                1,
             ),
         };
         // The 144-byte camera and 32-byte light uniforms, the sun and the

@@ -992,7 +992,7 @@ pub(crate) mod tests {
     #[test]
     fn the_reference_scenes_meshes_cook_to_the_same_blobs_on_every_machine() {
         const BLOBS_SHA256: &str =
-            "e0b71ece5a57993e4222a3b3983122e85e557cf77d3e3b31fae646c07c72c486";
+            "bc794f3b09781e4d163946af51b3ec4c092a11c125db9922a2b3e928bd7a2b0e";
         let committed_gltf_meshes = reference_gltf_meshes()
             .into_iter()
             .filter(|(path, _)| path.starts_with("assets/NormalTangentTest/"));

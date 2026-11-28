@@ -857,7 +857,7 @@ pub(crate) fn camera_at(frame: u32) -> Camera {
 }
 
 #[cfg(feature = "cook")]
-pub(super) use generators::bird;
+pub(super) use generators::{bird, cuboid, merged};
 #[cfg(feature = "cook")]
 pub(crate) use generators::{materials, meshes};
 
@@ -1192,7 +1192,7 @@ mod generators {
     }
 
     /// `parts` as one Geometry.
-    fn merged(parts: impl IntoIterator<Item = Geometry>) -> Geometry {
+    pub(in crate::scenes) fn merged(parts: impl IntoIterator<Item = Geometry>) -> Geometry {
         let mut geometry = Geometry::default();
         for part in parts {
             let first = geometry.positions.len() as u32;
@@ -1238,7 +1238,7 @@ mod generators {
     }
 
     /// A box from `min` to `max`, each face with its own vertices.
-    fn cuboid(min: Vec3, max: Vec3) -> Geometry {
+    pub(in crate::scenes) fn cuboid(min: Vec3, max: Vec3) -> Geometry {
         let size = max - min;
         let (x, y, z) = (Vec3::X * size.x, Vec3::Y * size.y, Vec3::Z * size.z);
         let mut geometry = Geometry::default();
