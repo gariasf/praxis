@@ -5,6 +5,7 @@ use anyhow::Context as ContextExt;
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::RunSystemOnce;
 
+use super::house::{open_door, switch_on_lamp, turn_sun};
 use super::{ReferenceScene, WrapsAroundCamera, spin, sway, wrap_around_camera};
 use crate::assets::AssetLoader;
 use crate::camera::{Camera, CameraPath, fly_camera};
@@ -71,13 +72,13 @@ impl Simulation {
 
         let (schedule, mut fixed_schedule) = simulation_schedules(recorder);
 
+        world.spawn(scene.sun());
         scene
             .spawn(&mut world, loader, crowd_form)
             .with_context(|| format!("loading {}", scene.name()))?;
         world.insert_resource(LoadedChunks::default());
         world.insert_resource(ResidentFarProxies::default());
         world.insert_resource(scene.environment());
-        world.spawn(scene.sun());
         // A child's translation is relative to its parent, so only roots move.
         let mut root_query = world.query_filtered::<&mut Transform, Without<ChildOf>>();
         for mut transform in root_query.iter_mut(&mut world) {
@@ -141,6 +142,9 @@ pub(crate) fn simulation_schedules(recorder: &FrameRecorder) -> (Schedule, Sched
                 wrap_around_camera.run_if(any_with_component::<WrapsAroundCamera>),
                 spin,
                 sway,
+                turn_sun,
+                open_door,
+                switch_on_lamp,
                 clear_just_pressed,
                 reset_teleported,
                 propagate_world_transforms,

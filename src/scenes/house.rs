@@ -11,10 +11,18 @@ use glam::{DVec3, FloatExt};
 use super::ReferenceScene;
 use crate::assets::AssetLoader;
 use crate::camera::Camera;
-use crate::components::{MeshRef, PointLight, Transform};
+use crate::components::{DirectionalLight, MeshRef, PointLight, Transform};
 #[cfg(feature = "cook")]
 use crate::cooked::{CookedLight, CookedPlacement};
-use crate::transform::PreviousWorldTransform;
+use crate::time::{FixedTime, TICK_SECONDS};
+use crate::transform::{PreviousWorldTransform, Teleported};
+
+/// The Tick at whose end room A's lamp comes on.
+pub const LAMP_SWITCHES_ON_AT_TICK: u64 = 128;
+/// The Tick at whose end room A's door stands open; it is shut until then.
+pub const DOOR_OPENS_AT_TICK: u64 = 256;
+/// The Tick at whose end the sun jumps `SUN_STEP_RADIANS` further west.
+pub const SUN_STEPS_AT_TICK: u64 = 1536;
 
 // Every pivot lies in Chunk (0, 0), the one Chunk `chunk_coordinates` lists for the scene.
 const HOUSE_CENTRE: DVec3 = DVec3::new(32.0, 0.0, 32.0);
@@ -48,6 +56,11 @@ const BALL_RADIUS_METRES: f32 = 0.3;
 const YARD_HALF_SIZE_METRES: f32 = 30.0;
 
 pub(super) const SUN_DIRECTION: glam::Vec3 = glam::Vec3::new(-0.4, -0.6, -0.7);
+/// Turns about +Y that carry the sun west, as across a southern sky: half a
+/// degree a second, and a step of 30°, which moves room B's sun patch off
+/// its place.
+const SUN_RADIANS_PER_SECOND: f64 = -std::f64::consts::PI / 360.0;
+const SUN_STEP_RADIANS: f64 = -std::f64::consts::FRAC_PI_6;
 const LAMP_POSITION: DVec3 = DVec3::new(-3.3, 2.25, 1.4);
 const LAMP_LIGHT: PointLight = PointLight {
     color: glam::Vec3::new(1.0, 0.85, 0.65),
@@ -63,69 +76,74 @@ struct PathKey {
     stops_under_the_yard: f32,
 }
 
-const PATH: [PathKey; 9] = [
+const ROOM_A_VIEW: PathKey = PathKey {
+    frame: 0,
+    position: DVec3::new(-1.6, 1.65, -1.3),
+    yaw_degrees: -255.0,
+    pitch_degrees: -17.0,
+    stops_under_the_yard: 4.0,
+};
+const ROOM_B_VIEW: PathKey = PathKey {
+    frame: 1320,
+    position: DVec3::new(0.7, 1.65, -1.6),
+    yaw_degrees: -296.0,
+    pitch_degrees: -19.0,
+    stops_under_the_yard: 4.0,
+};
+
+// Still in room A over the lamp's and the door's Ticks, and in room B over the sun's step.
+const PATH: [PathKey; 10] = [
+    ROOM_A_VIEW,
     PathKey {
-        frame: 0,
-        position: DVec3::new(1.0, 1.65, 14.0),
-        yaw_degrees: -95.0,
-        pitch_degrees: -2.0,
-        stops_under_the_yard: 0.0,
+        frame: 330,
+        ..ROOM_A_VIEW
     },
     PathKey {
-        frame: 300,
-        position: DVec3::new(-2.05, 1.65, 5.0),
-        yaw_degrees: -90.0,
-        pitch_degrees: -9.0,
-        stops_under_the_yard: 0.0,
-    },
-    PathKey {
-        frame: 510,
-        position: DVec3::new(-2.05, 1.65, 1.0),
-        yaw_degrees: -90.0,
-        pitch_degrees: -9.0,
-        stops_under_the_yard: 4.0,
-    },
-    PathKey {
-        frame: 690,
-        position: DVec3::new(-1.6, 1.65, -1.3),
-        yaw_degrees: -255.0,
-        pitch_degrees: -17.0,
-        stops_under_the_yard: 4.0,
-    },
-    PathKey {
-        frame: 780,
+        frame: 420,
         position: DVec3::new(-2.05, 1.65, 1.0),
         yaw_degrees: -270.0,
         pitch_degrees: -5.0,
         stops_under_the_yard: 4.0,
     },
     PathKey {
-        frame: 870,
+        frame: 510,
         position: DVec3::new(-2.05, 1.65, 3.6),
-        yaw_degrees: -360.0,
+        yaw_degrees: -270.0,
         pitch_degrees: -5.0,
         stops_under_the_yard: 0.0,
     },
     PathKey {
-        frame: 1020,
+        frame: 750,
+        position: DVec3::new(1.0, 1.65, 14.0),
+        yaw_degrees: -455.0,
+        pitch_degrees: -2.0,
+        stops_under_the_yard: 0.0,
+    },
+    PathKey {
+        frame: 990,
+        position: DVec3::new(0.5, 1.65, 3.6),
+        yaw_degrees: -450.0,
+        pitch_degrees: -5.0,
+        stops_under_the_yard: 0.0,
+    },
+    PathKey {
+        frame: 1080,
         position: DVec3::new(2.6, 1.65, 3.6),
         yaw_degrees: -450.0,
         pitch_degrees: -5.0,
         stops_under_the_yard: 0.0,
     },
     PathKey {
-        frame: 1110,
+        frame: 1170,
         position: DVec3::new(2.6, 1.65, 1.0),
         yaw_degrees: -450.0,
         pitch_degrees: -10.0,
         stops_under_the_yard: 4.0,
     },
+    ROOM_B_VIEW,
     PathKey {
-        frame: 1260,
-        position: DVec3::new(0.7, 1.65, -1.6),
-        yaw_degrees: -296.0,
-        pitch_degrees: -19.0,
-        stops_under_the_yard: 4.0,
+        frame: 1560,
+        ..ROOM_B_VIEW
     },
 ];
 
@@ -156,17 +174,90 @@ pub(super) fn stops_under_the_yard(frame: u32) -> f32 {
         .lerp(to.stops_under_the_yard, progress as f32)
 }
 
+/// Room A's door, shut until `DOOR_OPENS_AT_TICK`.
+#[derive(Component)]
+pub(crate) struct Door;
+
+/// Room A's lamp, dark until `LAMP_SWITCHES_ON_AT_TICK`.
+#[derive(Component)]
+pub(crate) struct Lamp;
+
+/// house's sun, turned west each Tick and stepped at `SUN_STEPS_AT_TICK`.
+#[derive(Component)]
+pub(crate) struct TurningSun;
+
+/// Spawns the door, shut, and the lamp, dark, and makes the scene's sun,
+/// spawned before, turn.
 pub(super) fn spawn_house(world: &mut World, loader: &mut dyn AssetLoader) -> anyhow::Result<()> {
     let door = loader.mesh(ReferenceScene::House.mesh_id("door"))?;
     world.spawn((
-        Transform {
-            rotation: glam::Quat::from_rotation_y(-FRAC_PI_2),
-            ..Transform::from_translation(HOUSE_CENTRE + DOOR_HINGE)
-        },
+        Transform::from_translation(HOUSE_CENTRE + DOOR_HINGE),
         MeshRef(door),
         PreviousWorldTransform::default(),
+        Door,
     ));
+    world.spawn((
+        Transform::from_translation(HOUSE_CENTRE + LAMP_POSITION),
+        Lamp,
+    ));
+    let mut suns = world.query_filtered::<Entity, With<DirectionalLight>>();
+    let sun = (suns.single(world)).map_err(|error| anyhow::anyhow!("house's sun: {error}"))?;
+    world
+        .entity_mut(sun)
+        .insert((TurningSun, PreviousWorldTransform::default()));
     Ok(())
+}
+
+/// Sets the sun's direction for the end of the running Tick, from the Tick
+/// count, so no rounding accumulates over Ticks; its step is a jump.
+pub(super) fn turn_sun(
+    mut commands: Commands,
+    fixed_time: Res<FixedTime>,
+    mut suns: Query<(Entity, &mut Transform), With<TurningSun>>,
+) {
+    let tick = fixed_time.tick;
+    let stepped = if tick >= SUN_STEPS_AT_TICK {
+        SUN_STEP_RADIANS
+    } else {
+        0.0
+    };
+    let radians = SUN_RADIANS_PER_SECOND * (tick + 1) as f64 * TICK_SECONDS + stepped;
+    let direction = glam::Quat::from_rotation_y(radians as f32) * SUN_DIRECTION.normalize();
+    for (entity, mut transform) in &mut suns {
+        transform.rotation = glam::Quat::from_rotation_arc(glam::Vec3::NEG_Z, direction);
+        if tick == SUN_STEPS_AT_TICK {
+            commands.entity(entity).insert(Teleported);
+        }
+    }
+}
+
+/// Opens the door, a quarter turn into room A, at `DOOR_OPENS_AT_TICK`, as a jump.
+pub(super) fn open_door(
+    mut commands: Commands,
+    fixed_time: Res<FixedTime>,
+    mut doors: Query<(Entity, &mut Transform), With<Door>>,
+) {
+    if fixed_time.tick != DOOR_OPENS_AT_TICK {
+        return;
+    }
+    for (entity, mut transform) in &mut doors {
+        transform.rotation = glam::Quat::from_rotation_y(-FRAC_PI_2);
+        commands.entity(entity).insert(Teleported);
+    }
+}
+
+/// Switches the lamp on at `LAMP_SWITCHES_ON_AT_TICK`.
+pub(super) fn switch_on_lamp(
+    mut commands: Commands,
+    fixed_time: Res<FixedTime>,
+    lamps: Query<Entity, With<Lamp>>,
+) {
+    if fixed_time.tick != LAMP_SWITCHES_ON_AT_TICK {
+        return;
+    }
+    for lamp in &lamps {
+        commands.entity(lamp).insert(LAMP_LIGHT);
+    }
 }
 
 #[cfg(feature = "cook")]
@@ -236,8 +327,7 @@ pub(super) fn static_content() -> (Vec<CookedPlacement>, Vec<CookedLight>) {
         prop("ball", 3.3, floor_top + ball_height, 1.2),
         prop("table", -3.3, floor_top, 1.5),
     ];
-    let lights = super::cooked_lights(&[(HOUSE_CENTRE + LAMP_POSITION, LAMP_LIGHT)]);
-    (placements, lights)
+    (placements, Vec::new())
 }
 
 #[cfg(feature = "cook")]
@@ -298,8 +388,8 @@ mod tests {
     fn the_cameras_ev100_is_the_sunlit_scenes_in_the_yard_and_four_stops_under_it_in_each_room() {
         let ev100 = |frame| ReferenceScene::House.camera_at(frame, DVec3::ZERO).ev100;
         let within = |actual: f32, expected: f32| (actual - expected).abs() < 1e-3;
-        assert!(within(ev100(59), 16.3466), "yard: {}", ev100(59));
-        assert!(within(ev100(690), 12.3466), "room A: {}", ev100(690));
-        assert!(within(ev100(1260), 12.3466), "room B: {}", ev100(1260));
+        assert!(within(ev100(59), 12.3466), "room A: {}", ev100(59));
+        assert!(within(ev100(750), 16.3466), "yard: {}", ev100(750));
+        assert!(within(ev100(1320), 12.3466), "room B: {}", ev100(1320));
     }
 }
