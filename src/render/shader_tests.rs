@@ -15,6 +15,7 @@ use crate::assets::material::MaterialData;
 use crate::assets::{MeshData, MeshletData};
 use crate::cooked::CookedVertex;
 use crate::gpu::{floor_downlevel_flags, floor_features, floor_limits};
+use crate::render::acceleration_structures::FootprintPlacement;
 use crate::render::bend_pass::BendData;
 use crate::render::bind_groups::{
     BindGroupDefinition, Binding, Writer, read_only_storage, uniform,
@@ -415,6 +416,12 @@ fn structs_shared_with_the_cpu_match_their_rust_twins() {
             first_level,
             cascade_offset,
             _pad_cascade_offset,
+        }),
+        twin!(FootprintPlacement {
+            first_axis,
+            second_axis,
+            cells,
+            _pad_cells,
         }),
     ];
     let problems = layout_problems(&modules, &twins);

@@ -203,6 +203,23 @@ impl RayScene {
         &self.layout
     }
 
+    /// Where the dynamic TLAS's footprint along the first directional light
+    /// lies, which the shadow mask pass binds.
+    pub fn dynamic_footprint_placement(&self) -> &wgpu::Buffer {
+        self.dynamic_tlas.footprint_placement_buffer()
+    }
+
+    /// The dynamic TLAS's footprint's grid, which the shadow mask pass binds.
+    pub fn dynamic_footprint_grid(&self) -> &wgpu::Buffer {
+        self.dynamic_tlas.footprint_grid_buffer()
+    }
+
+    /// The frame's writes of the dynamic footprint's placement and grid,
+    /// while the dynamic TLAS holds entries.
+    pub fn footprint_uploads(&self) -> impl Iterator<Item = (&wgpu::Buffer, u64, &[u8])> + Clone {
+        self.dynamic_tlas.footprint_uploads()
+    }
+
     /// The group of the static TLAS rays trace this frame.
     pub fn bind_group(&self) -> &wgpu::BindGroup {
         &self.bind_groups[self.static_tlas.bound_index()]
