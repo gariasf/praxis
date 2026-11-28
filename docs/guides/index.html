@@ -64,6 +64,13 @@ code { font-family: var(--mono); font-size: 0.88em; }
 .reads { display: block; font-family: var(--mono); font-size: 13px; letter-spacing: 0.02em; color: var(--ink-soft); margin-top: 2px; }
 .reads a.reference { font-weight: 600; }
 .frame-graph { margin: 0; display: grid; gap: 12px; }
+.frame-graph .strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 4px 6px; font-family: var(--display); font-size: 12px; line-height: 1.3; }
+.frame-graph .strip figure, .frame-graph .strip a { display: grid; grid-template-rows: subgrid; }
+.frame-graph .strip figure { grid-row: span 3; margin: 0 0 8px; }
+.frame-graph .strip a { grid-row: span 2; align-items: end; font-weight: 700; text-decoration: none; }
+.frame-graph .strip a:hover { text-decoration: underline; }
+.frame-graph .strip figcaption { font-size: 12px; line-height: 1.3; }
+.frame-graph img { display: block; width: 100%; height: auto; border-radius: 3px; }
 .frame-graph .scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
 .frame-graph .scroll:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
 .frame-graph table { border-collapse: collapse; width: 100%; min-width: 630px; font-family: var(--display); font-size: 13px; line-height: 1.2; }
@@ -93,8 +100,11 @@ code { font-family: var(--mono); font-size: 0.88em; }
 .frame-graph .life-mark { display: inline-block; width: 22px; height: 2px; vertical-align: middle; background: var(--accent); opacity: 0.3; }
 .frame-graph .entries { background: var(--figure-bg); border-radius: 6px; padding: 14px 16px; font-size: 16px; line-height: 1.5; display: grid; gap: 14px; }
 .frame-graph.is-live .entries { min-height: 8.5em; align-content: start; }
-.frame-graph.is-live .entry { display: none; }
-.frame-graph.is-live .entry.current { display: block; }
+.frame-graph.is-live .entry:not(.current) { display: none; }
+.frame-graph .entry:has(.view) { display: grid; grid-template-columns: minmax(0, 1fr) 280px; grid-template-rows: auto auto 1fr; column-gap: 16px; }
+.frame-graph .entry:has(.view) > p { grid-column: 1; }
+.frame-graph .view { grid-column: 2; grid-row: 1 / span 3; margin: 0; display: grid; gap: 6px; }
+.frame-graph .view figcaption { font-size: 14px; line-height: 1.4; }
 .frame-graph .entry p { margin: 0; }
 .frame-graph .entry-title { font-family: var(--display); font-weight: 700; font-size: 17px; }
 .frame-graph .io { color: var(--ink-soft); font-size: 15px; margin-top: 4px; }
@@ -104,6 +114,8 @@ code { font-family: var(--mono); font-size: 0.88em; }
 footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; font-size: 15px; }
 @media (max-width: 640px) {
   body { font-size: 17px; }
+  .frame-graph .entry:has(.view) { display: block; }
+  .frame-graph .view { margin-top: 10px; }
 }
 </style>
 </head>
@@ -119,6 +131,15 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
 <section class="stage" aria-labelledby="map">
   <h2 id="map">The frame at a glance</h2>
   <figure class="frame-graph" aria-labelledby="map-caption">
+  <div class="strip">
+    <figure><a href="froxel-pass.html#lists"><span>Froxel pass</span><img src="img/buffer-view/town-point-lights.png" alt="The town street as heat: dark red over the road and the near walls, part of the left wall black, brightening through orange to white where the street ends" width="640" height="360"></a><figcaption><b>Froxel lists.</b> Hotter where a pixel has more point lights.</figcaption></figure>
+    <figure><a href="depth-prepass.html#depth"><span>depth pre-pass</span><img src="img/buffer-view/town-depth.png" alt="The town street in grey: the road at the camera light, the buildings and trees darker with distance, the sky black" width="640" height="360"></a><figcaption><b>Depth.</b> Nearer is lighter.</figcaption></figure>
+    <figure><a href="depth-prepass.html#normals"><span>depth pre-pass</span><img src="img/buffer-view/town-normals.png" alt="The town street coloured by direction: the road green, the walls on the left salmon, those on the right teal, the faces toward the camera violet" width="640" height="360"></a><figcaption><b>Surface normals.</b> Each direction a colour: up is green.</figcaption></figure>
+    <figure><a href="depth-pyramid-pass.html#levels"><span>depth pyramid pass</span><img src="img/buffer-view/town-depth-pyramid-3.png" alt="The town street in coarse grey blocks, lighter toward the camera, the sky black" width="640" height="360"></a><figcaption><b>Depth pyramid.</b> Level 3, in depth's grey.</figcaption></figure>
+    <figure><a href="shadow-mask.html#word"><span>shadow mask pass</span><img src="img/buffer-view/town-shadow-mask.png" alt="The town street in two greys: the buildings on the left and the ground beside them dark, and the ground under each car and tree" width="640" height="360"></a><figcaption><b>Shadow mask.</b> Dark where the sun is hidden.</figcaption></figure>
+    <figure><a href="lit-pass.html#output"><span>lit pass</span><img src="img/buffer-view/town-hdr.png" alt="The town street lit, much as displayed: a dark road between brick buildings, conifers and parked cars under a blue sky" width="640" height="360"></a><figcaption><b>HDR target.</b> Exposed colour, no tone curve.</figcaption></figure>
+    <figure><a href="tonemapping-pass.html#frame"><span>tonemapping pass</span><img src="img/buffer-view/town-target.png" alt="The town street as displayed: a dark road between brick buildings, conifers and parked cars under a blue sky" width="640" height="360"></a><figcaption><b>8-bit target.</b> The frame as displayed.</figcaption></figure>
+  </div>
   <div class="scroll" tabindex="0" role="group" aria-label="The frame as a table of steps and buffers">
   <table>
     <thead>
@@ -498,39 +519,46 @@ footer.project { border-top: 1px solid var(--rule); padding-top: 16px; display: 
       <p class="entry-title">Froxel lists</p>
       <p>For each Froxel, the point lights that may reach it.</p>
       <p class="io">Written by the Froxel pass. Read by the shadow mask pass and the lit pass.</p>
+      <figure class="view"><img src="img/buffer-view/town-point-lights.png" alt="The town street as heat: dark red over the road and the near walls, part of the left wall black, brightening through orange to white where the street ends" width="640" height="360"><figcaption>The point lights each pixel's Froxel lists, as heat: black at none, through red and yellow to white at 8 or more.</figcaption></figure>
     </div>
     <div class="entry" data-for="buffer-depth">
       <p class="entry-title">Depth</p>
       <p>The depth target: 4x MSAA, reversed, with no far plane. <code>Depth32Float</code>.</p>
       <p class="io">Written by the depth pre-pass and phase two's depth pass. Read by the depth pyramid pass, the shadow mask pass and the lit pass.</p>
+      <figure class="view"><img src="img/buffer-view/town-depth.png" alt="The town street in grey: the road at the camera light, the buildings and trees darker with distance, the sky black" width="640" height="360"><figcaption>Nearer is lighter; the sky, where nothing is drawn, is black.</figcaption></figure>
     </div>
     <div class="entry" data-for="buffer-normals">
       <p class="entry-title">Surface normals</p>
       <p>Two normals for each sample of depth, its triangle's own and the interpolated one, 4x MSAA. <code>Rgba8Unorm</code>.</p>
       <p class="io">Written by the depth pre-pass and phase two's depth pass. Read by the shadow mask pass.</p>
+      <figure class="view"><img src="img/buffer-view/town-normals.png" alt="The town street coloured by direction: the road green, the walls on the left salmon, those on the right teal, the faces toward the camera violet" width="640" height="360"><figcaption>The interpolated normal's x, y and z as red, green and blue: the road, facing up, is green.</figcaption></figure>
     </div>
     <div class="entry" data-for="buffer-pyramid">
       <p class="entry-title">Depth pyramid</p>
       <p>The farthest depth over each texel's share of the screen, a level for each halving. <code>R32Float</code>.</p>
       <p class="io">Written by the depth pyramid pass. Read by culling, phase two.</p>
+      <figure class="view"><img src="img/buffer-view/town-depth-pyramid-3.png" alt="The town street in coarse grey blocks, lighter toward the camera, the sky black" width="640" height="360"><figcaption>Level 3, in depth's grey: each texel holds the farthest depth over its share of the screen.</figcaption></figure>
     </div>
     <div class="entry" data-for="buffer-shadowmask">
       <p class="entry-title">Shadow mask</p>
       <p>A bit a light at each pixel, set where that light is hidden, for up to 59 lights. <code>Rg32Uint</code>.</p>
       <p class="io">Written by the shadow mask pass. Read by the lit pass.</p>
+      <figure class="view"><img src="img/buffer-view/town-shadow-mask.png" alt="The town street in two greys: the buildings on the left and the ground beside them dark, and the ground under each car and tree" width="640" height="360"><figcaption>The sun's bit: dark where the sun is hidden from the pixel's nearest surface.</figcaption></figure>
     </div>
     <div class="entry" data-for="buffer-hdr">
       <p class="entry-title">HDR target</p>
       <p>The lit pass's colour, pre-exposed and resolved from 4x MSAA. <code>Rgba16Float</code>.</p>
       <p class="io">Written by the lit pass. Read by the tonemapping pass.</p>
+      <figure class="view"><img src="img/buffer-view/town-hdr.png" alt="The town street lit, much as displayed: a dark road between brick buildings, conifers and parked cars under a blue sky" width="640" height="360"><figcaption>The exposed colour, sRGB-encoded with no tone curve.</figcaption></figure>
     </div>
     <div class="entry" data-for="buffer-target">
       <p class="entry-title">8-bit target</p>
       <p>What is presented or captured: sRGB, dithered.</p>
       <p class="io">Written by the tonemapping pass.</p>
+      <figure class="view"><img src="img/buffer-view/town-target.png" alt="The town street as displayed: a dark road between brick buildings, conifers and parked cars under a blue sky" width="640" height="360"><figcaption>The frame as displayed.</figcaption></figure>
     </div>
   </div>
-  <figcaption id="map-caption">The frame on <code>main</code> at 7c676077 (2026-11-27). Each column is a step, in the order the frame runs them; each row is a buffer or a structure. The stages below say more of each step and link its page.</figcaption>
+  <figcaption id="map-caption">The frame on <code>main</code> at 7c676077 (2026-11-27). The images above the table are frame 59 of <code>town</code> on <code>main</code> at 84fbb4e6 (2026-11-28), each written by <a href="buffer-view-pass.html#views">a capture of that buffer</a>, under the step that first writes it. Each column is a step, in the order the frame runs them; each row is a buffer or a structure. The stages below say more of each step and link its page.</figcaption>
   </figure>
 </section>
 
