@@ -19,6 +19,7 @@ use crate::render::light_count_pass::{LightCountPass, LightCountTargetGroups};
 use crate::render::main_pass::{
     DEPTH_PREPASS, LIT_PASS, MainPass, MainTargetGroups, PHASE_TWO_DEPTH_PASS,
 };
+use crate::render::probes::Cascade;
 use crate::render::ray_scene::{RayScene, create_frame_encoder};
 use crate::render::readback::GpuStatsReadback;
 use crate::render::shadow_mask_pass::{SHADOW_MASK_PASS, ShadowMaskPass, ShadowMaskTargetGroups};
@@ -104,6 +105,9 @@ pub struct RenderSwitches {
     /// none so coarse, rather than the one the culling pass selects for it:
     /// `Some(0)` draws LOD 0 alone. `None`, as it ships, selects.
     pub forced_lod: Option<u32>,
+    /// Whether the Renderer creates a Cascade of Probes (ADR 0020). Off, as
+    /// it ships, it creates none.
+    pub probes: bool,
 }
 
 /// How the shapes the GPU bends Meshes to each frame reach the TLAS (ADR
@@ -158,6 +162,7 @@ impl Default for RenderSwitches {
             residency: false,
             wait_for_static_tlas: false,
             forced_lod: None,
+            probes: false,
         }
     }
 }
@@ -365,6 +370,8 @@ pub struct Renderer {
     tonemapping_pass: TonemappingPass,
     /// With the `count_point_lights` Render switch on.
     light_count_pass: Option<LightCountPass>,
+    /// With the `probes` Render switch on.
+    probe_cascade: Option<Cascade>,
     shared_buffers: SharedBuffers,
     /// The camera, the lights and the Froxel lists (`FRAME`).
     frame_bind_group: wgpu::BindGroup,
@@ -605,6 +612,7 @@ impl Renderer {
             &tonemapping_pass,
             light_count_pass.as_ref(),
         );
+        let probe_cascade = (switches.probes).then(|| Cascade::new(&device, &memory));
 
         Self {
             mesh_pool,
@@ -622,6 +630,7 @@ impl Renderer {
             depth_pyramid_pass,
             tonemapping_pass,
             light_count_pass,
+            probe_cascade,
             shared_buffers,
             frame_bind_group,
             scene_geometry_bind_group,
@@ -662,6 +671,12 @@ impl Renderer {
     /// The shadow mask the last frame's shadow mask pass wrote.
     pub(crate) fn shadow_mask(&self) -> &wgpu::Texture {
         self.bound_targets.render_targets.shadow_mask().texture()
+    }
+
+    /// The irradiance its Cascade's Probes hold, with the `probes` Render
+    /// switch on.
+    pub(crate) fn probe_irradiance(&self) -> Option<&wgpu::Texture> {
+        self.probe_cascade.as_ref().map(Cascade::irradiance)
     }
 
     /// What its Instance buffer, light buffer and static TLAS hold, which

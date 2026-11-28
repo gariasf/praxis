@@ -8,8 +8,9 @@ src/
   bin/praxis.rs                # thin binary: command dispatch
   gpu/                         # GPU context, windowed or headless
   capture/                     # offscreen render read back as an image,
-                                 where its Goldens live, and how two
-                                 images, or two shadow masks, differ
+                                 or as the light the Probes hold, where
+                                 its Goldens live, and how two images,
+                                 or two shadow masks, differ
   preflight/                   # `praxis preflight`: a session's starting
                                  state, a line per check
   bench/                       # Reference scene medians, compared with
@@ -144,7 +145,11 @@ src/
                                  wgpu-hal), ray_scene (the Ray scene:
                                  both TLAS, the BLAS refit, the order
                                  of their steps in a frame and the bind
-                                 group a pass that traces sets), instance,
+                                 group a pass that traces sets), probes
+                                 (one Cascade's Probes: their irradiance,
+                                 depth moments and state, and how a
+                                 read-back's bytes split by Probe),
+                                 instance,
                                  uniforms, staging,
                                  shaders/ (WGSL parts and the modules
                                  each pipeline assembles from them)

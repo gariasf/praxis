@@ -204,6 +204,7 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
         ),
         (GpuMemoryKind::Staging, staging),
         (GpuMemoryKind::SceneAndPassBuffers, scene_and_pass_buffers),
+        (GpuMemoryKind::Probes, 0),
     ];
     for (kind, bytes) in by_kind {
         assert_eq!(
@@ -333,6 +334,38 @@ fn capture_reports_the_pbr_sweep_frame_stats() {
 
     let printed = last.to_string();
     assert!(printed.lines().count() <= 5, "over 5 lines:\n{printed}");
+}
+
+/// One Cascade of 32 × 16 × 32 Probes: a Probe's irradiance, 8 × 8 texels of
+/// RGBA16F, its depth moments, 16 × 16 of RG16F, and its u32 of state.
+#[test]
+fn the_probes_switch_counts_one_cascade_under_its_own_kind() {
+    let context = match pollster::block_on(GpuContext::headless()) {
+        Ok(context) => context,
+        Err(error) if error.is::<wgpu::RequestAdapterError>() => {
+            writeln!(std::io::stderr(), "skipped: no GPU adapter: {error}").ok();
+            return;
+        }
+        Err(error) => panic!("headless GPU context failed: {error:#}"),
+    };
+    let last_frame = |probes| {
+        let switches = praxis::RenderSwitches {
+            probes,
+            ..praxis::RenderSwitches::default()
+        };
+        let scene = ReferenceScene::PbrSweep;
+        let (_, mut frames) =
+            praxis::capture(&context, scene, glam::DVec3::ZERO, 160, 90, switches)
+                .expect("capture failed");
+        frames.pop().expect("no frame stats")
+    };
+    let (off, on) = (last_frame(false), last_frame(true));
+    let cascade_bytes = 32 * 16 * 32 * (8 * 8 * 8 + 16 * 16 * 4 + 4);
+    assert_eq!(
+        on.gpu_memory_bytes_by_kind[GpuMemoryKind::Probes as usize],
+        cascade_bytes
+    );
+    assert_eq!(on.gpu_memory_bytes, off.gpu_memory_bytes + cascade_bytes);
 }
 
 /// On every Reference scene, each frame reads back from the GPU the

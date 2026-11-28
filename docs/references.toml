@@ -1768,6 +1768,31 @@ quote = '''pub const fn defaults() -> Self {
     max_storage_buffer_binding_size: 128 << 20, // (128 MiB)'''
 checked = 2026-10-27
 
+["wgpu-types-30-guaranteed-format-features"]
+url = "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-types/src/texture/format.rs#L914-L1057"
+section = "wgpu-types 30.0.2, TextureFormat::guaranteed_format_features: what a format allows without TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES; sample_type gives Rg16Float and Rgba16Float a filterable float (L1079, L1091-L1104)"
+quote = '''let s_ro_wo = TextureFormatFeatureFlags::STORAGE_READ_ONLY
+    | TextureFormatFeatureFlags::STORAGE_WRITE_ONLY;
+let s_all = s_ro_wo | TextureFormatFeatureFlags::STORAGE_READ_WRITE;
+[...]
+let (rg11b10f_f, rg11b10f_u) =
+    if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
+        (msaa_resolve, attachment)
+    } else {
+        (msaa, basic)
+    };
+[...]
+Self::R32Uint =>              (       s_all,     atomic),
+[...]
+Self::Rg16Float =>            (msaa_resolve, attachment),
+[...]
+Self::Rg11b10Ufloat =>        (  rg11b10f_f, rg11b10f_u),
+[...]
+Self::Rgba16Float =>          (msaa_resolve | s_ro_wo,  all_flags),
+[...]
+let is_blendable = sample_type2 == Some(TextureSampleType::Float { filterable: true })'''
+checked = 2026-11-27
+
 ["wgpu-types-30-default-workgroups-per-dimension"]
 url = "https://github.com/gfx-rs/wgpu/blob/v30.0.1/wgpu-types/src/limits.rs#L421-L456"
 section = "wgpu-types 30.0.1, Limits::defaults"

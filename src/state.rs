@@ -201,6 +201,11 @@ impl State {
         self.renderer.shadow_mask()
     }
 
+    /// The irradiance the Probes hold, with the `probes` Render switch on.
+    pub(crate) fn probe_irradiance(&self) -> Option<&wgpu::Texture> {
+        self.renderer.probe_irradiance()
+    }
+
     /// One past the last frame whose submission completed, as far as the
     /// submissions and polls since have seen.
     #[cfg(test)]

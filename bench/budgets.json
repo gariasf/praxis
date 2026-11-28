@@ -14,6 +14,7 @@
     "render_targets": 536870912,
     "acceleration_structures": 268435456,
     "staging": 268435456,
-    "scene_and_pass_buffers": 234881024
+    "scene_and_pass_buffers": 234881024,
+    "probes": 134217728
   }
 }
